@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tax Invoice</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .invoice-box {
+            width: 800px;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.15);
+        }
+        .title { text-align: center; font-size: 24px; font-weight: bold; text-transform: uppercase; }
+        .company-details, .client-details {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        .table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .table th, .table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        .table th { background: #f2f2f2; }
+        .total-section { margin-top: 20px; text-align: right; font-size: 16px; font-weight: bold; }
+        .bank-details, .footer {
+            margin-top: 20px;
+            font-size: 14px;
+        }
+        .signature { text-align: right; margin-top: 40px; }
+        .print-button {
+            display: block;
+            width: 150px;
+            padding: 10px;
+            text-align: center;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            margin: 20px auto;
+            font-size: 16px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="invoice-box">
+        <div class="title">Tax Invoice</div>
+
+        <!-- Company & Client Details -->
+        <div class="company-details">
+            <div>
+                <strong>Bhanderi Info Tech</strong><br>
+                35-Aamgan Row House, Sayan Road,<br>
+                Amroli, Surat, 394107<br>
+                GSTIN: 27XXXXXXXXX9Z2<br>
+                PAN: AAAAA0000A
+            </div>
+            <div>
+                <strong>Bill To:</strong><br>
+                ClientName<br>
+                ClientAddress<br>
+                ClientGstNumber
+            </div>
+        </div>
+
+        <!-- Invoice Details -->
+        <div class="company-details">
+            <div>
+                <strong>Invoice No:</strong> orderNumber<br>
+                <strong>Invoice Date:</strong> createdAt<br>
+                <strong>Due Date:</strong> DueDate(60 Days)
+            </div>
+            <div>
+                <strong>Place of Supply:</strong> SupplyState<br>
+                <strong>State Code:</strong> SupplyStateCode
+            </div>
+        </div>
+
+        <!-- Invoice Table -->
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Item Description</th>
+                    <th>HSN Code</th>
+                    <th>Qty</th>
+                    <th>Rate (₹)</th>
+                    <th>GST (%)</th>
+                    <th>Tax Amount (₹)</th>
+                    <th>Total (₹)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>1</td>
+                    <td>ItemName</td>
+                    <td>5810</td>
+                    <td>ItemQty</td>
+                    <td>ItemRate</td>
+                    <td>ItemGst %</td>
+                    <td>ItemTaxAmount</td>
+                    <td>TotalCostWithoutGst</td>
+                </tr>
+                <!-- <tr>
+                    <td>2</td>
+                    <td>Thread Supply</td>
+                    <td>654321</td>
+                    <td>5</td>
+                    <td>200</td>
+                    <td>18%</td>
+                    <td>180</td>
+                    <td>1180</td>
+                </tr> -->
+            </tbody>
+        </table>
+
+        <!-- Total Section -->
+        <div class="total-section">
+            Subtotal: ₹ ItemSubtotal<br>
+            GST (ItemGst %): ₹ ItemTaxAmount <br>
+            <strong>Grand Total: ₹ ItemTotalCost</strong>
+        </div>
+
+        <!-- Bank Details -->
+        <div class="bank-details">
+            <strong>Bank Details:</strong><br>
+            Bank Name: XYZ Bank<br>
+            Account No: 1234567890<br>
+            IFSC Code: XYZB0001234<br>
+            Payment Mode: NEFT / UPI
+        </div>
+
+        <!-- Signature Section -->
+        <div class="signature">
+            <strong>Authorized Signatory</strong><br>
+            ____________________
+        </div>
+
+        <!-- Print Button -->
+        <a class="print-button" href="javascript:window.print()">Print Invoice</a>
+    </div>
+
+</body>
+</html>

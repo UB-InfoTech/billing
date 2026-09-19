@@ -1,0 +1,24 @@
+/* body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+      sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  } */
+  
+  /* Ensure content isn't hidden behind fixed navbar */
+  @media (min-width: 768px) {
+    .container-fluid {
+      padding-left: 250px;
+    }
+  }
+  
+  /* Smooth transitions */
+  .translate-0 {
+    transform: translateX(0);
+  }
+  
+  .-translate-x-100 {
+    transform: translateX(-100%);
+  }

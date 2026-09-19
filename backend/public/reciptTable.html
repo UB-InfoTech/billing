@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Receipt</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            width: 210mm;
+            height: 297mm;
+            box-sizing: border-box;
+        }
+        .receipt-container {
+            width: 190mm;
+            margin: 10mm auto;
+            padding: 10mm;
+            border: 1px solid #000;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+        th, td {
+            border: 1px solid #000;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            font-weight: bold;
+            text-align: center;
+        }
+        .header-table th {
+            font-size: 14px;
+        }
+        .payment-details-table td:nth-child(2),
+        .transaction-table td:nth-child(2) {
+            text-align: right;
+        }
+        .amount-table {
+            width: 40%;
+            float: right;
+        }
+        .amount-table .label {
+            font-weight: bold;
+        }
+        .amount-table .total {
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .amount-words {
+            margin: 10px 0;
+            font-style: italic;
+            clear: both;
+        }
+        .footer-table td {
+            font-size: 11px;
+        }
+        .signature {
+            margin-top: 20px;
+            text-align: right;
+        }
+        @media print {
+            body {
+                margin: 0;
+            }
+            .receipt-container {
+                border: none;
+                margin: 0;
+                padding: 0;
+                width: 210mm;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-container">
+        <!-- Header Table -->
+        <table class="header-table">
+            <tr>
+                <th colspan="2">Payment Receipt</th>
+            </tr>
+            <tr>
+                <td><strong>Bhanderi Info Tech Pvt. Ltd.</strong></td>
+                <td><strong>Receipt No:</strong> VpaymentId</td>
+            </tr>
+            <tr>
+                <td>123 Business Street, City, State, ZIP</td>
+                <!-- <td><strong>Date:</strong> March 26, 2025</td> -->
+                <td><strong>Date:</strong> VtodayDate</td>
+            </tr>
+            <tr>
+                <td>Email: info@abccompany.com</td>
+                <td><strong>GSTIN:</strong> 12ABCDE3456F7Z8</td>
+            </tr>
+            <tr>
+                <td>Phone: +1-234-567-890</td>
+                <td><strong>PAN:</strong> ABCDE1234F</td>
+            </tr>
+        </table>
+
+        <!-- Received From Table -->
+        <table>
+            <tr>
+                <th>Received From</th>
+            </tr>
+            <tr>
+                <td><strong>VclintCompanyName</strong></td>
+            </tr>
+            <tr>
+                <td>VclintAddress</td>
+            </tr>
+            <tr>
+                <td>Email: VclintEmail</td>
+            </tr>
+            <tr>
+                <td>Phone: +91-VclintPhoneNumber</td>
+            </tr>
+            <tr>
+                <td><strong>GSTIN:</strong> VclintGstNumber</td>
+            </tr>
+            <tr>
+                <td><strong>Challan No.:</strong> VclintChallanNumber</td>
+            </tr>
+        </table>
+
+        <!-- Payment Details Table -->
+        <table class="payment-details-table">
+            <tr>
+                <th colspan="2">Payment Details</th>
+            </tr>
+            <tr>
+                <td><strong>Invoice No:</strong></td>
+                <td>VorderNumber</td>
+            </tr>
+            <tr>
+                <td><strong>Invoice Date:</strong></td>
+                <td>VcreatedAt</td>
+            </tr>
+            <tr>
+                <td><strong>Payment Date:</strong></td>
+                <td>VreceiptCreatedDate</td>
+            </tr>
+            <tr>
+                <td><strong>Payment Mode:</strong></td>
+                <td>VreceiptPaymentMode</td>
+            </tr>
+            <tr>
+                <td><strong>Reference/Transaction ID:</strong></td>
+                <td>VreceiptPaymentReference</td>
+            </tr>
+        </table>
+
+        <!-- Transaction Table -->
+        <table class="transaction-table">
+            <tr>
+                <th colspan="2">Transaction Breakdown</th>
+            </tr>
+            <tr>
+                <td>Description</td>
+                <td>Amount</td>
+            </tr>
+            <tr>
+                <td>Payment towards Invoice VorderNumber (VorderName)</td>
+                <td>VorderFinalRevenue</td>
+            </tr>
+        </table>
+
+        <!-- Amount Table -->
+        <table class="amount-table">
+            <tr>
+                <td class="label">Total Amount Received</td>
+                <td>VamountReceived</td>
+            </tr>
+            <tr>
+                <td class="label">Tax Deducted at Source (TDS), if any</td>
+                <td>0.00</td>
+            </tr>
+            <tr>
+                <td class="label total">Net Amount</td>
+                <td class="total">VamountReceived</td>
+            </tr>
+        </table>
+
+        <!-- Amount in Words -->
+        <p class="amount-words"><strong>Amount in Words:</strong> Five Thousand Six Hundred Five Rupees Only</p>
+
+        <!-- Footer Table -->
+        <table class="footer-table">
+            <tr>
+                <th>Payment Acknowledgment</th>
+            </tr>
+            <tr>
+                <td>This is to acknowledge the receipt of payment as per the details above.</td>
+            </tr>
+            <tr>
+                <td><strong>Bank Details:</strong> ABC Bank | A/C No: 1234567890 | IFSC: ABCX0000123 | SWIFT: ABCXUS33</td>
+            </tr>
+            <tr>
+                <td>For queries, contact us at support@abccompany.com</td>
+            </tr>
+        </table>
+
+        <!-- Signature -->
+        <div class="signature">
+            <p><strong>Authorized Signatory:</strong> ___________________________</p>
+            <p>Date: VtodayDate</p>
+        </div>
+    </div>
+</body>
+</html>

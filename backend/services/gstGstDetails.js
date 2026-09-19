@@ -14,9 +14,8 @@ const getGstDetails = async (gstNumber) => {
     
     const token = await getValidToken(profile);
     //in live version profile is not send ${profile.gstin}, directly {gstin} is send
-    // const url = `https://gstsandbox.charteredinfo.com/ewaybillapi/dec/v1.03/Master?action=GetGSTINDetails&aspid=${aspid}&password=${password}&gstin=${profile.gstin}&username=${profile.eWayUserName}&authtoken=${token}&SearchGSTIN=${gstNumber}`;
-    const url = `https://einvapi.charteredinfo.com/v1.03/dec/Master?action=GetGSTINDetails&aspid=${aspid}&password=${password}&gstin=${profile.gstin}&username=${profile.eWayUserName}&authtoken=${token}&SearchGSTIN=${gstNumber}`;
-    try {
+    const url = `https://gstsandbox.charteredinfo.com/ewaybillapi/dec/v1.03/Master?action=GetGSTINDetails&aspid=${aspid}&password=${password}&gstin=${profile.gstin}&username=${profile.eWayUserName}&authtoken=${token}&SearchGSTIN=${gstNumber}`;
+     try {
         const response = await axios.get(url);
         return response.data;
     } catch (error) {

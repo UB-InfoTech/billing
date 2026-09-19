@@ -25,11 +25,8 @@ const generateEWayBill = async (body, orderId) => {
     
     // //     'Content-Type': 'text/plain',
     // // const url = `https://gstsandbox.charteredinfo.com/ewaybillapi/dec/v1.03/ewayapi?action=GENEWAYBILL&aspid=${aspid}&password=${password}&gstin=${gstin}&username=${username}&authtoken=${token}`;
-    // // const url = `https://gstsandbox.charteredinfo.com/ewaybillapi/dec/v1.03/ewayapi?action=GENEWAYBILL&aspid=1783712425&password=MakeMoney123@@&gstin=34AACCC1596Q002&username=TaxProEnvPON&authtoken=1g59Bm9i5Kr7sIJJ1woi7lcpX`;
-    // // const response = await axios.post(url, payload);
-
+   
     try {
-        // // "https://einvapi.charteredinfo.com/v1.03/dec/ewayapi?action=GENEWAYBILL",
         
         const response = await axios.post(
             "https://gstsandbox.charteredinfo.com/ewaybillapi/dec/v1.03/ewayapi?action=GENEWAYBILL",

@@ -444,24 +444,6 @@ export default function CreditNote() {
         }
     };
 
-    const cancelNote = async (id) => {
-        if (!window.confirm("Cancel this posted Credit Note? This will reverse its invoice adjustment. Refund records remain auditable.")) return;
-        try {
-            setCancellingId(id);
-            setError("");
-            const response = await axios.post(`${API_BASE}/api/credit-notes/${id}/cancel`, {}, getAuthConfig());
-            setSuccess(response.data?.message || "Credit Note cancelled.");
-            await loadCreditNotes(filters);
-            if (previewNote?._id === id) {
-                setPreviewNote(response.data?.creditNote || previewNote);
-            }
-        } catch (error) {
-            setError(getErrorMessage(error));
-        } finally {
-            setCancellingId(null);
-        }
-    };
-
     const startEditNote = (note) => {
         if (!note || note.status === "Cancelled") {
             setError("Cancelled Credit Notes cannot be edited.");

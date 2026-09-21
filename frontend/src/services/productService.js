@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-// const BASE_URL = 'http://localhost:5000/api/products';
-const BASE_URL = 'https://baba.divinesparks.in/api/products'; // Use this for production
+const BASE_URL = 'http://localhost:5000/api/products';
 
 export const fetchProducts = () => axios.get(BASE_URL);
 

@@ -6,7 +6,7 @@ import * as XLSX from 'xlsx';
 
 function Clients() {
 
-  const linkone = `http://localhost:5000`;
+  const linkone = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
   
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState('');
@@ -55,6 +55,7 @@ function Clients() {
   }, []);
 
   const token = localStorage.getItem('token');
+  const authConfig = { headers: { "x-auth-token": token || "" } };
   if (!token) {
     throw new Error('No token found');
   }
@@ -128,7 +129,7 @@ function Clients() {
 
       const stateName = gstinStates[stateCode] || 'Unknown';
 
-      const response = await axios.get(`${linkone}/api/gstdetails/${gstNumber}`);
+      const response = await axios.get(`${linkone}/api/gstdetails/${gstNumber}`, authConfig);
 
       if (!response.data || !response.data.success) {
         throw new Error('Failed to fetch GST details');
@@ -242,7 +243,7 @@ function Clients() {
     const password = prompt("Enter password to delete:");
     if (password === "123") {
       try {
-        await axios.delete(`${linkone}/api/clients/${id}`);
+        await axios.delete(`${linkone}/api/clients/${id}`, authConfig);
         alert("✅ Client Deleted Successfully");
 
         fetchClients();

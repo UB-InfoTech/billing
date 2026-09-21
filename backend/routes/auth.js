@@ -1,103 +1,40 @@
-const express = require('express');
-const router = express.Router();
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const auth = require('../middleware/auth');
+const express=require("express");
+const bcrypt=require("bcryptjs");
+const jwt=require("jsonwebtoken");
+const User=require("../models/User");
+const auth=require("../middleware/auth");
+const router=express.Router();
 
-// Register
-router.post('/register', async (req, res) => {
-  const { username, email, password } = req.body;
+const signToken=user=>jwt.sign({user:{id:user.id}},process.env.JWT_SECRET,{expiresIn:process.env.JWT_EXPIRES_IN||"8h"});
+const normalizeEmail=e=>String(e||"").trim().toLowerCase();
 
-  try {
-    let user = await User.findOne({ email });
-    if (user) {
-      return res.status(400).json({ msg: 'User already exists' });
-    }
-
-    user = new User({
-      username,
-      email,
-      password
-    });
-
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(password, salt);
-
-    await user.save();
-
-    const payload = {
-      user: {
-        id: user.id
-      }
-    };
-
-    jwt.sign(
-      payload,
-      process.env.JWT_SECRET,
-      { expiresIn: '1h' },
-      (err, token) => {
-        if (err) throw err;
-        res.json({ token });
-      }
-    );
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server error');
-  }
+router.post("/register",async(req,res)=>{
+  try{
+    const username=String(req.body?.username||"").trim();
+    const email=normalizeEmail(req.body?.email);
+    const password=String(req.body?.password||"");
+    if(username.length<2)return res.status(400).json({msg:"Username must be at least 2 characters."});
+    if(!/^\\S+@\\S+\\.\\S+$/.test(email))return res.status(400).json({msg:"Enter a valid email address."});
+    if(password.length<8)return res.status(400).json({msg:"Password must be at least 8 characters."});
+    if(await User.findOne({$or:[{email},{username}]}).select("_id").lean())return res.status(409).json({msg:"User already exists."});
+    const passwordHash=await bcrypt.hash(password,12);
+    const user=await User.create({username,email,password:passwordHash});
+    res.status(201).json({token:signToken(user)});
+  }catch(error){if(error.code===11000)return res.status(409).json({msg:"Username or email already exists."});res.status(500).json({msg:"Server error"});}
 });
 
-// Login
-router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(400).json({ msg: 'Invalid credentials' });
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    // const isMatch = await user.matchPassword(password);
-
-    if (!isMatch) {
-      return res.status(400).json({ msg: 'Invalid credentials' });
-    }
-
-    const payload = {
-      user: {
-        id: user.id
-      }
-    };
-
-    // jwt.sign(
-    //   payload,
-    //   process.env.JWT_SECRET,
-    //   { expiresIn: '1h' },
-    //   (err, token) => {
-    //     if (err) throw err;
-    //     res.json({ token });
-    //   }
-    // );
-
-    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-    res.json({ token });
-
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server error');
-  }
+router.post("/login",async(req,res)=>{
+  try{
+    const email=normalizeEmail(req.body?.email),password=String(req.body?.password||"");
+    if(!email||!password)return res.status(400).json({msg:"Email and password are required."});
+    const user=await User.findOne({email}).select("+password");
+    if(!user||!(await bcrypt.compare(password,user.password)))return res.status(401).json({msg:"Invalid credentials"});
+    res.json({token:signToken(user),user:{id:user.id,username:user.username,email:user.email}});
+  }catch(error){res.status(500).json({msg:"Server error"});}
 });
 
-// // Get user data
-router.get('/user', auth, async (req, res) => {
-  try {
-    const user = await User.findById(req.user.id).select('-password');
-    res.json(user);
-  } catch (err) {
-    console.error(err.message);
-    res.status(500).send('Server error');
-  }
+router.get("/user",auth,async(req,res)=>{
+  try{const user=await User.findById(req.user.id).select("-password").lean();if(!user)return res.status(404).json({msg:"User not found"});res.json(user);}catch(error){res.status(500).json({msg:"Server error"});}
 });
 
-module.exports = router;
+module.exports=router;

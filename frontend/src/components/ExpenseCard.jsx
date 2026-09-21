@@ -1,10 +1,12 @@
 import React from "react";
+import {useNavigate} from "react-router-dom";
 import deleteSVG from "../assets/delete.svg";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const money=v=>Number(v||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 
 export default function ExpenseCard({expense,onDelete}){
+  const navigate=useNavigate();
   const receipt=expense.receipt||expense.receiptUrl;
   const clientName=expense.clientId?.companyName||expense.clientId?.name;
   return <div className="card mb-3 p-3 bg-white shadow-sm">
@@ -19,7 +21,7 @@ export default function ExpenseCard({expense,onDelete}){
         {receipt&&<a href={receipt.startsWith("http")?receipt:API+receipt} target="_blank" rel="noreferrer" className="text-primary">View Receipt</a>}
       </div>
       <div className="col-md-3 text-end">
-        <button className="btn btn-sm btn-outline-danger" onClick={()=>onDelete(expense._id)}><img src={deleteSVG} alt="Delete"/></button>
+        <button className="btn btn-sm btn-outline-primary me-2" onClick={()=>navigate("/edit-expense/"+expense._id)}>Edit</button><button className="btn btn-sm btn-outline-danger" onClick={()=>onDelete(expense._id)}><img src={deleteSVG} alt="Delete"/></button>
       </div>
     </div>
   </div>;

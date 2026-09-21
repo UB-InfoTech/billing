@@ -377,16 +377,7 @@ const OrdersTable = React.memo(({
     );
   }
 
-  const [filters, setFilters] = useState({
-    billNo: '',
-    challanNumber: '',
-    clientName: ''
-  });
-  const [sortKey, setSortKey] = useState('orderNumber'); // default
-      const [sortOrder, setSortOrder] = useState('asc'); // default
-  
-
-  const filteredOrders = orders.filter(order => {
+    const filteredOrders = orders.filter(order => {
     return (
       order.orderNumber.includes(filters.billNo) &&
       order.challanNumber.includes(filters.challanNumber) &&

@@ -1,10 +1,10 @@
-//using
-
-module.exports = {
-    aspid: '1783712425',
-    password: 'MakeMoney123@@',
-    username: 'TaxProEnvPON',
-    gstin: '34AACCC1596Q002',
-    eInvPwd: 'abc34*',
-    ewbpwd: 'abc34*',
+module.exports={
+  aspid:process.env.TAXPRO_ASPID||"",
+  password:process.env.TAXPRO_PASSWORD||"",
+  username:process.env.TAXPRO_USERNAME||"",
+  gstin:process.env.TAXPRO_GSTIN||"",
+  eInvPwd:process.env.TAXPRO_EINVOICE_PASSWORD||"",
+  ewbpwd:process.env.TAXPRO_EWAY_PASSWORD||"",
+  baseUrl:process.env.TAXPRO_BASE_URL||"https://gstsandbox.charteredinfo.com",
+  printUrl:process.env.TAXPRO_PRINT_URL||"https://einvapi.charteredinfo.com/aspapi/v1.0/printewb"
 };

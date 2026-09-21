@@ -9,7 +9,7 @@ function ttlMinutes(){
 
 async function getNewToken(gstin,eWayUserName,eWayPassword){
   if(!aspid||!password)throw new Error("E-Way Bill ASP credentials are not configured.");
-  if(!gstin||!eWayUserName||!eWayUserName||!eWayPassword)throw new Error("GSTIN, E-Way username and password are required.");
+  if(!gstin||!eWayUserName||!eWayPassword)throw new Error("GSTIN, E-Way username and password are required.");
 
   const response=await axios.get(
     "https://gstsandbox.charteredinfo.com/ewaybillapi/dec/v1.03/auth",

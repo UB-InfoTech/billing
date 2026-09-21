@@ -66,9 +66,8 @@ export default function ProductPage() {
     setEditingProduct(product);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
-  // const BASE_URL = 'http://localhost:5000/api/products';
-  const BASE_URL = `https://baba.divinesparks.in/api/products`;
-
+  const BASE_URL = 'http://localhost:5000/api/products';
+ 
 
   const handleBarcodeSearch = async (code) => {
     try {

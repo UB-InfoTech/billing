@@ -2,9 +2,8 @@
 import React from 'react';
 import axios from 'axios';
 
-// baseURL: 'http://localhost:5000'
 const instance = axios.create({
-  baseURL: 'https://baba.divinesparks.in'
+  baseURL: 'http://localhost:5000'
 });
 
 instance.interceptors.request.use(

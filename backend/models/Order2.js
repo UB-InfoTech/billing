@@ -102,6 +102,8 @@ const orderSchema = new mongoose.Schema({
     totalCost: { type: Number }, // Total after Discount // sum of total price 
     paidAmount: { type: Number, default: 0 },
     dueAmount: { type: Number },
+    creditAppliedAmount: { type: Number, default: 0, min: 0 },
+    creditNoteCount: { type: Number, default: 0, min: 0 },
     totalAmount: { type: Number },
     finalRevenue: { type: Number }, // totalCost - Tax
     roundOffFinalRevenue: { type: Number }, // after roundOff finalRevenue

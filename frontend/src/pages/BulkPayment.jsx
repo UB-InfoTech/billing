@@ -361,6 +361,14 @@ const OrdersTable = React.memo(({
   customSplits,
   onCustomAmountChange
 }) => {
+  const [filters, setFilters] = useState({
+    billNo: '',
+    challanNumber: '',
+    clientName: ''
+  });
+  const [sortKey] = useState('orderNumber');
+  const [sortOrder] = useState('asc');
+
   if (orders.length === 0) {
     return (
       <div className="card p-3 mb-3 shadow-sm text-center">
@@ -720,8 +728,9 @@ export default function BulkPayment() {
 
     if (validationErrors[field]) {
       setValidationErrors(prev => {
-        const { [field]: removed, ...rest } = prev;
-        return rest;
+        const next = { ...prev };
+        delete next[field];
+        return next;
       });
     }
   }, [validationErrors]);
@@ -854,6 +863,9 @@ export default function BulkPayment() {
       }
     }
   }, [form, selectedOrders, customSplits]);
+  const reportRef = useRef();
+  const contentRef = useRef(null);
+  const reactToPrintFn = useReactToPrint({ contentRef });
 
   const toggleModal = useCallback(() => {
     setShowModal(prev => !prev);

@@ -212,7 +212,7 @@ async function searchInvoiceRows(search, limit = 25) {
  */
 router.get("/invoices/search", auth, async (req, res) => {
   try {
-    const q = String(req.query.q || "").trim();
+    const q = String(req.query.q || req.query.search || "").trim();
     const limit = Math.min(Math.max(Number(req.query.limit || 25), 1), 50);
 
     if (q.length < 2) {
@@ -306,6 +306,10 @@ router.get("/", auth, async (req, res) => {
     const creditNotes = rows.map((note) => ({
       ...note,
       originalOrder: note.originalOrderId,
+      originalInvoiceNumber: note.originalInvoiceNumber || note.originalOrderId?.orderNumber || "",
+      originalInvoiceDate: note.originalInvoiceDate || note.originalOrderId?.orderDate || null,
+      adjustmentAmount: Number(note.settlement?.adjustmentAmount || 0),
+      refundAmount: Number(note.settlement?.refundAmount || 0),
     }));
 
     return res.json({

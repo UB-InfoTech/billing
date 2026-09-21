@@ -846,7 +846,61 @@ router.post("/", auth, async (req, res) => {
 });
 
 /** POST /api/credit-notes/:id/cancel */
-router.post("/:id/cancel", auth, async (req, res) => {
+router.put("/:id", auth, async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid credit note ID." });
+    }
+
+    const note = await CreditNote.findOne({
+      _id: req.params.id,
+      createdBy: req.user.id,
+    });
+
+    if (!note) return res.status(404).json({ message: "Credit note not found." });
+    if (note.status === "Cancelled") {
+      return res.status(400).json({ message: "Cancelled credit notes cannot be edited." });
+    }
+
+    if (req.body?.creditNoteDate !== undefined) {
+      const date = new Date(req.body.creditNoteDate);
+      if (Number.isNaN(date.getTime())) {
+        return res.status(400).json({ message: "Invalid credit note date." });
+      }
+      note.creditNoteDate = date;
+    }
+
+    if (req.body?.reason !== undefined) {
+      if (!REASONS.includes(req.body.reason)) {
+        return res.status(400).json({ message: "Invalid credit note reason." });
+      }
+      note.reason = req.body.reason;
+    }
+
+    if (req.body?.note !== undefined) {
+      note.note = String(req.body.note || "").trim().slice(0, 1000);
+    }
+
+    await note.save();
+
+    const updated = await CreditNote.findById(note._id)
+      .populate(
+        "originalOrderId",
+        "orderNumber orderDate companyName gstNumber Address State City pinCode stateCode paymentTerms roundOffFinalRevenue finalRevenue dueAmount creditAppliedAmount"
+      )
+      .lean();
+
+    return res.json({
+      message: "Credit note updated successfully.",
+      creditNote: { ...updated, originalOrder: updated?.originalOrderId },
+    });
+  } catch (error) {
+    console.error("Credit note update error:", error);
+    return res.status(400).json({ message: error.message || "Unable to update credit note." });
+  }
+});
+
+async function cancelCreditNote(req, res) {
   const userId = getAuthenticatedUserId(req);
   if (!userId) {
     return res.status(401).json({ message: "Authentication required." });
@@ -979,9 +1033,12 @@ router.post("/:id/cancel", auth, async (req, res) => {
   } finally {
     if (session) await session.endSession();
   }
-});
+}
 
-// Posted credit notes are intentionally immutable. Use /:id/cancel instead of DELETE.
+router.post("/:id/cancel", auth, cancelCreditNote);
+router.delete("/:id", auth, cancelCreditNote);
+
+// Financial values are immutable after posting; metadata can be edited. Use /:id/cancel instead of DELETE.
 router.delete("/:id", auth, async (req, res) => {
   return res.status(405).json({
     message:

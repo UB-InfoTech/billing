@@ -6,7 +6,7 @@ import * as Yup from 'yup';
 
 // Configuration constants
 const API_CONFIG = {
-  BASE_URL: 'http://localhost:5000/',
+  BASE_URL: (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/$/, ''),
   ENDPOINTS: {
     ORDERS: '/api/order/orders',
     BULK_PAYMENT: '/api/order/orders/payments/bulk'
@@ -15,7 +15,7 @@ const API_CONFIG = {
   REQUEST_TIMEOUT: 30000
 };
 
-const PAYMENT_METHODS = ['Cash', 'Bank', 'UPI', 'Cheque'];
+const PAYMENT_METHODS = ['Cash', 'Bank Transfer', 'UPI', 'Cheque'];
 const SPLIT_TYPES = ['proportional', 'custom'];
 
 

@@ -6,9 +6,8 @@ import * as XLSX from 'xlsx';
 
 function Clients() {
 
-  // const linkone = `http://localhost:5000`;
-  const linkone = `https://baba.divinesparks.in`;
-
+  const linkone = `http://localhost:5000`;
+  
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);

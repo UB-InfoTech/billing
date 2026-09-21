@@ -47,9 +47,15 @@ function emptyForm() {
         creditNoteDate: today(),
         reason: "Sales Return",
         originalOrderId: "",
+        creditMode: "ITEM",
+        adjustmentType: "Outstanding",
         adjustmentAmount: 0,
         refundAmount: 0,
         refundMethod: "Cash",
+        customerCreditAmount: 0,
+        stockAffecting: false,
+        manualTaxableAmount: 0,
+        manualTaxRate: 5,
         note: "",
     };
 }
@@ -112,6 +118,14 @@ export default function CreditNote() {
     const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
 
     const totals = useMemo(() => {
+        if (form.creditMode === "AMOUNT") {
+            const taxable = r2(n(form.manualTaxableAmount));
+            const tax = r2((taxable * n(form.manualTaxRate)) / 100);
+            const beforeRound = r2(taxable + tax);
+            const grandTotal = Math.round(beforeRound);
+            const roundOff = r2(grandTotal - beforeRound);
+            return { subtotal: taxable, discount: 0, taxable, tax, beforeRound, grandTotal, roundOff };
+        }
         const subtotal = r2(items.reduce((sum, item) => sum + n(item.gross), 0));
         const discount = r2(items.reduce((sum, item) => sum + n(item.discount), 0));
         const taxable = r2(items.reduce((sum, item) => sum + n(item.taxable), 0));
@@ -119,10 +133,8 @@ export default function CreditNote() {
         const beforeRound = r2(taxable + tax);
         const grandTotal = Math.round(beforeRound);
         const roundOff = r2(grandTotal - beforeRound);
-
         return { subtotal, discount, taxable, tax, beforeRound, grandTotal, roundOff };
-    }, [items]);
-
+    }, [items, form.creditMode, form.manualTaxableAmount, form.manualTaxRate]);
     const invoiceRemainingCredit = useMemo(() => {
         if (!selectedOrder) return 0;
         const invoiceTotal = n(selectedOrder.roundOffFinalRevenue ?? selectedOrder.finalRevenue ?? 0);
@@ -336,7 +348,8 @@ export default function CreditNote() {
         if (!selectedOrder?._id) return "Please select an original invoice.";
 
         const activeItems = items.filter((item) => getCreditQty(item) > 0);
-        if (!activeItems.length) return "Enter credit quantity for at least one item.";
+        if (form.creditMode === "ITEM" && !activeItems.length) return "Enter credit quantity for at least one item.";
+        if (form.creditMode === "AMOUNT" && n(form.manualTaxableAmount) <= 0) return "Enter a valid taxable credit amount.";
 
         for (const item of activeItems) {
             if (getCreditQty(item) > n(item.availableCreditQty) + 0.000001) {
@@ -354,7 +367,10 @@ export default function CreditNote() {
         if (n(form.adjustmentAmount) > invoiceDueAvailableForAdjustment + 0.000001) {
             return "Adjustment cannot exceed the invoice's remaining due amount.";
         }
+        if (n(form.customerCreditAmount) < 0) return "Customer credit cannot be negative.";
         if (n(form.refundAmount) > 0 && !form.refundMethod) return "Select a refund method.";
+        if (r2(n(form.adjustmentAmount) + n(form.refundAmount) + n(form.customerCreditAmount)) !== r2(totals.grandTotal)) return "Adjustment, refund and customer credit must exactly equal the Credit Note total.";
+        if (form.stockAffecting && (form.creditMode !== "ITEM" || form.reason !== "Sales Return")) return "Stock return is allowed only for item-based Sales Return credits.";
         return "";
     };
 

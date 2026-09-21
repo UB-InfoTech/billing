@@ -200,9 +200,9 @@ export default function CreditNote() {
             searchAbort.current = controller;
             try {
                 setOrderLoading(true);
-                const response = await axios.get(`${API_BASE}/api/credit-notes/invoices`, {
+                const response = await axios.get(`${API_BASE}/api/credit-notes/invoices/search`, {
                     ...getAuthConfig(),
-                    params: { search: value.trim(), limit: 15 },
+                    params: { q: value.trim(), limit: 15 },
                     signal: controller.signal,
                 });
                 setOrders(response.data?.orders || []);
@@ -218,15 +218,24 @@ export default function CreditNote() {
         try {
             setLoading(true);
             setError("");
-            const response = await axios.get(`${API_BASE}/api/credit-notes/invoices/${orderId}`, getAuthConfig());
-            const payload = response.data?.order;
+            const response = await axios.get(`${API_BASE}/api/credit-notes/available/${orderId}`, getAuthConfig());
+            const availableResponse = response.data;
+            const payload = availableResponse?.order;
             if (!payload) throw new Error("Invoice not found.");
 
-            setSelectedOrder(payload);
+            const availableItems = Array.isArray(availableResponse?.items) ? availableResponse.items : [];
+            const normalizedOrder = {
+                ...payload,
+                roundOffFinalRevenue: n(payload.invoiceTotal ?? payload.roundOffFinalRevenue ?? payload.finalRevenue ?? 0),
+                alreadyCreditedAmount: n(payload.previouslyCreditedTotal),
+                remainingCreditTotal: n(payload.remainingCreditTotal),
+            };
+
+            setSelectedOrder(normalizedOrder);
             setInvoiceSearch(payload.orderNumber || "");
             setSearchResultsOpen(false);
             setOrders([]);
-            setItems((payload.creditableItems || []).map((item) => calculateCreditLine({
+            setItems(availableItems.map((item) => calculateCreditLine({
                 _id: item._id,
                 designNumber: item.designNumber || "",
                 orderName: item.orderName || "",
@@ -237,7 +246,7 @@ export default function CreditNote() {
                 originalShortPcs: n(item.shortPcs),
                 previouslyCreditedQuantity: n(item.previouslyCreditedQuantity),
                 previouslyCreditedMTR: n(item.previouslyCreditedMTR),
-                availableCreditQty: n(item.availableCreditQty),
+                availableCreditQty: n(item.availableQuantity),
                 unitPrice: n(item.unitPrice),
                 discountRate: n(payload.discountRate),
                 taxRate: n(payload.taxPercentage),
@@ -364,17 +373,25 @@ export default function CreditNote() {
                 {
                     creditNoteDate: form.creditNoteDate,
                     reason: form.reason,
+                    creditMode: "ITEM",
                     originalOrderId: form.originalOrderId,
-                    adjustmentAmount: r2(form.adjustmentAmount),
-                    refundAmount: r2(form.refundAmount),
-                    refundMethod: form.refundAmount > 0 ? form.refundMethod : null,
+                    stockAffecting: false,
+                    settlement: {
+                        adjustmentType: "Outstanding",
+                        adjustmentAmount: r2(form.adjustmentAmount),
+                        refundAmount: r2(form.refundAmount),
+                        refundMethod: form.refundAmount > 0 ? form.refundMethod : null,
+                        customerCreditAmount: 0,
+                    },
                     note: form.note.trim(),
                     items: items
                         .filter((item) => getCreditQty(item) > 0)
                         .map((item) => ({
                             sourceSubOrderId: item._id,
-                            creditQuantity: item.qtyUnit === "MTR" ? 0 : r2(item.creditQuantity),
-                            creditMTR: item.qtyUnit === "MTR" ? r2(item.creditMTR) : 0,
+                            quantity: item.qtyUnit === "MTR" ? 0 : r2(item.creditQuantity),
+                            MTR: item.qtyUnit === "MTR" ? r2(item.creditMTR) : 0,
+                            discountRate: r2(item.discountRate),
+                            taxRate: r2(item.taxRate),
                         })),
                 },
                 getAuthConfig()
@@ -411,7 +428,7 @@ export default function CreditNote() {
         try {
             setCancellingId(id);
             setError("");
-            const response = await axios.patch(`${API_BASE}/api/credit-notes/${id}/cancel`, {}, getAuthConfig());
+            const response = await axios.post(`${API_BASE}/api/credit-notes/${id}/cancel`, {}, getAuthConfig());
             setSuccess(response.data?.message || "Credit Note cancelled.");
             await loadCreditNotes(filters);
             if (previewNote?._id === id) {
@@ -482,13 +499,13 @@ export default function CreditNote() {
                                         {loading ? <tr><td colSpan="10" className="text-center py-5"><span className="spinner-border spinner-border-sm me-2" />Loading...</td></tr> : creditNotes.length === 0 ? <tr><td colSpan="10" className="text-center py-5 text-muted">No Credit Notes found.</td></tr> : creditNotes.map((note) => <tr key={note._id}>
                                             <td className="fw-semibold">{note.creditNoteNumber}</td>
                                             <td>{formatDate(note.creditNoteDate)}</td>
-                                            <td>{note.originalOrderNumber || "-"}</td>
+                                            <td>{note.originalInvoiceNumber || note.originalOrder?.orderNumber || "-"}</td>
                                             <td>{note.companyName || "-"}</td>
                                             <td>{note.reason}</td>
                                             <td><span className={`badge ${note.status === "Cancelled" ? "text-bg-danger" : "text-bg-success"}`}>{note.status}</span></td>
                                             <td className="text-end">{money(note?.totals?.grandTotal)}</td>
-                                            <td className="text-end">{money(note?.adjustmentAmount)}</td>
-                                            <td className="text-end">{money(note?.refundAmount)}</td>
+                                            <td className="text-end">{money(note?.settlement?.adjustmentAmount)}</td>
+                                            <td className="text-end">{money(note?.settlement?.refundAmount)}</td>
                                             <td className="text-end no-print"><div className="btn-group btn-group-sm"><button className="btn btn-outline-primary" onClick={() => openNote(note._id)}>View</button>{note.status === "Posted" && <button className="btn btn-outline-danger" disabled={cancellingId === note._id} onClick={() => cancelNote(note._id)}>{cancellingId === note._id ? "..." : "Cancel"}</button>}</div></td>
                                         </tr>)}
                                     </tbody>
@@ -580,8 +597,8 @@ function CreditNotePrint({ note }) {
         <div className="border p-4">
             <div className="row align-items-start border-bottom pb-3 mb-3"><div className="col-7"><h2 className="fw-bold mb-1">CREDIT NOTE</h2><div>Credit Note No.: <strong>{note.creditNoteNumber}</strong></div><div>Date: {formatDate(note.creditNoteDate)}</div></div><div className="col-5 text-end"><div>Original Invoice: <strong>{note.originalOrderNumber || original.orderNumber || "-"}</strong></div><div>Invoice Date: {formatDate(note.originalOrderDate || original.orderDate)}</div><div>Reason: {note.reason}</div></div></div>
             <div className="row mb-4"><div className="col-6"><div className="small text-muted">Customer</div><div className="fw-bold">{note.companyName || original.companyName || "-"}</div><div>{note.Address || original.Address || ""}</div><div>{[note.City || original.City, note.State || original.State, note.pinCode || original.pinCode].filter(Boolean).join(", ")}</div><div>GSTIN: {note.gstNumber || original.gstNumber || "-"}</div></div><div className="col-6 text-end"><div>Payment Terms: {original.paymentTerms || "-"}</div><div>Original Invoice Total: {money(original.roundOffFinalRevenue)}</div></div></div>
-            <div className="table-responsive"><table className="table table-bordered"><thead className="table-light"><tr><th>#</th><th>Design</th><th>Description</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Disc.</th><th>Taxable</th><th>Tax</th><th className="text-end">Amount</th></tr></thead><tbody>{items.map((item, index) => <tr key={item._id || index}><td>{index + 1}</td><td>{item.designNumber || "-"}</td><td>{item.orderName || "-"}</td><td>{item.hsnCode || "-"}</td><td>{item.qtyUnit === "MTR" ? `${n(item.creditMTR).toFixed(2)} MTR` : `${n(item.creditQuantity).toFixed(2)} ${item.qtyUnit || "PCS"}`}</td><td>{money(item.unitPrice)}</td><td>{n(item.discountRate).toFixed(2)}%</td><td>{money(item.taxableAmount)}</td><td>{money(item.taxAmount)}</td><td className="text-end">{money(item.lineTotal)}</td></tr>)}</tbody></table></div>
-            <div className="row justify-content-end"><div className="col-5"><div className="d-flex justify-content-between"><span>Subtotal</span><span>{money(note.totals?.subtotal)}</span></div><div className="d-flex justify-content-between"><span>Discount</span><span>{money(note.totals?.discountAmount)}</span></div><div className="d-flex justify-content-between"><span>Taxable</span><span>{money(note.totals?.taxableAmount)}</span></div><div className="d-flex justify-content-between"><span>Tax</span><span>{money(note.totals?.taxAmount)}</span></div><div className="d-flex justify-content-between"><span>Round Off</span><span>{money(note.totals?.roundOff)}</span></div><hr/><div className="d-flex justify-content-between fs-5 fw-bold"><span>Total</span><span>{money(note.totals?.grandTotal)}</span></div><div className="d-flex justify-content-between mt-2"><span>Adjusted</span><span>{money(note.adjustmentAmount)}</span></div><div className="d-flex justify-content-between"><span>Refund</span><span>{money(note.refundAmount)}</span></div></div></div>
+            <div className="table-responsive"><table className="table table-bordered"><thead className="table-light"><tr><th>#</th><th>Design</th><th>Description</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Disc.</th><th>Taxable</th><th>Tax</th><th className="text-end">Amount</th></tr></thead><tbody>{items.map((item, index) => <tr key={item._id || index}><td>{index + 1}</td><td>{item.designNumber || "-"}</td><td>{item.orderName || "-"}</td><td>{item.hsnCode || "-"}</td><td>{item.qtyUnit === "MTR" ? `${n(item.MTR).toFixed(2)} MTR` : `${n(item.quantity).toFixed(2)} ${item.qtyUnit || "PCS"}`}</td><td>{money(item.unitPrice)}</td><td>{n(item.discountRate).toFixed(2)}%</td><td>{money(item.taxableAmount)}</td><td>{money(item.taxAmount)}</td><td className="text-end">{money(item.lineTotal)}</td></tr>)}</tbody></table></div>
+            <div className="row justify-content-end"><div className="col-5"><div className="d-flex justify-content-between"><span>Subtotal</span><span>{money(note.totals?.subtotal)}</span></div><div className="d-flex justify-content-between"><span>Discount</span><span>{money(note.totals?.discountAmount)}</span></div><div className="d-flex justify-content-between"><span>Taxable</span><span>{money(note.totals?.taxableAmount)}</span></div><div className="d-flex justify-content-between"><span>Tax</span><span>{money(note.totals?.taxAmount)}</span></div><div className="d-flex justify-content-between"><span>Round Off</span><span>{money(note.totals?.roundOff)}</span></div><hr/><div className="d-flex justify-content-between fs-5 fw-bold"><span>Total</span><span>{money(note.totals?.grandTotal)}</span></div><div className="d-flex justify-content-between mt-2"><span>Adjusted</span><span>{money(note.settlement?.adjustmentAmount)}</span></div><div className="d-flex justify-content-between"><span>Refund</span><span>{money(note.settlement?.refundAmount)}</span></div></div></div>
             {note.note && <div className="mt-4"><strong>Note:</strong> {note.note}</div>}
             <div className="mt-5 pt-3 border-top text-center small text-muted">This Credit Note is linked to the original invoice shown above.</div>
         </div>

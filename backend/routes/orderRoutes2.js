@@ -236,15 +236,75 @@ function numberToWords(amount){
   return parts.join(" ")+" Rupees Only";
 }
 
+function invoiceEscape(value){
+  return String(value ?? "")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+}
+
+function renderSimpleInvoiceHtml({order,profile,client}){
+  const dueDate=new Date(order.orderDate||new Date());
+  const terms=Number(order.paymentTerms);
+  if(Number.isFinite(terms))dueDate.setDate(dueDate.getDate()+terms);
+
+  const rows=(order.subOrders||[]).map((item,index)=>{
+    const qtyUnit=item.qtyUnit||"PCS";
+    const qty=qtyUnit==="MTR"?Number(item.MTR||0):Number(item.quantity||0);
+    const amount=round2(qty*Number(item.unitPrice||0));
+    return `<tr>
+      <td>${index+1}</td>
+      <td>${invoiceEscape(item.orderName||"")}</td>
+      <td>${invoiceEscape(item.designNumber||"")}</td>
+      <td>${invoiceEscape(item.hsnCode??"")}</td>
+      <td>${qty.toFixed(2)} ${invoiceEscape(qtyUnit)}</td>
+      <td>${Number(item.unitPrice||0).toFixed(2)}</td>
+      <td>${amount.toFixed(2)}</td>
+    </tr>`;
+  }).join("");
+
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Invoice ${invoiceEscape(order.orderNumber||"")}</title>
+  <style>
+    body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#111;background:#fff}
+    .sheet{max-width:1100px;margin:0 auto}
+    .top{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #111;padding-bottom:14px}
+    h1,h2,p{margin:0 0 6px}.muted{color:#555}
+    table{width:100%;border-collapse:collapse;margin-top:18px}
+    th,td{border:1px solid #222;padding:7px;font-size:13px}
+    th{background:#f3f3f3}.right{text-align:right}
+    .summary{margin-left:auto;width:320px;margin-top:16px}
+    .summary div{display:flex;justify-content:space-between;padding:4px 0}
+    @media print{body{padding:0}.sheet{max-width:none}}
+  </style></head><body><div class="sheet">
+  <div class="top"><div><div class="muted">${invoiceEscape(profile.headerTitle||"TAX INVOICE")}</div><h1>${invoiceEscape(profile.companyName||"Company")}</h1><div>${invoiceEscape(profile.companyAddress||"")}</div><div>GSTIN: ${invoiceEscape(profile.gstin||"")}</div><div>Phone: ${invoiceEscape(profile.phoneNumber1||"")}</div></div>
+  <div><h2>Invoice</h2><div><b>No.:</b> ${invoiceEscape(order.orderNumber||"")}</div><div><b>Date:</b> ${invoiceEscape(new Date(order.orderDate||new Date()).toLocaleDateString("en-IN"))}</div><div><b>Due:</b> ${invoiceEscape(dueDate.toLocaleDateString("en-IN"))}</div></div></div>
+  <div style="margin-top:18px"><h3>Bill To</h3><div><b>${invoiceEscape(order.companyName||client?.companyName||client?.name||"Customer")}</b></div><div>${invoiceEscape(order.Address||client?.address||"")}</div><div>${invoiceEscape(order.City||client?.city||"")}, ${invoiceEscape(order.State||client?.state||"")}</div><div>GSTIN: ${invoiceEscape(order.gstNumber||client?.gstNumber||"")}</div></div>
+  <table><thead><tr><th>#</th><th>Description</th><th>Design</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${rows||'<tr><td colspan="7">No line items.</td></tr>'}</tbody></table>
+  <div class="summary"><div><span>Taxable</span><span>₹${Number(order.totalCost||0).toFixed(2)}</span></div><div><span>Tax</span><span>₹${Number(order.taxAmount||0).toFixed(2)}</span></div><div><span>Round Off</span><span>₹${round2(Number(order.roundOffFinalRevenue||0)-Number(order.finalRevenue||0)).toFixed(2)}</span></div><div style="border-top:2px solid #111;font-weight:700"><span>Invoice Total</span><span>₹${Number(order.roundOffFinalRevenue||0).toFixed(2)}</span></div></div>
+  <div style="margin-top:28px;border-top:1px solid #999;padding-top:10px;font-size:12px">Payment Status: ${invoiceEscape(order.paymentStatus||"Unpaid")} &nbsp; | &nbsp; Paid: ₹${Number(order.paidAmount||0).toFixed(2)} &nbsp; | &nbsp; Due: ₹${Number(order.dueAmount||0).toFixed(2)}</div>
+  </div></body></html>`;
+}
+
 async function renderInvoice(order,res){
-  const profile=await Profile.findOne({createdBy:String(order.createdBy)}).lean()||{};const client=order.clientId?await Client.findById(order.clientId).lean():null;
-  const dueDate=new Date(order.orderDate||new Date());const terms=Number(order.paymentTerms);if(Number.isFinite(terms))dueDate.setDate(dueDate.getDate()+terms);
-  const html=await ejs.renderFile(path.join(__dirname,"../public/invoiceTable.ejs"),{
-    profileHeaderTitle:profile.headerTitle||"Invoice",profileCompanyName:profile.companyName||"Company",profileCompanyAddress:profile.companyAddress||"",profilePhoneNumber1:profile.phoneNumber1||"",profilePhoneNumber2:profile.phoneNumber2||"",profileGstNumber:profile.gstin||"",profilePanNumber:profile.pan||"",profileBankName:profile.bankName||"",profileAccountNo:profile.accountNo||"",profileBranchName:profile.branchName||"",profileIfsc:profile.ifsc||"",
-    clientChallanNumber:order.challanNumber||"",clientCompanyName:order.companyName||"",clientAddress:order.Address||"",clientPhoneNumber:client?.phone||"",clientGstNumber:order.gstNumber||"",clientState:client?.state||order.State||"",
-    orderNumber:order.orderNumber||"",createdAt:new Date(order.orderDate).toLocaleDateString("en-IN"),dueDate:dueDate.toLocaleDateString("en-IN"),paymentTerm:order.paymentTerms||"",ewayBillNo:order.ewbDetails?.ewbNo||"N/A",subOrders:order.subOrders||[],orderTotalCost:order.totalCost||0,orderSubTotal:round2(Number(order.totalCost||0)+Number(order.discountAmount||0)),orderDisRate:order.discountRate||0,orderDiscountAmount:order.discountAmount||0,orderTax:round2(Number(order.taxPercentage||0)/2),orderTaxAmount:round2(Number(order.taxAmount||0)/2),orderIgstTax:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxPercentage||0):0,orderIgstTaxAmount:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxAmount||0):0,orderFinalRevenue:order.finalRevenue||0,orderFinalRevenueRoundOff:round2(Number(order.roundOffFinalRevenue||0)-Number(order.finalRevenue||0)),orderFinalRevenueAfterRoundOff:order.roundOffFinalRevenue||0,orderFinalRevenueInWords:numberToWords(order.roundOffFinalRevenue||0),paymentStatus:order.paymentStatus,dueAmount:order.dueAmount||0,creditAppliedAmount:order.creditAppliedAmount||0,payments:order.payments||[]
-  });
-  res.type("html").send(html);
+  const profile=await Profile.findOne({createdBy:String(order.createdBy)}).lean()||{};
+  const client=order.clientId?await Client.findById(order.clientId).lean():null;
+  const dueDate=new Date(order.orderDate||new Date());
+  const terms=Number(order.paymentTerms);
+  if(Number.isFinite(terms))dueDate.setDate(dueDate.getDate()+terms);
+
+  try{
+    const html=await ejs.renderFile(path.join(__dirname,"../public/invoiceTable.ejs"),{
+      profileHeaderTitle:profile.headerTitle||"Invoice",profileCompanyName:profile.companyName||"Company",profileCompanyAddress:profile.companyAddress||"",profilePhoneNumber1:profile.phoneNumber1||"",profilePhoneNumber2:profile.phoneNumber2||"",profileGstNumber:profile.gstin||"",profilePanNumber:profile.pan||"",profileBankName:profile.bankName||"",profileAccountNo:profile.accountNo||"",profileBranchName:profile.branchName||"",profileIfsc:profile.ifsc||"",
+      clientChallanNumber:order.challanNumber||"",clientCompanyName:order.companyName||"",clientAddress:order.Address||"",clientPhoneNumber:client?.phone||"",clientGstNumber:order.gstNumber||"",clientState:client?.state||order.State||"",
+      orderNumber:order.orderNumber||"",createdAt:new Date(order.orderDate).toLocaleDateString("en-IN"),dueDate:dueDate.toLocaleDateString("en-IN"),paymentTerm:order.paymentTerms||"",ewayBillNo:order.ewbDetails?.ewbNo||"N/A",subOrders:order.subOrders||[],orderTotalCost:order.totalCost||0,orderSubTotal:round2(Number(order.totalCost||0)+Number(order.discountAmount||0)),orderDisRate:order.discountRate||0,orderDiscountAmount:order.discountAmount||0,orderTax:round2(Number(order.taxPercentage||0)/2),orderTaxAmount:round2(Number(order.taxAmount||0)/2),orderIgstTax:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxPercentage||0):0,orderIgstTaxAmount:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxAmount||0):0,orderFinalRevenue:order.finalRevenue||0,orderFinalRevenueRoundOff:round2(Number(order.roundOffFinalRevenue||0)-Number(order.finalRevenue||0)),orderFinalRevenueAfterRoundOff:order.roundOffFinalRevenue||0,orderFinalRevenueInWords:numberToWords(order.roundOffFinalRevenue||0),paymentStatus:order.paymentStatus,dueAmount:order.dueAmount||0,creditAppliedAmount:order.creditAppliedAmount||0,payments:order.payments||[]
+    });
+    return res.type("html").send(html);
+  }catch(error){
+    console.error("Invoice template render failed; using simple fallback:",error);
+    return res.type("html").send(renderSimpleInvoiceHtml({order,profile,client}));
+  }
 }
 
 router.get("/:orderId/invoice",auth,async(req,res)=>{try{const order=await Order.findOne({_id:req.params.orderId,createdBy:userId(req)}).lean();if(!order)return res.status(404).json({message:"Order not found"});await renderInvoice(order,res);}catch(error){res.status(500).json({message:"Error generating invoice",error:error.message});}});

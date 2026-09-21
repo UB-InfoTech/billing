@@ -1012,7 +1012,7 @@ function Clients() {
                     <h5 className="modal-title">Edit Client</h5>
                     <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
                   </div>
-                  <form onSubmit={handleSubmit}>
+                  <form onSubmit={(e) => { e.preventDefault(); handleUpdateClient(); }}>
                     <div className="modal-body">
                       <div className="row g-3">
                         {Object.keys(editClient).filter(key => key !== '_id').map(key => (

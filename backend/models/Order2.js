@@ -1,256 +1,167 @@
-//for multiple items only
-//total cost ne sum of total price kar va ni che
-const mongoose = require('mongoose');
+const mongoose=require("mongoose");
 
-// const SubOrderSchema = new mongoose.Schema({
-//     designNumber: String,
-//     orderName: String,
-//     quantity: Number,
-//     unitPrice: Number,
-//     shortPcs: Number,
-// });
-// // }, { timestamps: true });
+const PAYMENT_METHODS=["Cash","Bank Transfer","UPI","Cheque","Bank"];
+const STATUSES=["Pending","In Process","Completed","Cancelled","Dispatched"];
 
+function round2(v){
+  return Math.round((Number(v||0)+Number.EPSILON)*100)/100;
+}
 
-const orderSchema = new mongoose.Schema({
+function calculateFinancials(data){
+  const subOrders=Array.isArray(data.subOrders)?data.subOrders:[];
+  const discountRate=Math.min(100,Math.max(0,Number(data.discountRate||0)));
+  const taxPercentage=Math.min(100,Math.max(0,Number(data.taxPercentage??5)));
 
-    orderNumber: { type: String }, // invoice number
-    challanNumber: { type: String },
-    lrNo: { type: String }, // Lr No
-    orderDate: { type: Date, default: Date.now },
-    //   designNumber: { type: String },
-    //   orderName: { type: String },
+  const base=subOrders.reduce((total,sub)=>{
+    const unit=sub.qtyUnit||"PCS";
+    const qty=Number(sub.quantity||0);
+    const mtr=Number(sub.MTR||0);
+    const short=Number(sub.shortPcs||0);
+    const price=Math.max(0,Number(sub.unitPrice||0));
+    const billable=unit==="MTR"?Math.max(0,mtr-short):Math.max(0,qty-short);
+    return total+(billable*price);
+  },0);
 
-    // subOrders: [SubOrderSchema],
-    subOrders: [
-        {
-            designNumber: String,
-            orderName: String,
-            hsnCode: Number,
-            qtyUnit: String,
-            quantity: Number,
-            cut: Number,
-            MTR: Number,
-            unitPrice: Number,
-            shortPcs: Number,
-        }
-    ],
+  const discount=round2(base*discountRate/100);
+  const totalCost=round2(base-discount);
+  const tax=round2(totalCost*taxPercentage/100);
+  const finalRevenue=round2(totalCost+tax);
+  const rounded=Math.round(finalRevenue);
+  const roundOff=round2(rounded-finalRevenue);
 
-    Address: { type: String },
-    State: { type: String },
-    City: { type: String },
-    pinCode: { type: String },
-    stateCode: { type: String },
+  const payments=Array.isArray(data.payments)?data.payments:[];
+  const paidAmount=round2(payments.reduce((s,p)=>s+Math.max(0,Number(p.amount||0)),0));
+  const creditAppliedAmount=Math.min(
+    rounded,
+    Math.max(0,round2(Number(data.creditAppliedAmount||0)))
+  );
+  const dueAmount=Math.max(0,round2(rounded-paidAmount-creditAppliedAmount));
 
-    clientId: { type: mongoose.Schema.Types.ObjectId, ref: "Client" },
-    gstNumber: { type: String },
-    companyName: { type: String },
+  const paymentStatus=dueAmount<=0
+    ?"Paid"
+    :(paidAmount+creditAppliedAmount)>0
+      ?"Partial"
+      :"Unpaid";
 
-    // designFiles: [String],
-    //   quantity: { type: Number, default: 0 },
-    //   shortPcs: { type: Number, default: 0 }, //return pcs
+  return {
+    discountAmount:discount,
+    totalCost,
+    taxAmount:tax,
+    finalRevenue,
+    roundOffFinalRevenue:rounded,
+    dueAmount,
+    paidAmount,
+    paymentStatus,
+    totalAmount:rounded,
+    roundOff,
+  };
+}
 
-    //   orderType: { type: String, enum: ["Custom", "Bulk", "Sample"], default: "Custom" }, // Dropdown
-    //   fabricType: { type: String, enum: ["Cotton", "Silk", "Polyester", "Wool"], default: "Cotton" }, // Dropdown
-    //   priority: { type: String, enum: ["Low", "Medium", "High", "Urgent"], default: "Medium" }, // Dropdown
-    status: { type: String, enum: ["Pending", "In Process", "Completed", "Cancelled", "Dispatched"], default: "Pending" }, // Dropdown
-    paymentTerms: { type: String, enum: ['30', '60', '90', 'Advance'], default: '30' },
+const paymentSchema=new mongoose.Schema({
+  _id:{type:mongoose.Schema.Types.ObjectId,auto:true},
+  amount:{type:Number,required:true,min:0},
+  paymentDate:{type:Date,default:Date.now},
+  createdAt:{type:Date,default:Date.now},
+  method:{type:String,enum:PAYMENT_METHODS,default:"Cash"},
+  amountReference:{type:String,trim:true,default:""},
+  processedBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",default:null}
+},{_id:false});
 
-    statusHistory: [
-        {
-            status: { type: String },
-            timestamp: { type: Date, default: Date.now }
-        }
-    ],
-    // tracking: [
-    //   {
-    //     stage: { type: String },
-    //     timestamp: { type: Date, default: Date.now },
-    //   },
-    // ],
-    //   estimatedCompletion: { type: Date },
-    paymentStatus: { type: String, enum: ["Unpaid", "Partial", "Paid"], default: "Unpaid" }, // Dropdown
-    // payments: [PaymentSchema],
-    payments: [
-        {
-            _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
-            amount: { type: Number },
-            paymentDate: { type: Date },
-            createdAt: { type: Date, default: Date.now },
-            method: { type: String, enum: ["Cash", "Bank Transfer", "UPI", "Cheque"], default: "Cash" }, // Dropdown
-            amountReference: { type: String },
-        }
-    ],
-    // expenses: [
-    //   {
-    //     description: String,
-    //     amount: Number,
-    //     date: { type: Date, default: Date.now },
-    //     category: { type: String, enum: ["Raw Materials", "Labor", "Maintenance", "Other"], default: "Other" }, // Dropdown
-    //   }
-    // ],
-    // qrCode: String,
+const subOrderSchema=new mongoose.Schema({
+  productId:{type:mongoose.Schema.Types.ObjectId,ref:"Product",default:null},
+  designNumber:{type:String,trim:true,default:""},
+  orderName:{type:String,trim:true,default:""},
+  hsnCode:{type:Number,default:null},
+  qtyUnit:{type:String,trim:true,default:"PCS"},
+  quantity:{type:Number,default:0,min:0},
+  cut:{type:Number,default:0,min:0},
+  MTR:{type:Number,default:0,min:0},
+  unitPrice:{type:Number,default:0,min:0},
+  shortPcs:{type:Number,default:0,min:0},
+},{_id:true});
 
-    //   unitPrice: { type: Number },
-    taxPercentage: { type: Number, default: 5 }, // Dynamic Tax Input
-    //   otherTaxes: { type: Number, default: 0 }, // Other tax fields
-    taxAmount: { type: Number },
-    discountRate: { type: Number, default: 0 },
-    discountAmount: { type: Number },
+const orderSchema=new mongoose.Schema({
+  orderNumber:{type:String,trim:true,index:true},
+  challanNumber:{type:String,trim:true,default:""},
+  lrNo:{type:String,trim:true,default:""},
+  orderDate:{type:Date,default:Date.now,index:true},
+  subOrders:{type:[subOrderSchema],default:[]},
+  Address:{type:String,default:""},
+  State:{type:String,default:""},
+  City:{type:String,default:""},
+  pinCode:{type:String,default:""},
+  stateCode:{type:String,default:""},
+  clientId:{type:mongoose.Schema.Types.ObjectId,ref:"Client",default:null,index:true},
+  gstNumber:{type:String,trim:true,default:""},
+  companyName:{type:String,trim:true,default:""},
+  status:{type:String,enum:STATUSES,default:"Pending",index:true},
+  paymentTerms:{type:String,enum:["30","60","90","Advance"],default:"30"},
+  statusHistory:[{status:{type:String,enum:STATUSES},timestamp:{type:Date,default:Date.now}}],
+  paymentStatus:{type:String,enum:["Unpaid","Partial","Paid"],default:"Unpaid",index:true},
+  payments:{type:[paymentSchema],default:[]},
+  taxPercentage:{type:Number,default:5,min:0,max:100},
+  taxAmount:{type:Number,default:0,min:0},
+  discountRate:{type:Number,default:0,min:0,max:100},
+  discountAmount:{type:Number,default:0,min:0},
+  totalCost:{type:Number,default:0,min:0},
+  paidAmount:{type:Number,default:0,min:0},
+  dueAmount:{type:Number,default:0,min:0},
+  totalAmount:{type:Number,default:0,min:0},
+  finalRevenue:{type:Number,default:0,min:0},
+  roundOffFinalRevenue:{type:Number,default:0,min:0},
+  roundOff:{type:Number,default:0},
+  creditAppliedAmount:{type:Number,default:0,min:0},
+  creditNoteCount:{type:Number,default:0,min:0},
+  lastPaymentDate:{type:Date,default:null},
+  note:{type:String,trim:true,default:""},
+  netProfit:{type:Number,default:0},
+  createdBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true,index:true},
+  ewbDetails:{
+    ewbNo:{type:String,default:""},
+    ewbDate:{type:String,default:""},
+    validTill:{type:String,default:""},
+    alert:{type:String,default:""},
+    status:{type:String,default:null},
+  },
+},{timestamps:true});
 
+orderSchema.index({createdBy:1,orderDate:-1});
+orderSchema.index({createdBy:1,status:1,paymentStatus:1});
+orderSchema.index({createdBy:1,clientId:1,orderDate:-1});
+orderSchema.index({createdBy:1,orderNumber:1});
 
-    totalCost: { type: Number }, // Total after Discount // sum of total price 
-    paidAmount: { type: Number, default: 0 },
-    dueAmount: { type: Number },
-    creditAppliedAmount: { type: Number, default: 0, min: 0 },
-    creditNoteCount: { type: Number, default: 0, min: 0 },
-    totalAmount: { type: Number },
-    finalRevenue: { type: Number }, // totalCost - Tax
-    roundOffFinalRevenue: { type: Number }, // after roundOff finalRevenue
-    note: { type: String },
+function applyFinancials(doc){
+  const calc=calculateFinancials(doc);
+  Object.assign(doc,calc);
+  if(!Array.isArray(doc.statusHistory))doc.statusHistory=[];
+  if(!doc.statusHistory.length)doc.statusHistory.push({status:doc.status,timestamp:new Date()});
+}
 
-    // rawMaterialCost: { type: Number }, // Fabric, thread, dye costs
-    // laborCost: { type: Number }, // Wages for workers
-    // machineUsageCost: { type: Number }, // Electricity, wear & tear
-    netProfit: { type: Number }, // finalRevenue - (all costs)
-    createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
-
-    ewbDetails: {
-        ewbNo: { type: String },
-        ewbDate: { type: String },
-        validTill: { type: String },
-        alert: { type: String },
-        status: {
-            type: String,
-            // enum: ['generated', 'cancelled'],
-            default: null,
-        }
-    },
-
-}, { timestamps: true });
-
-
-
-// Auto Calculate Due Amount & Payment Status Before Saving
-
-// orderSchema.virtual("dueAmount").get(function () {
-//   return this.totalCost - this.paidAmount;
-// });
-
-
-orderSchema.pre("findOneAndUpdate", function (next) {
-
-    const update = this.getUpdate();
-
-    // Get current document values
-    this.model.findOne(this.getQuery()).then(doc => {
-        // var quantity = update.quantity || doc.quantity;
-        // var shortPcs = update.shortPcs || doc.shortPcs;
-        // var unitPrice = update.unitPrice || doc.unitPrice;
-        var subOrders = update.subOrders || doc.subOrders || [];
-        var discountRate = update.discountRate || doc.discountRate;
-        var taxPercentage = update.taxPercentage || doc.taxPercentage;
-        var payments = update.payments || doc.payments;
-
-        var totalBaseCost = subOrders.reduce((total, sub) => {
-
-            const qtyUnit = sub.qtyUnit || "PCS";
-            const mtr = sub.MTR || 0;
-            const qty = sub.quantity || 0;
-            const short = sub.shortPcs || 0;
-            const unitPrice = sub.unitPrice || 0;
-            if (qtyUnit === "MTR") {
-                return total + ((mtr - short) * unitPrice);
-            } else {
-                return total + ((qty - short) * unitPrice);
-            }
-            // return (total + ((qty - short) * unitPrice));
-        }, 0);
-
-        // var totalBaseCost = Number(((quantity - shortPcs) * unitPrice).toFixed(2));
-        var discountAmount = Number(((totalBaseCost * discountRate) / 100).toFixed(2));
-        var totalCost = totalBaseCost - discountAmount;
-
-        var taxAmount = Number(((totalCost * taxPercentage) / 100).toFixed(2));
-        var finalRevenue = totalCost + taxAmount;
-        var roundOffFinalRevenue = Math.round(finalRevenue);
-
-        var totalPaid = payments.reduce((sum, payment) =>
-            Number(sum) + (Number(payment.amount) || 0), 0);
-        // var dueAmount = Number((finalRevenue - totalPaid).toFixed(2));
-        var dueAmount = Number((roundOffFinalRevenue - totalPaid).toFixed(2));
-
-        let paymentStatus;
-        if (dueAmount === 0) {
-            paymentStatus = "Paid";
-        } else if (dueAmount < roundOffFinalRevenue) {
-            paymentStatus = "Partial";
-        } else {
-            paymentStatus = "Unpaid";
-        }
-
-        // Update the fields
-        this.setUpdate({
-            ...update,
-            totalBaseCost,
-            discountAmount,
-            totalCost,
-            taxAmount,
-            finalRevenue,
-            roundOffFinalRevenue,
-            dueAmount,
-            paymentStatus
-        });
-
-        next();
-    }).catch(err => next(err));
+orderSchema.pre("save",function(next){
+  try{applyFinancials(this);next();}catch(err){next(err);}
 });
 
-orderSchema.pre("save", function (next) {
+orderSchema.pre("findOneAndUpdate",async function(next){
+  try{
+    const current=await this.model.findOne(this.getQuery()).lean();
+    if(!current)return next();
 
-    const totalBaseCost = this.subOrders.reduce((total, sub) => {
-        const qtyUnit = sub.qtyUnit || "PCS";
-        const mtr = sub.MTR || 0;
-        const qty = sub.quantity || 0;
-        const short = sub.shortPcs || 0;
-        const price = sub.unitPrice || 0;
-        if (qtyUnit === "MTR") {
-            return total + ((mtr - short) * price);
-        } else {
-            return total + ((qty - short) * price);
-        }
-        // return total + ((qty - short) * price);
-    }, 0);
+    const update=this.getUpdate()||{};
+    const set={...(update.$set||{})};
+    const merged={...current,...set};
 
+    if(update.$push?.payments?.$each)merged.payments=[...(current.payments||[]),...(update.$push.payments.$each||[])];
+    else if(update.$push?.payments)merged.payments=[...(current.payments||[]),update.$push.payments];
 
-    // const totalBaseCost = Number(((this.quantity - this.shortPcs) * this.unitPrice).toFixed(2));
-    this.discountAmount = Number(((totalBaseCost * this.discountRate) / 100).toFixed(2));
-    this.totalCost = Number(totalBaseCost - this.discountAmount).toFixed(2);
-    this.taxAmount = Number(((this.totalCost * this.taxPercentage) / 100).toFixed(2));
-    this.finalRevenue = this.totalCost + this.taxAmount;
-    this.roundOffFinalRevenue = Math.round(this.finalRevenue);
+    if(update.$pull?.payments)merged.payments=(current.payments||[]).filter(p=>String(p._id)!==String(update.$pull.payments._id||update.$pull.payments));
 
-    // Calculate Due Amount 
-    var totalPaid = this.payments.reduce((sum, payment) => Number(sum) + (Number(payment.amount) || 0), 0);
-    this.dueAmount = Number((this.roundOffFinalRevenue - totalPaid).toFixed(2));
-    // this.dueAmount = Number((this.finalRevenue - totalPaid).toFixed(2));
-
-    // Update Payment Status
-    if (this.dueAmount == 0) {
-        this.paymentStatus = "Paid";
-        this.dueAmount = 0; // Ensure it doesn't go negative
-    } else if (this.dueAmount < this.roundOffFinalRevenue) {
-        this.paymentStatus = "Partial";
-    } else {
-        this.paymentStatus = "Unpaid";
-    }
-
+    const calc=calculateFinancials(merged);
+    this.setUpdate({...update,$set:{...set,...calc}});
     next();
+  }catch(err){next(err);}
 });
 
+orderSchema.statics.calculateFinancials=calculateFinancials;
+orderSchema.statics.round2=round2;
 
-module.exports = mongoose.model('Order2', orderSchema);
+module.exports=mongoose.model("Order2",orderSchema);

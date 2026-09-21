@@ -1,114 +1,74 @@
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const jwt = require('jsonwebtoken');
-// const axios = require('axios');
-const clientRoutes = require('./routes/clientRoutes');
-const orderRoutes = require('./routes/orderRoutes2');
-const authRoutes = require('./routes/auth');
-const reportRoutes = require('./routes/reportRoutes');
-const calendarRoutes = require('./routes/calendar');
-const productRoutes = require('./routes/productRoute');
-const profileRoutes = require('./routes/profile');
-
-const ewaybillRoutes = require('./routes/ewaybillRoutes');
-const getGstDetailsRoutes = require('./routes/getGstDetailsRoutes');
-const bulkPaymentRoutes = require('./routes/bulkPayment');
-
-// credit notes
-// const creditNoteOldRoutes = require('./routes/creditNoteRoutesOld');
-const creditNoteRoutes = require('./routes/creditNoteRoutes');
-
-// const { cloudinary } = require('./utils/cloudinary');
-
-// const supplierRoutes = require('./routes/supplierRoutes');
-// const orderRoutes = require('./routes/orderRoutes');
-// const auth = require('./routes/auth');
-// const expenseRoutes = require('./routes/expenseRoutes');
-
-// const setupRecurringExpenses = require('./utils/recurringExpense');
-// setupRecurringExpenses();
-
-// const http = require('http');
-// const socketIo = require('socket.io');
-// const server = http.createServer(app);
-// const io = socketIo(server, {
-//   cors: { origin: '*' }
-// });
+const express=require("express");
+const mongoose=require("mongoose");
+const cors=require("cors");
+const dotenv=require("dotenv");
+const path=require("path");
+const rateLimit=require("express-rate-limit");
 
 dotenv.config();
-const app = express();
 
-// app.set('io', io); // pass to controller
+const app=express();
+const PORT=Number(process.env.PORT||5000);
 
-// Middleware
-// app.use(cors());
+const allowedOrigins=String(process.env.FRONTEND_URLS||process.env.FRONTEND_URL||"*")
+  .split(",").map(x=>x.trim()).filter(Boolean);
+
+app.set("trust proxy",1);
 app.use(cors({
-  // origin: 'http://localhost:5173',
-  credentials: true,
-  allowedHeaders: ['Content-Type', 'x-auth-token'],
-  exposedHeaders: ['x-auth-token']
+  origin:(origin,callback)=>{
+    if(!origin||allowedOrigins.includes("*")||allowedOrigins.includes(origin))return callback(null,true);
+    return callback(new Error("CORS origin not allowed."));
+  },
+  credentials:true,
+  allowedHeaders:["Content-Type","x-auth-token","Authorization"],
+  exposedHeaders:["x-auth-token"]
 }));
-app.use(express.json());
+app.use(express.json({limit:"2mb"}));
+app.use(express.urlencoded({extended:true,limit:"2mb"}));
 
+app.use("/uploads",express.static(path.join(__dirname,"public/uploads"),{maxAge:"7d"}));
 
-// Database Connection
-mongoose.connect(process.env.MONGO_URI).then(() => console.log('MongoDB Connected'))
-  .catch(err => console.log(err));
-
-// JWT Middleware
-const verifyToken = (req, res, next) => {
-  // const token = req.header('x-auth-token') || req.query.token || req.body.token;
-  const token = req.header('x-auth-token');
-
-  if (!token) return res.status(401).json({ message: 'Access Denied' });
-  try {
-    const verified = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = verified;
-    next();
-  } catch (err) {
-    // res.status(400).json({ message: 'Invalid Token' });
-    res.status(400).json({ message: 'Token Expired' });
-  }
-};
-
-
-// Routes
-// app.use('/api/auth', require('./routes/auth'));
-app.use('/api/auth', authRoutes);
-
-
-// Routes
-app.use('/api/clients', clientRoutes);
-app.use('/api/order', orderRoutes);
-// app.use('/api/reports', reportRoutes);
-app.use('/api/events', calendarRoutes);
-app.use('/api/expenses', require('./routes/expenseRoutes2'));
-app.use('/api/products', productRoutes);
-app.use('/api/profile', profileRoutes);
-app.use('/api/ewaybill', ewaybillRoutes);
-app.use('/api/gstdetails', getGstDetailsRoutes);
-app.use('/api/payments', bulkPaymentRoutes);
-app.use('/api/credit-notes', creditNoteRoutes);
-// app.use('/api/credit-notesOld', creditNoteOldRoutes);
-
-// app.use('/api/notes', require('./routes/notes')); // Add this line
-// app.use('/api/suppliers', supplierRoutes);
-// app.use('/api/clients', verifyToken, clientRoutes);
-// app.use('/api/suppliers', verifyToken, supplierRoutes);
-// app.use('/api/auth', authRoutes);
-
-// app.use('/api/expenses', auth, expenseRoutes);
-// app.use('/api/expenses', expenseRoutes);
-
-
-// Error Handling Middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ message: 'Something went wrong!' });
+app.get("/api/health",(req,res)=>{
+  res.json({
+    status:"ok",
+    database:mongoose.connection.readyState===1?"connected":"disconnected",
+    timestamp:new Date().toISOString(),
+    uptime:process.uptime(),
+    version:process.env.API_VERSION||"1.0.0"
+  });
 });
 
-// Start Server
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.use("/api/auth",require("./routes/auth"));
+app.use("/api/clients",require("./routes/clientRoutes"));
+app.use("/api/order",require("./routes/orderRoutes2"));
+app.use("/api/events",require("./routes/calendar"));
+app.use("/api/expenses",require("./routes/expenseRoutes2"));
+app.use("/api/products",require("./routes/productRoute"));
+app.use("/api/profile",require("./routes/profile"));
+app.use("/api/ewaybill",require("./routes/ewaybillRoutes"));
+app.use("/api/gstdetails",require("./routes/getGstDetailsRoutes"));
+app.use("/api/payments",require("./routes/bulkPayment"));
+app.use("/api/credit-notes",require("./routes/creditNoteRoutes"));
+app.use("/api/reports",require("./routes/reportRoutes"));
+
+const errorHandler=(err,req,res,next)=>{
+  console.error("API error:",err);
+  if(res.headersSent)return next(err);
+  const status=Number(err.status||err.statusCode)||500;
+  res.status(status).json({message:err.message||"Something went wrong.",requestId:req.id||undefined});
+};
+app.use(errorHandler);
+
+async function start(){
+  if(!process.env.MONGO_URI)throw new Error("MONGO_URI is required.");
+  if(!process.env.JWT_SECRET)throw new Error("JWT_SECRET is required.");
+  await mongoose.connect(process.env.MONGO_URI,{serverSelectionTimeoutMS:10000});
+  console.log("MongoDB Connected");
+  app.listen(PORT,()=>console.log("Server running on port "+PORT));
+}
+start().catch(error=>{
+  console.error("Server startup failed:",error);
+  process.exit(1);
+});
+
+module.exports=app;

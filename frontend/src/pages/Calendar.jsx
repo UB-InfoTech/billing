@@ -4,6 +4,8 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import timeGridPlugin from "@fullcalendar/timegrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import axios from "axios";
+
+const authConfig = () => ({ headers: { "x-auth-token": localStorage.getItem("token") || "" } });
 import { Modal, Button, Form } from "react-bootstrap";
 import "./CalendarPage.css"; // Optional: custom CSS for additional tweaks
 
@@ -19,7 +21,7 @@ const Calendar = () => {
         isEdit: false,
     });
 
-  const linkone = `http://localhost:5000`;
+  const linkone = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
   
     // Fetch events from the database
     useEffect(() => {
@@ -132,7 +134,7 @@ const Calendar = () => {
         }
 
         try {
-            await axios.delete(`${linkone}/api/events/${modalEvent.id}`);
+            await axios.delete(`${linkone}/api/events/${modalEvent.id}`, authConfig());
             setEvents(events.filter((event) => event.id !== modalEvent.id));
             setShowModal(false);
             alert("✅ Event Deleted Sucessfully");

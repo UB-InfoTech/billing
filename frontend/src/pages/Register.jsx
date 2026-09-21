@@ -8,9 +8,8 @@ const Register = () => {
     email: '',
     password: ''
   });
-  // const linkone = `http://localhost:5000`;
-  const linkone = `https://baba.divinesparks.in`;
-
+  const linkone = `http://localhost:5000`;
+  
 
   const [error, setError] = useState('');
   const navigate = useNavigate();

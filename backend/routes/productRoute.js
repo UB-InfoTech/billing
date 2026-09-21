@@ -19,7 +19,7 @@ const storage=multer.diskStorage({
   }
 });
 const upload=multer({storage,limits:{files:5,fileSize:5*1024*1024},fileFilter:(_,file,cb)=>{
-  if(/^image\\/(jpeg|png|webp|gif)$/i.test(file.mimetype))return cb(null,true);
+  if(new RegExp("^image/(jpeg|png|webp|gif)$","i").test(file.mimetype))return cb(null,true);
   cb(new Error("Only image files are allowed."));
 }});
 

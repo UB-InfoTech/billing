@@ -1038,12 +1038,5 @@ async function cancelCreditNote(req, res) {
 router.post("/:id/cancel", auth, cancelCreditNote);
 router.delete("/:id", auth, cancelCreditNote);
 
-// Financial values are immutable after posting; metadata can be edited. Use /:id/cancel instead of DELETE.
-router.delete("/:id", auth, async (req, res) => {
-  return res.status(405).json({
-    message:
-      "Credit notes cannot be deleted. Cancel the posted credit note to preserve the audit trail.",
-  });
-});
 
 module.exports = router;

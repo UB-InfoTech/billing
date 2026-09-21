@@ -94,6 +94,7 @@ export default function CreditNote() {
     const [items, setItems] = useState([]);
     const [form, setForm] = useState(emptyForm());
     const [previewNote, setPreviewNote] = useState(null);
+    const [editingNote, setEditingNote] = useState(null);
 
     const [loading, setLoading] = useState(false);
     const [orderLoading, setOrderLoading] = useState(false);
@@ -461,6 +462,72 @@ export default function CreditNote() {
         }
     };
 
+    const startEditNote = (note) => {
+        if (!note || note.status === "Cancelled") {
+            setError("Cancelled Credit Notes cannot be edited.");
+            return;
+        }
+        setEditingNote({
+            _id: note._id,
+            creditNoteDate: note.creditNoteDate ? new Date(note.creditNoteDate).toISOString().split("T")[0] : today(),
+            reason: note.reason || "Other",
+            note: note.note || "",
+        });
+        setError("");
+        setSuccess("");
+        setView("edit");
+    };
+
+    const updateNote = async () => {
+        if (!editingNote?._id) return;
+        try {
+            setSaving(true);
+            setError("");
+            const response = await axios.put(
+                `${API_BASE}/api/credit-notes/${editingNote._id}`,
+                {
+                    creditNoteDate: editingNote.creditNoteDate,
+                    reason: editingNote.reason,
+                    note: editingNote.note,
+                },
+                getAuthConfig()
+            );
+            const updated = response.data?.creditNote;
+            setPreviewNote(updated);
+            setEditingNote(null);
+            setSuccess(response.data?.message || "Credit Note updated successfully.");
+            setView("preview");
+            await loadCreditNotes(filters);
+        } catch (error) {
+            setError(getErrorMessage(error));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const deleteNote = async (id) => {
+        if (!id) return;
+        if (!window.confirm("Delete this Credit Note? The accounting effect will be reversed and the record marked cancelled.")) return;
+        try {
+            setCancellingId(id);
+            setError("");
+            const response = await axios.delete(
+                `${API_BASE}/api/credit-notes/${id}`,
+                getAuthConfig()
+            );
+            setSuccess(response.data?.message || "Credit Note deleted successfully.");
+            await loadCreditNotes(filters);
+            if (previewNote?._id === id) {
+                setPreviewNote(response.data?.creditNote || null);
+                setView("preview");
+            }
+        } catch (error) {
+            setError(getErrorMessage(error));
+        } finally {
+            setCancellingId(null);
+        }
+    };
+
     const print = () => window.print();
 
     return (
@@ -526,7 +593,7 @@ export default function CreditNote() {
                                             <td className="text-end">{money(note?.totals?.grandTotal)}</td>
                                             <td className="text-end">{money(note?.settlement?.adjustmentAmount)}</td>
                                             <td className="text-end">{money(note?.settlement?.refundAmount)}</td>
-                                            <td className="text-end no-print"><div className="btn-group btn-group-sm"><button className="btn btn-outline-primary" onClick={() => openNote(note._id)}>View</button>{note.status === "Posted" && <button className="btn btn-outline-danger" disabled={cancellingId === note._id} onClick={() => cancelNote(note._id)}>{cancellingId === note._id ? "..." : "Cancel"}</button>}</div></td>
+                                            <td className="text-end no-print"><div className="btn-group btn-group-sm"><button className="btn btn-outline-primary" onClick={() => openNote(note._id)}>View</button>{note.status === "Posted" && <button className="btn btn-outline-warning" onClick={() => startEditNote(note)}>Edit</button>}{note.status === "Posted" && <button className="btn btn-outline-danger" disabled={cancellingId === note._id} onClick={() => deleteNote(note._id)}>{cancellingId === note._id ? "..." : "Delete"}</button>}</div></td>
                                         </tr>)}
                                     </tbody>
                                 </table>
@@ -601,8 +668,23 @@ export default function CreditNote() {
                     </div>
                 )}
 
+                {view === "edit" && editingNote && <div className="card border-0 shadow-sm credit-note-create">
+                    <div className="card-body">
+                        <div className="d-flex justify-content-between align-items-center mb-3">
+                            <div><h5 className="fw-bold mb-1">Edit Credit Note</h5><div className="text-muted small">Invoice, total and accounting effects are locked.</div></div>
+                            <button className="btn btn-outline-secondary btn-sm" onClick={() => setView("list")}>Back</button>
+                        </div>
+                        <div className="row g-3">
+                            <div className="col-md-4"><label className="form-label fw-semibold">Credit Note Date</label><input type="date" className="form-control" value={editingNote.creditNoteDate} onChange={(e) => setEditingNote((v) => ({ ...v, creditNoteDate: e.target.value }))} /></div>
+                            <div className="col-md-8"><label className="form-label fw-semibold">Reason</label><select className="form-select" value={editingNote.reason} onChange={(e) => setEditingNote((v) => ({ ...v, reason: e.target.value }))}>{REASONS.map((reason) => <option key={reason}>{reason}</option>)}</select></div>
+                            <div className="col-12"><label className="form-label fw-semibold">Note</label><textarea className="form-control" rows="4" maxLength="1000" value={editingNote.note} onChange={(e) => setEditingNote((v) => ({ ...v, note: e.target.value }))} /></div>
+                        </div>
+                        <div className="d-flex justify-content-end gap-2 mt-3"><button className="btn btn-outline-secondary" onClick={() => setView("list")}>Cancel</button><button className="btn btn-primary" disabled={saving} onClick={updateNote}>{saving ? "Saving..." : "Update Credit Note"}</button></div>
+                    </div>
+                </div>}
+
                 {view === "preview" && previewNote && <div className="credit-note-print">
-                    <div className="d-flex justify-content-end gap-2 mb-3 no-print"><button className="btn btn-outline-secondary" onClick={() => setView("list")}>Back</button><button className="btn btn-primary" onClick={print}>Print</button></div>
+                    <div className="d-flex justify-content-end gap-2 mb-3 no-print"><button className="btn btn-outline-secondary" onClick={() => setView("list")}>Back</button>{previewNote.status === "Posted" && <><button className="btn btn-outline-warning" onClick={() => startEditNote(previewNote)}>Edit</button><button className="btn btn-outline-danger" onClick={() => deleteNote(previewNote._id)}>Delete</button></>}<button className="btn btn-primary" onClick={print}>Print</button></div>
                     <CreditNotePrint note={previewNote} />
                 </div>}
             </div>

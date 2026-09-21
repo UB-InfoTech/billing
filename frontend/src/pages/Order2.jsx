@@ -1788,7 +1788,7 @@ function Order2() {
                                         <tbody>
                                             {payments.map((p) => (
                                                 <tr key={p._id}>
-                                                    <td>{new Date(p.date).toLocaleDateString()}</td>
+                                                    <td>{new Date(p.paymentDate || p.createdAt).toLocaleDateString()}</td>
                                                     <td>{p.method}</td>
                                                     <td>{p.amount}</td>
                                                     <td>{p.amountReference}</td>

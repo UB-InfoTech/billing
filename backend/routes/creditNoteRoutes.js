@@ -434,17 +434,13 @@ router.post("/", auth, async (req, res) => {
     });
   }
 
-  if (!isReplicaSetAvailable()) {
-    return res.status(503).json({
-      message:
-        "Credit notes require MongoDB transactions. Start MongoDB as a replica set or use MongoDB Atlas before posting credit notes.",
-    });
-  }
-
-  const session = await mongoose.startSession();
+  // Atlas/replica-set deployments get full MongoDB transactions. Local standalone
+  // MongoDB instances use a sequential fallback so development is not blocked.
+  const transactional = isReplicaSetAvailable();
+  const session = transactional ? await mongoose.startSession() : null;
 
   try {
-    session.startTransaction();
+    if (session) session.startTransaction();
 
     const {
       creditNoteNumber: requestedNumber,
@@ -801,8 +797,8 @@ router.post("/", auth, async (req, res) => {
       createdBy: userId,
     });
 
-    await noteDoc.save({ session });
-    await session.commitTransaction();
+    await noteDoc.save(session ? { session } : undefined);
+    if (session) await session.commitTransaction();
 
     const saved = await CreditNote.findById(noteDoc._id)
       .populate(
@@ -821,10 +817,12 @@ router.post("/", auth, async (req, res) => {
       },
     });
   } catch (error) {
-    try {
-      await session.abortTransaction();
-    } catch {
-      // Transaction may already be closed.
+    if (session) {
+      try {
+        if (session.inTransaction()) await session.abortTransaction();
+      } catch {
+        // Transaction may already be closed.
+      }
     }
 
     console.error("Credit note create error:", error);
@@ -843,7 +841,7 @@ router.post("/", auth, async (req, res) => {
       message: error?.message || "Unable to create credit note.",
     });
   } finally {
-    await session.endSession();
+    if (session) await session.endSession();
   }
 });
 
@@ -853,21 +851,16 @@ router.post("/:id/cancel", auth, async (req, res) => {
   if (!userId) {
     return res.status(401).json({ message: "Authentication required." });
   }
-  if (!isReplicaSetAvailable()) {
-    return res.status(503).json({
-      message:
-        "Credit note cancellation requires MongoDB transactions. Start MongoDB as a replica set or use MongoDB Atlas.",
-    });
-  }
 
   if (!mongoose.isValidObjectId(req.params.id)) {
     return res.status(400).json({ message: "Invalid credit note ID." });
   }
 
-  const session = await mongoose.startSession();
+  const transactional = isReplicaSetAvailable();
+  const session = transactional ? await mongoose.startSession() : null;
 
   try {
-    session.startTransaction();
+    if (session) session.startTransaction();
 
     const note = await CreditNote.findById(req.params.id).session(session);
     if (!note) throw new Error("Credit note not found.");
@@ -960,8 +953,8 @@ router.post("/:id/cancel", auth, async (req, res) => {
     note.cancelledAt = new Date();
     note.cancelledBy = userId;
 
-    await note.save({ session });
-    await session.commitTransaction();
+    await note.save(session ? { session } : undefined);
+    if (session) await session.commitTransaction();
     await syncClientData(order.clientId);
 
     const cancelled = await CreditNote.findById(note._id)
@@ -976,13 +969,15 @@ router.post("/:id/cancel", auth, async (req, res) => {
       creditNote: { ...cancelled, originalOrder: cancelled?.originalOrderId }
     });
   } catch (error) {
-    try {
-      await session.abortTransaction();
-    } catch {}
+    if (session) {
+      try {
+        if (session.inTransaction()) await session.abortTransaction();
+      } catch {}
+    }
     console.error("Credit note cancellation error:", error);
     return res.status(400).json({ message: error.message });
   } finally {
-    await session.endSession();
+    if (session) await session.endSession();
   }
 });
 

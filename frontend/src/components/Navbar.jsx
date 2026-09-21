@@ -19,6 +19,7 @@ function Navbar() {
             <nav className="bg-light border-end vh-auto p-3 min-vh-100">
                 <h4>Admin Dashboard</h4>
                 <ul className="nav flex-column row-gap-3">
+                    <li className="nav-item"><div className="nav-link d-flex align-items-baseline gap-4"><h2><i className="bi bi-speedometer2 text-primary"></i></h2><h5><Link to="/dashboard" className="text-primary-emphasis">Dashboard</Link></h5></div></li>
                     <li className="nav-item">
                         <div className="nav-link d-flex align-items-baseline gap-4">
                             <h2>
@@ -91,6 +92,7 @@ function Navbar() {
                                 <svg xmlns="http://www.w3.org/2000/svg" height="27px" viewBox="0 -960 960 960" width="27px" fill="#052c65"><path d="M200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-80h80v80h320v-80h80v80h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Zm0-480h560v-80H200v80Zm0 0v-80 80Zm280 240q-17 0-28.5-11.5T440-440q0-17 11.5-28.5T480-480q17 0 28.5 11.5T520-440q0 17-11.5 28.5T480-400Zm-160 0q-17 0-28.5-11.5T280-440q0-17 11.5-28.5T320-480q17 0 28.5 11.5T360-440q0 17-11.5 28.5T320-400Zm320 0q-17 0-28.5-11.5T600-440q0-17 11.5-28.5T640-480q17 0 28.5 11.5T680-440q0 17-11.5 28.5T640-400ZM480-240q-17 0-28.5-11.5T440-280q0-17 11.5-28.5T480-320q17 0 28.5 11.5T520-280q0 17-11.5 28.5T480-240Zm-160 0q-17 0-28.5-11.5T280-280q0-17 11.5-28.5T320-320q17 0 28.5 11.5T360-280q0 17-11.5 28.5T320-240Zm320 0q-17 0-28.5-11.5T600-280q0-17 11.5-28.5T640-320q17 0 28.5 11.5T680-280q0 17-11.5 28.5T640-240Z" /></svg>
                             </h2>
                             <h5>
+                    <li className="nav-item"><div className="nav-link d-flex align-items-baseline gap-4"><h2><i className="bi bi-file-earmark-minus text-primary"></i></h2><h5><Link to="/credit-notes" className="text-primary-emphasis">Credit Notes</Link></h5></div></li>
                                 <Link to="/calendar" className="text-primary-emphasis">Calendar</Link>
                             </h5>
                         </div>

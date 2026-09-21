@@ -871,6 +871,9 @@ router.put("/:id", auth, async (req, res) => {
     }
 
     if (req.body?.reason !== undefined) {
+      if (note.stockAffecting && req.body.reason !== "Sales Return") {
+        return res.status(400).json({ message: "A credit note with a stock return must keep the Sales Return reason." });
+      }
       if (!REASONS.includes(req.body.reason)) {
         return res.status(400).json({ message: "Invalid credit note reason." });
       }

@@ -10,6 +10,7 @@ export default function ProductPage() {
   const [form, setForm] = useState({});
   const [images, setImages] = useState([]);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [error, setError] = useState('');
   const barcodeString = "E:/POS/Demo/backend"; // Adjust this to your backend URL
 
   // Fetch products initially
@@ -32,20 +33,32 @@ export default function ProductPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+
     const formData = new FormData();
-    Object.keys(form).forEach((key) => formData.append(key, form[key]));
+    ['productName','productCode','description','rate','quantity','serialNumber','designNo','purchaseDate','purchasePrice','barcode','minStock']
+      .forEach((key) => {
+        if (form[key] !== undefined && form[key] !== null) {
+          formData.append(key, form[key]);
+        }
+      });
     images.forEach((img) => formData.append('images', img));
 
-    if (editingProduct) {
-      await updateProduct(editingProduct._id, formData);
-    } else {
-      await createProduct(formData);
-    }
+    try {
+      if (editingProduct?._id) {
+        await updateProduct(editingProduct._id, formData);
+      } else {
+        await createProduct(formData);
+      }
 
-    setForm({});
-    setImages([]);
-    setEditingProduct(null);
-    loadProducts();
+      setForm({});
+      setImages([]);
+      setEditingProduct(null);
+      await loadProducts();
+    } catch (err) {
+      console.error('Product save error:', err);
+      setError(err.response?.data?.message || err.message || 'Unable to save product.');
+    }
   };
 
   const handleEdit = (product) => {
@@ -84,6 +97,7 @@ export default function ProductPage() {
     // <div className="container py-4">
     <div className="w-100 mx-3 mt-3">
       <h2 className="mb-4 text-primary">🧵 Product Management</h2>
+      {error && <div className="alert alert-danger">{error}</div>}
 
       <form onSubmit={handleSubmit} className="mb-2 p-4 border rounded bg-light shadow-sm ">
         <div className="row row-gap-1 mb-3">

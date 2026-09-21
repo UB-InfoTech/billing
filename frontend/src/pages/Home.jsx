@@ -1,178 +1,26 @@
-import React,{ useState, useEffect } from 'react';
-import axios from 'axios';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React,{useEffect,useState} from "react";
+import axios from "axios";
+import {useNavigate} from "react-router-dom";
 
-const Home = () => {
-  const [user, setUser] = useState(null);
-  const [notes, setNotes] = useState([]);
-  const [formData, setFormData] = useState({
-    title: '',
-    content: ''
-  });
-  const [error, setError] = useState('');
-  const navigate = useNavigate();
-  const location = useLocation();
+const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
+const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
+const money=v=>"₹"+Number(v||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 
-  const { title, content } = formData;
-
-  useEffect(() => {
-    // Check for error from ProtectedRoute
-    if (location.state?.error) {
-      setError(location.state.error);
-    }
-    const token = localStorage.getItem('token');
-    if (!token) {
-      alert('❌ No token found, please login first');
-      throw new Error('No token found');
-    }
-
-    const fetchUserAndNotes = async () => {
-      try {
-
-       // Fetch user data
-        const userRes = await axios.get(`${linkone}/api/auth/user`, {
-          headers: {
-            'x-auth-token': token
-          }
-        });
-        setUser(userRes.data);
-
-        // Fetch user-specific notes
-        const notesRes = await axios.get(`${linkone}/api/notes`, {
-          headers: {
-            'x-auth-token': token
-          }
-        });
-        setNotes(notesRes.data);
-      } catch (err) {
-        console.error('Home fetch error:', err.message); // Debug log
-        setError(err.response?.data?.msg || 'Please login first');
-        navigate('/login', { state: { error: err.response?.data?.msg || 'Please login first' } });
-      }
-    };
-    fetchUserAndNotes();
-  }, [navigate, location.state]);
-
-  const onChange = e => 
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-
-  const onSubmit = async e => {
-    e.preventDefault();
-    try {
-      
-      const res = await axios.post(`${linkone}/api/notes`, {
-        title,
-        content
-      }, {
-        headers: {
-          'x-auth-token': token
-        }
-      });
-      setNotes([...notes, res.data]);
-      setFormData({ title: '', content: '' });
-    } catch (err) {
-      console.error('Note creation error:', err.message); // Debug log
-      setError(err.response?.data?.msg || 'Error creating note');
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/login', { state: { error: 'Logged out successfully' } });
-  };
-
-  return (
-    <div className="container mt-5">
-      <div className="row justify-content-center">
-        <div className="col-md-8">
-          <div className="card shadow">
-            <div className="card-body">
-              <h1 className="card-title text-center mb-4">Dashboard</h1>
-              
-              {error && (
-                <div className="alert alert-danger" role="alert">
-                  {error}
-                </div>
-              )}
-              
-              {user && (
-                <>
-                  <div className="d-flex justify-content-between align-items-center mb-4">
-                    <h2>Welcome, {user.username}</h2>
-                    <button 
-                      className="btn btn-danger"
-                      onClick={handleLogout}
-                    >
-                      Logout
-                    </button>
-                  </div>
-                  <p className="text-center mb-4">Email: {user.email}</p>
-
-                  {/* Note Creation Form */}
-                  <h3 className="mb-3">Create New Note</h3>
-                  <form onSubmit={onSubmit}>
-                    <div className="mb-3">
-                      <label htmlFor="title" className="form-label">
-                        Title
-                      </label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        id="title"
-                        name="title"
-                        value={title}
-                        onChange={onChange}
-                        placeholder="Enter note title"
-                        required
-                      />
-                    </div>
-                    <div className="mb-3">
-                      <label htmlFor="content" className="form-label">
-                        Content
-                      </label>
-                      <textarea
-                        className="form-control"
-                        id="content"
-                        name="content"
-                        value={content}
-                        onChange={onChange}
-                        placeholder="Enter note content"
-                        rows="4"
-                        required
-                      ></textarea>
-                    </div>
-                    <div className="d-grid gap-2">
-                      <button type="submit" className="btn btn-primary">
-                        Create Note
-                      </button>
-                    </div>
-                  </form>
-
-                  {/* Notes List */}
-                  <h3 className="mt-5 mb-3">Your Notes</h3>
-                  {notes.length === 0 ? (
-                    <p className="text-muted">No notes found. Create one above!</p>
-                  ) : (
-                    <div className="list-group">
-                      {notes.map(note => (
-                        <div key={note._id} className="list-group-item">
-                          <h5>{note.title}</h5>
-                          <p>{note.content}</p>
-                          <small className="text-muted">
-                            Created: {new Date(note.createdAt).toLocaleDateString()}
-                          </small>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+export default function Home(){
+  const navigate=useNavigate();
+  const [user,setUser]=useState(null);
+  const [data,setData]=useState(null);
+  const [loading,setLoading]=useState(true);
+  const [error,setError]=useState("");
+  useEffect(()=>{let alive=true;Promise.all([axios.get(API+"/api/auth/user",auth()),axios.get(API+"/api/reports/dashboard-summary",auth())]).then(([u,d])=>{if(alive){setUser(u.data);setData(d.data);}}).catch(e=>{if(!alive)return;if(e.response?.status===401){localStorage.removeItem("token");navigate("/login");}else setError(e.response?.data?.message||"Unable to load dashboard.");}).finally(()=>alive&&setLoading(false));return()=>{alive=false;};},[navigate]);
+  if(loading)return <div className="container-fluid py-5 text-center"><span className="spinner-border text-primary"/></div>;
+  const cards=[["Invoices",data?.orders||0,"/orders"],["Clients",data?.clients||0,"/clients"],["Products",data?.products||0,"/products"],["Revenue",money(data?.revenue),"/analytics"],["Outstanding",money(data?.due),"/orders"],["Expenses",money(data?.expenses),"/expense"]];
+  return <div className="container-fluid py-4">
+    <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4"><div><h2 className="mb-1">Dashboard</h2><div className="text-muted">Welcome back{user?.username?", "+user.username:""}.</div></div><div className="d-flex gap-2"><button className="btn btn-primary" onClick={()=>navigate("/orders")}>+ New Invoice</button><button className="btn btn-outline-primary" onClick={()=>navigate("/credit-notes")}>Credit Note</button></div></div>
+    {error&&<div className="alert alert-danger">{error}</div>}
+    <div className="row g-3 mb-4">{cards.map(([label,value,to])=><div className="col-6 col-md-4 col-xl-2" key={label}><button className="card border-0 shadow-sm w-100 h-100 text-start bg-white" onClick={()=>navigate(to)}><div className="card-body"><div className="text-muted small">{label}</div><div className="fs-4 fw-bold mt-1">{value}</div></div></button></div>)}</div>
+    <div className="row g-3"><div className="col-lg-8"><div className="card border-0 shadow-sm h-100"><div className="card-body"><h5 className="mb-3">Business Snapshot</h5><div className="row g-3"><div className="col-md-4"><div className="small text-muted">Paid</div><div className="fw-bold">{money(data?.paid)}</div></div><div className="col-md-4"><div className="small text-muted">Credit Notes</div><div className="fw-bold">{money(data?.creditNotes)}</div></div><div className="col-md-4"><div className="small text-muted">Net after Expenses</div><div className="fw-bold">{money(Number(data?.revenue||0)-Number(data?.expenses||0))}</div></div></div></div></div></div>
+      <div className="col-lg-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><h5 className="mb-3">Quick Actions</h5><div className="d-grid gap-2"><button className="btn btn-outline-primary" onClick={()=>navigate("/bulk-payment")}>Record Bulk Payment</button><button className="btn btn-outline-secondary" onClick={()=>navigate("/add-expense")}>Add Expense</button><button className="btn btn-outline-success" onClick={()=>navigate("/calendar")}>Schedule Event</button><button className="btn btn-outline-dark" onClick={()=>navigate("/profile")}>Company Settings</button></div></div></div></div>
     </div>
-  );
-};
-
-export default Home;
+  </div>;
+}

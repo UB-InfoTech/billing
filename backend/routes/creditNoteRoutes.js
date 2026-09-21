@@ -235,7 +235,7 @@ router.get("/", auth, async (req, res) => {
     const page = Math.max(Number(req.query.page || 1), 1);
     const limit = Math.min(Math.max(Number(req.query.limit || 25), 1), 100);
     const skip = (page - 1) * limit;
-    const filter = {};
+    const filter = { createdBy: req.user.id };
 
     if (req.query.reason) {
       if (!REASONS.includes(req.query.reason)) {

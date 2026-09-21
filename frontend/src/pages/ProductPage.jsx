@@ -1,6 +1,6 @@
 // using
 import React, { useEffect, useState } from 'react';
-import { createProduct, fetchProducts, updateProduct } from '../services/productService';
+import { createProduct, fetchProducts, updateProduct, searchProductByBarcode } from '../services/productService';
 import axios from 'axios';
 import { Html5QrcodeScanner } from "html5-qrcode";
 
@@ -59,7 +59,7 @@ export default function ProductPage() {
 
   const handleBarcodeSearch = async (code) => {
     try {
-      const res = await axios.get(`${BASE_URL}/barcode/${code}`);
+      const res = await searchProductByBarcode(code);
       const product = res.data.product;
       if (product) {
         alert(`✅ Product: ${product.productName}`);

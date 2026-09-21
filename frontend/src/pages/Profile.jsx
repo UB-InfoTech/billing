@@ -23,7 +23,7 @@ function Profile() {
         eWayPassword: '',
     });
     //  const linkone = `http://localhost:5000`;
-     const linkone = `https://baba.divinesparks.in`;
+     const linkone = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
 
     const [isEditing, setIsEditing] = useState(false);

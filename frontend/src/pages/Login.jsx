@@ -3,8 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
-  // const linkone = `http://localhost:5000`;
-   const linkone = `https://baba.divinesparks.in`;
+  const linkone = `http://localhost:5000`;
   
   const [formData, setFormData] = useState({
     email: '',

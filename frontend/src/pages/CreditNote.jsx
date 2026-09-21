@@ -389,18 +389,22 @@ export default function CreditNote() {
                 {
                     creditNoteDate: form.creditNoteDate,
                     reason: form.reason,
-                    creditMode: "ITEM",
+                    creditMode: form.creditMode,
                     originalOrderId: form.originalOrderId,
-                    stockAffecting: false,
+                    stockAffecting: Boolean(form.stockAffecting),
                     settlement: {
-                        adjustmentType: "Outstanding",
+                        adjustmentType: form.adjustmentType,
                         adjustmentAmount: r2(form.adjustmentAmount),
                         refundAmount: r2(form.refundAmount),
                         refundMethod: form.refundAmount > 0 ? form.refundMethod : null,
-                        customerCreditAmount: 0,
+                        customerCreditAmount: r2(form.customerCreditAmount),
                     },
+                    manualCredit: form.creditMode === "AMOUNT" ? {
+                        taxableAmount: r2(form.manualTaxableAmount),
+                        taxRate: r2(form.manualTaxRate),
+                    } : undefined,
                     note: form.note.trim(),
-                    items: items
+                    items: form.creditMode === "ITEM" ? items
                         .filter((item) => getCreditQty(item) > 0)
                         .map((item) => ({
                             sourceSubOrderId: item._id,
@@ -408,7 +412,7 @@ export default function CreditNote() {
                             MTR: item.qtyUnit === "MTR" ? r2(item.creditMTR) : 0,
                             discountRate: r2(item.discountRate),
                             taxRate: r2(item.taxRate),
-                        })),
+                        })) : [],
                 },
                 getAuthConfig()
             );

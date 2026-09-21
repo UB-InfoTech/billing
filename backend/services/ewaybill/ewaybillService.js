@@ -1,62 +1,35 @@
-// using
-const axios = require('axios');
-const Order = require('../../models/Order2');
-const Profile = require('../../models/Profile');
-// const { getAuthToken } = require('../ewaybillAuthService');
-const { getValidToken } = require('../../utils/ewaybill/tokenManager');
-const { buildEwaybillPayload } = require('./payloadBuilder');
-const { aspid, password, username, gstin } = require('../../config/ewaybillConfig');
-// const { aspid, gstin } = require('../../config/ewaybillConfig');
-// eWayPassword
-// eWayUserName
+const axios=require("axios");
+const Order=require("../../models/Order2");
+const Profile=require("../../models/Profile");
+const {getValidToken}=require("../../utils/ewaybill/tokenManager");
+const {buildEwaybillPayload}=require("./payloadBuilder");
+const {aspid,password,baseUrl}=require("../../config/ewaybillConfig");
 
-// const generateEWayBill = async (body, orderId, eWayUserName, eWayPassword, userRecord) => {
-const generateEWayBill = async (body, orderId) => {
-    const order = await Order.findById(body.orderId || orderId);
-    const profile = await Profile.findOne({ createdBy: order.createdBy });
+async function generateEWayBill(body){
+  const order=await Order.findOne({_id:body.orderId,createdBy:body.createdBy||undefined});
+  if(!order)throw new Error("Order not found.");
+  const profile=await Profile.findOne({createdBy:String(order.createdBy)}).lean();
+  if(!profile)throw new Error("Company profile not found.");
+  const eWayUserName=profile.eWayUserName||process.env.TAXPRO_USERNAME;
+  const eWayPassword=profile.eWayPassword||process.env.TAXPRO_EWAY_PASSWORD;
+  const eWayProfile={...profile,eWayUserName,eWayPassword,gstin:profile.gstin||process.env.TAXPRO_GSTIN};
+  const payload=buildEwaybillPayload(order,body,eWayProfile);
+  const token=await getValidToken(eWayProfile);
 
-    if (!order) throw new Error('Order not found');
-    if (!order.gstNumber) throw new Error('Client GST not available');
+  if(!aspid||!password)throw new Error("TaxPro ASP credentials are not configured.");
+  const response=await axios.post(
+    baseUrl+"/ewaybillapi/dec/v1.03/ewayapi?action=GENEWAYBILL",
+    payload,
+    {headers:{"Content-Type":"application/json",aspid,password,gstin:eWayProfile.gstin,username:eWayProfile.eWayUserName,authtoken:token},timeout:30000}
+  );
 
-    const payload = buildEwaybillPayload(order, body, profile);
+  const data=response.data||{};
+  const ewayBillNo=data.ewayBillNo||data.EwayBillNo||data.ewayBillNumber;
+  if(!ewayBillNo)throw new Error(data?.error?.message||data?.message||"E-Way Bill was not generated.");
 
-    const token = await getValidToken(profile);
+  order.ewbDetails={ewbNo:String(ewayBillNo),ewbDate:data.ewayBillDate||"",validTill:data.validUpto||data.validTill||"",status:"Generated",alert:data.alert||""};
+  await order.save();
+  return data;
+}
 
-    
-    // //     'Content-Type': 'text/plain',
-    // // const url = `https://gstsandbox.charteredinfo.com/ewaybillapi/dec/v1.03/ewayapi?action=GENEWAYBILL&aspid=${aspid}&password=${password}&gstin=${gstin}&username=${username}&authtoken=${token}`;
-   
-    try {
-        
-        const response = await axios.post(
-            "https://gstsandbox.charteredinfo.com/ewaybillapi/dec/v1.03/ewayapi?action=GENEWAYBILL",
-            payload
-            , {
-                headers: {
-                    'Content-Type': 'application/json',
-                    'aspid': aspid,
-                    'username': profile.eWayUserName,
-                    'password': password,
-                    'authtoken': token,
-                    'gstin': profile.gstin,
-                },
-            }
-        );
-        const { ewayBillNo, ewayBillDate, validUpto, alert } = response.data;
-
-        order.ewbDetails = {
-            ewbNo: ewayBillNo,
-            ewbDate: ewayBillDate,
-            validTill: validUpto,
-            status: 'Generated',
-            alert: alert,
-        };
-
-        await order.save();
-        return response.data;
-    } catch (err) {
-        throw new Error('Failed to generate e-Way Bill - ' + (err.response.data.error.message || err.message));
-    }
-};
-
-module.exports = { generateEWayBill };
+module.exports={generateEWayBill};

@@ -24,7 +24,7 @@ export default function Calendar(){
   useEffect(()=>{load();},[]);
 
   const close=()=>setModal({open:false,id:null,title:"",start:"",end:"",color:"#3788d8"});
-  const openCreate=(start="")=>setModal({open:true,id:null,title:"",start,end:start||start,color:"#3788d8"});
+  const openCreate=(start="")=>{const base=start||new Date().toISOString().slice(0,16);const end=new Date(base.length===10?base+"T09:00":base);end.setHours(end.getHours()+1);setModal({open:true,id:null,title:"",start:base.length===10?base+"T09:00":base,end:end.toISOString().slice(0,16),color:"#3788d8"});};
   const openEdit=(event)=>setModal({open:true,id:event._id,title:event.title||"",start:event.start?new Date(event.start).toISOString().slice(0,16):"",end:event.end?new Date(event.end).toISOString().slice(0,16):"",color:event.color||"#3788d8"});
 
   const save=async()=>{
@@ -72,8 +72,48 @@ export default function Calendar(){
       editable
       eventDrop={move}
       eventResize={move}
+      eventColor="#3788d8"
+      eventDisplay="block"
+      dayMaxEvents={4}
+      height="auto"
       headerToolbar={{left:"prev,next today",center:"title",right:"dayGridMonth,timeGridWeek,timeGridDay"}}
     />}</div></div>
+
+    <div className="card border-0 shadow-sm mt-3">
+      <div className="card-body">
+        <div className="d-flex justify-content-between align-items-center mb-2">
+          <h5 className="mb-0">Events</h5>
+          <span className="text-muted small">{events.length} event(s)</span>
+        </div>
+        {events.length===0
+          ? <div className="text-center text-muted py-4">No events yet. Click a date or use + Event.</div>
+          : <div className="list-group list-group-flush">
+              {[...events].sort((a,b)=>new Date(a.start)-new Date(b.start)).map(event=>(
+                <div className="list-group-item px-0 d-flex justify-content-between align-items-center gap-2" key={event.id}>
+                  <div className="d-flex align-items-center gap-2">
+                    <span className="event-color-dot" style={{backgroundColor:event.color||"#3788d8"}}></span>
+                    <div>
+                      <div className="fw-semibold">{event.title}</div>
+                      <div className="small text-muted">{new Date(event.start).toLocaleString("en-IN")}{event.end&&event.end!==event.start?" - "+new Date(event.end).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}):""}</div>
+                    </div>
+                  </div>
+                  <div className="btn-group btn-group-sm">
+                    <button className="btn btn-outline-primary" onClick={()=>openEdit(event)}>Edit</button>
+                    <button className="btn btn-outline-danger" onClick={async()=>{
+                      if(!window.confirm("Delete this event?"))return;
+                      try{
+                        await axios.delete(API+"/api/events/"+event.id,auth());
+                        setEvents(v=>v.filter(x=>x.id!==event.id));
+                      }catch(e){
+                        setError(e.response?.data?.message||"Unable to delete event.");
+                      }
+                    }}>Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>}
+      </div>
+    </div>
 
     {modal.open&&<div className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true">
       <div className="modal-dialog"><div className="modal-content">

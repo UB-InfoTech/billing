@@ -1,36 +1,24 @@
-import axios from 'axios';
+import axios from "axios";
 
-const linkone = 'http://localhost:5000'; // Adjust based on your environment
+const BASE_URL=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
+const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
 
-const API_URL = `${linkone}/api/expenses`; // Adjust based on backend
+export const getExpenses=(params={})=>axios.get(BASE_URL+"/api/expenses",{...auth(),params});
+export const getExpenseById=(id)=>axios.get(BASE_URL+"/api/expenses/"+id,auth());
+export const createExpense=(data)=>axios.post(BASE_URL+"/api/expenses",data,auth());
+export const updateExpense=(id,data)=>axios.put(BASE_URL+"/api/expenses/"+id,data,auth());
+export const deleteExpense=(id)=>axios.delete(BASE_URL+"/api/expenses/"+id,auth());
+export const getExpenseSummary=(params={})=>axios.get(BASE_URL+"/api/expenses/summary",{...auth(),params});
+export const getExpenseOptions=()=>axios.get(BASE_URL+"/api/expenses/linked/options",auth());
 
-export const getExpenses = () => axios.get(API_URL, {
-  headers: {
-    'x-auth-token': localStorage.getItem('token')
-  }
-});
-
-export const getExpenseById = (id) => axios.get(`${API_URL}/${id}`);
-
-export const createExpense = (data) => axios.post(API_URL, data, {
-  headers: {
-    'x-auth-token': localStorage.getItem('token'),
-  }
-});
-
-export const updateExpense = (id, data) => axios.put(`${API_URL}/${id}`, data);
-
-export const deleteExpense = (id) => axios.delete(`${API_URL}/${id}`, {
-  headers: {
-    'x-auth-token': localStorage.getItem('token'),
-  }
-});
-
-export const uploadReceipt = async (file) => {
-  const formData = new FormData();
-  formData.append('receipt', file);
-  const response = await axios.post(`${API_URL}/upload-receipt`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+export const uploadReceipt=async(file)=>{
+  const formData=new FormData();
+  formData.append("receipt",file);
+  const response=await axios.post(BASE_URL+"/api/expenses/upload-receipt",formData,{
+    ...auth(),
+    headers:{...auth().headers,"Content-Type":"multipart/form-data"}
   });
   return response.data;
 };
+
+export const getApiBase=()=>BASE_URL;

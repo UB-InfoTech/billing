@@ -1,10 +1,9 @@
-//using
-const mongoose = require('mongoose');
+const mongoose=require("mongoose");
 
-const ewayAuthTokenSchema = new mongoose.Schema({
-  token: { type: String, default:"123" ,required: true },
-  tokenExp: { type: Date, required: true  },
-  createdBy: { type: String  }
-}, { timestamps: true });
-
-module.exports = mongoose.model('EwayAuthToken', ewayAuthTokenSchema);
+const schema=new mongoose.Schema({
+  token:{type:String,required:true,trim:true},
+  tokenExp:{type:Date,required:true,index:true},
+  createdBy:{type:String,required:true,index:true}
+},{timestamps:true});
+schema.index({createdBy:1,tokenExp:-1});
+module.exports=mongoose.model("EwayAuthToken",schema);

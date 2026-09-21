@@ -44,10 +44,8 @@ import "../index.css"
 
 const SalesAnalytics = () => {
 
-  // const linkone = `http://localhost:5000`;
-  const linkone = `https://baba.divinesparks.in`;
-
-
+  const linkone = `http://localhost:5000`;
+  
   const [salesData, setSalesData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);

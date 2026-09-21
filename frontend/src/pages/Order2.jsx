@@ -14,9 +14,8 @@ import { useReactToPrint } from "react-to-print";
 import { Link } from 'react-router-dom';
 
 function Order2() {
-    // const linkone = `http://localhost:5000`;
-    const linkone = `https://baba.divinesparks.in`;
-
+    const linkone = `http://localhost:5000`;
+    
     const [orders, setOrders] = useState([]);
     const [clients, setClients] = useState([]);
     const [clientsData, setClientsData] = useState([]);

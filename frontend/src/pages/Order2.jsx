@@ -14,7 +14,7 @@ import { useReactToPrint } from "react-to-print";
 import { Link } from 'react-router-dom';
 
 function Order2() {
-    const linkone = `http://localhost:5000`;
+    const linkone = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
     
     const [orders, setOrders] = useState([]);
     const [clients, setClients] = useState([]);
@@ -52,6 +52,7 @@ function Order2() {
     const [payments, setPayments] = useState([]);
     const [editPayment, setEditPayment] = useState(null);
     const [newPayment, setNewPayment] = useState({ amount: "", method: "Cash", amountReference: "" });
+    const authConfig = () => ({ headers: { "x-auth-token": localStorage.getItem("token") || "" } });
 
     // const date = new DateObject()
     // const [editIndex, setEditIndex] = useState(null);
@@ -202,7 +203,7 @@ function Order2() {
     };
 
     const fetchProducts = async () => {
-        const response = await axios.get(`${linkone}/api/products`);
+        const response = await axios.get(`${linkone}/api/products`, authConfig());
         setProducts(response.data.products);
     };
 
@@ -476,7 +477,7 @@ function Order2() {
         if (editingOrder) {
 
             // await axios.patch(`${linkone}/api/order/orders/${editingOrder._id}/update`, formData);
-            await axios.put(`${linkone}/api/order/orders/${editingOrder._id}/update`, formData);
+            await axios.put(`${linkone}/api/order/orders/${editingOrder._id}/update`, formData, authConfig());
 
             alert("✅ Order Update Sucessfully");
         } else {
@@ -528,7 +529,7 @@ function Order2() {
         updatedOrder.statusHistory.push({ status: newStatus, timestamp: new Date().toISOString() });
 
         // await axios.patch(`https://baba.divinesparks.in/api/order/orders/${orderId}/update`, updatedOrder);
-        await axios.patch(`${linkone}/api/order/orders/${orderId}/upd`, updatedOrder);
+        await axios.patch(`${linkone}/api/order/orders/${orderId}/upd`, updatedOrder, authConfig());
 
         alert("✅ Status change to " + newStatus);
         // await axios.put(`https://baba.divinesparks.in/api/order/orders/${orderId}`, updatedOrder);
@@ -545,7 +546,7 @@ function Order2() {
     const fetchPayments = async () => {
         try {
             // const response = await axios.get(`https://baba.divinesparks.in/api/order/orders/${orderId}/payments`);
-            const response = await axios.get(`${linkone}/api/order/orders/${editingOrder._id}/payments`);
+            const response = await axios.get(`${linkone}/api/order/orders/${editingOrder._id}/payments`, authConfig());
             setPayments(response.data);
         } catch (error) {
             console.error("Error fetching payments" + error.response.data.message);
@@ -554,7 +555,7 @@ function Order2() {
 
     const addPayment = async (orderId) => {
         try {
-            await axios.post(`${linkone}/api/order/orders/${orderId}/pay`, newPayment);
+            await axios.post(`${linkone}/api/order/orders/${orderId}/pay`, newPayment, authConfig());
             fetchPayments();
             setNewPayment({ amount: "", method: "Cash", amountReference: "" });
             fetchOrders();
@@ -567,7 +568,7 @@ function Order2() {
 
     const updatePayment = async () => {
         try {
-            await axios.put(`${linkone}/api/order/orders/${editingOrder._id}/payments/${editPayment._id}`, editPayment);
+            await axios.put(`${linkone}/api/order/orders/${editingOrder._id}/payments/${editPayment._id}`, editPayment, authConfig());
             fetchPayments();
             setEditPayment(null);
             fetchOrders();
@@ -587,7 +588,7 @@ function Order2() {
         const password = prompt("Enter password to delete:");
         if (password === "123") {
             try {
-                await axios.delete(`${linkone}/api/order/orders/${editingOrder._id}/payments/${paymentId}`);
+                await axios.delete(`${linkone}/api/order/orders/${editingOrder._id}/payments/${paymentId}`, authConfig());
                 fetchPayments();
                 alert("✅ Payment Delete Sucessfully")
             } catch (error) {
@@ -605,7 +606,7 @@ function Order2() {
         if (password === "123") {
 
             try {
-                await axios.delete(`${linkone}/api/order/orders/${order}/delete`);
+                await axios.delete(`${linkone}/api/order/orders/${order}/delete`, authConfig());
                 fetchOrders();
                 alert("✅ Order Delete Sucessfully")
             } catch (error) {

@@ -75,4 +75,23 @@ router.patch('/billNoSequence', auth, async (req, res) => {
 });
 
 
+// Backward-compatible alias used by older clients.
+router.patch('/updateBillNoSequence', auth, async (req, res) => {
+  req.url = '/billNoSequence';
+  const { billNoSequence } = req.body || {};
+  if (!Number.isFinite(Number(billNoSequence)) || Number(billNoSequence) < 0) {
+    return res.status(400).json({ message: 'billNoSequence must be a non-negative number' });
+  }
+  try {
+    const profile = await Profile.findOneAndUpdate(
+      { createdBy: String(req.user.id) },
+      { $set: { billNoSequence: Number(billNoSequence) } },
+      { new: true, upsert: true }
+    ).lean();
+    res.json(profile);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+});
+
 module.exports = router;

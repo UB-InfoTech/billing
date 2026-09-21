@@ -1,29 +1,33 @@
-const mongoose = require('mongoose');
+const mongoose=require("mongoose");
 
-const expenseSchema = new mongoose.Schema({
-  title: { type: String, required: true },  // Expense title (e.g., "Machine Repair")
-  description: { type: String },            // Details of the expense
-  amount: { type: Number, required: true },  // Expense amount
-  category: { 
-    type: String, 
-    enum: ['Production', 'Operational', 'Marketing', 'Financial', 'Miscellaneous'],
-    required: true 
-  },
-  subCategory: { type: String },             // Subcategory (e.g., "Raw Material")
-  tags: [{ type: String }],                  // Custom tags (e.g., "urgent", "repair")
-  project: { type: mongoose.Schema.Types.ObjectId, ref: 'Project' }, // Optional linkage
-  machineId: { type: mongoose.Schema.Types.ObjectId, ref: 'Machine' }, // Machine specific expenses
-  clientId: { type: mongoose.Schema.Types.ObjectId, ref: 'Client' },   // Client specific expenses
-  date: { type: Date, default: Date.now },    // Date of expense
-  isRecurring: { type: Boolean, default: false },  // Recurring expense indicator
-  recurringInterval: {                        // Recurrence details (if applicable)
-    type: String,
-    enum: ['Daily', 'Weekly', 'Monthly', 'Yearly']
-  },
-  user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },  // Expense recorder
-  attachments: [{ type: String }],            // File paths for receipts or invoices
-  createdAt: { type: Date, default: Date.now }, // Creation timestamp
-  updatedAt: { type: Date, default: Date.now }  // Update timestamp
-});
-
-module.exports = mongoose.model('Expense', expenseSchema);
+const ExpenseSchema=new mongoose.Schema({
+  title:{type:String,trim:true,default:""},
+  description:{type:String,required:true,trim:true},
+  amount:{type:Number,required:true,min:0},
+  category:{type:String,required:true,trim:true},
+  subCategory:{type:String,trim:true,default:""},
+  tags:[{type:String,trim:true}],
+  paymentMethod:{type:String,enum:["Cash","Bank Transfer","UPI","Cheque","Credit"],default:"Cash"},
+  currency:{type:String,trim:true,uppercase:true,default:"INR"},
+  vendor:{type:String,trim:true,default:""},
+  gstNo:{type:String,trim:true,uppercase:true,default:""},
+  taxDeductible:{type:Boolean,default:false},
+  taxRate:{type:Number,default:0,min:0,max:100},
+  taxAmount:{type:Number,default:0,min:0},
+  clientId:{type:mongoose.Schema.Types.ObjectId,ref:"Client",default:null},
+  orderId:{type:mongoose.Schema.Types.ObjectId,ref:"Order2",default:null},
+  date:{type:Date,default:Date.now,index:true},
+  isRecurring:{type:Boolean,default:false},
+  recurringInterval:{type:String,enum:["Daily","Weekly","Monthly","Yearly",null],default:null},
+  recurringEndDate:{type:Date,default:null},
+  notes:{type:String,trim:true,default:""},
+  attachments:[{type:String}],
+  receipt:{type:String,default:""},
+  createdBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true,index:true},
+  updatedBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",default:null},
+  user:{type:mongoose.Schema.Types.ObjectId,ref:"User",default:null}
+},{timestamps:true});
+ExpenseSchema.index({createdBy:1,date:-1});
+ExpenseSchema.index({createdBy:1,category:1,date:-1});
+ExpenseSchema.index({createdBy:1,vendor:1});
+module.exports=mongoose.model("Expense",ExpenseSchema);

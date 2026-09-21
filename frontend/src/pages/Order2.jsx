@@ -622,9 +622,35 @@ function Order2() {
     const printKachuBill = (order) => {
         window.open(`${linkone}/api/order/${order}/KachuBill`, "_blank");
     };
-    const printInvoice = (order) => {
-        window.open(`${linkone}/api/order/${order}/invoice`, "_blank");
+    const printInvoice = async (order) => {
+        const printWindow = window.open("", "_blank");
+        if (!printWindow) {
+            alert("Please allow pop-ups to open the invoice.");
+            return;
+        }
+
+        printWindow.document.write("<p style='font-family:sans-serif;padding:24px'>Loading invoice...</p>");
+
+        try {
+            const response = await axios.get(
+                `${linkone}/api/order/${order}/invoice`,
+                {
+                    ...authConfig(),
+                    responseType: "text"
+                }
+            );
+
+            printWindow.document.open();
+            printWindow.document.write(response.data);
+            printWindow.document.close();
+            printWindow.focus();
+        } catch (error) {
+            console.error("Error opening invoice:", error);
+            printWindow.close();
+            alert(error.response?.data?.message || "Failed to open invoice.");
+        }
     };
+
     const printReceipt = (paymentId) => {
         window.open(`${linkone}/api/order/${editingOrder._id}/payments/${paymentId}/invoice`, "_blank");
     };

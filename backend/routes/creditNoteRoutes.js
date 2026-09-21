@@ -188,9 +188,10 @@ async function nextNumber(session) {
   return `CN-${year}-${String(counter.value).padStart(5, "0")}`;
 }
 
-async function searchInvoiceRows(search, limit = 25) {
+async function searchInvoiceRows(search, limit = 25, createdBy) {
   const regex = new RegExp(escapeRegex(search.trim()), "i");
   return Order.find({
+    createdBy,
     $or: [
       { orderNumber: regex },
       { companyName: regex },
@@ -220,7 +221,7 @@ router.get("/invoices/search", auth, async (req, res) => {
       return res.json({ orders: [] });
     }
 
-    const orders = await searchInvoiceRows(q, limit);
+    const orders = await searchInvoiceRows(q, limit, req.user.id);
     return res.json({ orders });
   } catch (error) {
     console.error("Credit note invoice search error:", error);
@@ -272,6 +273,7 @@ router.get("/", auth, async (req, res) => {
     if (search) {
       const regex = new RegExp(escapeRegex(search), "i");
       const orderRows = await Order.find({
+        createdBy: req.user.id,
         $or: [
           { orderNumber: regex },
           { companyName: regex },
@@ -295,7 +297,7 @@ router.get("/", auth, async (req, res) => {
       CreditNote.find(filter)
         .populate(
           "originalOrderId",
-          "orderNumber orderDate companyName gstNumber Address State City pinCode stateCode"
+          "orderNumber orderDate companyName gstNumber Address State City pinCode stateCode paymentTerms"
         )
         .sort({ creditNoteDate: -1, createdAt: -1 })
         .skip(skip)

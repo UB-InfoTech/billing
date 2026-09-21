@@ -10,6 +10,7 @@ import Calendar from "./pages/Calendar.jsx";
 import SalesAnalytics from "./pages/SalesAnalytics.jsx";
 import Expenses from "./pages/Expenses.jsx";
 import AddExpense from "./pages/AddExpense.jsx";
+import EditExpense from "./pages/EditExpense.jsx";
 import ProductPage from "./pages/ProductPage.jsx";
 import Profile from "./pages/Profile.jsx";
 import BulkPayment from "./pages/BulkPayment.jsx";
@@ -32,6 +33,7 @@ export default function App(){
       <Route path="products" element={<ProtectedRoute><ProductPage/></ProtectedRoute>}/>
       <Route path="expense" element={<ProtectedRoute><Expenses/></ProtectedRoute>}/>
       <Route path="add-expense" element={<ProtectedRoute><AddExpense/></ProtectedRoute>}/>
+      <Route path="edit-expense/:id" element={<ProtectedRoute><EditExpense/></ProtectedRoute>}/>
       <Route path="calendar" element={<ProtectedRoute><Calendar/></ProtectedRoute>}/>
       <Route path="bulk-payment" element={<ProtectedRoute><BulkPayment/></ProtectedRoute>}/>
       <Route path="credit-notes" element={<ProtectedRoute><CreditNote/></ProtectedRoute>}/>

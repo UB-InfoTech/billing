@@ -1,1636 +1,589 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import axios from "axios";
+import "bootstrap/dist/css/bootstrap.min.css";
 
-/**
- * CreditNote.jsx
- *
- * MERN / React Vite
- * - Bootstrap classes only (no react-bootstrap)
- * - Uses native fetch (no axios dependency)
- * - Designed around the supplied Order schema
- *
- * Expected backend endpoints:
- *   GET  /api/credit-notes?search=&reason=&from=&to=
- *   GET  /api/credit-notes/next-number
- *   GET  /api/orders?search=<invoiceNo/customer/company>
- *   GET  /api/orders/:id
- *   GET  /api/credit-notes/available/:orderId
- *   POST /api/credit-notes
- *   GET  /api/credit-notes/:id
- *   DELETE /api/credit-notes/:id   (recommended: draft-only)
- *
- * API response may be either the data itself or { data: ... } / { orders: ... }.
- */
-
-const API_BASE = import.meta.env.VITE_API_URL || "";
+const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
 const REASONS = [
-  "Sales Return",
-  "Post Sale Discount",
-  "Deficiency in Service",
-  "Correction in Invoice",
-  "Change in POS",
-  "Finalization of Provisional Assessment",
-  "Other",
+    "Sales Return",
+    "Post Sale Discount",
+    "Deficiency in Service",
+    "Correction in Invoice",
+    "Change in POS",
+    "Finalization of Provisional Assessment",
+    "Other",
 ];
 
-const PAYMENT_METHODS = ["Cash", "Bank Transfer", "UPI", "Cheque"];
+const REFUND_METHODS = ["Cash", "Bank Transfer", "UPI", "Cheque"];
+const PAGE_SIZE = 10;
 
-const emptyItem = () => ({
-  sourceSubOrderId: "",
-  designNumber: "",
-  orderName: "",
-  hsnCode: "",
-  qtyUnit: "PCS",
-  originalQuantity: 0,
-  originalMTR: 0,
-  originalShortPcs: 0,
-  previouslyCreditedQuantity: 0,
-  previouslyCreditedMTR: 0,
-  quantity: 0,
-  MTR: 0,
-  cut: 0,
-  shortPcs: 0,
-  unitPrice: 0,
-  discountRate: 0,
-  taxRate: 0,
-  taxableAmount: 0,
-  taxAmount: 0,
-  lineTotal: 0,
-});
+const today = () => new Date().toISOString().slice(0, 10);
+const money = (value) => `₹${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const n = (value) => {
+    const valueAsNumber = Number(value);
+    return Number.isFinite(valueAsNumber) ? valueAsNumber : 0;
+};
+const r2 = (value) => Math.round((n(value) + Number.EPSILON) * 100) / 100;
 
-function money(value) {
-  const number = Number(value || 0);
-  return number.toLocaleString("en-IN", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+function getErrorMessage(error) {
+    return (
+        error?.response?.data?.message ||
+        error?.response?.data?.msg ||
+        error?.message ||
+        "Something went wrong."
+    );
 }
 
-function num(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : 0;
+function getAuthConfig() {
+    const token = localStorage.getItem("token");
+    return token
+        ? { headers: { "x-auth-token": token } }
+        : {};
 }
 
-function round2(value) {
-  return Math.round((num(value) + Number.EPSILON) * 100) / 100;
+function emptyForm() {
+    return {
+        creditNoteNumber: "",
+        creditNoteDate: today(),
+        reason: "Sales Return",
+        originalOrderId: "",
+        adjustmentAmount: 0,
+        refundAmount: 0,
+        refundMethod: "Cash",
+        note: "",
+    };
 }
 
-function effectiveQty(item) {
-  return item.qtyUnit === "MTR" ? num(item.MTR) : num(item.quantity);
+function getOrderBillableQty(item) {
+    const unit = item?.qtyUnit || "PCS";
+    if (unit === "MTR") return Math.max(0, r2(n(item?.MTR) - n(item?.shortPcs)));
+    return Math.max(0, r2(n(item?.quantity) - n(item?.shortPcs)));
 }
 
-function availableQty(item) {
-  return Math.max(
-    0,
-    round2(
-      effectiveQty(item) -
-        (item.qtyUnit === "MTR"
-          ? num(item.previouslyCreditedMTR)
-          : num(item.previouslyCreditedQuantity))
-    )
-  );
+function getCreditQty(item) {
+    return item?.qtyUnit === "MTR" ? n(item.creditMTR) : n(item.creditQuantity);
 }
 
-function displayOrderNumber(order) {
-  return order?.orderNumber || order?._id || "";
+function calculateCreditLine(item) {
+    const creditQty = getCreditQty(item);
+    const gross = r2(creditQty * n(item.unitPrice));
+    const discount = r2((gross * n(item.discountRate)) / 100);
+    const taxable = r2(gross - discount);
+    const tax = r2((taxable * n(item.taxRate)) / 100);
+    const total = r2(taxable + tax);
+    return { ...item, gross, discount, taxable, tax, total };
 }
 
-function normalizeOrders(payload) {
-  if (Array.isArray(payload)) return payload;
-  return payload?.orders || payload?.data || payload?.results || [];
-}
-
-function normalizeCreditNotes(payload) {
-  if (Array.isArray(payload)) return payload;
-  return payload?.creditNotes || payload?.data || payload?.results || [];
-}
-
-async function api(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
-    ...options,
-  });
-
-  const contentType = response.headers.get("content-type") || "";
-  const payload = contentType.includes("application/json")
-    ? await response.json()
-    : await response.text();
-
-  if (!response.ok) {
-    const message =
-      payload?.message ||
-      payload?.error ||
-      (typeof payload === "string" ? payload : "Request failed");
-    throw new Error(message);
-  }
-
-  return payload;
-}
-
-function getInitialForm() {
-  return {
-    creditNoteNumber: "",
-    creditNoteDate: new Date().toISOString().slice(0, 10),
-    reason: "Sales Return",
-    originalOrderId: "",
-    adjustmentType: "Outstanding",
-    refundMethod: "Cash",
-    adjustmentAmount: 0,
-    refundAmount: 0,
-    note: "",
-    stockAffecting: true,
-    items: [],
-  };
+function formatDate(date) {
+    if (!date) return "-";
+    const parsed = new Date(date);
+    return Number.isNaN(parsed.getTime()) ? "-" : parsed.toLocaleDateString("en-IN");
 }
 
 export default function CreditNote() {
-  const [view, setView] = useState("list");
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+    const [view, setView] = useState("list");
+    const [orders, setOrders] = useState([]);
+    const [creditNotes, setCreditNotes] = useState([]);
+    const [selectedOrder, setSelectedOrder] = useState(null);
+    const [items, setItems] = useState([]);
+    const [form, setForm] = useState(emptyForm());
+    const [previewNote, setPreviewNote] = useState(null);
 
-  const [creditNotes, setCreditNotes] = useState([]);
-  const [filters, setFilters] = useState({
-    search: "",
-    reason: "",
-    from: "",
-    to: "",
-  });
+    const [loading, setLoading] = useState(false);
+    const [orderLoading, setOrderLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [cancellingId, setCancellingId] = useState(null);
+    const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
 
-  const [form, setForm] = useState(getInitialForm());
-  const [orderSearch, setOrderSearch] = useState("");
-  const [orders, setOrders] = useState([]);
-  const [orderLoading, setOrderLoading] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [creditableLoading, setCreditableLoading] = useState(false);
+    const [invoiceSearch, setInvoiceSearch] = useState("");
+    const [searchResultsOpen, setSearchResultsOpen] = useState(false);
+    const searchTimer = useRef(null);
+    const searchAbort = useRef(null);
 
-  const [previewNote, setPreviewNote] = useState(null);
-
-  const totals = useMemo(() => {
-    const subtotal = round2(
-      form.items.reduce((sum, item) => sum + num(item.lineTotalBeforeDiscount), 0)
-    );
-    const discount = round2(
-      form.items.reduce((sum, item) => sum + num(item.discountAmount), 0)
-    );
-    const taxable = round2(
-      form.items.reduce((sum, item) => sum + num(item.taxableAmount), 0)
-    );
-    const tax = round2(
-      form.items.reduce((sum, item) => sum + num(item.taxAmount), 0)
-    );
-    const beforeRound = round2(taxable + tax);
-    const grandTotal = Math.round(beforeRound);
-    const roundOff = round2(grandTotal - beforeRound);
-
-    const adjustment = Math.min(
-      round2(num(form.adjustmentAmount)),
-      grandTotal
-    );
-    const refund = Math.min(
-      round2(num(form.refundAmount)),
-      Math.max(0, grandTotal - adjustment)
-    );
-    const unallocated = round2(grandTotal - adjustment - refund);
-
-    return {
-      subtotal,
-      discount,
-      taxable,
-      tax,
-      beforeRound,
-      roundOff,
-      grandTotal,
-      adjustment,
-      refund,
-      unallocated,
-    };
-  }, [form]);
-
-  useEffect(() => {
-    loadCreditNotes();
-    loadNextNumber();
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (orderSearch.trim().length >= 2) {
-        searchOrders(orderSearch.trim());
-      } else {
-        setOrders([]);
-      }
-    }, 350);
-
-    return () => clearTimeout(timer);
-  }, [orderSearch]);
-
-  async function loadCreditNotes() {
-    try {
-      setLoading(true);
-      setError("");
-      const query = new URLSearchParams();
-      if (filters.search) query.set("search", filters.search);
-      if (filters.reason) query.set("reason", filters.reason);
-      if (filters.from) query.set("from", filters.from);
-      if (filters.to) query.set("to", filters.to);
-
-      const payload = await api(`/api/credit-notes?${query.toString()}`);
-      setCreditNotes(normalizeCreditNotes(payload));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function loadNextNumber() {
-    try {
-      const payload = await api("/api/credit-notes/next-number");
-      const number =
-        payload?.creditNoteNumber ||
-        payload?.nextNumber ||
-        payload?.data?.creditNoteNumber ||
-        "";
-      setForm((current) => ({
-        ...current,
-        creditNoteNumber: number || current.creditNoteNumber,
-      }));
-    } catch {
-      // Keep the page functional even if the backend does not expose numbering yet.
-    }
-  }
-
-  async function searchOrders(search) {
-    try {
-      setOrderLoading(true);
-      const payload = await api(
-        `/api/orders?search=${encodeURIComponent(search)}&limit=20`
-      );
-      setOrders(normalizeOrders(payload));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setOrderLoading(false);
-    }
-  }
-
-  async function selectOrder(order) {
-    try {
-      setError("");
-      setCreditableLoading(true);
-
-      let fullOrder = order;
-      if (order?._id) {
-        try {
-          fullOrder = await api(`/api/orders/${order._id}`);
-          fullOrder = fullOrder?.data || fullOrder?.order || fullOrder;
-        } catch {
-          // Search result can already contain the full order.
-        }
-      }
-
-      let available = null;
-      try {
-        const payload = await api(`/api/credit-notes/available/${order._id}`);
-        available = payload?.items || payload?.data || payload;
-      } catch {
-        // Fallback to the Order schema when endpoint is not yet available.
-      }
-
-      const sourceItems =
-        Array.isArray(available) && available.length
-          ? available
-          : fullOrder?.subOrders || [];
-
-      const items = sourceItems.map((sub, index) => {
-        const existingQty =
-          num(sub.previouslyCreditedQuantity) ||
-          num(sub.creditedQuantity) ||
-          0;
-        const existingMTR =
-          num(sub.previouslyCreditedMTR) ||
-          num(sub.creditedMTR) ||
-          0;
-
-        const qtyUnit = sub.qtyUnit || "PCS";
-        const sourceQty =
-          qtyUnit === "MTR" ? num(sub.MTR) : num(sub.quantity);
-
-        return recalculateItem({
-          ...emptyItem(),
-          sourceSubOrderId: sub._id || String(index),
-          designNumber: sub.designNumber || "",
-          orderName: sub.orderName || "",
-          hsnCode: sub.hsnCode ?? "",
-          qtyUnit,
-          originalQuantity: num(sub.quantity),
-          originalMTR: num(sub.MTR),
-          originalShortPcs: num(sub.shortPcs),
-          previouslyCreditedQuantity: existingQty,
-          previouslyCreditedMTR: existingMTR,
-          quantity: 0,
-          MTR: 0,
-          cut: num(sub.cut),
-          shortPcs: num(sub.shortPcs),
-          unitPrice: num(sub.unitPrice),
-          discountRate: num(fullOrder?.discountRate),
-          taxRate: num(fullOrder?.taxPercentage),
-        });
-      });
-
-      setSelectedOrder(fullOrder);
-      setOrderSearch(displayOrderNumber(fullOrder));
-      setOrders([]);
-      setForm((current) => ({
-        ...current,
-        originalOrderId: fullOrder?._id || "",
-        adjustmentType: "Outstanding",
-        adjustmentAmount: 0,
-        refundAmount: 0,
-        stockAffecting: current.reason === "Sales Return",
-        items,
-      }));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setCreditableLoading(false);
-    }
-  }
-
-  function recalculateItem(item) {
-    const taxableBase =
-      item.qtyUnit === "MTR" ? num(item.MTR) : num(item.quantity);
-
-    const lineTotalBeforeDiscount = round2(taxableBase * num(item.unitPrice));
-    const discountAmount = round2(
-      (lineTotalBeforeDiscount * num(item.discountRate)) / 100
-    );
-    const taxableAmount = round2(lineTotalBeforeDiscount - discountAmount);
-    const taxAmount = round2((taxableAmount * num(item.taxRate)) / 100);
-    const lineTotal = round2(taxableAmount + taxAmount);
-
-    return {
-      ...item,
-      lineTotalBeforeDiscount,
-      discountAmount,
-      taxableAmount,
-      taxAmount,
-      lineTotal,
-    };
-  }
-
-  function updateItem(index, field, value) {
-    setForm((current) => {
-      const items = [...current.items];
-      const item = { ...items[index] };
-      const numericFields = new Set([
-        "quantity",
-        "MTR",
-        "cut",
-        "shortPcs",
-        "unitPrice",
-        "discountRate",
-        "taxRate",
-      ]);
-
-      item[field] = numericFields.has(field) ? num(value) : value;
-
-      if (field === "quantity" || field === "MTR") {
-        const max = availableQty(item);
-        if (item.qtyUnit === "MTR") {
-          item.MTR = Math.min(num(item.MTR), max);
-        } else {
-          item.quantity = Math.min(num(item.quantity), max);
-        }
-      }
-
-      items[index] = recalculateItem(item);
-      return { ...current, items };
+    const [filters, setFilters] = useState({
+        search: "",
+        reason: "",
+        status: "",
+        from: "",
+        to: "",
+        page: 1,
     });
-  }
+    const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
 
-  function updateForm(field, value) {
-    setForm((current) => ({
-      ...current,
-      [field]: value,
-      ...(field === "reason"
-        ? {
-            stockAffecting: value === "Sales Return",
-          }
-        : {}),
-    }));
-  }
+    const totals = useMemo(() => {
+        const subtotal = r2(items.reduce((sum, item) => sum + n(item.gross), 0));
+        const discount = r2(items.reduce((sum, item) => sum + n(item.discount), 0));
+        const taxable = r2(items.reduce((sum, item) => sum + n(item.taxable), 0));
+        const tax = r2(items.reduce((sum, item) => sum + n(item.tax), 0));
+        const beforeRound = r2(taxable + tax);
+        const grandTotal = Math.round(beforeRound);
+        const roundOff = r2(grandTotal - beforeRound);
 
-  function clearSelectedOrder() {
-    setSelectedOrder(null);
-    setOrders([]);
-    setOrderSearch("");
-    setForm((current) => ({
-      ...current,
-      originalOrderId: "",
-      items: [],
-      adjustmentAmount: 0,
-      refundAmount: 0,
-    }));
-  }
+        return { subtotal, discount, taxable, tax, beforeRound, grandTotal, roundOff };
+    }, [items]);
 
-  function validate() {
-    if (!form.creditNoteNumber.trim()) return "Credit Note number is required.";
-    if (!form.creditNoteDate) return "Credit Note date is required.";
-    if (!form.reason) return "Select a credit note reason.";
-    if (!form.originalOrderId) return "Select an original invoice/bill.";
-    if (!form.items.length) return "The selected invoice has no creditable items.";
+    const invoiceRemainingCredit = useMemo(() => {
+        if (!selectedOrder) return 0;
+        const invoiceTotal = n(selectedOrder.roundOffFinalRevenue ?? selectedOrder.finalRevenue ?? 0);
+        const alreadyCredited = n(selectedOrder.alreadyCreditedAmount);
+        return Math.max(0, r2(invoiceTotal - alreadyCredited));
+    }, [selectedOrder]);
 
-    const activeItems = form.items.filter((item) =>
-      item.qtyUnit === "MTR" ? num(item.MTR) > 0 : num(item.quantity) > 0
-    );
+    const invoiceDueAvailableForAdjustment = useMemo(() => {
+        if (!selectedOrder) return 0;
+        return Math.max(0, r2(n(selectedOrder.dueAmount)));
+    }, [selectedOrder]);
 
-    if (!activeItems.length) {
-      return "Enter a credit quantity for at least one item.";
-    }
-
-    for (const item of activeItems) {
-      const requested = effectiveQty(item);
-      const max = availableQty(item);
-      if (requested <= 0) return `Enter a valid quantity for ${item.orderName}.`;
-      if (requested > max) {
-        return `Credit quantity for "${item.orderName}" cannot exceed ${max}.`;
-      }
-      if (num(item.unitPrice) < 0) {
-        return `Rate cannot be negative for "${item.orderName}".`;
-      }
-      if (num(item.taxRate) < 0) {
-        return `Tax rate cannot be negative for "${item.orderName}".`;
-      }
-    }
-
-    if (num(form.adjustmentAmount) + num(form.refundAmount) > totals.grandTotal) {
-      return "Adjustment + refund cannot exceed the credit note total.";
-    }
-
-    return "";
-  }
-
-  function getPayload() {
-    const activeItems = form.items
-      .filter((item) =>
-        item.qtyUnit === "MTR" ? num(item.MTR) > 0 : num(item.quantity) > 0
-      )
-      .map((item) => ({
-        sourceSubOrderId: item.sourceSubOrderId || undefined,
-        designNumber: item.designNumber,
-        orderName: item.orderName,
-        hsnCode: item.hsnCode || undefined,
-        qtyUnit: item.qtyUnit,
-        quantity: num(item.quantity),
-        MTR: num(item.MTR),
-        cut: num(item.cut),
-        shortPcs: num(item.shortPcs),
-        unitPrice: num(item.unitPrice),
-        discountRate: num(item.discountRate),
-        taxRate: num(item.taxRate),
-        lineTotalBeforeDiscount: num(item.lineTotalBeforeDiscount),
-        discountAmount: num(item.discountAmount),
-        taxableAmount: num(item.taxableAmount),
-        taxAmount: num(item.taxAmount),
-        lineTotal: num(item.lineTotal),
-      }));
-
-    return {
-      creditNoteNumber: form.creditNoteNumber.trim(),
-      creditNoteDate: form.creditNoteDate,
-      reason: form.reason,
-      originalOrderId: form.originalOrderId,
-      stockAffecting: Boolean(form.stockAffecting),
-      adjustment: {
-        type: form.adjustmentType,
-        amount: totals.adjustment,
-      },
-      refund: {
-        method: form.refundAmount > 0 ? form.refundMethod : null,
-        amount: totals.refund,
-      },
-      note: form.note.trim(),
-      items: activeItems,
-      totals: {
-        subtotal: totals.subtotal,
-        discountAmount: totals.discount,
-        taxableAmount: totals.taxable,
-        taxAmount: totals.tax,
-        roundOff: totals.roundOff,
-        grandTotal: totals.grandTotal,
-      },
-    };
-  }
-
-  async function saveCreditNote({ printAfterSave = false } = {}) {
-    const validationError = validate();
-    if (validationError) {
-      setError(validationError);
-      return;
-    }
-
-    try {
-      setSaving(true);
-      setError("");
-      setSuccess("");
-
-      const payload = await api("/api/credit-notes", {
-        method: "POST",
-        body: JSON.stringify(getPayload()),
-      });
-
-      const created =
-        payload?.creditNote || payload?.data || payload;
-
-      setPreviewNote(created);
-      setSuccess(
-        `Credit Note ${created?.creditNoteNumber || form.creditNoteNumber} saved successfully.`
-      );
-
-      await loadCreditNotes();
-
-      if (printAfterSave) {
-        setTimeout(() => window.print(), 150);
-      } else {
-        startNew();
-      }
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function startNew() {
-    setForm(getInitialForm());
-    setSelectedOrder(null);
-    setOrderSearch("");
-    setOrders([]);
-    setError("");
-    setSuccess("");
-    setPreviewNote(null);
-    loadNextNumber();
-    setView("create");
-  }
-
-  function openList() {
-    setView("list");
-    setPreviewNote(null);
-    setError("");
-    loadCreditNotes();
-  }
-
-  async function openCreditNote(id) {
-    try {
-      setLoading(true);
-      const payload = await api(`/api/credit-notes/${id}`);
-      const note = payload?.creditNote || payload?.data || payload;
-      setPreviewNote(note);
-      setView("preview");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function deleteCreditNote(id) {
-    const confirmed = window.confirm(
-      "Delete this credit note? This should only be used for draft/unposted notes."
-    );
-    if (!confirmed) return;
-
-    try {
-      setLoading(true);
-      await api(`/api/credit-notes/${id}`, { method: "DELETE" });
-      await loadCreditNotes();
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  function resetFilters() {
-    setFilters({ search: "", reason: "", from: "", to: "" });
-    setTimeout(loadCreditNotes, 0);
-  }
-
-  const invoicePayments = selectedOrder?.payments || [];
-  const invoiceTotal = num(
-    selectedOrder?.roundOffFinalRevenue ??
-      selectedOrder?.finalRevenue ??
-      selectedOrder?.totalAmount
-  );
-  const invoicePaid = num(selectedOrder?.paidAmount);
-  const invoiceDue = Math.max(
-    0,
-    num(selectedOrder?.dueAmount ?? invoiceTotal - invoicePaid)
-  );
-
-  return (
-    <div className="container-fluid py-3">
-      <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 no-print">
-        <div>
-          <h3 className="mb-1 fw-bold">Credit Notes</h3>
-          <div className="text-muted small">
-            Returns, invoice corrections, discounts and other customer credits
-          </div>
-        </div>
-
-        <div className="btn-group">
-          <button
-            className={`btn btn-sm ${
-              view === "list" ? "btn-primary" : "btn-outline-primary"
-            }`}
-            onClick={openList}
-          >
-            Credit Notes
-          </button>
-          <button
-            className={`btn btn-sm ${
-              view === "create" ? "btn-primary" : "btn-outline-primary"
-            }`}
-            onClick={startNew}
-          >
-            + Create Credit Note
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="alert alert-danger d-flex justify-content-between gap-2 no-print">
-          <span>{error}</span>
-          <button className="btn-close" onClick={() => setError("")} />
-        </div>
-      )}
-
-      {success && (
-        <div className="alert alert-success no-print">{success}</div>
-      )}
-
-      {view === "list" && (
-        <CreditNoteList
-          creditNotes={creditNotes}
-          filters={filters}
-          setFilters={setFilters}
-          loading={loading}
-          onSearch={loadCreditNotes}
-          onReset={resetFilters}
-          onCreate={startNew}
-          onView={openCreditNote}
-          onDelete={deleteCreditNote}
-        />
-      )}
-
-      {view === "create" && (
-        <div className="card border-0 shadow-sm">
-          <div className="card-body">
-            <div className="row g-3">
-              <div className="col-12">
-                <div className="d-flex justify-content-between align-items-center">
-                  <h5 className="mb-0">Create Credit Note</h5>
-                  <span className="badge text-bg-light border">
-                    Total: ₹ {money(totals.grandTotal)}
-                  </span>
-                </div>
-                <hr />
-              </div>
-
-              <div className="col-md-3">
-                <label className="form-label">Credit Note No.</label>
-                <input
-                  className="form-control"
-                  value={form.creditNoteNumber}
-                  onChange={(e) =>
-                    updateForm("creditNoteNumber", e.target.value)
-                  }
-                  placeholder="Auto generated"
-                />
-              </div>
-
-              <div className="col-md-3">
-                <label className="form-label">Credit Note Date</label>
-                <input
-                  type="date"
-                  className="form-control"
-                  value={form.creditNoteDate}
-                  onChange={(e) =>
-                    updateForm("creditNoteDate", e.target.value)
-                  }
-                />
-              </div>
-
-              <div className="col-md-3">
-                <label className="form-label">Reason</label>
-                <select
-                  className="form-select"
-                  value={form.reason}
-                  onChange={(e) => updateForm("reason", e.target.value)}
-                >
-                  {REASONS.map((reason) => (
-                    <option key={reason}>{reason}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="col-md-3 d-flex align-items-end">
-                <div className="form-check form-switch mb-2">
-                  <input
-                    id="stockAffecting"
-                    className="form-check-input"
-                    type="checkbox"
-                    checked={form.stockAffecting}
-                    onChange={(e) =>
-                      updateForm("stockAffecting", e.target.checked)
-                    }
-                  />
-                  <label className="form-check-label" htmlFor="stockAffecting">
-                    Reverse stock
-                  </label>
-                </div>
-              </div>
-
-              <div className="col-12">
-                <div className="card bg-light border">
-                  <div className="card-body">
-                    <div className="row g-3 align-items-end">
-                      <div className="col-lg-7">
-                        <label className="form-label fw-semibold">
-                          Original Invoice / Bill
-                        </label>
-                        <div className="position-relative">
-                          <input
-                            className="form-control"
-                            value={orderSearch}
-                            onChange={(e) => setOrderSearch(e.target.value)}
-                            placeholder="Search invoice number, company, GSTIN..."
-                          />
-
-                          {(orderLoading || orders.length > 0) && (
-                            <div
-                              className="position-absolute bg-white border rounded shadow-sm w-100 mt-1"
-                              style={{
-                                zIndex: 20,
-                                maxHeight: 280,
-                                overflowY: "auto",
-                              }}
-                            >
-                              {orderLoading && (
-                                <div className="p-3 text-muted">
-                                  Searching invoices...
-                                </div>
-                              )}
-
-                              {!orderLoading &&
-                                orders.map((order) => (
-                                  <button
-                                    key={order._id}
-                                    type="button"
-                                    className="dropdown-item p-3 border-bottom text-start"
-                                    onClick={() => selectOrder(order)}
-                                  >
-                                    <div className="fw-semibold">
-                                      {displayOrderNumber(order)}
-                                    </div>
-                                    <div className="small text-muted">
-                                      {order.companyName ||
-                                        order.company ||
-                                        "Customer"}{" "}
-                                      {order.gstNumber
-                                        ? `• ${order.gstNumber}`
-                                        : ""}
-                                    </div>
-                                    <div className="small">
-                                      Date:{" "}
-                                      {order.orderDate
-                                        ? new Date(
-                                            order.orderDate
-                                          ).toLocaleDateString("en-IN")
-                                        : "-"}
-                                    </div>
-                                  </button>
-                                ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {creditableLoading && (
-                        <div className="col-lg-5 text-muted">
-                          <span className="spinner-border spinner-border-sm me-2" />
-                          Loading invoice items and existing credits...
-                        </div>
-                      )}
-
-                      {selectedOrder && (
-                        <div className="col-12">
-                          <div className="row g-3">
-                            <div className="col-lg-3">
-                              <div className="small text-muted">Invoice No.</div>
-                              <div className="fw-semibold">
-                                {displayOrderNumber(selectedOrder)}
-                              </div>
-                            </div>
-                            <div className="col-lg-3">
-                              <div className="small text-muted">Invoice Date</div>
-                              <div>
-                                {selectedOrder.orderDate
-                                  ? new Date(
-                                      selectedOrder.orderDate
-                                    ).toLocaleDateString("en-IN")
-                                  : "-"}
-                              </div>
-                            </div>
-                            <div className="col-lg-3">
-                              <div className="small text-muted">Customer</div>
-                              <div className="fw-semibold">
-                                {selectedOrder.companyName || "-"}
-                              </div>
-                            </div>
-                            <div className="col-lg-3 text-lg-end">
-                              <button
-                                type="button"
-                                className="btn btn-sm btn-outline-danger"
-                                onClick={clearSelectedOrder}
-                              >
-                                Change Invoice
-                              </button>
-                            </div>
-
-                            <div className="col-lg-4">
-                              <div className="small text-muted">GSTIN</div>
-                              <div>{selectedOrder.gstNumber || "-"}</div>
-                            </div>
-                            <div className="col-lg-4">
-                              <div className="small text-muted">
-                                Original Invoice Total
-                              </div>
-                              <div className="fw-semibold">
-                                ₹ {money(invoiceTotal)}
-                              </div>
-                            </div>
-                            <div className="col-lg-2">
-                              <div className="small text-muted">Paid</div>
-                              <div>₹ {money(invoicePaid)}</div>
-                            </div>
-                            <div className="col-lg-2">
-                              <div className="small text-muted">Due</div>
-                              <div className="text-danger fw-semibold">
-                                ₹ {money(invoiceDue)}
-                              </div>
-                            </div>
-
-                            <div className="col-12">
-                              <div className="small text-muted">Address</div>
-                              <div>
-                                {[
-                                  selectedOrder.Address,
-                                  selectedOrder.City,
-                                  selectedOrder.State,
-                                  selectedOrder.pinCode,
-                                ]
-                                  .filter(Boolean)
-                                  .join(", ") || "-"}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="col-12">
-                <h6 className="fw-bold mb-2">Credit Items</h6>
-                <div className="table-responsive border rounded">
-                  <table className="table table-sm table-hover align-middle mb-0">
-                    <thead className="table-light">
-                      <tr>
-                        <th style={{ minWidth: 160 }}>Design / Item</th>
-                        <th>HSN</th>
-                        <th>Unit</th>
-                        <th>Original</th>
-                        <th>Already Credited</th>
-                        <th>Available</th>
-                        <th style={{ width: 105 }}>Credit Qty</th>
-                        <th style={{ width: 105 }}>MTR</th>
-                        <th style={{ width: 110 }}>Rate</th>
-                        <th style={{ width: 90 }}>Disc %</th>
-                        <th style={{ width: 90 }}>Tax %</th>
-                        <th className="text-end">Taxable</th>
-                        <th className="text-end">Tax</th>
-                        <th className="text-end">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {!selectedOrder && (
-                        <tr>
-                          <td colSpan="14" className="text-center py-5 text-muted">
-                            Select an invoice to load creditable items.
-                          </td>
-                        </tr>
-                      )}
-
-                      {selectedOrder &&
-                        form.items.map((item, index) => {
-                          const available = availableQty(item);
-                          const hasQuantity =
-                            item.qtyUnit === "MTR"
-                              ? num(item.MTR) > 0
-                              : num(item.quantity) > 0;
-
-                          return (
-                            <tr key={item.sourceSubOrderId || index}>
-                              <td>
-                                <div className="fw-semibold">
-                                  {item.orderName || "-"}
-                                </div>
-                                <div className="small text-muted">
-                                  {item.designNumber || ""}
-                                </div>
-                              </td>
-                              <td>{item.hsnCode || "-"}</td>
-                              <td>{item.qtyUnit}</td>
-                              <td>
-                                {item.qtyUnit === "MTR"
-                                  ? money(item.originalMTR)
-                                  : money(item.originalQuantity)}
-                              </td>
-                              <td>
-                                {item.qtyUnit === "MTR"
-                                  ? money(item.previouslyCreditedMTR)
-                                  : money(item.previouslyCreditedQuantity)}
-                              </td>
-                              <td>
-                                <span
-                                  className={
-                                    available > 0
-                                      ? "text-success fw-semibold"
-                                      : "text-danger"
-                                  }
-                                >
-                                  {money(available)}
-                                </span>
-                              </td>
-                              <td>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max={
-                                    item.qtyUnit === "PCS"
-                                      ? available
-                                      : undefined
-                                  }
-                                  step="0.01"
-                                  className="form-control form-control-sm"
-                                  value={
-                                    item.qtyUnit === "MTR" ? "" : item.quantity
-                                  }
-                                  disabled={item.qtyUnit === "MTR" || available <= 0}
-                                  onChange={(e) =>
-                                    updateItem(
-                                      index,
-                                      "quantity",
-                                      e.target.value
-                                    )
-                                  }
-                                  placeholder={
-                                    item.qtyUnit === "MTR" ? "MTR" : "0"
-                                  }
-                                />
-                              </td>
-                              <td>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max={
-                                    item.qtyUnit === "MTR" ? available : undefined
-                                  }
-                                  step="0.01"
-                                  className="form-control form-control-sm"
-                                  value={item.MTR}
-                                  disabled={item.qtyUnit !== "MTR" || available <= 0}
-                                  onChange={(e) =>
-                                    updateItem(index, "MTR", e.target.value)
-                                  }
-                                  placeholder={
-                                    item.qtyUnit === "MTR" ? "0" : "-"
-                                  }
-                                />
-                              </td>
-                              <td>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  className="form-control form-control-sm"
-                                  value={item.unitPrice}
-                                  onChange={(e) =>
-                                    updateItem(
-                                      index,
-                                      "unitPrice",
-                                      e.target.value
-                                    )
-                                  }
-                                />
-                              </td>
-                              <td>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  max="100"
-                                  step="0.01"
-                                  className="form-control form-control-sm"
-                                  value={item.discountRate}
-                                  onChange={(e) =>
-                                    updateItem(
-                                      index,
-                                      "discountRate",
-                                      e.target.value
-                                    )
-                                  }
-                                />
-                              </td>
-                              <td>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  className="form-control form-control-sm"
-                                  value={item.taxRate}
-                                  onChange={(e) =>
-                                    updateItem(index, "taxRate", e.target.value)
-                                  }
-                                />
-                              </td>
-                              <td className="text-end">
-                                ₹ {money(item.taxableAmount)}
-                              </td>
-                              <td className="text-end">
-                                ₹ {money(item.taxAmount)}
-                              </td>
-                              <td className="text-end fw-semibold">
-                                ₹ {money(item.lineTotal)}
-                                {hasQuantity && (
-                                  <div className="small text-success">Credit</div>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div className="col-lg-7">
-                <div className="card border">
-                  <div className="card-body">
-                    <h6 className="fw-bold">Credit Allocation</h6>
-                    <div className="row g-3">
-                      <div className="col-md-5">
-                        <label className="form-label">Adjustment Type</label>
-                        <select
-                          className="form-select"
-                          value={form.adjustmentType}
-                          onChange={(e) =>
-                            updateForm("adjustmentType", e.target.value)
-                          }
-                        >
-                          <option value="Outstanding">
-                            Adjust against outstanding
-                          </option>
-                          <option value="Advance">
-                            Adjust against customer advance
-                          </option>
-                          <option value="Other">Other adjustment</option>
-                        </select>
-                      </div>
-
-                      <div className="col-md-3">
-                        <label className="form-label">Adjustment Amount</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max={totals.grandTotal}
-                          step="0.01"
-                          className="form-control"
-                          value={form.adjustmentAmount}
-                          onChange={(e) =>
-                            updateForm("adjustmentAmount", num(e.target.value))
-                          }
-                        />
-                      </div>
-
-                      <div className="col-md-4">
-                        <label className="form-label">Refund Amount</label>
-                        <input
-                          type="number"
-                          min="0"
-                          max={totals.grandTotal}
-                          step="0.01"
-                          className="form-control"
-                          value={form.refundAmount}
-                          onChange={(e) =>
-                            updateForm("refundAmount", num(e.target.value))
-                          }
-                        />
-                      </div>
-
-                      <div className="col-md-4">
-                        <label className="form-label">Refund Method</label>
-                        <select
-                          className="form-select"
-                          value={form.refundMethod}
-                          onChange={(e) =>
-                            updateForm("refundMethod", e.target.value)
-                          }
-                        >
-                          {PAYMENT_METHODS.map((method) => (
-                            <option key={method}>{method}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="col-md-8">
-                        <label className="form-label">Note</label>
-                        <textarea
-                          className="form-control"
-                          rows="2"
-                          value={form.note}
-                          onChange={(e) => updateForm("note", e.target.value)}
-                          placeholder="Reason / internal note..."
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="col-lg-5">
-                <div className="border rounded p-3 bg-light">
-                  <div className="d-flex justify-content-between mb-2">
-                    <span>Subtotal</span>
-                    <span>₹ {money(totals.subtotal)}</span>
-                  </div>
-                  <div className="d-flex justify-content-between mb-2">
-                    <span>Discount</span>
-                    <span>₹ {money(totals.discount)}</span>
-                  </div>
-                  <div className="d-flex justify-content-between mb-2">
-                    <span>Taxable Value</span>
-                    <span>₹ {money(totals.taxable)}</span>
-                  </div>
-                  <div className="d-flex justify-content-between mb-2">
-                    <span>Tax</span>
-                    <span>₹ {money(totals.tax)}</span>
-                  </div>
-                  <div className="d-flex justify-content-between mb-2">
-                    <span>Round Off</span>
-                    <span>₹ {money(totals.roundOff)}</span>
-                  </div>
-                  <hr />
-                  <div className="d-flex justify-content-between fs-5 fw-bold">
-                    <span>Credit Note Total</span>
-                    <span>₹ {money(totals.grandTotal)}</span>
-                  </div>
-
-                  <div className="d-flex justify-content-between mt-3">
-                    <span>Outstanding Adjustment</span>
-                    <span>₹ {money(totals.adjustment)}</span>
-                  </div>
-                  <div className="d-flex justify-content-between mt-1">
-                    <span>Refund</span>
-                    <span>₹ {money(totals.refund)}</span>
-                  </div>
-                  <div className="d-flex justify-content-between mt-1">
-                    <span>Unallocated</span>
-                    <span className="fw-semibold">
-                      ₹ {money(totals.unallocated)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="col-12 d-flex flex-wrap justify-content-end gap-2 no-print">
-                <button className="btn btn-outline-secondary" onClick={openList}>
-                  Cancel
-                </button>
-                <button
-                  className="btn btn-outline-primary"
-                  disabled={saving}
-                  onClick={() => saveCreditNote()}
-                >
-                  {saving ? "Saving..." : "Save Credit Note"}
-                </button>
-                <button
-                  className="btn btn-primary"
-                  disabled={saving}
-                  onClick={() => saveCreditNote({ printAfterSave: true })}
-                >
-                  {saving ? "Saving..." : "Save & Print"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {view === "preview" && previewNote && (
-        <CreditNotePrint
-          note={previewNote}
-          onBack={openList}
-          onPrint={() => window.print()}
-        />
-      )}
-
-      <style>{`
-        @media print {
-          .no-print { display: none !important; }
-          body { background: #fff !important; }
-          .container-fluid { padding: 0 !important; }
-          .card, .shadow-sm { box-shadow: none !important; }
+    const loadCreditNotes = useCallback(async (nextFilters = filters) => {
+        try {
+            setLoading(true);
+            setError("");
+            const params = {
+                search: nextFilters.search || undefined,
+                reason: nextFilters.reason || undefined,
+                status: nextFilters.status || undefined,
+                from: nextFilters.from || undefined,
+                to: nextFilters.to || undefined,
+                page: nextFilters.page || 1,
+                limit: PAGE_SIZE,
+            };
+            const response = await axios.get(`${API_BASE}/api/credit-notes`, {
+                ...getAuthConfig(),
+                params,
+            });
+            setCreditNotes(response.data?.creditNotes || []);
+            setPagination(response.data?.pagination || { page: 1, pages: 1, total: 0 });
+        } catch (error) {
+            if (error?.response?.status === 401) {
+                localStorage.removeItem("token");
+            }
+            setError(getErrorMessage(error));
+        } finally {
+            setLoading(false);
         }
-      `}</style>
-    </div>
-  );
-}
+    }, [filters]);
 
-function CreditNoteList({
-  creditNotes,
-  filters,
-  setFilters,
-  loading,
-  onSearch,
-  onReset,
-  onCreate,
-  onView,
-  onDelete,
-}) {
-  return (
-    <div className="card border-0 shadow-sm">
-      <div className="card-body">
-        <div className="row g-2 mb-3 no-print">
-          <div className="col-lg-4">
-            <input
-              className="form-control"
-              placeholder="Search credit note / invoice / customer..."
-              value={filters.search}
-              onChange={(e) =>
-                setFilters((current) => ({
-                  ...current,
-                  search: e.target.value,
-                }))
-              }
-              onKeyDown={(e) => e.key === "Enter" && onSearch()}
-            />
-          </div>
+    useEffect(() => {
+        loadCreditNotes(filters);
+    }, [loadCreditNotes, filters]);
 
-          <div className="col-lg-2">
-            <select
-              className="form-select"
-              value={filters.reason}
-              onChange={(e) =>
-                setFilters((current) => ({
-                  ...current,
-                  reason: e.target.value,
-                }))
-              }
-            >
-              <option value="">All Reasons</option>
-              {REASONS.map((reason) => (
-                <option key={reason}>{reason}</option>
-              ))}
-            </select>
-          </div>
+    useEffect(() => {
+        const orderId = new URLSearchParams(window.location.search).get("orderId");
+        if (!orderId) return;
+        setView("create");
+        loadOrder(orderId);
+        // Keep the Credit Note page usable on refresh without repeatedly reloading the invoice.
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }, []);
 
-          <div className="col-lg-2">
-            <input
-              type="date"
-              className="form-control"
-              value={filters.from}
-              onChange={(e) =>
-                setFilters((current) => ({
-                  ...current,
-                  from: e.target.value,
-                }))
-              }
-            />
-          </div>
+    useEffect(() => {
+        return () => {
+            if (searchTimer.current) clearTimeout(searchTimer.current);
+            if (searchAbort.current) searchAbort.current.abort();
+        };
+    }, []);
 
-          <div className="col-lg-2">
-            <input
-              type="date"
-              className="form-control"
-              value={filters.to}
-              onChange={(e) =>
-                setFilters((current) => ({
-                  ...current,
-                  to: e.target.value,
-                }))
-              }
-            />
-          </div>
+    const searchInvoices = (value) => {
+        setInvoiceSearch(value);
+        setSearchResultsOpen(true);
+        if (searchTimer.current) clearTimeout(searchTimer.current);
+        if (searchAbort.current) searchAbort.current.abort();
 
-          <div className="col-lg-2 d-flex gap-2">
-            <button className="btn btn-primary flex-grow-1" onClick={onSearch}>
-              Filter
-            </button>
-            <button className="btn btn-outline-secondary" onClick={onReset}>
-              Reset
-            </button>
-          </div>
-        </div>
+        if (!value.trim()) {
+            setOrders([]);
+            return;
+        }
 
-        <div className="d-flex justify-content-between align-items-center mb-2">
-          <h6 className="mb-0">Credit Note History</h6>
-          <button className="btn btn-primary btn-sm no-print" onClick={onCreate}>
-            + New
-          </button>
-        </div>
+        searchTimer.current = setTimeout(async () => {
+            const controller = new AbortController();
+            searchAbort.current = controller;
+            try {
+                setOrderLoading(true);
+                const response = await axios.get(`${API_BASE}/api/credit-notes/invoices`, {
+                    ...getAuthConfig(),
+                    params: { search: value.trim(), limit: 15 },
+                    signal: controller.signal,
+                });
+                setOrders(response.data?.orders || []);
+            } catch (error) {
+                if (error?.code !== "ERR_CANCELED") setError(getErrorMessage(error));
+            } finally {
+                setOrderLoading(false);
+            }
+        }, 300);
+    };
 
-        <div className="table-responsive">
-          <table className="table table-hover align-middle">
-            <thead className="table-light">
-              <tr>
-                <th>Credit Note</th>
-                <th>Date</th>
-                <th>Original Invoice</th>
-                <th>Customer</th>
-                <th>Reason</th>
-                <th className="text-end">Amount</th>
-                <th className="text-end">Refund</th>
-                <th className="text-end">Adjustment</th>
-                <th>Status</th>
-                <th className="text-end no-print">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && (
-                <tr>
-                  <td colSpan="10" className="text-center py-5">
-                    <span className="spinner-border spinner-border-sm me-2" />
-                    Loading...
-                  </td>
-                </tr>
-              )}
+    const loadOrder = async (orderId) => {
+        try {
+            setLoading(true);
+            setError("");
+            const response = await axios.get(`${API_BASE}/api/credit-notes/invoices/${orderId}`, getAuthConfig());
+            const payload = response.data?.order;
+            if (!payload) throw new Error("Invoice not found.");
 
-              {!loading && creditNotes.length === 0 && (
-                <tr>
-                  <td colSpan="10" className="text-center py-5 text-muted">
-                    No credit notes found.
-                  </td>
-                </tr>
-              )}
+            setSelectedOrder(payload);
+            setInvoiceSearch(payload.orderNumber || "");
+            setSearchResultsOpen(false);
+            setOrders([]);
+            setItems((payload.creditableItems || []).map((item) => calculateCreditLine({
+                _id: item._id,
+                designNumber: item.designNumber || "",
+                orderName: item.orderName || "",
+                hsnCode: item.hsnCode ?? "",
+                qtyUnit: item.qtyUnit || "PCS",
+                originalQuantity: n(item.quantity),
+                originalMTR: n(item.MTR),
+                originalShortPcs: n(item.shortPcs),
+                previouslyCreditedQuantity: n(item.previouslyCreditedQuantity),
+                previouslyCreditedMTR: n(item.previouslyCreditedMTR),
+                availableCreditQty: n(item.availableCreditQty),
+                unitPrice: n(item.unitPrice),
+                discountRate: n(payload.discountRate),
+                taxRate: n(payload.taxPercentage),
+                creditQuantity: 0,
+                creditMTR: 0,
+            })));
 
-              {!loading &&
-                creditNotes.map((note) => {
-                  const total =
-                    note?.totals?.grandTotal ??
-                    note?.grandTotal ??
-                    note?.totalAmount ??
-                    0;
+            const due = Math.max(0, n(payload.dueAmount) - n(payload.alreadyAppliedCreditAmount));
+            setForm((current) => ({
+                ...current,
+                originalOrderId: payload._id,
+                adjustmentAmount: due > 0 ? 0 : 0,
+                refundAmount: 0,
+            }));
+        } catch (error) {
+            setError(getErrorMessage(error));
+        } finally {
+            setLoading(false);
+        }
+    };
 
-                  return (
-                    <tr key={note._id}>
-                      <td className="fw-semibold">
-                        {note.creditNoteNumber || note.number || "-"}
-                      </td>
-                      <td>
-                        {note.creditNoteDate
-                          ? new Date(note.creditNoteDate).toLocaleDateString(
-                              "en-IN"
-                            )
-                          : "-"}
-                      </td>
-                      <td>
-                        {note.originalOrder?.orderNumber ||
-                          note.originalOrderNumber ||
-                          "-"}
-                      </td>
-                      <td>{note.companyName || note.clientName || "-"}</td>
-                      <td>{note.reason || "-"}</td>
-                      <td className="text-end">₹ {money(total)}</td>
-                      <td className="text-end">
-                        ₹{" "}
-                        {money(
-                          note?.refund?.amount ??
-                            note?.refundAmount ??
-                            0
-                        )}
-                      </td>
-                      <td className="text-end">
-                        ₹{" "}
-                        {money(
-                          note?.adjustment?.amount ??
-                            note?.adjustmentAmount ??
-                            0
-                        )}
-                      </td>
-                      <td>
-                        <span
-                          className={`badge ${
-                            note.status === "Cancelled"
-                              ? "text-bg-danger"
-                              : note.status === "Draft"
-                              ? "text-bg-warning"
-                              : "text-bg-success"
-                          }`}
-                        >
-                          {note.status || "Posted"}
-                        </span>
-                      </td>
-                      <td className="text-end no-print">
-                        <div className="btn-group btn-group-sm">
-                          <button
-                            className="btn btn-outline-primary"
-                            onClick={() => onView(note._id)}
-                          >
-                            View
-                          </button>
-                          {(!note.status || note.status === "Draft") && (
-                            <button
-                              className="btn btn-outline-danger"
-                              onClick={() => onDelete(note._id)}
-                            >
-                              Delete
-                            </button>
-                          )}
+    const startNew = () => {
+        setView("create");
+        setSelectedOrder(null);
+        setItems([]);
+        setInvoiceSearch("");
+        setOrders([]);
+        setSearchResultsOpen(false);
+        setForm(emptyForm());
+        setPreviewNote(null);
+        setError("");
+        setSuccess("");
+    };
+
+    const updateItem = (index, field, value) => {
+        setItems((current) => current.map((item, itemIndex) => {
+            if (itemIndex !== index) return item;
+            const next = { ...item };
+            const numeric = n(value);
+            const max = n(item.availableCreditQty);
+            if (field === "creditQuantity" || field === "creditMTR") {
+                next[field] = Math.max(0, Math.min(max, numeric));
+            } else {
+                next[field] = value;
+            }
+            return calculateCreditLine(next);
+        }));
+    };
+
+    const clearAllItemCredits = () => {
+        setItems((current) => current.map((item) => calculateCreditLine({
+            ...item,
+            creditQuantity: 0,
+            creditMTR: 0,
+        })));
+        setForm((current) => ({ ...current, adjustmentAmount: 0, refundAmount: 0 }));
+    };
+
+    const applyAllAvailable = () => {
+        setItems((current) => current.map((item) => calculateCreditLine({
+            ...item,
+            creditQuantity: item.qtyUnit === "MTR" ? 0 : n(item.availableCreditQty),
+            creditMTR: item.qtyUnit === "MTR" ? n(item.availableCreditQty) : 0,
+        })));
+    };
+
+    useEffect(() => {
+        if (!selectedOrder) return;
+        const total = totals.grandTotal;
+        const dueAvailable = invoiceDueAvailableForAdjustment;
+        if (total <= 0) {
+            setForm((current) => ({ ...current, adjustmentAmount: 0, refundAmount: 0 }));
+            return;
+        }
+        const adjustment = Math.min(total, dueAvailable);
+        const refund = r2(total - adjustment);
+        setForm((current) => ({
+            ...current,
+            adjustmentAmount: adjustment,
+            refundAmount: refund,
+        }));
+    }, [totals.grandTotal, selectedOrder, invoiceDueAvailableForAdjustment]);
+
+    const validateClient = () => {
+        if (!form.creditNoteDate) return "Credit Note date is required.";
+        if (!form.reason) return "Reason is required.";
+        if (!selectedOrder?._id) return "Please select an original invoice.";
+
+        const activeItems = items.filter((item) => getCreditQty(item) > 0);
+        if (!activeItems.length) return "Enter credit quantity for at least one item.";
+
+        for (const item of activeItems) {
+            if (getCreditQty(item) > n(item.availableCreditQty) + 0.000001) {
+                return `${item.orderName || "Item"}: credit quantity exceeds the remaining quantity.`;
+            }
+        }
+
+        if (totals.grandTotal <= 0) return "Credit Note total must be greater than zero.";
+        if (totals.grandTotal > invoiceRemainingCredit + 0.000001) {
+            return "Credit Note total exceeds the remaining creditable value of the invoice.";
+        }
+        if (r2(n(form.adjustmentAmount) + n(form.refundAmount)) !== r2(totals.grandTotal)) {
+            return "Adjustment and refund must exactly equal the Credit Note total.";
+        }
+        if (n(form.adjustmentAmount) > invoiceDueAvailableForAdjustment + 0.000001) {
+            return "Adjustment cannot exceed the invoice's remaining due amount.";
+        }
+        if (n(form.refundAmount) > 0 && !form.refundMethod) return "Select a refund method.";
+        return "";
+    };
+
+    const save = async () => {
+        const message = validateClient();
+        if (message) {
+            setError(message);
+            return;
+        }
+
+        try {
+            setSaving(true);
+            setError("");
+            const response = await axios.post(
+                `${API_BASE}/api/credit-notes`,
+                {
+                    creditNoteDate: form.creditNoteDate,
+                    reason: form.reason,
+                    originalOrderId: form.originalOrderId,
+                    adjustmentAmount: r2(form.adjustmentAmount),
+                    refundAmount: r2(form.refundAmount),
+                    refundMethod: form.refundAmount > 0 ? form.refundMethod : null,
+                    note: form.note.trim(),
+                    items: items
+                        .filter((item) => getCreditQty(item) > 0)
+                        .map((item) => ({
+                            sourceSubOrderId: item._id,
+                            creditQuantity: item.qtyUnit === "MTR" ? 0 : r2(item.creditQuantity),
+                            creditMTR: item.qtyUnit === "MTR" ? r2(item.creditMTR) : 0,
+                        })),
+                },
+                getAuthConfig()
+            );
+
+            const note = response.data?.creditNote;
+            setPreviewNote(note);
+            setSuccess(`Credit Note ${note?.creditNoteNumber || ""} created successfully.`);
+            setView("preview");
+            await loadCreditNotes({ ...filters, page: 1 });
+        } catch (error) {
+            setError(getErrorMessage(error));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const openNote = async (id) => {
+        try {
+            setLoading(true);
+            setError("");
+            const response = await axios.get(`${API_BASE}/api/credit-notes/${id}`, getAuthConfig());
+            setPreviewNote(response.data?.creditNote);
+            setView("preview");
+        } catch (error) {
+            setError(getErrorMessage(error));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const cancelNote = async (id) => {
+        if (!window.confirm("Cancel this posted Credit Note? This will reverse its invoice adjustment. Refund records remain auditable.")) return;
+        try {
+            setCancellingId(id);
+            setError("");
+            const response = await axios.patch(`${API_BASE}/api/credit-notes/${id}/cancel`, {}, getAuthConfig());
+            setSuccess(response.data?.message || "Credit Note cancelled.");
+            await loadCreditNotes(filters);
+            if (previewNote?._id === id) {
+                setPreviewNote(response.data?.creditNote || previewNote);
+            }
+        } catch (error) {
+            setError(getErrorMessage(error));
+        } finally {
+            setCancellingId(null);
+        }
+    };
+
+    const print = () => window.print();
+
+    return (
+        <div className="container-fluid py-3">
+            <style>{`
+                .credit-note-page .form-control:focus, .credit-note-page .form-select:focus { box-shadow: 0 0 0 .2rem rgba(13,110,253,.12); }
+                .credit-note-page .table th { white-space: nowrap; }
+                .invoice-search-menu { max-height: 320px; overflow-y: auto; z-index: 1080; }
+                @media print {
+                    body { background: #fff !important; }
+                    .no-print { display: none !important; }
+                    .credit-note-print { display: block !important; }
+                    .credit-note-list, .credit-note-create { display: none !important; }
+                    .container-fluid { padding: 0 !important; }
+                }
+            `}</style>
+
+            <div className="credit-note-page">
+                <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 no-print">
+                    <div>
+                        <h3 className="mb-1 fw-bold">Credit Note Management</h3>
+                        <div className="text-muted small">Create, track, print and cancel invoice-linked Credit Notes.</div>
+                    </div>
+                    <div className="btn-group">
+                        <button className={`btn ${view === "list" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setView("list")}>Credit Notes</button>
+                        <button className={`btn ${view === "create" ? "btn-primary" : "btn-outline-primary"}`} onClick={startNew}>+ Create Credit Note</button>
+                    </div>
+                </div>
+
+                {error && <div className="alert alert-danger alert-dismissible no-print"><strong>Error:</strong> {error}<button type="button" className="btn-close" onClick={() => setError("")} /></div>}
+                {success && <div className="alert alert-success no-print">{success}</div>}
+
+                {view === "list" && (
+                    <div className="card border-0 shadow-sm credit-note-list">
+                        <div className="card-body">
+                            <div className="row g-2 mb-3 no-print">
+                                <div className="col-xl-3 col-lg-4">
+                                    <input className="form-control" value={filters.search} placeholder="Search CN / invoice / client / GSTIN" onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value, page: 1 }))} />
+                                </div>
+                                <div className="col-xl-2 col-lg-3">
+                                    <select className="form-select" value={filters.reason} onChange={(e) => setFilters((f) => ({ ...f, reason: e.target.value, page: 1 }))}>
+                                        <option value="">All Reasons</option>
+                                        {REASONS.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+                                    </select>
+                                </div>
+                                <div className="col-xl-1 col-lg-2"><select className="form-select" value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value, page: 1 }))}><option value="">Status</option><option>Posted</option><option>Cancelled</option></select></div>
+                                <div className="col-xl-2 col-lg-3"><input type="date" className="form-control" value={filters.from} onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value, page: 1 }))} /></div>
+                                <div className="col-xl-2 col-lg-3"><input type="date" className="form-control" value={filters.to} onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value, page: 1 }))} /></div>
+                                <div className="col-xl-2 col-lg-2"><button className="btn btn-outline-secondary w-100" onClick={() => setFilters({ search: "", reason: "", status: "", from: "", to: "", page: 1 })}>Reset Filters</button></div>
+                            </div>
+
+                            <div className="table-responsive">
+                                <table className="table table-bordered table-hover align-middle mb-0">
+                                    <thead className="table-light"><tr><th>CN No.</th><th>Date</th><th>Invoice</th><th>Client</th><th>Reason</th><th>Status</th><th className="text-end">Total</th><th className="text-end">Adjustment</th><th className="text-end">Refund</th><th className="text-end no-print">Actions</th></tr></thead>
+                                    <tbody>
+                                        {loading ? <tr><td colSpan="10" className="text-center py-5"><span className="spinner-border spinner-border-sm me-2" />Loading...</td></tr> : creditNotes.length === 0 ? <tr><td colSpan="10" className="text-center py-5 text-muted">No Credit Notes found.</td></tr> : creditNotes.map((note) => <tr key={note._id}>
+                                            <td className="fw-semibold">{note.creditNoteNumber}</td>
+                                            <td>{formatDate(note.creditNoteDate)}</td>
+                                            <td>{note.originalOrderNumber || "-"}</td>
+                                            <td>{note.companyName || "-"}</td>
+                                            <td>{note.reason}</td>
+                                            <td><span className={`badge ${note.status === "Cancelled" ? "text-bg-danger" : "text-bg-success"}`}>{note.status}</span></td>
+                                            <td className="text-end">{money(note?.totals?.grandTotal)}</td>
+                                            <td className="text-end">{money(note?.adjustmentAmount)}</td>
+                                            <td className="text-end">{money(note?.refundAmount)}</td>
+                                            <td className="text-end no-print"><div className="btn-group btn-group-sm"><button className="btn btn-outline-primary" onClick={() => openNote(note._id)}>View</button>{note.status === "Posted" && <button className="btn btn-outline-danger" disabled={cancellingId === note._id} onClick={() => cancelNote(note._id)}>{cancellingId === note._id ? "..." : "Cancel"}</button>}</div></td>
+                                        </tr>)}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="d-flex justify-content-between align-items-center mt-3 no-print">
+                                <small className="text-muted">Total records: {pagination.total || 0}</small>
+                                <div className="btn-group btn-group-sm">
+                                    <button className="btn btn-outline-secondary" disabled={(pagination.page || 1) <= 1} onClick={() => setFilters((f) => ({ ...f, page: Math.max(1, f.page - 1) }))}>Previous</button>
+                                    <button className="btn btn-outline-secondary" disabled>{pagination.page || 1} / {pagination.pages || 1}</button>
+                                    <button className="btn btn-outline-secondary" disabled={(pagination.page || 1) >= (pagination.pages || 1)} onClick={() => setFilters((f) => ({ ...f, page: f.page + 1 }))}>Next</button>
+                                </div>
+                            </div>
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
+                    </div>
+                )}
+
+                {view === "create" && (
+                    <div className="card border-0 shadow-sm credit-note-create">
+                        <div className="card-body">
+                            <div className="d-flex justify-content-between align-items-center mb-3"><h5 className="fw-bold mb-0">Create Credit Note</h5><span className="badge text-bg-light border">Number generated by server</span></div>
+
+                            <div className="row g-3 mb-3">
+                                <div className="col-md-3"><label className="form-label fw-semibold">Credit Note Date</label><input type="date" className="form-control" value={form.creditNoteDate} onChange={(e) => setForm((f) => ({ ...f, creditNoteDate: e.target.value }))} /></div>
+                                <div className="col-md-3"><label className="form-label fw-semibold">Reason</label><select className="form-select" value={form.reason} onChange={(e) => setForm((f) => ({ ...f, reason: e.target.value }))}>{REASONS.map((reason) => <option key={reason}>{reason}</option>)}</select></div>
+                                <div className="col-md-6 position-relative"><label className="form-label fw-semibold">Original Invoice / Bill</label><input className="form-control" value={invoiceSearch} placeholder="Search Invoice No., Client or GSTIN" onFocus={() => setSearchResultsOpen(Boolean(invoiceSearch))} onChange={(e) => searchInvoices(e.target.value)} />
+                                    {searchResultsOpen && invoiceSearch.trim() && <div className="position-absolute bg-white border rounded shadow-sm w-100 invoice-search-menu">
+                                        {orderLoading ? <div className="p-3 text-muted">Searching invoices...</div> : orders.length === 0 ? <div className="p-3 text-muted">No matching invoices.</div> : orders.map((order) => <button type="button" key={order._id} className="dropdown-item p-3 border-bottom text-start" onClick={() => loadOrder(order._id)}><div className="fw-semibold">{order.orderNumber}</div><div className="small">{order.companyName || "-"} {order.gstNumber ? `• ${order.gstNumber}` : ""}</div><div className="small text-muted">{formatDate(order.orderDate)} • {money(order.roundOffFinalRevenue)}</div></button>)}
+                                    </div>}
+                                </div>
+                            </div>
+
+                            {selectedOrder && <>
+                                <div className="card border mb-3"><div className="card-body"><div className="row g-3">
+                                    <div className="col-lg-3"><div className="small text-muted">Invoice Number</div><div className="fw-semibold">{selectedOrder.orderNumber}</div></div>
+                                    <div className="col-lg-3"><div className="small text-muted">Invoice Date</div><div>{formatDate(selectedOrder.orderDate)}</div></div>
+                                    <div className="col-lg-3"><div className="small text-muted">Client</div><div className="fw-semibold">{selectedOrder.companyName || "-"}</div></div>
+                                    <div className="col-lg-3"><div className="small text-muted">GSTIN</div><div>{selectedOrder.gstNumber || "-"}</div></div>
+                                    <div className="col-lg-3"><div className="small text-muted">Invoice Total</div><div className="fw-semibold">{money(selectedOrder.roundOffFinalRevenue)}</div></div>
+                                    <div className="col-lg-3"><div className="small text-muted">Original Paid</div><div>{money(selectedOrder.paidAmount)}</div></div>
+                                    <div className="col-lg-3"><div className="small text-muted">Current Due</div><div className="text-danger fw-semibold">{money(selectedOrder.dueAmount)}</div></div>
+                                    <div className="col-lg-3"><div className="small text-muted">Remaining Creditable</div><div className="text-success fw-semibold">{money(invoiceRemainingCredit)}</div></div>
+                                </div></div></div>
+
+                                <div className="table-responsive border rounded mb-3"><table className="table table-sm table-bordered align-middle mb-0"><thead className="table-light"><tr><th>Design</th><th>Item</th><th>HSN</th><th>Unit</th><th>Invoice Qty</th><th>Previous Credit</th><th>Available</th><th style={{ minWidth: 125 }}>Credit Qty</th><th>Rate</th><th>Disc %</th><th>Tax %</th><th className="text-end">Taxable</th><th className="text-end">Tax</th><th className="text-end">Total</th></tr></thead>
+                                    <tbody>{items.map((item, index) => <tr key={item._id}>
+                                        <td>{item.designNumber || "-"}</td><td>{item.orderName || "-"}</td><td>{item.hsnCode || "-"}</td><td>{item.qtyUnit || "PCS"}</td>
+                                        <td>{n(item.availableCreditQty) + n(item.previouslyCreditedQuantity || item.previouslyCreditedMTR) /* source availability is authoritative */}</td>
+                                        <td>{item.qtyUnit === "MTR" ? n(item.previouslyCreditedMTR).toFixed(2) : n(item.previouslyCreditedQuantity).toFixed(2)}</td>
+                                        <td className="fw-semibold text-success">{n(item.availableCreditQty).toFixed(2)}</td>
+                                        <td><input type="number" min="0" max={n(item.availableCreditQty)} step="0.01" className="form-control form-control-sm" value={item.qtyUnit === "MTR" ? item.creditMTR : item.creditQuantity} onChange={(e) => updateItem(index, item.qtyUnit === "MTR" ? "creditMTR" : "creditQuantity", e.target.value)} /></td>
+                                        <td>{money(item.unitPrice)}</td><td>{n(item.discountRate).toFixed(2)}</td><td>{n(item.taxRate).toFixed(2)}</td>
+                                        <td className="text-end">{money(item.taxable)}</td><td className="text-end">{money(item.tax)}</td><td className="text-end fw-semibold">{money(item.total)}</td>
+                                    </tr>)}{items.length === 0 && <tr><td colSpan="14" className="text-center py-5 text-muted">No creditable items found.</td></tr>}</tbody>
+                                </table></div>
+
+                                <div className="d-flex flex-wrap gap-2 mb-3 no-print"><button className="btn btn-outline-primary btn-sm" onClick={applyAllAvailable}>Credit All Available</button><button className="btn btn-outline-secondary btn-sm" onClick={clearAllItemCredits}>Clear Quantities</button></div>
+
+                                <div className="row g-3">
+                                    <div className="col-lg-7"><div className="card border h-100"><div className="card-body"><h6 className="fw-bold">Settlement</h6><div className="row g-3">
+                                        <div className="col-md-6"><label className="form-label">Adjust Against Invoice Due</label><input type="number" className="form-control" min="0" max={invoiceDueAvailableForAdjustment} step="0.01" value={form.adjustmentAmount} onChange={(e) => setForm((f) => ({ ...f, adjustmentAmount: r2(e.target.value) }))} /><div className="small text-muted mt-1">Maximum: {money(invoiceDueAvailableForAdjustment)}</div></div>
+                                        <div className="col-md-6"><label className="form-label">Refund Amount</label><input type="number" className="form-control" min="0" max={totals.grandTotal} step="0.01" value={form.refundAmount} onChange={(e) => setForm((f) => ({ ...f, refundAmount: r2(e.target.value) }))} /></div>
+                                        <div className="col-md-5"><label className="form-label">Refund Method</label><select className="form-select" value={form.refundMethod} onChange={(e) => setForm((f) => ({ ...f, refundMethod: e.target.value }))}>{REFUND_METHODS.map((method) => <option key={method}>{method}</option>)}</select></div>
+                                        <div className="col-md-7"><label className="form-label">Note</label><textarea className="form-control" rows="2" maxLength="1000" value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} /></div>
+                                    </div></div></div></div>
+                                    <div className="col-lg-5"><div className="card border h-100"><div className="card-body"><div className="d-flex justify-content-between"><span>Subtotal</span><span>{money(totals.subtotal)}</span></div><div className="d-flex justify-content-between"><span>Discount</span><span>{money(totals.discount)}</span></div><div className="d-flex justify-content-between"><span>Taxable</span><span>{money(totals.taxable)}</span></div><div className="d-flex justify-content-between"><span>Tax</span><span>{money(totals.tax)}</span></div><div className="d-flex justify-content-between"><span>Round Off</span><span>{money(totals.roundOff)}</span></div><hr/><div className="d-flex justify-content-between fs-5 fw-bold"><span>Credit Note Total</span><span>{money(totals.grandTotal)}</span></div><div className="d-flex justify-content-between mt-2"><span>Invoice Adjustment</span><span>{money(form.adjustmentAmount)}</span></div><div className="d-flex justify-content-between"><span>Refund</span><span>{money(form.refundAmount)}</span></div><div className={`small mt-2 ${r2(n(form.adjustmentAmount) + n(form.refundAmount)) === r2(totals.grandTotal) ? "text-success" : "text-danger"}`}>Allocated: {money(r2(n(form.adjustmentAmount) + n(form.refundAmount)))} / {money(totals.grandTotal)}</div></div></div></div>
+                                </div>
+                            </>}
+
+                            <div className="d-flex justify-content-end gap-2 mt-3 no-print"><button className="btn btn-outline-secondary" onClick={() => setView("list")}>Cancel</button><button className="btn btn-primary" disabled={saving || !selectedOrder} onClick={save}>{saving ? <><span className="spinner-border spinner-border-sm me-2" />Saving...</> : "Post Credit Note"}</button></div>
+                        </div>
+                    </div>
+                )}
+
+                {view === "preview" && previewNote && <div className="credit-note-print">
+                    <div className="d-flex justify-content-end gap-2 mb-3 no-print"><button className="btn btn-outline-secondary" onClick={() => setView("list")}>Back</button><button className="btn btn-primary" onClick={print}>Print</button></div>
+                    <CreditNotePrint note={previewNote} />
+                </div>}
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 }
 
-function CreditNotePrint({ note, onBack, onPrint }) {
-  const items = note.items || [];
-  const totals = note.totals || {};
-
-  return (
-    <div>
-      <div className="d-flex justify-content-end gap-2 mb-3 no-print">
-        <button className="btn btn-outline-secondary" onClick={onBack}>
-          Back
-        </button>
-        <button className="btn btn-primary" onClick={onPrint}>
-          Print Credit Note
-        </button>
-      </div>
-
-      <div className="card border-0">
-        <div className="card-body">
-          <div className="d-flex justify-content-between border-bottom pb-3 mb-3">
-            <div>
-              <h2 className="fw-bold mb-1">CREDIT NOTE</h2>
-              <div className="small text-muted">
-                Original Invoice:{" "}
-                {note.originalOrder?.orderNumber ||
-                  note.originalOrderNumber ||
-                  "-"}
-              </div>
-            </div>
-            <div className="text-end">
-              <div className="fw-bold">
-                {note.creditNoteNumber || note.number}
-              </div>
-              <div>
-                Date:{" "}
-                {note.creditNoteDate
-                  ? new Date(note.creditNoteDate).toLocaleDateString("en-IN")
-                  : "-"}
-              </div>
-              <div className="small">
-                Reason: {note.reason || "-"}
-              </div>
-            </div>
-          </div>
-
-          <div className="row mb-4">
-            <div className="col-md-6">
-              <div className="text-muted small">Customer</div>
-              <div className="fw-bold">
-                {note.companyName ||
-                  note.clientName ||
-                  note.originalOrder?.companyName ||
-                  "-"}
-              </div>
-              <div>{note.Address || note.originalOrder?.Address || ""}</div>
-              <div>
-                {[
-                  note.City || note.originalOrder?.City,
-                  note.State || note.originalOrder?.State,
-                  note.pinCode || note.originalOrder?.pinCode,
-                ]
-                  .filter(Boolean)
-                  .join(", ")}
-              </div>
-              <div>GSTIN: {note.gstNumber || note.originalOrder?.gstNumber || "-"}</div>
-            </div>
-            <div className="col-md-6 text-md-end">
-              <div>Invoice Date: {note.originalOrder?.orderDate ? new Date(note.originalOrder.orderDate).toLocaleDateString("en-IN") : "-"}</div>
-              <div>Stock Reversal: {note.stockAffecting ? "Yes" : "No"}</div>
-            </div>
-          </div>
-
-          <div className="table-responsive">
-            <table className="table table-bordered align-middle">
-              <thead className="table-light">
-                <tr>
-                  <th>#</th>
-                  <th>Description</th>
-                  <th>HSN</th>
-                  <th>Qty</th>
-                  <th>Rate</th>
-                  <th>Discount</th>
-                  <th>Taxable</th>
-                  <th>Tax</th>
-                  <th className="text-end">Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item, index) => (
-                  <tr key={item._id || index}>
-                    <td>{index + 1}</td>
-                    <td>
-                      <div className="fw-semibold">{item.orderName || "-"}</div>
-                      <div className="small text-muted">
-                        {item.designNumber || ""}
-                      </div>
-                    </td>
-                    <td>{item.hsnCode || "-"}</td>
-                    <td>
-                      {item.qtyUnit === "MTR"
-                        ? `${money(item.MTR)} MTR`
-                        : `${money(item.quantity)} PCS`}
-                    </td>
-                    <td>₹ {money(item.unitPrice)}</td>
-                    <td>{money(item.discountRate)}%</td>
-                    <td>₹ {money(item.taxableAmount)}</td>
-                    <td>₹ {money(item.taxAmount)}</td>
-                    <td className="text-end">₹ {money(item.lineTotal)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="row justify-content-end mt-3">
-            <div className="col-md-5 col-lg-4">
-              <div className="d-flex justify-content-between">
-                <span>Subtotal</span>
-                <span>₹ {money(totals.subtotal)}</span>
-              </div>
-              <div className="d-flex justify-content-between">
-                <span>Discount</span>
-                <span>₹ {money(totals.discountAmount)}</span>
-              </div>
-              <div className="d-flex justify-content-between">
-                <span>Taxable</span>
-                <span>₹ {money(totals.taxableAmount)}</span>
-              </div>
-              <div className="d-flex justify-content-between">
-                <span>Tax</span>
-                <span>₹ {money(totals.taxAmount)}</span>
-              </div>
-              <div className="d-flex justify-content-between">
-                <span>Round Off</span>
-                <span>₹ {money(totals.roundOff)}</span>
-              </div>
-              <hr />
-              <div className="d-flex justify-content-between fs-5 fw-bold">
-                <span>Total</span>
-                <span>₹ {money(totals.grandTotal)}</span>
-              </div>
-            </div>
-          </div>
-
-          {note.note && (
-            <div className="mt-4">
-              <div className="small text-muted">Note</div>
-              <div>{note.note}</div>
-            </div>
-          )}
-
-          <div className="mt-5 pt-4 border-top text-center small text-muted">
-            This credit note is linked to the original invoice shown above.
-          </div>
+function CreditNotePrint({ note }) {
+    const original = note.originalOrder || {};
+    const items = note.items || [];
+    return <div className="container py-3">
+        <div className="border p-4">
+            <div className="row align-items-start border-bottom pb-3 mb-3"><div className="col-7"><h2 className="fw-bold mb-1">CREDIT NOTE</h2><div>Credit Note No.: <strong>{note.creditNoteNumber}</strong></div><div>Date: {formatDate(note.creditNoteDate)}</div></div><div className="col-5 text-end"><div>Original Invoice: <strong>{note.originalOrderNumber || original.orderNumber || "-"}</strong></div><div>Invoice Date: {formatDate(note.originalOrderDate || original.orderDate)}</div><div>Reason: {note.reason}</div></div></div>
+            <div className="row mb-4"><div className="col-6"><div className="small text-muted">Customer</div><div className="fw-bold">{note.companyName || original.companyName || "-"}</div><div>{note.Address || original.Address || ""}</div><div>{[note.City || original.City, note.State || original.State, note.pinCode || original.pinCode].filter(Boolean).join(", ")}</div><div>GSTIN: {note.gstNumber || original.gstNumber || "-"}</div></div><div className="col-6 text-end"><div>Payment Terms: {original.paymentTerms || "-"}</div><div>Original Invoice Total: {money(original.roundOffFinalRevenue)}</div></div></div>
+            <div className="table-responsive"><table className="table table-bordered"><thead className="table-light"><tr><th>#</th><th>Design</th><th>Description</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Disc.</th><th>Taxable</th><th>Tax</th><th className="text-end">Amount</th></tr></thead><tbody>{items.map((item, index) => <tr key={item._id || index}><td>{index + 1}</td><td>{item.designNumber || "-"}</td><td>{item.orderName || "-"}</td><td>{item.hsnCode || "-"}</td><td>{item.qtyUnit === "MTR" ? `${n(item.creditMTR).toFixed(2)} MTR` : `${n(item.creditQuantity).toFixed(2)} ${item.qtyUnit || "PCS"}`}</td><td>{money(item.unitPrice)}</td><td>{n(item.discountRate).toFixed(2)}%</td><td>{money(item.taxableAmount)}</td><td>{money(item.taxAmount)}</td><td className="text-end">{money(item.lineTotal)}</td></tr>)}</tbody></table></div>
+            <div className="row justify-content-end"><div className="col-5"><div className="d-flex justify-content-between"><span>Subtotal</span><span>{money(note.totals?.subtotal)}</span></div><div className="d-flex justify-content-between"><span>Discount</span><span>{money(note.totals?.discountAmount)}</span></div><div className="d-flex justify-content-between"><span>Taxable</span><span>{money(note.totals?.taxableAmount)}</span></div><div className="d-flex justify-content-between"><span>Tax</span><span>{money(note.totals?.taxAmount)}</span></div><div className="d-flex justify-content-between"><span>Round Off</span><span>{money(note.totals?.roundOff)}</span></div><hr/><div className="d-flex justify-content-between fs-5 fw-bold"><span>Total</span><span>{money(note.totals?.grandTotal)}</span></div><div className="d-flex justify-content-between mt-2"><span>Adjusted</span><span>{money(note.adjustmentAmount)}</span></div><div className="d-flex justify-content-between"><span>Refund</span><span>{money(note.refundAmount)}</span></div></div></div>
+            {note.note && <div className="mt-4"><strong>Note:</strong> {note.note}</div>}
+            <div className="mt-5 pt-3 border-top text-center small text-muted">This Credit Note is linked to the original invoice shown above.</div>
         </div>
-      </div>
-    </div>
-  );
+    </div>;
 }

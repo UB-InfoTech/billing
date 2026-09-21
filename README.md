@@ -387,6 +387,16 @@ Adjust Due       Refund       Customer Credit
 - dotenv
 - Moment
 
+## Architecture Notes
+
+- Backend business logic is implemented directly in the active route modules; the legacy `backend/controllers` folder has been removed.
+- Frontend navigation is defined directly in `App.jsx`; the legacy `frontend/src/routes` folder has been removed.
+- All business APIs are authenticated and scoped to the logged-in user where applicable.
+- Financial values such as invoice totals, payments, due balances, Credit Note adjustments, and inventory changes are recalculated/validated on the server.
+- Posted Credit Notes are audit-preserving documents and are cancelled rather than deleted.
+- Credit Note posting/cancellation uses MongoDB transactions and therefore requires a replica-set/Atlas deployment.
+- API rate limiting and MongoDB query sanitization are enabled in the server.
+
 ## Project Structure
 
 ```text
@@ -531,13 +541,7 @@ cd backend
 npm install
 ```
 
-Create/update `.env`:
-
-```env
-MONGO_URI=your_mongodb_connection_string
-JWT_SECRET=your_jwt_secret
-PORT=5000
-```
+Create `.env` from the committed `backend/.env.example` and set the real values for MongoDB, JWT, TaxPro, and email services. Secrets are intentionally not stored in Git.
 
 Start backend:
 
@@ -591,7 +595,7 @@ Recommended development environment:
 - npm
 - Modern Chromium-based browser or equivalent modern browser
 
-For Credit Note posting/cancellation, the backend is designed to use MongoDB transactions. Use MongoDB Atlas or a MongoDB deployment configured as a replica set.
+For Credit Note posting/cancellation, use MongoDB Atlas or a MongoDB deployment configured as a replica set so MongoDB transactions are available.
 
 ## Typical Business Workflow
 
@@ -637,6 +641,10 @@ The project is intended to provide:
 - Business analytics and reporting
 - Responsive browser-based operation
 - Extensible architecture for future accounting and CRM features
+
+## Validation
+
+GitHub Actions validates every push with backend JavaScript syntax checks plus frontend lint and production build checks.
 
 ## Current Repository
 

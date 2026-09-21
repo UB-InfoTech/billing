@@ -1,124 +1,43 @@
-import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
-import Clients from './pages/Clients.jsx';
-import Login from './pages/Login.jsx';
-// import Orders from './pages/Order.jsx';
-import Orders2 from './pages/Order2.jsx';
-// import Navbar from './components/Navbar.jsx';
-import Layout from './Layout.jsx';
-// import Analytics from './pages/Analytics.jsx';
-import Calendar from './pages/Calendar.jsx';
-import SalesAnalytics from './pages/SalesAnalytics.jsx';
-// import Login from './pages/Login';
-import Register from './pages/Register';
-// import ExpensePage from './pages/ExpensePage.jsx';
-import Expenses from './pages/Expenses';
-import AddExpense from './pages/AddExpense';
-import ProductPage from './pages/ProductPage.jsx';
+import React from "react";
+import { Routes, Route, Navigate } from "react-router-dom";
+import Layout from "./Layout.jsx";
+import Home from "./pages/Home.jsx";
+import Login from "./pages/Login.jsx";
+import Register from "./pages/Register.jsx";
+import Clients from "./pages/Clients.jsx";
+import Orders2 from "./pages/Order2.jsx";
+import Calendar from "./pages/Calendar.jsx";
+import SalesAnalytics from "./pages/SalesAnalytics.jsx";
+import Expenses from "./pages/Expenses.jsx";
+import AddExpense from "./pages/AddExpense.jsx";
+import ProductPage from "./pages/ProductPage.jsx";
+import Profile from "./pages/Profile.jsx";
+import BulkPayment from "./pages/BulkPayment.jsx";
+import CreditNote from "./pages/CreditNote.jsx";
 
-import Profile from './pages/Profile.jsx';
-import BulkPayment from './pages/BulkPayment.jsx';
-import CreditNote from './pages/CreditNote.jsx';
-
-
-// import ProtectedRoute from './components/ProtectedRoute.jsx';
-
-// import navdas from './pages/navdas.jsx';
-
-const ProtectedRoute = ({ children }) => {
-  const token = localStorage.getItem('token');
-
-  if (!token) {
-    alert('❌ ProtectedRoute - No token found , Rout protected'); // Debug log
-  }
-
-  return token ? children : <Navigate to="/login" />;
-
-};
-
-function App() {
-  return (
-    // <div className="container mt-4">
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/" element={<Layout />}>
-        <Route path="*" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-
-        <Route path="/" element={<Login />} />
-        
-        <Route path="/calendar" element={
-          <ProtectedRoute>
-            <Calendar />
-          </ProtectedRoute>
-
-        } />
-        <Route path="/analytics" element={
-          <ProtectedRoute>
-            <SalesAnalytics />
-          </ProtectedRoute>
-        } />
-
-        <Route path="/credit-notes" element={
-          <ProtectedRoute>
-            <CreditNote />
-          </ProtectedRoute>
-        } />
-
-        <Route path="/bulk-payment" element={
-          <ProtectedRoute>
-            <BulkPayment />
-          </ProtectedRoute>
-        } />
-        
-        <Route path="/expense" element={
-          <ProtectedRoute>
-            <Expenses />
-          </ProtectedRoute>
-        } />
-
-        <Route path="/add-expense" element={
-          <ProtectedRoute>
-            <AddExpense />
-          </ProtectedRoute>
-        } />
-
-        <Route
-          path="/clients"
-          element={
-            <ProtectedRoute>
-              <Clients />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route path='/orders'
-          element={
-            <ProtectedRoute>
-              <Orders2 />
-            </ProtectedRoute>
-          } />
-
-        <Route path='/profile'
-          element={
-              <Profile />
-          } />
-
-      
-        <Route path='/products'
-          element={
-            <ProtectedRoute>
-              <ProductPage />
-            </ProtectedRoute>
-          } />
-        
-
-        
-      </Route>
-
-    </Routes>
-    // </div>
-  );
+function ProtectedRoute({children}){
+  return localStorage.getItem("token") ? children : <Navigate to="/login" replace />;
 }
 
-export default App;
+export default function App(){
+  return <Routes>
+    <Route path="/login" element={<Login/>}/>
+    <Route path="/register" element={<Register/>}/>
+    <Route path="/" element={<Layout/>}>
+      <Route index element={<ProtectedRoute><Home/></ProtectedRoute>}/>
+      <Route path="dashboard" element={<ProtectedRoute><Home/></ProtectedRoute>}/>
+      <Route path="analytics" element={<ProtectedRoute><SalesAnalytics/></ProtectedRoute>}/>
+      <Route path="orders" element={<ProtectedRoute><Orders2/></ProtectedRoute>}/>
+      <Route path="clients" element={<ProtectedRoute><Clients/></ProtectedRoute>}/>
+      <Route path="products" element={<ProtectedRoute><ProductPage/></ProtectedRoute>}/>
+      <Route path="expense" element={<ProtectedRoute><Expenses/></ProtectedRoute>}/>
+      <Route path="add-expense" element={<ProtectedRoute><AddExpense/></ProtectedRoute>}/>
+      <Route path="calendar" element={<ProtectedRoute><Calendar/></ProtectedRoute>}/>
+      <Route path="bulk-payment" element={<ProtectedRoute><BulkPayment/></ProtectedRoute>}/>
+      <Route path="credit-notes" element={<ProtectedRoute><CreditNote/></ProtectedRoute>}/>
+      <Route path="profile" element={<ProtectedRoute><Profile/></ProtectedRoute>}/>
+      <Route path="*" element={<Navigate to="/dashboard" replace/>}/>
+    </Route>
+    <Route path="*" element={<Navigate to="/login" replace/>}/>
+  </Routes>;
+}

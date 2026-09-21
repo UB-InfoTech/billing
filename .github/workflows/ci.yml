@@ -1,0 +1,45 @@
+name: Billing CI
+
+on:
+  push:
+    branches: ["main", "develop", "feature/**", "fix/**"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - name: Check JavaScript syntax
+        shell: bash
+        run: |
+          set -e
+          while IFS= read -r -d "" file; do node --check "$file"; done < <(find . -type f -name "*.js" -not -path "./node_modules/*" -print0)
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build

@@ -528,11 +528,9 @@ function Order2() {
         updatedOrder.status = newStatus;
         updatedOrder.statusHistory.push({ status: newStatus, timestamp: new Date().toISOString() });
 
-        // await axios.patch(`https://baba.divinesparks.in/api/order/orders/${orderId}/update`, updatedOrder);
         await axios.patch(`${linkone}/api/order/orders/${orderId}/upd`, updatedOrder, authConfig());
 
         alert("✅ Status change to " + newStatus);
-        // await axios.put(`https://baba.divinesparks.in/api/order/orders/${orderId}`, updatedOrder);
         fetchOrders();
     };
 
@@ -545,7 +543,6 @@ function Order2() {
 
     const fetchPayments = async () => {
         try {
-            // const response = await axios.get(`https://baba.divinesparks.in/api/order/orders/${orderId}/payments`);
             const response = await axios.get(`${linkone}/api/order/orders/${editingOrder._id}/payments`, authConfig());
             setPayments(response.data);
         } catch (error) {

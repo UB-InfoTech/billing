@@ -42,7 +42,7 @@ function isReplicaSetAvailable() {
   const topology = client?.topology?.description;
   if (!topology) return false;
   return Object.values(topology.servers || {}).some(
-    (server) => server.type === "RSPrimary" || server.type === "RSSecondary"
+    (server) => server.type === "RSPrimary" || server.type === "RSSecondary" || server.type === "Mongos"
   );
 }
 

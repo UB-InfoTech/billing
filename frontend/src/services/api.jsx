@@ -1,8 +1,6 @@
 import axios from 'axios';
 
-// const linkone = 'http://localhost:5000'; // Adjust based on your environment
-  const linkone = `https://baba.divinesparks.in`;
-
+const linkone = 'http://localhost:5000'; // Adjust based on your environment
 
 const API_URL = `${linkone}/api/expenses`; // Adjust based on backend
 

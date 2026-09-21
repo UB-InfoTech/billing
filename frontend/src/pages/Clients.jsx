@@ -203,11 +203,31 @@ function Clients() {
 
   const handleUpdateClient = async () => {
     try {
-      await axios.patch((`${linkone}/api/clients/${editingClient}`, newClient), {
-        headers: {
-          'x-auth-token': token
+      await axios.patch(
+        `${linkone}/api/clients/${editingClient}`,
+        {
+          name: newClient.name || '',
+          email: newClient.email || '',
+          phone: newClient.phone || '',
+          address: newClient.address || '',
+          state: newClient.state || '',
+          city: newClient.city || '',
+          pinCode: newClient.pinCode || '',
+          stateCode: newClient.stateCode || '',
+          gstNumber: newClient.gstNumber || '',
+          companyName: newClient.companyName || '',
+          businessType: newClient.businessType || '',
+          paymentTerms: newClient.paymentTerms || '30',
+          discountRate: Number(newClient.discountRate || 0),
+          accountStatus: newClient.accountStatus || 'Active',
+          notes: newClient.notes || ''
+        },
+        {
+          headers: {
+            'x-auth-token': token
+          }
         }
-      });
+      );
 
       alert("✅ Client Updated Successfully");
       setShowModal(false);

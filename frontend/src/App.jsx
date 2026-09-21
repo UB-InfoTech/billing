@@ -18,6 +18,7 @@ import ProductPage from './pages/ProductPage.jsx';
 
 import Profile from './pages/Profile.jsx';
 import BulkPayment from './pages/BulkPayment.jsx';
+import CreditNote from './pages/CreditNote.jsx';
 
 
 // import ProtectedRoute from './components/ProtectedRoute.jsx';
@@ -55,6 +56,12 @@ function App() {
         <Route path="/analytics" element={
           <ProtectedRoute>
             <SalesAnalytics />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/credit-notes" element={
+          <ProtectedRoute>
+            <CreditNote />
           </ProtectedRoute>
         } />
 

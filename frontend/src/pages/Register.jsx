@@ -8,7 +8,7 @@ const Register = () => {
     email: '',
     password: ''
   });
-  const linkone = `http://localhost:5000`;
+  const linkone = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
   
 
   const [error, setError] = useState('');
@@ -30,7 +30,7 @@ const Register = () => {
       localStorage.setItem('token', res.data.token);
       navigate('/');
     } catch (err) {
-      setError(err.response.data.msg);
+      setError(err.response?.data?.msg || "Registration failed.");
     }
   };
 

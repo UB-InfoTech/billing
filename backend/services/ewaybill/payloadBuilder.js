@@ -1,183 +1,83 @@
-// using
-const buildEwaybillPayload = (order, body, profile) => {
+function round2(v){return Math.round((Number(v||0)+Number.EPSILON)*100)/100;}
 
-    const dateToDDMMYYYY = (date) => {
-        if (!date) return;
+function buildEwaybillPayload(order,body,profile){
+  if(!profile?.gstin)throw new Error("Company GSTIN is required for E-Way Bill.");
+  if(!order?.gstNumber)throw new Error("Customer GSTIN is required for E-Way Bill.");
+  if(!order?.orderNumber&&!order?.challanNumber)throw new Error("Invoice or challan number is required.");
+  const docDate=new Date(order.orderDate||new Date());
+  const formatDate=d=>{const x=new Date(d);return String(x.getUTCDate()).padStart(2,"0")+"/"+String(x.getUTCMonth()+1).padStart(2,"0")+"/"+x.getUTCFullYear();};
+  const taxRate=Number(order.taxPercentage||0);
+  const sameState=Number(order.stateCode)===Number(profile.stateCode);
+  const taxableTotal=round2(order.totalCost||0);
+  const discountRate=Number(order.discountRate||0);
 
-        const d = new Date(date);
-        const day = String(d.getUTCDate()).padStart(2, '0');
-        const month = String(d.getUTCMonth() + 1).padStart(2, '0');
-        const year = String(d.getUTCFullYear());
-        const formattedDate = `${day}/${month}/${year}`;
-        return `${day}/${month}/${year}`;
+  const itemList=(order.subOrders||[]).map(sub=>{
+    const qtyUnit=String(sub.qtyUnit||"PCS").toUpperCase();
+    const rawQty=qtyUnit==="MTR"?Number(sub.MTR||0):Number(sub.quantity||0);
+    const short=Number(sub.shortPcs||0);
+    const quantity=round2(Math.max(0,rawQty-short));
+    const gross=round2(quantity*Number(sub.unitPrice||0));
+    const discount=round2(gross*discountRate/100);
+    const taxableAmount=round2(gross-discount);
+    const itemTaxRate=taxRate;
+    return{
+      productName:String(sub.orderName||sub.designNumber||"Item"),
+      productDesc:String(sub.designNumber||sub.orderName||""),
+      hsnCode:Number(sub.hsnCode||0),
+      quantity,
+      qtyUnit:qtyUnit==="MTR"?"MTR":qtyUnit==="PCS"?"NOS":qtyUnit,
+      cgstRate:sameState?round2(itemTaxRate/2):0,
+      sgstRate:sameState?round2(itemTaxRate/2):0,
+      igstRate:sameState?0:itemTaxRate,
+      cessRate:0,
+      cessNonadvol:0,
+      taxableAmount
     };
+  }).filter(x=>x.quantity>0);
 
-    // return {
-    //     "supplyType": "O",
+  const cgstValue=sameState?round2(taxableTotal*taxRate/200):0;
+  const sgstValue=cgstValue;
+  const igstValue=sameState?0:round2(taxableTotal*taxRate/100);
 
-    //     "subSupplyType": "1",
-
-    //     "subSupplyDesc": "Transaction",
-
-    //     "docType": "INV",
-
-    //     "docNo": "45467dvcdddcdr",
-
-    //     "docDate": "04/07/2025",
-
-    //     "fromGstin": "34AACCC1596Q002",
-
-    //     "fromTrdName": "welton",
-
-    //     "fromAddr1": "4-9-35, GROUND,1ST, 2ND FLOOR, AURANGPURA",
-
-    //     "fromAddr2": "GROUND FLOOR OSBORNE ROAD",
-
-    //     "fromPlace": "FRAZER TOWN",
-
-    //     "fromPincode": 605001,
-
-    //     "actFromStateCode": 34,
-
-    //     "fromStateCode": 34,
-
-    //     "toGstin": "29AWGPV7107B1Z1",
-
-    //     "toTrdName": "sthuthya",
-
-    //     "toAddr1": "Shree Nilaya",
-
-    //     "toAddr1": "GODOWN NO 5 GAT NO 1214/1230 ",
-
-    //     "toPlace": "Beml Nagar",
-
-    //     "toPincode": 562160,
-
-    //     "actToStateCode": 29,
-
-    //     "toStateCode": 29,
-
-    //     "transactionType": 4,
-
-    //     "otherValue": "-100",
-
-    //     "totalValue": 0,
-
-    //     "cgstValue": 0,
-
-    //     "sgstValue": 0,
-
-    //     "igstValue": 0,
-
-    //     "cessValue": 0,
-
-    //     "cessNonAdvolValue": 400,
-
-    //     "totInvValue": 0,
-
-    //     "transporterId": "",
-
-    //     "transporterName": "",
-
-    //     "transDocNo": "DOC/123",
-
-    //     "transMode": "1",
-
-    //     "transDistance": "0",
-
-    //     "transDocDate": "04/07/2025",
-
-    //     "vehicleNo": "PVC1234",
-
-    //     "vehicleType": "R",
-
-    //     "itemList":
-
-    //         [{
-
-    //             "productName": "BLAZER-1",
-
-    //             "productDesc": "BLAZER-1",
-
-    //             "hsnCode": 4421,
-
-    //             "quantity": 25,
-
-    //             "qtyUnit": "NOS",
-
-    //             "cgstRate": 0,
-
-    //             "sgstRate": 0,
-
-    //             "igstRate": 3,
-
-    //             "cessRate": 3,
-
-    //             "cessNonadvol": 0,
-
-    //             "taxableAmount": 5609889
-
-    //         }
-
-    //         ]
-    // }
-
-    return {
-        "supplyType": body.supplyType,//required Outward(O)/Inward(I) ? !
-        "subSupplyType": body.subSupplyType,//required ?    !
-        "subSupplyDesc": "",
-        "docType": "INV",//required  [ "INV", "CHL", "BIL","BOE","OTH" ],
-        // "docNo": order.orderNumber + Math.floor((Math.random() * 10) + 1) ,//required
-        "docNo": "6548dcsddfd52",//required
-        // "docNo": order.orderNumber,//required
-        "docDate": dateToDDMMYYYY(order.orderDate),//required
-        // "docDate": "20/06/2025",//required
-        "fromGstin": profile.gstin,//required
-        "fromTrdName": profile.companyName,
-        "fromAddr1": profile.companyAddress,
-        "fromPlace": "",// Area or City
-        "fromPincode": Number(profile.pinCode),//required     !
-        "actFromStateCode": Number(profile.stateCode),//required    !
-        "fromStateCode": Number(profile.stateCode),//required       !
-        "toGstin": order.gstNumber,//required
-        "toTrdName": order.companyName,
-        "toAddr1": order.Address,
-        "toPlace": "",// Area or City
-        "toPincode": Number(order.pinCode),//required   !
-        "actToStateCode": Number(order.stateCode),//required  !
-        "toStateCode": Number(order.stateCode),//required     !
-        "transactionType": Number(body.transactionType),//required  ! ?
-        "otherValue": 0,
-        "totalValue": order.totalCost,
-        "cgstValue": 0,
-        "sgstValue": 0,
-        "igstValue": 0,
-        "cessValue": 0,
-        "cessNonAdvolValue": 0,
-        "totInvValue": order.roundOffFinalRevenue,//required
-        "transporterId": body.transporterId || "",
-        "transporterName": body.transporterName || "",
-        "transDocNo": body.transDocNo || "",
-        "transMode": body.transMode || "",   //(Road-1, Rail-2, Air-3, Ship-4) !    
-        "transDistance": body.transDistance,//required   !
-        "transDocDate": dateToDDMMYYYY(body.transDocDate) || "",   //!
-        "vehicleNo": body.vehicleNo || "",        // !
-        "vehicleType": body.vehicleType || "",            // !
-        // pallavi maam
-        "itemList": order.subOrders.map((sub) => ({
-            "productName": sub.orderName,
-            "productDesc": sub.designNumber,
-            "hsnCode": sub.hsnCode,
-            "quantity": sub.quantity,
-            "qtyUnit": sub.qtyUnit,
-            "cgstRate": Number(order.stateCode) === Number(profile.stateCode) ? 2.5 : 0,
-            "sgstRate": Number(order.stateCode) === Number(profile.stateCode) ? 2.5 : 0,
-            "igstRate": Number(order.stateCode) !== Number(profile.stateCode) ? 5 : 0,
-            "cessRate": 0,
-            "cessNonadvol": 0,
-            "taxableAmount": (sub.quantity - sub.shortPcs) * sub.unitPrice
-        })),
-    }
-};
-
-module.exports = { buildEwaybillPayload };
+  return{
+    supplyType:body.supplyType||"O",
+    subSupplyType:String(body.subSupplyType||"1"),
+    subSupplyDesc:String(body.subSupplyDesc||""),
+    docType:String(body.docType||"INV"),
+    docNo:String(order.orderNumber||order.challanNumber||""),
+    docDate:formatDate(docDate),
+    fromGstin:String(profile.gstin),
+    fromTrdName:String(profile.companyName||""),
+    fromAddr1:String(profile.companyAddress||""),
+    fromPlace:String(profile.companyAddress||""),
+    fromPincode:Number(profile.pinCode||0),
+    actFromStateCode:Number(profile.stateCode||0),
+    fromStateCode:Number(profile.stateCode||0),
+    toGstin:String(order.gstNumber),
+    toTrdName:String(order.companyName||""),
+    toAddr1:String(order.Address||""),
+    toPlace:String(order.City||""),
+    toPincode:Number(order.pinCode||0),
+    actToStateCode:Number(order.stateCode||0),
+    toStateCode:Number(order.stateCode||0),
+    transactionType:Number(body.transactionType||1),
+    otherValue:0,
+    totalValue:taxableTotal,
+    cgstValue,
+    sgstValue,
+    igstValue,
+    cessValue:0,
+    cessNonAdvolValue:0,
+    totInvValue:Number(order.roundOffFinalRevenue||order.finalRevenue||0),
+    transporterId:body.transporterId||"",
+    transporterName:body.transporterName||"",
+    transDocNo:body.transDocNo||"",
+    transMode:String(body.transMode||"1"),
+    transDistance:String(body.transDistance||"0"),
+    transDocDate:body.transDocDate?formatDate(body.transDocDate):"",
+    vehicleNo:body.vehicleNo||"",
+    vehicleType:body.vehicleType||"R",
+    itemList
+  };
+}
+module.exports={buildEwaybillPayload};

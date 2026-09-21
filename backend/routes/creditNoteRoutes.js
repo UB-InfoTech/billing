@@ -5,6 +5,7 @@ const Order = require("../models/Order2");
 const CreditNote = require("../models/CreditNote");
 const CreditNoteCounter = require("../models/CreditNoteCounter");
 const auth = require('../middleware/auth');
+const { syncClientData } = require("../utils/syncClientData");
 
 
 const router = express.Router();
@@ -351,7 +352,7 @@ router.get("/available/:orderId", auth, async (req, res) => {
       return res.status(400).json({ message: "Invalid invoice ID." });
     }
 
-    const order = await Order.findById(req.params.orderId).lean();
+    const order = await Order.findOne({ _id: req.params.orderId, createdBy: req.user.id }).lean();
     if (!order) return res.status(404).json({ message: "Invoice not found." });
 
     const { map, total } = await getPreviouslyCredited(order._id);
@@ -401,7 +402,7 @@ router.get("/:id", auth, async (req, res) => {
       return res.status(400).json({ message: "Invalid credit note ID." });
     }
 
-    const note = await CreditNote.findById(req.params.id)
+    const note = await CreditNote.findOne({ _id: req.params.id, createdBy: req.user.id })
       .populate(
         "originalOrderId",
         "orderNumber orderDate companyName gstNumber Address State City pinCode stateCode payments paidAmount dueAmount roundOffFinalRevenue finalRevenue"
@@ -462,7 +463,7 @@ router.post("/", auth, async (req, res) => {
       throw new Error("Invalid original invoice.");
     }
 
-    const order = await Order.findById(originalOrderId).session(session);
+    const order = await Order.findOne({ _id: originalOrderId, createdBy: userId }).session(session);
     if (!order) throw new Error("Original invoice not found.");
 
     const { map: previousCredits, total: previousCreditTotal } =
@@ -804,9 +805,11 @@ router.post("/", auth, async (req, res) => {
     const saved = await CreditNote.findById(noteDoc._id)
       .populate(
         "originalOrderId",
-        "orderNumber orderDate companyName gstNumber Address State City pinCode stateCode roundOffFinalRevenue finalRevenue dueAmount creditAppliedAmount"
+        "orderNumber orderDate companyName gstNumber Address State City pinCode stateCode paymentTerms roundOffFinalRevenue finalRevenue dueAmount creditAppliedAmount"
       )
       .lean();
+
+    await syncClientData(noteDoc.clientId);
 
     return res.status(201).json({
       message: "Credit note created successfully.",
@@ -957,8 +960,19 @@ router.post("/:id/cancel", auth, async (req, res) => {
 
     await note.save({ session });
     await session.commitTransaction();
+    await syncClientData(order.clientId);
 
-    return res.json({ message: "Credit note cancelled successfully." });
+    const cancelled = await CreditNote.findById(note._id)
+      .populate(
+        "originalOrderId",
+        "orderNumber orderDate companyName gstNumber Address State City pinCode stateCode paymentTerms roundOffFinalRevenue finalRevenue dueAmount creditAppliedAmount"
+      )
+      .lean();
+
+    return res.json({
+      message: "Credit note cancelled successfully.",
+      creditNote: { ...cancelled, originalOrder: cancelled?.originalOrderId }
+    });
   } catch (error) {
     try {
       await session.abortTransaction();

@@ -44,7 +44,7 @@ import "../index.css"
 
 const SalesAnalytics = () => {
 
-  const linkone = `http://localhost:5000`;
+  const linkone = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
   
   const [salesData, setSalesData] = useState(null);
   const [loading, setLoading] = useState(true);

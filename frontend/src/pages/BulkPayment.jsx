@@ -6,7 +6,7 @@ import * as Yup from 'yup';
 
 // Configuration constants
 const API_CONFIG = {
-  BASE_URL: 'https://baba.divinesparks.in',
+  BASE_URL: 'http://localhost:5000/',
   ENDPOINTS: {
     ORDERS: '/api/order/orders',
     BULK_PAYMENT: '/api/order/orders/payments/bulk'

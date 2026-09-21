@@ -626,11 +626,39 @@ function Order2() {
             return;
         }
 
+        const esc = (value) => String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+
+        const buildFallbackInvoice = () => {
+            const rows = (order.subOrders || []).map((item, index) => {
+                const unit = item.qtyUnit || "PCS";
+                const qty = unit === "MTR" ? Number(item.MTR || 0) : Number(item.quantity || 0);
+                const amount = qty * Number(item.unitPrice || 0);
+                return `<tr><td>${index + 1}</td><td>${esc(item.orderName)}</td><td>${esc(item.designNumber)}</td><td>${esc(item.hsnCode)}</td><td>${qty.toFixed(2)} ${esc(unit)}</td><td>${Number(item.unitPrice || 0).toFixed(2)}</td><td>${amount.toFixed(2)}</td></tr>`;
+            }).join("");
+
+            return `<!doctype html><html><head><meta charset="utf-8"><title>Invoice ${esc(order.orderNumber)}</title><style>
+            body{font-family:Arial,sans-serif;padding:24px;color:#111} .wrap{max-width:1100px;margin:auto}
+            .head{display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:14px}
+            table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #222;padding:7px;font-size:13px}
+            th{background:#f2f2f2}.right{text-align:right}@media print{body{padding:0}}
+            </style></head><body><div class="wrap"><div class="head">
+            <div><h2>${esc(profile.companyName || "Company")}</h2><div>${esc(profile.companyAddress || "")}</div><div>GSTIN: ${esc(profile.gstin || "")}</div></div>
+            <div><h2>INVOICE</h2><div>Invoice: <b>${esc(order.orderNumber)}</b></div><div>Date: ${new Date(order.orderDate).toLocaleDateString("en-IN")}</div></div>
+            </div><p><b>Bill To:</b> ${esc(order.companyName || "Customer")}</p><p>${esc(order.Address || "")}</p>
+            <table><thead><tr><th>#</th><th>Item</th><th>Design</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${rows || '<tr><td colspan="7">No items</td></tr>'}</tbody></table>
+            <div class="right" style="margin-top:18px"><div>Taxable: ₹${Number(order.totalCost || 0).toFixed(2)}</div><div>Tax: ₹${Number(order.taxAmount || 0).toFixed(2)}</div><h3>Total: ₹${Number(order.roundOffFinalRevenue || 0).toFixed(2)}</h3><div>Paid: ₹${Number(order.paidAmount || 0).toFixed(2)} | Due: ₹${Number(order.dueAmount || 0).toFixed(2)}</div></div>
+            </div></body></html>`;
+        };
+
         printWindow.document.write("<p style='font-family:sans-serif;padding:24px'>Loading invoice...</p>");
 
         try {
             const response = await axios.get(
-                `${linkone}/api/order/${order}/invoice`,
+                `${linkone}/api/order/${order._id}/invoice`,
                 {
                     ...authConfig(),
                     responseType: "text"
@@ -643,8 +671,16 @@ function Order2() {
             printWindow.focus();
         } catch (error) {
             console.error("Error opening invoice:", error);
-            printWindow.close();
-            alert(error.response?.data?.message || "Failed to open invoice.");
+            try {
+                printWindow.document.open();
+                printWindow.document.write(buildFallbackInvoice());
+                printWindow.document.close();
+                printWindow.focus();
+            } catch (fallbackError) {
+                console.error("Fallback invoice error:", fallbackError);
+                printWindow.close();
+                alert(error.response?.data?.message || error.message || "Failed to open invoice.");
+            }
         }
     };
 

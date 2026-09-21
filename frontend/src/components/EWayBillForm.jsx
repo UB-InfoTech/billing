@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 
 const EWayBillForm = ({ orderId, profile }) => {
-  //const linkone = `http://localhost:5000`;
-  const linkone = `https://baba.divinesparks.in`;
+  const linkone = `http://localhost:5000`;
 
   const [formData, setFormData] = useState({
     supplyType: 'O', // required

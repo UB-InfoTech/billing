@@ -28,7 +28,41 @@ app.use(cors({
 }));
 app.use(express.json({limit:"2mb"}));
 app.use(express.urlencoded({extended:true,limit:"2mb"}));
-app.use(mongoSanitize());
+
+/*
+ * Express 5 exposes req.query through a read-only getter.
+ * express-mongo-sanitize@2.x sanitizes the object correctly, but then
+ * tries to assign req.query = sanitizedQuery, which throws under Express 5.
+ *
+ * Keep the proven sanitizer but use its programmatic API and only shadow
+ * req.query with an own writable property when a prohibited query key exists.
+ * Body/headers are mutated in place, so no property reassignment is needed.
+ */
+const sanitizeMongoRequest=(req,res,next)=>{
+  try{
+    ["body","headers","params"].forEach((key)=>{
+      if(req[key]&&typeof req[key]==="object"){
+        mongoSanitize.sanitize(req[key]);
+      }
+    });
+
+    if(req.query&&typeof req.query==="object"&&mongoSanitize.has(req.query)){
+      const sanitizedQuery=mongoSanitize.sanitize(req.query);
+      Object.defineProperty(req,"query",{
+        configurable:true,
+        enumerable:true,
+        writable:true,
+        value:sanitizedQuery
+      });
+    }
+
+    next();
+  }catch(error){
+    next(error);
+  }
+};
+
+app.use(sanitizeMongoRequest);
 app.use("/api",apiLimiter);
 
 app.use("/uploads",express.static(path.join(__dirname,"public/uploads"),{maxAge:"7d"}));

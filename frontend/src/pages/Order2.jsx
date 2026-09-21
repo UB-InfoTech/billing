@@ -801,6 +801,10 @@ function Order2() {
         return sortConfig.direction === 'asc' ? '↑' : '↓';
     };
 
+    const reportRef = useRef();
+    const contentRef = useRef(null);
+    const reactToPrintFn = useReactToPrint({ contentRef });
+
     if (loading) {
         return (
             <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh' }}>
@@ -822,7 +826,8 @@ function Order2() {
         alert('Downloading PDF...');
         try {
             const response = await axios.get(`${linkone}/api/ewaybill/pdf/${ewbNo}/${profile.gstin}/${profile.eWayUserName}/${profile.eWayPassword}`, {
-                responseType: 'blob', // Important for binary data
+                responseType: 'blob',
+                headers: { 'x-auth-token': localStorage.getItem('token') || '' }
             });
 
             const blob = new Blob([response.data], { type: 'application/pdf' });
@@ -846,13 +851,7 @@ function Order2() {
             alert('✅ Download complete');
         }
     }
-
-    const reportRef = useRef();
-
-    const contentRef = useRef(null);
-    const reactToPrintFn = useReactToPrint({ contentRef });
-
-    const styles = {
+const styles = {
         pageReport: {
             '@media print': {
                 body: {

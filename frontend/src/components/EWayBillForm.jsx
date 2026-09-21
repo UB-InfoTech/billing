@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 
 const EWayBillForm = ({ orderId, profile }) => {
-  const linkone = `http://localhost:5000`;
+  const linkone = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
   const [formData, setFormData] = useState({
     supplyType: 'O', // required

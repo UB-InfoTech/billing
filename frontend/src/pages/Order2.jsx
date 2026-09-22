@@ -51,7 +51,7 @@ function Order2() {
 
     const [payments, setPayments] = useState([]);
     const [editPayment, setEditPayment] = useState(null);
-    const [newPayment, setNewPayment] = useState({ amount: "", method: "Cash", amountReference: "" });
+    const [newPayment, setNewPayment] = useState({ amount: "", method: "Cash", amountReference: "", paymentDate: new Date().toISOString().slice(0, 10) });
     const authConfig = () => ({ headers: { "x-auth-token": localStorage.getItem("token") || "" } });
 
     // const date = new DateObject()
@@ -551,27 +551,57 @@ function Order2() {
     };
 
     const addPayment = async (orderId) => {
+        const amount = Number(newPayment.amount);
+        const due = Number(editingOrder?.dueAmount || 0);
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+            alert("❌ Enter a valid payment amount.");
+            return;
+        }
+        if (amount > due + 0.01) {
+            alert(`❌ Payment cannot exceed the current due balance of ₹${due.toFixed(2)}.`);
+            return;
+        }
+
         try {
-            await axios.post(`${linkone}/api/order/orders/${orderId}/pay`, newPayment, authConfig());
-            fetchPayments();
-            setNewPayment({ amount: "", method: "Cash", amountReference: "" });
-            fetchOrders();
-            alert("✅ Payment Added Sucessfully");
+            const response = await axios.post(
+                `${linkone}/api/order/orders/${orderId}/pay`,
+                {
+                    ...newPayment,
+                    amount,
+                    paymentDate: newPayment.paymentDate || new Date().toISOString().slice(0, 10),
+                },
+                authConfig()
+            );
+            await fetchPayments();
+            setEditingOrder(response.data?.order || editingOrder);
+            setNewPayment({ amount: "", method: "Cash", amountReference: "", paymentDate: new Date().toISOString().slice(0, 10) });
+            await fetchOrders();
+            alert("✅ Payment added successfully.");
         } catch (error) {
-            alert("❌ ", error.response.data.message);
-            // alert("Error adding payment");
+            alert("❌ " + (error.response?.data?.message || error.message || "Unable to add payment."));
         }
     };
 
     const updatePayment = async () => {
+        if (!editingOrder || !editPayment) return;
         try {
-            await axios.put(`${linkone}/api/order/orders/${editingOrder._id}/payments/${editPayment._id}`, editPayment, authConfig());
-            fetchPayments();
+            const response = await axios.put(
+                `${linkone}/api/order/orders/${editingOrder._id}/payments/${editPayment._id}`,
+                {
+                    ...editPayment,
+                    amount: Number(editPayment.amount),
+                    paymentDate: editPayment.paymentDate || new Date().toISOString().slice(0, 10),
+                },
+                authConfig()
+            );
+            await fetchPayments();
+            setEditingOrder(response.data?.order || editingOrder);
             setEditPayment(null);
-            fetchOrders();
-            alert("✅ Payment Update Sucessfully")
+            await fetchOrders();
+            alert("✅ Payment updated successfully.");
         } catch (error) {
-            alert("❌ Error updating payment " + error.response.data.message);
+            alert("❌ Error updating payment: " + (error.response?.data?.message || error.message || "Unable to update payment."));
         }
     };
 
@@ -587,7 +617,7 @@ function Order2() {
             try {
                 await axios.delete(`${linkone}/api/order/orders/${editingOrder._id}/payments/${paymentId}`, authConfig());
                 fetchPayments();
-                alert("✅ Payment Delete Sucessfully")
+                alert("✅ Payment deleted successfully.");
             } catch (error) {
                 alert("❌ Error deleting payment" + error.response.data.message);
             }
@@ -684,8 +714,32 @@ function Order2() {
         }
     };
 
-    const printReceipt = (paymentId) => {
-        window.open(`${linkone}/api/order/${editingOrder._id}/payments/${paymentId}/invoice`, "_blank");
+    const printReceipt = async (paymentId) => {
+        if (!editingOrder?._id || !paymentId) return;
+
+        const printWindow = window.open("", "_blank");
+        if (!printWindow) {
+            alert("Please allow pop-ups to print the payment receipt.");
+            return;
+        }
+
+        printWindow.document.open();
+        printWindow.document.write("<p style='font-family:Arial,sans-serif;padding:24px'>Preparing receipt...</p>");
+        printWindow.document.close();
+
+        try {
+            const response = await axios.get(
+                `${linkone}/api/order/${editingOrder._id}/payments/${paymentId}/invoice`,
+                { ...authConfig(), responseType: "text" }
+            );
+            printWindow.document.open();
+            printWindow.document.write(response.data);
+            printWindow.document.close();
+            printWindow.focus();
+        } catch (error) {
+            printWindow.close();
+            alert("❌ Unable to print receipt: " + (error.response?.data?.message || error.message || "Unknown error"));
+        }
     };
 
     const sortedOrders = useMemo(() => {
@@ -1165,7 +1219,7 @@ const styles = {
                                             <button className="btn btn-danger" onClick={() => handleDeleteOrder(order._id)}>
                                                 <img src={deleteSVG} alt="Delete" />
                                             </button>
-                                            <button className="btn btn-primary" onClick={() => printInvoice(order._id)}>
+                                            <button className="btn btn-primary" onClick={() => printInvoice(order)}>
                                                 <img src={invoiceSVG} alt="Invoice" />
                                                 {/* <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#1f1f1f"><path d="M120-80v-800l60 60 60-60 60 60 60-60 60 60 60-60 60 60 60-60 60 60 60-60 60 60 60-60v800l-60-60-60 60-60-60-60 60-60-60-60 60-60-60-60 60-60-60-60 60-60-60-60 60Zm120-200h480v-80H240v80Zm0-160h480v-80H240v80Zm0-160h480v-80H240v80Zm-40 404h560v-568H200v568Zm0-568v568-568Z" /></svg> */}
                                             </button>
@@ -1806,7 +1860,7 @@ const styles = {
                         <div className="modal-dialog">
                             <div className="modal-content">
                                 <div className="modal-header">
-                                    <h5 className="modal-title">Manage Payments {clientsData.name}</h5>
+                                    <h5 className="modal-title">Manage Payments — {editingOrder?.companyName || "Customer"}</h5>
                                     <button type="button" className="btn-close" onClick={() => setShowPaymentModal(false)}></button>
                                 </div>
                                 <div className="modal-body">
@@ -1815,7 +1869,8 @@ const styles = {
                                     <div className="d-flex gap-2 mb-2">
 
                                         <div className="col-3">
-                                            <input type="number" className="form-control" placeholder="Amount" value={newPayment.amount} onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })} required />
+                                            <input type="number" className="form-control" placeholder="Amount" min="0.01" max={Number(editingOrder?.dueAmount || 0)} step="0.01" value={newPayment.amount} onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })} required />
+                                            <div className="small text-muted mt-1">Due: ₹{Number(editingOrder?.dueAmount || 0).toFixed(2)}</div>
                                         </div>
                                         <div className="col-3">
                                             <select className="form-select" value={newPayment.method} onChange={(e) => setNewPayment({ ...newPayment, method: e.target.value })}>
@@ -1826,7 +1881,8 @@ const styles = {
                                             </select>
                                         </div>
                                         <div className="col-5" >
-                                            <input type="text" className="form-control" placeholder="Reference" value={newPayment.amountReference} onChange={(e) => setNewPayment({ ...newPayment, amountReference: e.target.value })} />
+                                            <input type="text" className="form-control" placeholder="Reference (optional)" maxLength="100" value={newPayment.amountReference} onChange={(e) => setNewPayment({ ...newPayment, amountReference: e.target.value })} />
+                                            <input type="date" className="form-control mt-2" value={newPayment.paymentDate || ""} onChange={(e) => setNewPayment({ ...newPayment, paymentDate: e.target.value })} />
                                         </div>
                                         {/* // <button className="btn btn-success" onClick={addPayment}>Add Payment</button> */}
                                     </div>
@@ -1875,7 +1931,8 @@ const styles = {
                                         <div>
                                             <h6>Edit Payment</h6>
 
-                                            <input type="number" className="form-control mb-2" value={editPayment.amount} onChange={(e) => setEditPayment({ ...editPayment, amount: e.target.value })} />
+                                            <input type="number" className="form-control mb-2" min="0.01" step="0.01" value={editPayment.amount} onChange={(e) => setEditPayment({ ...editPayment, amount: e.target.value })} />
+                                            <input type="date" className="form-control mb-2" value={editPayment.paymentDate ? new Date(editPayment.paymentDate).toISOString().slice(0, 10) : ""} onChange={(e) => setEditPayment({ ...editPayment, paymentDate: e.target.value })} />
                                             <select className="form-select mb-2" value={editPayment.method} onChange={(e) => setEditPayment({ ...editPayment, method: e.target.value })}>
                                                 <option>Cash</option>
                                                 <option>Bank Transfer</option>

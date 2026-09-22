@@ -477,11 +477,12 @@ function renderCreditNoteHtml(note, profile, order) {
       <td>${qty}</td>
       <td class="num">${creditMoney(item.unitPrice)}</td>
       <td class="num">${Number(item.discountRate||0).toFixed(2)}%</td>
+      <td class="num">${Number(item.taxRate||0).toFixed(2)}%</td>
       <td class="num">${creditMoney(item.taxableAmount)}</td>
       <td class="num">${creditMoney(item.taxAmount)}</td>
       <td class="num">${creditMoney(item.lineTotal)}</td>
     </tr>`;
-  }).join(""):`<tr><td colspan="10" class="empty">Amount-based Credit Note</td></tr>`;
+  }).join(""):`<tr><td colspan="11" class="empty">Amount-based Credit Note</td></tr>`;
 
   const customerAddress=[note.Address,note.City,note.State,note.pinCode].filter(Boolean).join(", ");
   const originalTotal=Number(note.originalInvoiceTotal||getOrderInvoiceTotal(order));
@@ -559,7 +560,7 @@ table{width:100%;border-collapse:collapse}th{background:#111827;color:#fff;paddi
   </div>
 
   <table>
-    <thead><tr><th>#</th><th>Design</th><th>Description</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Disc.</th><th>Taxable</th><th>Tax</th><th>Amount</th></tr></thead>
+    <thead><tr><th>#</th><th>Design</th><th>Description</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Disc.</th><th>Tax Rate</th><th>Taxable</th><th>Tax</th><th>Amount</th></tr></thead>
     <tbody>${itemRows}</tbody>
   </table>
 

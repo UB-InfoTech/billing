@@ -485,9 +485,7 @@ router.post("/", auth, async (req, res) => {
     const { map: previousCredits, total: previousCreditTotal } =
       await getPreviouslyCredited(originalOrderId, session);
 
-    const invoiceTotal = round2(
-      order.roundOffFinalRevenue ?? order.finalRevenue ?? order.totalAmount ?? 0
-    );
+    const invoiceTotal = getOrderInvoiceTotal(order);
     const remainingCreditTotal = Math.max(
       0,
       round2(invoiceTotal - previousCreditTotal)

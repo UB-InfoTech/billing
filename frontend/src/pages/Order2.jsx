@@ -606,26 +606,21 @@ function Order2() {
     };
 
     const deletePayment = async (paymentId) => {
+        if (!editingOrder?._id || !paymentId) return;
+        if (!window.confirm("Delete this payment? The invoice balance will be recalculated.")) return;
 
-        if (!editingOrder) return;
-        if (!paymentId) return;
-
-        if (!window.confirm("Are you sure you want to delete this payment?")) return;
-
-        const password = prompt("Enter password to delete:");
-        if (password === "123") {
-            try {
-                await axios.delete(`${linkone}/api/order/orders/${editingOrder._id}/payments/${paymentId}`, authConfig());
-                fetchPayments();
-                alert("✅ Payment deleted successfully.");
-            } catch (error) {
-                alert("❌ Error deleting payment" + error.response.data.message);
-            }
-        } else {
-            alert("❌ Incorrect password");
+        try {
+            const response = await axios.delete(
+                `${linkone}/api/order/orders/${editingOrder._id}/payments/${paymentId}`,
+                authConfig()
+            );
+            await fetchPayments();
+            setEditingOrder(response.data?.order || editingOrder);
+            await fetchOrders();
+            alert("✅ Payment deleted successfully.");
+        } catch (error) {
+            alert("❌ Error deleting payment: " + (error.response?.data?.message || error.message || "Unable to delete payment."));
         }
-
-
     };
 
     const handleDeleteOrder = async (order) => {

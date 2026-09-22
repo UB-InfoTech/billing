@@ -459,6 +459,7 @@ GET    /api/credit-notes/next-number
 GET    /api/credit-notes/invoices/search
 GET    /api/credit-notes/available/:orderId
 GET    /api/credit-notes/:id
+GET    /api/credit-notes/:id/print
 POST   /api/credit-notes
 PUT    /api/credit-notes/:id
 POST   /api/credit-notes/:id/cancel

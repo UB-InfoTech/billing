@@ -503,10 +503,15 @@ function Order2() {
     };
 
     const handlePaymentEdit = (order) => {
-
         setEditingOrder(order);
         setFormData(order);
-
+        setEditPayment(null);
+        setNewPayment({
+            amount: "",
+            method: "Cash",
+            amountReference: "",
+            paymentDate: new Date().toISOString().slice(0, 10),
+        });
         setShowPaymentModal(true);
     };
 
@@ -1248,7 +1253,10 @@ const styles = {
                                     <td colSpan={1}></td>
                                     {/* <td colSpan="3" className="text-end fw-bold">Total: ₹{filteredOrders.reduce((sum, order) => sum + parseFloat(order.totalCost), 0)}</td> */}
 
-                                    {/* <td colSpan="3" className="text-end fw-bold">Total: ₹{payments.reduce((sum, p) => sum + parseFloat(p.amount), 0)}</td> */}
+                                    {/* <td colSpan="3" className="text-end fw-bold">
+                                                    Total Paid: ₹{payments.reduce((sum, p) => sum + Number(p.amount || 0), 0).toFixed(2)}
+                                                    <div className="small text-danger fw-normal">Current Due: ₹{Number(editingOrder?.dueAmount || 0).toFixed(2)}</div>
+                                                </td> */}
                                 </tr>
                             </tbody>
                         </table>
@@ -1881,7 +1889,7 @@ const styles = {
                                         </div>
                                         {/* // <button className="btn btn-success" onClick={addPayment}>Add Payment</button> */}
                                     </div>
-                                    <button className="btn btn-primary" onClick={() => addPayment(editingOrder._id)}>Submit Payment</button>
+                                    <button className="btn btn-primary" disabled={Number(editingOrder?.dueAmount || 0) <= 0 || !newPayment.amount} onClick={() => addPayment(editingOrder._id)}>Add Payment</button>
 
 
                                     <table className="table">
@@ -1907,9 +1915,9 @@ const styles = {
                                                         <button className="btn btn-warning btn-sm me-1" onClick={() => setEditPayment(p)}>
                                                             <img src={editSVG} alt="Edit" />
                                                         </button>
-                                                        {/* <button className="btn btn-danger btn-sm mx-1" onClick={() => deletePayment(p._id)}>
-                            <img src={deleteSVG} alt="Delete" />
-                          </button> */}
+                                                        <button className="btn btn-danger btn-sm mx-1" onClick={() => deletePayment(p._id)}>
+                                                            <img src={deleteSVG} alt="Delete" />
+                                                        </button>
                                                         <button className="btn btn-info btn-sm" onClick={() => printReceipt(p._id)}>
                                                             <img src={receiptSVG} alt="Receipt" />
                                                         </button>

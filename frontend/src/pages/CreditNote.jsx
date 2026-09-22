@@ -554,9 +554,43 @@ export default function CreditNote() {
         }
     };
 
-    const print = () => {
-        if (!previewNote) return;
-        window.print();
+    const print = async () => {
+        if (!previewNote?._id) return;
+
+        const printWindow = window.open("", "_blank");
+        if (!printWindow) {
+            setError("Please allow pop-ups to print the Credit Note.");
+            return;
+        }
+
+        printWindow.document.open();
+        printWindow.document.write(
+            "<p style='font-family:Arial,sans-serif;padding:24px'>Preparing Credit Note...</p>"
+        );
+        printWindow.document.close();
+
+        try {
+            const response = await axios.get(
+                `${API_BASE}/api/credit-notes/${previewNote._id}/print`,
+                {
+                    ...getAuthConfig(),
+                    responseType: "text",
+                }
+            );
+
+            printWindow.document.open();
+            printWindow.document.write(response.data);
+            printWindow.document.close();
+            printWindow.focus();
+        } catch (error) {
+            console.error("Credit Note print error:", error);
+            printWindow.close();
+            setError(
+                error?.response?.data?.message ||
+                error?.message ||
+                "Unable to print Credit Note."
+            );
+        }
     };
 
     return (
@@ -657,7 +691,7 @@ export default function CreditNote() {
                                             <td className="text-end">{money(note?.totals?.grandTotal)}</td>
                                             <td className="text-end">{money(note?.settlement?.adjustmentAmount)}</td>
                                             <td className="text-end">{money(note?.settlement?.refundAmount)}</td>
-                                            <td className="text-end no-print"><div className="btn-group btn-group-sm"><button className="btn btn-outline-primary" onClick={() => openNote(note._id)}>View</button>{note.status === "Posted" && <button className="btn btn-outline-warning" onClick={() => startEditNote(note)}>Edit</button>}{note.status === "Posted" && <button className="btn btn-outline-danger" disabled={cancellingId === note._id} onClick={() => deleteNote(note._id)}>{cancellingId === note._id ? "..." : "Delete"}</button>}</div></td>
+                                            <td className="text-end no-print"><div className="btn-group btn-group-sm"><button className="btn btn-outline-primary" onClick={() => openNote(note._id)}>View</button><button className="btn btn-outline-secondary" onClick={async () => { setPreviewNote(note); setView("preview"); }} title="Open Credit Note">Print</button>{note.status === "Posted" && <button className="btn btn-outline-warning" onClick={() => startEditNote(note)}>Edit</button>}{note.status === "Posted" && <button className="btn btn-outline-danger" disabled={cancellingId === note._id} onClick={() => deleteNote(note._id)}>{cancellingId === note._id ? "..." : "Cancel"}</button>}</div></td>
                                         </tr>)}
                                     </tbody>
                                 </table>
@@ -748,7 +782,7 @@ export default function CreditNote() {
                 </div>}
 
                 {view === "preview" && previewNote && <div className="credit-note-print">
-                    <div className="d-flex justify-content-end gap-2 mb-3 no-print"><button className="btn btn-outline-secondary" onClick={() => setView("list")}>Back</button>{previewNote.status === "Posted" && <><button className="btn btn-outline-warning" onClick={() => startEditNote(previewNote)}>Edit</button><button className="btn btn-outline-danger" onClick={() => deleteNote(previewNote._id)}>Cancel</button></>}<button className="btn btn-primary" onClick={print}>Print</button></div>
+                    <div className="d-flex justify-content-end gap-2 mb-3 no-print"><button className="btn btn-outline-secondary" onClick={() => setView("list")}>Back</button>{previewNote.status === "Posted" && <><button className="btn btn-outline-warning" onClick={() => startEditNote(previewNote)}>Edit</button><button className="btn btn-outline-danger" onClick={() => deleteNote(previewNote._id)}>Cancel</button></>}<button className="btn btn-primary" onClick={print}>Print / Save PDF</button></div>
                     <CreditNotePrint note={previewNote} profile={profile} />
                 </div>}
             </div>

@@ -415,6 +415,192 @@ router.get("/available/:orderId", auth, async (req, res) => {
   }
 });
 
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function creditDate(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "-";
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function creditMoney(value) {
+  return `₹ ${Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function creditWords(value) {
+  const ones=["Zero","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+  const tens=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+  const below100=n=>n<20?ones[n]:tens[Math.floor(n/10)]+(n%10?` ${ones[n%10]}`:"");
+  let amount=Math.max(0,Number(value||0));
+  const rupees=Math.floor(amount);
+  let n=rupees;
+  const parts=[];
+  const crore=Math.floor(n/10000000); if(crore){parts.push(`${below100(crore)} Crore`);n%=10000000;}
+  const lakh=Math.floor(n/100000); if(lakh){parts.push(`${below100(lakh)} Lakh`);n%=100000;}
+  const thousand=Math.floor(n/1000); if(thousand){parts.push(`${below100(thousand)} Thousand`);n%=1000;}
+  const hundred=Math.floor(n/100); if(hundred){parts.push(`${ones[hundred]} Hundred`);n%=100;}
+  if(n)parts.push(below100(n));
+  let result=`Indian Rupees ${parts.length?parts.join(" "):"Zero"}`;
+  const paise=Math.round((amount-rupees)*100);
+  if(paise)result+=` and ${below100(paise)} Paise`;
+  return result+" Only";
+}
+
+function renderCreditNoteHtml(note, profile, order) {
+  const items=Array.isArray(note.items)?note.items:[];
+  const totals=note.totals||{};
+  const settlement=note.settlement||{};
+  const itemRows=items.length?items.map((item,index)=>{
+    const qty=item.qtyUnit==="MTR"
+      ? `${Number(item.MTR||0).toFixed(2)} MTR`
+      : `${Number(item.quantity||0).toFixed(2)} ${item.qtyUnit||"PCS"}`;
+    return `<tr>
+      <td>${index+1}</td>
+      <td>${escapeHtml(item.designNumber||"-")}</td>
+      <td>${escapeHtml(item.orderName||"-")}</td>
+      <td>${escapeHtml(item.hsnCode??"-")}</td>
+      <td>${qty}</td>
+      <td class="num">${creditMoney(item.unitPrice)}</td>
+      <td class="num">${Number(item.discountRate||0).toFixed(2)}%</td>
+      <td class="num">${creditMoney(item.taxableAmount)}</td>
+      <td class="num">${creditMoney(item.taxAmount)}</td>
+      <td class="num">${creditMoney(item.lineTotal)}</td>
+    </tr>`;
+  }).join(""):`<tr><td colspan="10" class="empty">Amount-based Credit Note</td></tr>`;
+
+  const customerAddress=[note.Address,note.City,note.State,note.pinCode].filter(Boolean).join(", ");
+  const originalTotal=Number(note.originalInvoiceTotal||getOrderInvoiceTotal(order));
+  const cancelled=note.status==="Cancelled";
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Credit Note ${escapeHtml(note.creditNoteNumber||"")}</title>
+<style>
+@page{size:A4;margin:10mm}
+*{box-sizing:border-box}
+body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#111827;background:#f3f4f6;font-size:11px}
+.page{width:210mm;min-height:277mm;margin:12px auto;background:#fff;padding:12mm;position:relative}
+.header{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #111827;padding-bottom:14px}
+.company{flex:1}.company-name{font-size:22px;font-weight:800}.company-title{font-weight:600;color:#4b5563;margin-top:2px}
+.company-meta{color:#4b5563;line-height:1.5;margin-top:6px}
+.document{text-align:right;min-width:245px}.document-title{font-size:25px;font-weight:900;letter-spacing:.6px}
+.meta{display:flex;justify-content:flex-end;gap:8px;margin-top:3px}.meta span{color:#6b7280}.meta strong{color:#111827}
+.status{display:inline-block;margin-top:7px;padding:4px 9px;border:1px solid #6b7280;font-weight:800;font-size:9px}
+.cancelled{border-color:#b91c1c;color:#b91c1c}
+.stamp{position:absolute;right:50px;top:125px;transform:rotate(-14deg);border:4px solid #b91c1c;color:#b91c1c;padding:8px 15px;font-size:25px;font-weight:900;letter-spacing:2px;opacity:.16}
+.grid{display:grid;grid-template-columns:1.2fr .8fr;gap:12px;margin:14px 0}
+.box{border:1px solid #d1d5db;border-radius:5px;padding:10px}.label{text-transform:uppercase;color:#6b7280;font-size:9px;font-weight:800;letter-spacing:.7px;margin-bottom:5px}
+.bold{font-weight:800}.muted{color:#6b7280}
+table{width:100%;border-collapse:collapse}th{background:#111827;color:#fff;padding:6px;font-size:9px;text-align:left}td{border:1px solid #d1d5db;padding:6px;vertical-align:top}.num{text-align:right;white-space:nowrap}
+.empty{text-align:center;color:#6b7280;padding:18px}
+.bottom{display:grid;grid-template-columns:1fr 290px;gap:15px;margin-top:14px}
+.settlement-row,.total-row{display:flex;justify-content:space-between;gap:10px;padding:4px 0}
+.amount-words{margin-top:11px;padding-top:9px;border-top:1px dashed #d1d5db}
+.grand{border-top:2px solid #111827;margin-top:5px;padding-top:8px;font-size:16px;font-weight:900}
+.note{margin-top:10px;padding:8px;background:#f8fafc;border-left:3px solid #111827}
+.footer{display:flex;justify-content:space-between;gap:20px;border-top:1px solid #d1d5db;margin-top:20px;padding-top:12px}
+.signature{text-align:center;min-width:200px;padding-top:24px}.print-footer{text-align:center;color:#6b7280;font-size:9px;margin-top:15px}
+@media print{body{background:#fff}.page{margin:0;padding:0;width:auto;min-height:auto}.no-print{display:none}}
+</style>
+</head>
+<body>
+<div class="page">
+  ${cancelled?'<div class="stamp">CANCELLED</div>':""}
+  <div class="header">
+    <div class="company">
+      <div class="company-name">${escapeHtml(profile.companyName||"Company")}</div>
+      ${profile.headerTitle?`<div class="company-title">${escapeHtml(profile.headerTitle)}</div>`:""}
+      <div class="company-meta">${escapeHtml(profile.companyAddress||"")}</div>
+      ${profile.phoneNumber1?`<div class="company-meta">Phone: ${escapeHtml(profile.phoneNumber1)}</div>`:""}
+      ${profile.phoneNumber2?`<div class="company-meta">Phone: ${escapeHtml(profile.phoneNumber2)}</div>`:""}
+      ${profile.gstin?`<div class="company-meta">GSTIN: ${escapeHtml(profile.gstin)}</div>`:""}
+      ${profile.pan?`<div class="company-meta">PAN: ${escapeHtml(profile.pan)}</div>`:""}
+    </div>
+    <div class="document">
+      <div class="document-title">CREDIT NOTE</div>
+      <div class="meta"><span>Credit Note No.</span><strong>${escapeHtml(note.creditNoteNumber||"-")}</strong></div>
+      <div class="meta"><span>Date</span><strong>${creditDate(note.creditNoteDate)}</strong></div>
+      <div class="meta"><span>Reason</span><strong>${escapeHtml(note.reason||"-")}</strong></div>
+      <div class="status ${cancelled?"cancelled":""}">${escapeHtml(note.status||"Posted").toUpperCase()}</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="box">
+      <div class="label">Recipient / Customer</div>
+      <div class="bold">${escapeHtml(note.companyName||"-")}</div>
+      <div>${escapeHtml(customerAddress||"-")}</div>
+      <div class="muted">GSTIN: ${escapeHtml(note.gstNumber||"-")}</div>
+    </div>
+    <div class="box">
+      <div class="label">Corresponding Tax Invoice</div>
+      <div><span class="muted">Invoice No.:</span> <strong>${escapeHtml(note.originalInvoiceNumber||order?.orderNumber||"-")}</strong></div>
+      <div><span class="muted">Invoice Date:</span> ${creditDate(note.originalInvoiceDate||order?.orderDate)}</div>
+      <div><span class="muted">Invoice Total:</span> ${creditMoney(originalTotal)}</div>
+      ${order?.paymentTerms?`<div><span class="muted">Payment Terms:</span> ${escapeHtml(order.paymentTerms)}</div>`:""}
+    </div>
+  </div>
+
+  <table>
+    <thead><tr><th>#</th><th>Design</th><th>Description</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Disc.</th><th>Taxable</th><th>Tax</th><th>Amount</th></tr></thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+
+  <div class="bottom">
+    <div>
+      <div class="box">
+        <div class="label">Settlement</div>
+        <div class="settlement-row"><span>Adjustment against invoice</span><strong>${creditMoney(settlement.adjustmentAmount)}</strong></div>
+        <div class="settlement-row"><span>Refund</span><strong>${creditMoney(settlement.refundAmount)}</strong></div>
+        ${Number(settlement.refundAmount||0)>0?`<div class="settlement-row"><span>Refund Method</span><strong>${escapeHtml(settlement.refundMethod||"-")}</strong></div>`:""}
+        ${Number(settlement.customerCreditAmount||0)>0?`<div class="settlement-row"><span>Customer Credit</span><strong>${creditMoney(settlement.customerCreditAmount)}</strong></div>`:""}
+      </div>
+      ${note.note?`<div class="note"><strong>Note:</strong> ${escapeHtml(note.note)}</div>`:""}
+      <div class="amount-words"><div class="label">Amount in Words</div><strong>${escapeHtml(creditWords(totals.grandTotal))}</strong></div>
+    </div>
+    <div class="box">
+      <div class="total-row"><span>Subtotal</span><span>${creditMoney(totals.subtotal)}</span></div>
+      <div class="total-row"><span>Discount</span><span>${creditMoney(totals.discountAmount)}</span></div>
+      <div class="total-row"><span>Taxable Amount</span><span>${creditMoney(totals.taxableAmount)}</span></div>
+      <div class="total-row"><span>Tax</span><span>${creditMoney(totals.taxAmount)}</span></div>
+      <div class="total-row"><span>Round Off</span><span>${creditMoney(totals.roundOff)}</span></div>
+      <div class="total-row grand"><span>Total Credit</span><span>${creditMoney(totals.grandTotal)}</span></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div>
+      ${profile.bankName?`<div class="bold">${escapeHtml(profile.bankName)}</div>`:""}
+      ${profile.accountNo?`<div>A/C No.: ${escapeHtml(profile.accountNo)}</div>`:""}
+      ${profile.branchName?`<div>Branch: ${escapeHtml(profile.branchName)}</div>`:""}
+      ${profile.ifsc?`<div>IFSC: ${escapeHtml(profile.ifsc)}</div>`:""}
+    </div>
+    <div class="signature">Authorized Signatory<br><span class="muted">${escapeHtml(profile.companyName||"")}</span></div>
+  </div>
+  <div class="print-footer">This Credit Note is issued with reference to the corresponding tax invoice shown above.</div>
+</div>
+<script>window.addEventListener("load",()=>setTimeout(()=>{window.focus();window.print()},200));</script>
+</body>
+</html>`;
+}
+
 /** GET /api/credit-notes/:id */
 router.get("/:id", auth, async (req, res) => {
   try {

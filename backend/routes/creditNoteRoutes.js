@@ -97,6 +97,26 @@ function calculateManualCredit({ taxableAmount, taxRate }) {
   };
 }
 
+// Some legacy orders have roundOffFinalRevenue = 0 even though finalRevenue or
+// totalAmount is populated. Prefer a positive calculated total so Credit Notes
+// work correctly for both old and newly-created invoices.
+function getOrderInvoiceTotal(order) {
+  const rounded = Number(order?.roundOffFinalRevenue);
+  if (Number.isFinite(rounded) && rounded > EPSILON) return round2(rounded);
+
+  const finalRevenue = Number(order?.finalRevenue);
+  if (Number.isFinite(finalRevenue) && finalRevenue > EPSILON) {
+    return Math.round(finalRevenue);
+  }
+
+  const totalAmount = Number(order?.totalAmount);
+  if (Number.isFinite(totalAmount) && totalAmount > EPSILON) {
+    return Math.round(totalAmount);
+  }
+
+  return 0;
+}
+
 function calculateSettlement(settlement, grandTotal, orderDue) {
   const adjustmentAmount = round2(settlement?.adjustmentAmount);
   const refundAmount = round2(settlement?.refundAmount);
@@ -358,9 +378,7 @@ router.get("/available/:orderId", auth, async (req, res) => {
     if (!order) return res.status(404).json({ message: "Invoice not found." });
 
     const { map, total } = await getPreviouslyCredited(order._id);
-    const invoiceTotal = round2(
-      order.roundOffFinalRevenue ?? order.finalRevenue ?? order.totalAmount ?? 0
-    );
+    const invoiceTotal = getOrderInvoiceTotal(order);
 
     const items = (order.subOrders || []).map((sub) => {
       const key = String(sub._id);
@@ -612,7 +630,7 @@ router.post("/", auth, async (req, res) => {
     const currentDue = Math.max(
       0,
       round2(
-        Number(order.roundOffFinalRevenue || 0) -
+        getOrderInvoiceTotal(order) -
           Number(paymentTotal || 0) -
           Number(order.creditAppliedAmount || 0)
       )
@@ -941,7 +959,7 @@ async function cancelCreditNote(req, res) {
     const dueAmount = Math.max(
       0,
       round2(
-        Number(order.roundOffFinalRevenue || 0) -
+        getOrderInvoiceTotal(order) -
           paymentsTotal -
           nextCreditApplied
       )

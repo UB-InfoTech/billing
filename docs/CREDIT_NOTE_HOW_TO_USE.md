@@ -505,3 +505,27 @@ Accounting + Stock effects reversed
    ↓
 Credit Note remains as Cancelled
 `
+
+
+## 24. GST document fields used by the print layout
+
+The printable Credit Note includes the core particulars described in Rule 53(1A) of the CGST Rules, including:
+
+- Supplier name, address and GSTIN
+- Nature of the document
+- Consecutive Credit Note number
+- Issue date
+- Recipient/customer identity and GSTIN when available
+- Corresponding tax invoice number and date
+- Taxable value
+- Tax rate
+- Tax amount
+- Authorized-signatory area
+
+These fields are reflected in the server-generated print document. GST law can change and business-specific tax treatment may require professional review before filing or reporting. See the official CBIC references below.
+
+### Official references
+
+- Section 34 of the CGST Act covers circumstances in which a supplier may issue a Credit Note, including excess taxable value/tax, returned goods, and deficient goods or services.
+- Rule 53(1A) of the CGST Rules specifies particulars for Credit/Debit Notes.
+- The GST Portal documentation explains reporting of Credit/Debit Notes in GSTR-1.

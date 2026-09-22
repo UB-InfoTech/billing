@@ -15,6 +15,16 @@ const router=express.Router();
 
 const STATUSES=["Pending","In Process","Completed","Cancelled","Dispatched"];
 const METHODS=["Cash","Bank Transfer","UPI","Cheque","Bank"];
+
+const isReplicaSetAvailable=()=>{
+  const client=mongoose.connection.getClient?.();
+  const topology=client?.topology?.description;
+  if(!topology)return false;
+  return Object.values(topology.servers||{}).some(
+    server=>server.type==="RSPrimary"||server.type==="RSSecondary"||server.type==="Mongos"
+  );
+};
+
 const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
 const userId=req=>req.user.id;
 const idOrNull=v=>v&&mongoose.isValidObjectId(v)?v:null;
@@ -149,81 +159,296 @@ router.delete("/orders/:id/delete",auth,async(req,res)=>{
 });
 
 router.post("/orders/:id/pay",auth,async(req,res)=>{
-  const session=await mongoose.startSession();
+  const transactional=isReplicaSetAvailable();
+  const session=transactional?await mongoose.startSession():null;
+
   try{
-    const amount=round2(req.body?.amount),method=req.body?.method||"Cash",reference=String(req.body?.amountReference||"").trim();
+    const uid=userId(req);
+    const amount=round2(req.body?.amount);
+    const method=req.body?.method||"Cash";
+    const reference=String(req.body?.amountReference||"").trim();
+    const paymentDate=new Date(req.body?.paymentDate||new Date());
+
+    if(!uid)return res.status(401).json({message:"Authentication required."});
     if(amount<=0)return res.status(400).json({message:"Payment amount must be greater than zero."});
     if(!METHODS.includes(method))return res.status(400).json({message:"Invalid payment method."});
-    session.startTransaction();
-    const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)}).session(session);if(!order)throw new Error("Order not found");
-    if(amount>Number(order.dueAmount||0)+0.01)throw new Error("Amount exceeds due balance.");
-    if(reference){const dup=await Order.exists({"payments.amountReference":reference,createdBy:userId(req)}).session(session);if(dup)throw new Error("Payment reference already exists.");}
-    order.payments.push({amount,paymentDate:req.body.paymentDate||new Date(),method,amountReference,processedBy:userId(req)});
-    order.lastPaymentDate=new Date(req.body.paymentDate||new Date());
-    await order.save({session});
-    await session.commitTransaction();await syncClientData(order.clientId);
-    res.json({success:true,message:"Payment recorded successfully",order});
-  }catch(error){try{await session.abortTransaction();}catch{}res.status(400).json({success:false,message:error.message});}finally{await session.endSession();}
+    if(Number.isNaN(paymentDate.getTime()))return res.status(400).json({message:"Invalid payment date."});
+    if(reference.length>100)return res.status(400).json({message:"Payment reference must be at most 100 characters."});
+
+    if(session)session.startTransaction();
+
+    const findOrder=Order.findOne({_id:req.params.id,createdBy:uid});
+    if(session)findOrder.session(session);
+    const order=await findOrder;
+    if(!order)throw new Error("Order not found.");
+
+    if(amount>Number(order.dueAmount||0)+0.01){
+      throw new Error(`Payment amount exceeds the current due balance of ₹${Number(order.dueAmount||0).toFixed(2)}.`);
+    }
+
+    if(reference){
+      const duplicateQuery=Order.exists({
+        "payments.amountReference":reference,
+        createdBy:uid,
+      });
+      if(session)duplicateQuery.session(session);
+      const duplicate=await duplicateQuery;
+      if(duplicate)throw new Error("Payment reference already exists.");
+    }
+
+    order.payments.push({
+      amount,
+      paymentDate,
+      method,
+      amountReference:reference,
+      processedBy:uid,
+    });
+    order.lastPaymentDate=paymentDate;
+    await order.save(session?{session}:undefined);
+
+    if(session)await session.commitTransaction();
+    await syncClientData(order.clientId);
+
+    return res.json({success:true,message:"Payment recorded successfully.",order});
+  }catch(error){
+    if(session){
+      try{if(session.inTransaction())await session.abortTransaction();}catch{}
+    }
+    console.error("Payment create error:",error);
+    return res.status(400).json({success:false,message:error.message||"Unable to record payment."});
+  }finally{
+    if(session)await session.endSession();
+  }
 });
 
 router.get("/orders/:id/payments",auth,async(req,res)=>{
-  try{const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)}).select("payments");if(!order)return res.status(404).json({message:"Order not found"});res.json(order.payments||[]);}catch(error){res.status(500).json({message:error.message});}
+  try{
+    const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)}).select("payments");
+    if(!order)return res.status(404).json({message:"Order not found"});
+    res.json(order.payments||[]);
+  }catch(error){
+    res.status(500).json({message:error.message});
+  }
 });
 
 router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
-  const session=await mongoose.startSession();
+  const transactional=isReplicaSetAvailable();
+  const session=transactional?await mongoose.startSession():null;
+
   try{
-    const amount=round2(req.body?.amount),method=req.body?.method||"Cash",reference=String(req.body?.amountReference||"").trim();
-    if(amount<=0)return res.status(400).json({message:"Payment amount must be greater than zero."});if(!METHODS.includes(method))return res.status(400).json({message:"Invalid payment method."});
-    session.startTransaction();
-    const order=await Order.findOne({_id:req.params.orderId,createdBy:userId(req)}).session(session);if(!order)throw new Error("Order not found");
-    const payment=order.payments.id(req.params.paymentId);if(!payment)throw new Error("Payment not found");
-    const available=Number(order.dueAmount||0)+Number(payment.amount||0);if(amount>available+0.01)throw new Error("Payment amount exceeds available balance.");
-    if(reference&&reference!==payment.amountReference){const dup=await Order.exists({"payments.amountReference":reference,createdBy:userId(req),_id:{$ne:order._id}}).session(session);if(dup)throw new Error("Payment reference already exists.");}
-    payment.amount=amount;payment.method=method;payment.amountReference=reference;payment.paymentDate=req.body.paymentDate||payment.paymentDate||new Date();
-    await order.save({session});await session.commitTransaction();await syncClientData(order.clientId);res.json({message:"Payment updated",order});
-  }catch(error){try{await session.abortTransaction();}catch{}res.status(400).json({message:error.message});}finally{await session.endSession();}
+    const uid=userId(req);
+    const amount=round2(req.body?.amount);
+    const method=req.body?.method||"Cash";
+    const reference=String(req.body?.amountReference||"").trim();
+    const paymentDate=new Date(req.body?.paymentDate||new Date());
+
+    if(amount<=0)return res.status(400).json({message:"Payment amount must be greater than zero."});
+    if(!METHODS.includes(method))return res.status(400).json({message:"Invalid payment method."});
+    if(Number.isNaN(paymentDate.getTime()))return res.status(400).json({message:"Invalid payment date."});
+    if(reference.length>100)return res.status(400).json({message:"Payment reference must be at most 100 characters."});
+
+    if(session)session.startTransaction();
+
+    const findOrder=Order.findOne({_id:req.params.orderId,createdBy:uid});
+    if(session)findOrder.session(session);
+    const order=await findOrder;
+    if(!order)throw new Error("Order not found.");
+
+    const payment=order.payments.id(req.params.paymentId);
+    if(!payment)throw new Error("Payment not found.");
+
+    const available=Number(order.dueAmount||0)+Number(payment.amount||0);
+    if(amount>available+0.01)throw new Error("Payment amount exceeds the available invoice balance.");
+
+    if(reference&&reference!==payment.amountReference){
+      const duplicateQuery=Order.exists({
+        "payments.amountReference":reference,
+        createdBy:uid,
+        _id:{$ne:order._id}
+      });
+      if(session)duplicateQuery.session(session);
+      const duplicate=await duplicateQuery;
+      if(duplicate)throw new Error("Payment reference already exists.");
+    }
+
+    payment.amount=amount;
+    payment.method=method;
+    payment.amountReference=reference;
+    payment.paymentDate=paymentDate;
+
+    await order.save(session?{session}:undefined);
+    if(session)await session.commitTransaction();
+    await syncClientData(order.clientId);
+
+    return res.json({success:true,message:"Payment updated successfully.",order});
+  }catch(error){
+    if(session){
+      try{if(session.inTransaction())await session.abortTransaction();}catch{}
+    }
+    console.error("Payment update error:",error);
+    return res.status(400).json({message:error.message||"Unable to update payment."});
+  }finally{
+    if(session)await session.endSession();
+  }
 });
 
 router.delete("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
-  const session=await mongoose.startSession();
-  try{session.startTransaction();const order=await Order.findOne({_id:req.params.orderId,createdBy:userId(req)}).session(session);if(!order)throw new Error("Order not found");const payment=order.payments.id(req.params.paymentId);if(!payment)throw new Error("Payment not found");order.payments.pull({_id:req.params.paymentId});await order.save({session});await session.commitTransaction();await syncClientData(order.clientId);res.json({message:"Payment deleted",order});}catch(error){try{await session.abortTransaction();}catch{}res.status(400).json({message:error.message});}finally{await session.endSession();}
+  const transactional=isReplicaSetAvailable();
+  const session=transactional?await mongoose.startSession():null;
+
+  try{
+    if(session)session.startTransaction();
+
+    const findOrder=Order.findOne({_id:req.params.orderId,createdBy:userId(req)});
+    if(session)findOrder.session(session);
+    const order=await findOrder;
+    if(!order)throw new Error("Order not found.");
+
+    const payment=order.payments.id(req.params.paymentId);
+    if(!payment)throw new Error("Payment not found.");
+
+    order.payments.pull({_id:req.params.paymentId});
+    await order.save(session?{session}:undefined);
+
+    if(session)await session.commitTransaction();
+    await syncClientData(order.clientId);
+
+    return res.json({success:true,message:"Payment deleted successfully.",order});
+  }catch(error){
+    if(session){
+      try{if(session.inTransaction())await session.abortTransaction();}catch{}
+    }
+    console.error("Payment delete error:",error);
+    return res.status(400).json({message:error.message||"Unable to delete payment."});
+  }finally{
+    if(session)await session.endSession();
+  }
 });
 
 router.put("/orders/payments/bulk",auth,async(req,res)=>{
-  const session=await mongoose.startSession();
+  const transactional=isReplicaSetAvailable();
+  const session=transactional?await mongoose.startSession():null;
+
   try{
-    const {method="Cash",amountReference="",splitType="proportional",updates,paymentDate}=req.body||{};const amount=round2(req.body?.amount);
-    if(!METHODS.includes(method))throw new Error("Invalid payment method.");if(!referenceAllowed(amountReference))throw new Error("Payment reference is required and must be at most 100 characters.");
+    const {method="Cash",amountReference="",splitType="proportional",updates,paymentDate}=req.body||{};
+    const amount=round2(req.body?.amount);
+    if(!METHODS.includes(method))throw new Error("Invalid payment method.");
+    if(!referenceAllowed(amountReference))throw new Error("Payment reference is required and must be at most 100 characters.");
     if(amount<=0||amount>10000000)throw new Error("Payment amount must be between 0.01 and 10,000,000.");
-    if(!["proportional","custom"].includes(splitType))throw new Error("Invalid split type.");if(!Array.isArray(updates)||!updates.length)throw new Error("updates[] is required.");
-    const parsedDate=new Date(paymentDate);if(!paymentDate||Number.isNaN(parsedDate.getTime()))throw new Error("Valid paymentDate is required.");
-    session.startTransaction({writeConcern:{w:"majority"}});
-    const duplicate=await Order.exists({"payments.amountReference":String(amountReference).trim(),createdBy:userId(req)}).session(session);if(duplicate)throw new Error("Payment reference already exists.");
-    const ids=[...new Set(updates.map(x=>String(typeof x==="string"?x:x?.orderId)).filter(mongoose.isValidObjectId))];if(!ids.length)throw new Error("No valid order IDs supplied.");
-    const orders=await Order.find({_id:{$in:ids},createdBy:userId(req)}).session(session);if(orders.length!==ids.length)throw new Error("One or more selected invoices could not be found.");
-    const active=orders.filter(o=>Number(o.dueAmount||0)>0);if(!active.length)throw new Error("All selected orders are already fully paid.");
+    if(!["proportional","custom"].includes(splitType))throw new Error("Invalid split type.");
+    if(!Array.isArray(updates)||!updates.length)throw new Error("updates[] is required.");
+    const parsedDate=new Date(paymentDate);
+    if(!paymentDate||Number.isNaN(parsedDate.getTime()))throw new Error("Valid paymentDate is required.");
+
+    if(session)session.startTransaction({writeConcern:{w:"majority"}});
+
+    const duplicateQuery=Order.exists({"payments.amountReference":String(amountReference).trim(),createdBy:userId(req)});
+    if(session)duplicateQuery.session(session);
+    const duplicate=await duplicateQuery;
+    if(duplicate)throw new Error("Payment reference already exists.");
+
+    const ids=[...new Set(updates.map(x=>String(typeof x==="string"?x:x?.orderId)).filter(mongoose.isValidObjectId))];
+    if(!ids.length)throw new Error("No valid order IDs supplied.");
+
+    const orderQuery=Order.find({_id:{$in:ids},createdBy:userId(req)});
+    if(session)orderQuery.session(session);
+    const orders=await orderQuery;
+    if(orders.length!==ids.length)throw new Error("One or more selected invoices could not be found.");
+
+    const active=orders.filter(o=>Number(o.dueAmount||0)>0);
+    if(!active.length)throw new Error("All selected orders are already fully paid.");
+
     let allocations=[];
     if(splitType==="proportional"){
-      const totalDue=active.reduce((s,o)=>s+Math.round(Number(o.dueAmount||0)*100),0),amountCents=Math.round(amount*100);if(amountCents>totalDue)throw new Error("Payment exceeds total due amount of selected orders.");
-      let rows=active.map(o=>{const due=Math.round(Number(o.dueAmount||0)*100),exact=due/totalDue*amountCents;return{o,due,base:Math.floor(exact),frac:exact-Math.floor(exact)}});
-      let remainder=amountCents-rows.reduce((s,x)=>s+x.base,0);rows.sort((a,b)=>b.frac-a.frac);
-      for(const row of rows){if(remainder<=0)break;const cap=row.due-row.base;const give=Math.min(cap,remainder);row.base+=give;remainder-=give;}
+      const totalDue=active.reduce((s,o)=>s+Math.round(Number(o.dueAmount||0)*100),0);
+      const amountCents=Math.round(amount*100);
+      if(amountCents>totalDue)throw new Error("Payment exceeds total due amount of selected orders.");
+      let rows=active.map(o=>{
+        const due=Math.round(Number(o.dueAmount||0)*100);
+        const exact=due/totalDue*amountCents;
+        return{o,due,base:Math.floor(exact),frac:exact-Math.floor(exact)};
+      });
+      let remainder=amountCents-rows.reduce((s,x)=>s+x.base,0);
+      rows.sort((a,b)=>b.frac-a.frac);
+      for(const row of rows){
+        if(remainder<=0)break;
+        const cap=row.due-row.base;
+        const give=Math.min(cap,remainder);
+        row.base+=give;
+        remainder-=give;
+      }
       if(remainder>0)throw new Error("Unable to allocate payment without exceeding invoice dues.");
       allocations=rows.filter(x=>x.base>0).map(x=>({order:x.o,appliedAmount:x.base/100}));
     }else{
-      allocations=updates.map(x=>{const order=active.find(o=>String(o._id)===String(x?.orderId));if(!order)return null;const applied=round2(x?.amount);if(applied<0||applied>Number(order.dueAmount||0)+0.01)throw new Error("Custom allocation exceeds invoice due.");return{order,appliedAmount:applied};}).filter(Boolean);
-      const totalCustom=round2(allocations.reduce((s,x)=>s+x.appliedAmount,0));if(Math.abs(totalCustom-amount)>0.01)throw new Error("Custom allocations must equal payment amount.");
+      allocations=updates.map(x=>{
+        const order=active.find(o=>String(o._id)===String(x?.orderId));
+        if(!order)return null;
+        const applied=round2(x?.amount);
+        if(applied<0||applied>Number(order.dueAmount||0)+0.01)throw new Error("Custom allocation exceeds invoice due.");
+        return{order,appliedAmount:applied};
+      }).filter(Boolean);
+      const totalCustom=round2(allocations.reduce((s,x)=>s+x.appliedAmount,0));
+      if(Math.abs(totalCustom-amount)>0.01)throw new Error("Custom allocations must equal payment amount.");
     }
+
     if(!allocations.some(x=>x.appliedAmount>0))throw new Error("No positive payment allocations.");
+
     const paymentDateValue=parsedDate;
-    for(const item of allocations){if(item.appliedAmount<=0)continue;item.order.payments.push({amount:item.appliedAmount,paymentDate:paymentDateValue,method,amountReference:String(amountReference).trim(),processedBy:userId(req)});item.order.lastPaymentDate=paymentDateValue;await item.order.save({session});}
+    for(const item of allocations){
+      if(item.appliedAmount<=0)continue;
+      item.order.payments.push({
+        amount:item.appliedAmount,
+        paymentDate:paymentDateValue,
+        method,
+        amountReference:String(amountReference).trim(),
+        processedBy:userId(req)
+      });
+      item.order.lastPaymentDate=paymentDateValue;
+      await item.order.save(session?{session}:undefined);
+    }
+
     const skipped=orders.filter(o=>!active.some(a=>String(a._id)===String(o._id))).map(o=>({orderId:o._id,reason:"fully_paid"}));
-    const log=new PaymentLog({reference:String(amountReference).trim(),method,totalAmount:amount,splitType,paymentDate:paymentDateValue,userId:userId(req),allocations:allocations.filter(x=>x.appliedAmount>0).map(x=>({orderId:x.order._id,appliedAmount:x.appliedAmount,orderNumber:x.order.orderNumber,clientName:x.order.companyName})),skippedOrders:skipped,transactionMetadata:{batchSize:ids.length}});
-    await log.save({session});await session.commitTransaction();
+    const log=new PaymentLog({
+      reference:String(amountReference).trim(),
+      method,
+      totalAmount:amount,
+      splitType,
+      paymentDate:paymentDateValue,
+      userId:userId(req),
+      allocations:allocations.filter(x=>x.appliedAmount>0).map(x=>({
+        orderId:x.order._id,
+        appliedAmount:x.appliedAmount,
+        orderNumber:x.order.orderNumber,
+        clientName:x.order.companyName
+      })),
+      skippedOrders:skipped,
+      transactionMetadata:{batchSize:ids.length}
+    });
+
+    await log.save(session?{session}:undefined);
+    if(session)await session.commitTransaction();
+
     await Promise.allSettled(allocations.map(x=>syncClientData(x.order.clientId)));
-    res.json({message:"Bulk payment processed successfully",reference:String(amountReference).trim(),method,splitType,totalAmount:amount,paymentDate:paymentDateValue,allocations:allocations.map(x=>({orderId:x.order._id,appliedAmount:x.appliedAmount})),skippedOrders:skipped});
-  }catch(error){try{await session.abortTransaction();}catch{}res.status(400).json({message:error.message});}finally{await session.endSession();}
+
+    return res.json({
+      message:"Bulk payment processed successfully.",
+      reference:String(amountReference).trim(),
+      method,
+      splitType,
+      totalAmount:amount,
+      paymentDate:paymentDateValue,
+      allocations:allocations.map(x=>({orderId:x.order._id,appliedAmount:x.appliedAmount})),
+      skippedOrders:skipped
+    });
+  }catch(error){
+    if(session){
+      try{if(session.inTransaction())await session.abortTransaction();}catch{}
+    }
+    console.error("Bulk payment error:",error);
+    return res.status(400).json({message:error.message||"Unable to process bulk payment."});
+  }finally{
+    if(session)await session.endSession();
+  }
 });
 
 function referenceAllowed(value){const x=String(value||"").trim();return x.length>0&&x.length<=100;}

@@ -82,6 +82,11 @@ function calculateCreditLine(item) {
 
 function formatDate(date) {
     if (!date) return "-";
+    const value = String(date);
+    if (/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) {
+        const [year, month, day] = value.split("-").map(Number);
+        return new Date(year, month - 1, day).toLocaleDateString("en-IN");
+    }
     const parsed = new Date(date);
     return Number.isNaN(parsed.getTime()) ? "-" : parsed.toLocaleDateString("en-IN");
 }
@@ -95,6 +100,7 @@ export default function CreditNote() {
     const [form, setForm] = useState(emptyForm());
     const [previewNote, setPreviewNote] = useState(null);
     const [editingNote, setEditingNote] = useState(null);
+    const [profile, setProfile] = useState(null);
 
     const [loading, setLoading] = useState(false);
     const [orderLoading, setOrderLoading] = useState(false);
@@ -138,7 +144,15 @@ export default function CreditNote() {
     }, [items, form.creditMode, form.manualTaxableAmount, form.manualTaxRate]);
     const invoiceRemainingCredit = useMemo(() => {
         if (!selectedOrder) return 0;
-        const invoiceTotal = n(selectedOrder.roundOffFinalRevenue ?? selectedOrder.finalRevenue ?? 0);
+        if (selectedOrder.remainingCreditTotal !== undefined) {
+            return Math.max(0, r2(selectedOrder.remainingCreditTotal));
+        }
+        const invoiceTotal = n(
+            selectedOrder.invoiceTotal ??
+            selectedOrder.roundOffFinalRevenue ??
+            selectedOrder.finalRevenue ??
+            selectedOrder.totalAmount
+        );
         const alreadyCredited = n(selectedOrder.alreadyCreditedAmount);
         return Math.max(0, r2(invoiceTotal - alreadyCredited));
     }, [selectedOrder]);
@@ -180,6 +194,20 @@ export default function CreditNote() {
     useEffect(() => {
         loadCreditNotes(filters);
     }, [loadCreditNotes, filters]);
+
+    useEffect(() => {
+        let active = true;
+        axios.get(`${API_BASE}/api/profile`, getAuthConfig())
+            .then((response) => {
+                if (active) setProfile(response.data || null);
+            })
+            .catch((error) => {
+                console.error("Credit Note profile load failed:", error);
+            });
+        return () => {
+            active = false;
+        };
+    }, []);
 
     useEffect(() => {
         const orderId = new URLSearchParams(window.location.search).get("orderId");
@@ -264,6 +292,7 @@ export default function CreditNote() {
                 discountRate: n(payload.discountRate),
                 taxRate: n(payload.taxPercentage),
                 creditQuantity: 0,
+                billedQuantity: n(item.billedQuantity),
                 creditMTR: 0,
             })));
 
@@ -273,6 +302,7 @@ export default function CreditNote() {
                 originalOrderId: payload._id,
                 adjustmentAmount: due > 0 ? 0 : 0,
                 refundAmount: 0,
+                manualTaxRate: n(payload.taxPercentage ?? 5),
             }));
         } catch (error) {
             setError(getErrorMessage(error));
@@ -489,7 +519,7 @@ export default function CreditNote() {
 
     const deleteNote = async (id) => {
         if (!id) return;
-        if (!window.confirm("Delete this Credit Note? The accounting effect will be reversed and the record marked cancelled.")) return;
+        if (!window.confirm("Cancel this Credit Note? The accounting effect will be reversed and the record will be marked as Cancelled. This action cannot be undone.")) return;
         try {
             setCancellingId(id);
             setError("");
@@ -510,20 +540,58 @@ export default function CreditNote() {
         }
     };
 
-    const print = () => window.print();
+    const print = () => {
+        if (!previewNote) return;
+        window.print();
+    };
 
     return (
         <div className="container-fluid py-3">
             <style>{`
                 .credit-note-page .form-control:focus, .credit-note-page .form-select:focus { box-shadow: 0 0 0 .2rem rgba(13,110,253,.12); }
                 .credit-note-page .table th { white-space: nowrap; }
+                .credit-note-sheet { max-width: 1100px; margin: 0 auto; background: #fff; border: 1px solid #d9dee5; padding: 34px; box-shadow: 0 8px 30px rgba(0,0,0,.06); position: relative; }
+                .cn-header { display: flex; justify-content: space-between; gap: 24px; padding-bottom: 18px; border-bottom: 2px solid #1f2937; }
+                .cn-company { flex: 1; }
+                .cn-company-name { font-size: 25px; font-weight: 800; color: #111827; }
+                .cn-company-title { margin-top: 2px; color: #4b5563; font-weight: 600; }
+                .cn-company-address, .cn-company-contact { margin-top: 4px; color: #4b5563; }
+                .cn-document { min-width: 270px; text-align: right; }
+                .cn-document-title { font-size: 28px; font-weight: 900; letter-spacing: .8px; margin-bottom: 8px; }
+                .cn-meta-row { display: flex; justify-content: flex-end; gap: 9px; margin-top: 3px; color: #6b7280; }
+                .cn-meta-row strong { color: #111827; }
+                .cn-status { display: inline-block; margin-top: 9px; padding: 4px 10px; border: 1px solid #6b7280; font-size: 10px; font-weight: 800; letter-spacing: .6px; }
+                .cn-status.cancelled { border-color: #b91c1c; color: #b91c1c; }
+                .cn-info-grid { display: grid; grid-template-columns: 1.2fr .8fr; gap: 14px; margin: 16px 0; }
+                .cn-info-box, .cn-total-box { border: 1px solid #d1d5db; border-radius: 6px; padding: 13px; }
+                .cn-section-label { font-size: 10px; color: #6b7280; text-transform: uppercase; letter-spacing: .7px; font-weight: 800; margin-bottom: 6px; }
+                .cn-bold { font-weight: 800; color: #111827; margin-bottom: 2px; }
+                .cn-muted { color: #6b7280; }
+                .cn-items-table { margin-bottom: 0; }
+                .cn-items-table thead th { background: #1f2937 !important; color: #fff; font-size: 11px; }
+                .cn-settlement-row { display: flex; justify-content: space-between; gap: 14px; border-bottom: 1px dashed #e5e7eb; padding: 6px 0; }
+                .cn-note-box { margin-top: 12px; padding: 9px 11px; background: #f8fafc; border-left: 3px solid #1f2937; }
+                .cn-amount-words { margin-top: 14px; padding-top: 11px; border-top: 1px dashed #d1d5db; }
+                .cn-total-row { display: flex; justify-content: space-between; padding: 4px 0; gap: 12px; }
+                .cn-grand-row { display: flex; justify-content: space-between; gap: 12px; margin-top: 7px; padding-top: 9px; border-top: 2px solid #111827; font-size: 18px; font-weight: 900; }
+                .cn-footer { display: flex; justify-content: space-between; gap: 24px; margin-top: 22px; padding-top: 14px; border-top: 1px solid #d1d5db; }
+                .cn-signature { min-width: 220px; text-align: center; padding-top: 26px; }
+                .cn-print-footer { margin-top: 18px; padding-top: 9px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 10px; color: #6b7280; }
+                .credit-note-cancelled-stamp { position: absolute; top: 170px; right: 70px; transform: rotate(-14deg); border: 4px solid #b91c1c; color: #b91c1c; font-weight: 900; font-size: 28px; letter-spacing: 2px; padding: 10px 20px; opacity: .16; pointer-events: none; }
                 .invoice-search-menu { max-height: 320px; overflow-y: auto; z-index: 1080; }
                 @media print {
+                    @page { size: A4; margin: 10mm; }
                     body { background: #fff !important; }
                     .no-print { display: none !important; }
+                    .container-fluid { padding: 0 !important; margin: 0 !important; }
+                    .credit-note-page { width: 100% !important; }
                     .credit-note-print { display: block !important; }
                     .credit-note-list, .credit-note-create { display: none !important; }
-                    .container-fluid { padding: 0 !important; }
+                    .credit-note-sheet { max-width: none; margin: 0; border: 0; box-shadow: none; padding: 0; }
+                    .credit-note-cancelled-stamp { opacity: .18; }
+                    .table-responsive { overflow: visible !important; }
+                    .cn-items-table { font-size: 10px; }
+                    .cn-items-table th, .cn-items-table td { padding: 5px 4px !important; }
                 }
             `}</style>
 
@@ -666,25 +734,205 @@ export default function CreditNote() {
                 </div>}
 
                 {view === "preview" && previewNote && <div className="credit-note-print">
-                    <div className="d-flex justify-content-end gap-2 mb-3 no-print"><button className="btn btn-outline-secondary" onClick={() => setView("list")}>Back</button>{previewNote.status === "Posted" && <><button className="btn btn-outline-warning" onClick={() => startEditNote(previewNote)}>Edit</button><button className="btn btn-outline-danger" onClick={() => deleteNote(previewNote._id)}>Delete</button></>}<button className="btn btn-primary" onClick={print}>Print</button></div>
-                    <CreditNotePrint note={previewNote} />
+                    <div className="d-flex justify-content-end gap-2 mb-3 no-print"><button className="btn btn-outline-secondary" onClick={() => setView("list")}>Back</button>{previewNote.status === "Posted" && <><button className="btn btn-outline-warning" onClick={() => startEditNote(previewNote)}>Edit</button><button className="btn btn-outline-danger" onClick={() => deleteNote(previewNote._id)}>Cancel</button></>}<button className="btn btn-primary" onClick={print}>Print</button></div>
+                    <CreditNotePrint note={previewNote} profile={profile} />
                 </div>}
             </div>
         </div>
     );
 }
 
-function CreditNotePrint({ note }) {
-    const original = note.originalOrder || {};
-    const items = note.items || [];
-    return <div className="container py-3">
-        <div className="border p-4">
-            <div className="row align-items-start border-bottom pb-3 mb-3"><div className="col-7"><h2 className="fw-bold mb-1">CREDIT NOTE</h2><div>Credit Note No.: <strong>{note.creditNoteNumber}</strong></div><div>Date: {formatDate(note.creditNoteDate)}</div></div><div className="col-5 text-end"><div>Original Invoice: <strong>{note.originalOrderNumber || original.orderNumber || "-"}</strong></div><div>Invoice Date: {formatDate(note.originalOrderDate || original.orderDate)}</div><div>Reason: {note.reason}</div></div></div>
-            <div className="row mb-4"><div className="col-6"><div className="small text-muted">Customer</div><div className="fw-bold">{note.companyName || original.companyName || "-"}</div><div>{note.Address || original.Address || ""}</div><div>{[note.City || original.City, note.State || original.State, note.pinCode || original.pinCode].filter(Boolean).join(", ")}</div><div>GSTIN: {note.gstNumber || original.gstNumber || "-"}</div></div><div className="col-6 text-end"><div>Payment Terms: {original.paymentTerms || "-"}</div><div>Original Invoice Total: {money(original.roundOffFinalRevenue)}</div></div></div>
-            <div className="table-responsive"><table className="table table-bordered"><thead className="table-light"><tr><th>#</th><th>Design</th><th>Description</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Disc.</th><th>Taxable</th><th>Tax</th><th className="text-end">Amount</th></tr></thead><tbody>{items.map((item, index) => <tr key={item._id || index}><td>{index + 1}</td><td>{item.designNumber || "-"}</td><td>{item.orderName || "-"}</td><td>{item.hsnCode || "-"}</td><td>{item.qtyUnit === "MTR" ? `${n(item.MTR).toFixed(2)} MTR` : `${n(item.quantity).toFixed(2)} ${item.qtyUnit || "PCS"}`}</td><td>{money(item.unitPrice)}</td><td>{n(item.discountRate).toFixed(2)}%</td><td>{money(item.taxableAmount)}</td><td>{money(item.taxAmount)}</td><td className="text-end">{money(item.lineTotal)}</td></tr>)}</tbody></table></div>
-            <div className="row justify-content-end"><div className="col-5"><div className="d-flex justify-content-between"><span>Subtotal</span><span>{money(note.totals?.subtotal)}</span></div><div className="d-flex justify-content-between"><span>Discount</span><span>{money(note.totals?.discountAmount)}</span></div><div className="d-flex justify-content-between"><span>Taxable</span><span>{money(note.totals?.taxableAmount)}</span></div><div className="d-flex justify-content-between"><span>Tax</span><span>{money(note.totals?.taxAmount)}</span></div><div className="d-flex justify-content-between"><span>Round Off</span><span>{money(note.totals?.roundOff)}</span></div><hr/><div className="d-flex justify-content-between fs-5 fw-bold"><span>Total</span><span>{money(note.totals?.grandTotal)}</span></div><div className="d-flex justify-content-between mt-2"><span>Adjusted</span><span>{money(note.settlement?.adjustmentAmount)}</span></div><div className="d-flex justify-content-between"><span>Refund</span><span>{money(note.settlement?.refundAmount)}</span></div></div></div>
-            {note.note && <div className="mt-4"><strong>Note:</strong> {note.note}</div>}
-            <div className="mt-5 pt-3 border-top text-center small text-muted">This Credit Note is linked to the original invoice shown above.</div>
+function CreditNotePrint({ note, profile }) {
+    const original = note?.originalOrder || {};
+    const items = Array.isArray(note?.items) ? note.items : [];
+    const totals = note?.totals || {};
+    const settlement = note?.settlement || {};
+    const customerName = note?.companyName || original?.companyName || "-";
+    const customerAddress = [
+        note?.Address || original?.Address,
+        note?.City || original?.City,
+        note?.State || original?.State,
+        note?.pinCode || original?.pinCode,
+    ].filter(Boolean).join(", ");
+    const invoiceTotal = n(
+        note?.originalInvoiceTotal ??
+        original?.roundOffFinalRevenue ??
+        original?.finalRevenue ??
+        original?.totalAmount
+    );
+
+    const amountInWords = (value) => {
+        const ones = ["Zero","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
+        const tens = ["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
+        const below100 = (number) => {
+            const numberValue = Math.floor(number);
+            if (numberValue < 20) return ones[numberValue];
+            return tens[Math.floor(numberValue / 10)] + (numberValue % 10 ? ` ${ones[numberValue % 10]}` : "");
+        };
+        const integer = Math.floor(n(value));
+        const paise = Math.round((n(value) - integer) * 100);
+        let remaining = integer;
+        const parts = [];
+        if (remaining >= 10000000) {
+            parts.push(`${below100(Math.floor(remaining / 10000000))} Crore`);
+            remaining %= 10000000;
+        }
+        if (remaining >= 100000) {
+            parts.push(`${below100(Math.floor(remaining / 100000))} Lakh`);
+            remaining %= 100000;
+        }
+        if (remaining >= 1000) {
+            parts.push(`${below100(Math.floor(remaining / 1000))} Thousand`);
+            remaining %= 1000;
+        }
+        if (remaining >= 100) {
+            parts.push(`${ones[Math.floor(remaining / 100)]} Hundred`);
+            remaining %= 100;
+        }
+        if (remaining > 0) parts.push(below100(remaining));
+        let result = `Indian Rupees ${parts.length ? parts.join(" ") : "Zero"}`;
+        if (paise > 0) result += ` and ${below100(paise)} Paise`;
+        return result + " Only";
+    };
+
+    return (
+        <div className="credit-note-sheet">
+            {note?.status === "Cancelled" && <div className="credit-note-cancelled-stamp">CANCELLED</div>}
+
+            <div className="cn-header">
+                <div className="cn-company">
+                    <div className="cn-company-name">{profile?.companyName || "Company"}</div>
+                    {profile?.headerTitle && <div className="cn-company-title">{profile.headerTitle}</div>}
+                    <div className="cn-company-address">{profile?.companyAddress || ""}</div>
+                    {(profile?.phoneNumber1 || profile?.phoneNumber2) && (
+                        <div className="cn-company-contact">
+                            {profile?.phoneNumber1 && <span>Phone: {profile.phoneNumber1}</span>}
+                            {profile?.phoneNumber2 && <span className="ms-2">{profile.phoneNumber2}</span>}
+                        </div>
+                    )}
+                    {(profile?.gstin || profile?.pan) && (
+                        <div className="cn-company-contact">
+                            {profile?.gstin && <span>GSTIN: {profile.gstin}</span>}
+                            {profile?.pan && <span className="ms-2">PAN: {profile.pan}</span>}
+                        </div>
+                    )}
+                </div>
+
+                <div className="cn-document">
+                    <div className="cn-document-title">CREDIT NOTE</div>
+                    <div className="cn-meta-row"><span>Credit Note No.</span><strong>{note?.creditNoteNumber || "-"}</strong></div>
+                    <div className="cn-meta-row"><span>Date</span><strong>{formatDate(note?.creditNoteDate)}</strong></div>
+                    <div className="cn-meta-row"><span>Reason</span><strong>{note?.reason || "-"}</strong></div>
+                    <span className={`cn-status ${note?.status === "Cancelled" ? "cancelled" : "posted"}`}>
+                        {(note?.status || "Posted").toUpperCase()}
+                    </span>
+                </div>
+            </div>
+
+            <div className="cn-info-grid">
+                <div className="cn-info-box">
+                    <div className="cn-section-label">Customer</div>
+                    <div className="cn-bold">{customerName}</div>
+                    <div>{customerAddress || "-"}</div>
+                    <div className="cn-muted">GSTIN: {note?.gstNumber || original?.gstNumber || "-"}</div>
+                </div>
+
+                <div className="cn-info-box">
+                    <div className="cn-section-label">Original Invoice</div>
+                    <div><span className="cn-muted">Invoice No.:</span> <strong>{note?.originalInvoiceNumber || original?.orderNumber || "-"}</strong></div>
+                    <div><span className="cn-muted">Invoice Date:</span> {formatDate(note?.originalInvoiceDate || original?.orderDate)}</div>
+                    <div><span className="cn-muted">Invoice Total:</span> {money(invoiceTotal)}</div>
+                    {original?.paymentTerms && <div><span className="cn-muted">Payment Terms:</span> {original.paymentTerms}</div>}
+                </div>
+            </div>
+
+            <div className="table-responsive">
+                <table className="table table-bordered cn-items-table align-middle">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Design</th>
+                            <th>Description</th>
+                            <th>HSN</th>
+                            <th>Qty</th>
+                            <th className="text-end">Rate</th>
+                            <th className="text-end">Disc.</th>
+                            <th className="text-end">Taxable</th>
+                            <th className="text-end">Tax</th>
+                            <th className="text-end">Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {items.length ? items.map((item, index) => (
+                            <tr key={item?._id || index}>
+                                <td>{index + 1}</td>
+                                <td>{item?.designNumber || "-"}</td>
+                                <td>{item?.orderName || "-"}</td>
+                                <td>{item?.hsnCode ?? "-"}</td>
+                                <td>{item?.qtyUnit === "MTR" ? `${n(item?.MTR).toFixed(2)} MTR` : `${n(item?.quantity).toFixed(2)} ${item?.qtyUnit || "PCS"}`}</td>
+                                <td className="text-end">{money(item?.unitPrice)}</td>
+                                <td className="text-end">{n(item?.discountRate).toFixed(2)}%</td>
+                                <td className="text-end">{money(item?.taxableAmount)}</td>
+                                <td className="text-end">{money(item?.taxAmount)}</td>
+                                <td className="text-end fw-semibold">{money(item?.lineTotal)}</td>
+                            </tr>
+                        )) : (
+                            <tr><td colSpan="10" className="text-center py-4 text-muted">Manual amount-based Credit Note</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            <div className="row g-3 mt-1">
+                <div className="col-md-7">
+                    <div className="cn-info-box h-100">
+                        <div className="cn-section-label">Settlement</div>
+                        <div className="cn-settlement-row"><span>Adjustment against invoice</span><strong>{money(settlement?.adjustmentAmount)}</strong></div>
+                        <div className="cn-settlement-row"><span>Refund</span><strong>{money(settlement?.refundAmount)}</strong></div>
+                        {n(settlement?.refundAmount) > 0 && (
+                            <div className="cn-settlement-row"><span>Refund Method</span><strong>{settlement?.refundMethod || "-"}</strong></div>
+                        )}
+                        {n(settlement?.customerCreditAmount) > 0 && (
+                            <div className="cn-settlement-row"><span>Customer Credit</span><strong>{money(settlement?.customerCreditAmount)}</strong></div>
+                        )}
+                        {note?.note && (
+                            <div className="cn-note-box"><strong>Note:</strong> {note.note}</div>
+                        )}
+                        <div className="cn-amount-words">
+                            <div className="cn-section-label">Amount in Words</div>
+                            <div className="fw-semibold">{amountInWords(totals?.grandTotal)}</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="col-md-5">
+                    <div className="cn-total-box">
+                        <div className="cn-total-row"><span>Subtotal</span><span>{money(totals?.subtotal)}</span></div>
+                        <div className="cn-total-row"><span>Discount</span><span>{money(totals?.discountAmount)}</span></div>
+                        <div className="cn-total-row"><span>Taxable Amount</span><span>{money(totals?.taxableAmount)}</span></div>
+                        <div className="cn-total-row"><span>Tax</span><span>{money(totals?.taxAmount)}</span></div>
+                        <div className="cn-total-row"><span>Round Off</span><span>{money(totals?.roundOff)}</span></div>
+                        <div className="cn-grand-row"><span>Total Credit</span><span>{money(totals?.grandTotal)}</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="cn-footer">
+                <div>
+                    {profile?.bankName && <div className="fw-semibold">{profile.bankName}</div>}
+                    {profile?.accountNo && <div className="small">A/C No.: {profile.accountNo}</div>}
+                    {profile?.branchName && <div className="small">Branch: {profile.branchName}</div>}
+                    {profile?.ifsc && <div className="small">IFSC: {profile.ifsc}</div>}
+                </div>
+                <div className="cn-signature">
+                    <div>Authorized Signatory</div>
+                    <div className="small text-muted">{profile?.companyName || ""}</div>
+                </div>
+            </div>
+
+            <div className="cn-print-footer">
+                This Credit Note is linked to the original invoice shown above.
+            </div>
         </div>
-    </div>;
+    );
 }

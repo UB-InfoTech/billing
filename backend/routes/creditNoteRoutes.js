@@ -601,6 +601,41 @@ table{width:100%;border-collapse:collapse}th{background:#111827;color:#fff;paddi
 </html>`;
 }
 
+/** GET /api/credit-notes/:id/print */
+router.get("/:id/print", auth, async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) {
+      return res.status(400).json({ message: "Invalid credit note ID." });
+    }
+
+    const note = await CreditNote.findOne({
+      _id: req.params.id,
+      createdBy: req.user.id,
+    }).lean();
+
+    if (!note) return res.status(404).json({ message: "Credit note not found." });
+
+    const order = await Order.findOne({
+      _id: note.originalOrderId,
+      createdBy: req.user.id,
+    })
+      .select("orderNumber orderDate paymentTerms")
+      .lean();
+
+    const profile = (await require("../models/Profile")
+      .findOne({ createdBy: req.user.id })
+      .lean()) || {};
+
+    res.set("Cache-Control", "no-store");
+    return res.type("html").send(renderCreditNoteHtml(note, profile, order));
+  } catch (error) {
+    console.error("Credit note print error:", error);
+    return res.status(500).json({
+      message: error?.message || "Unable to generate Credit Note print view.",
+    });
+  }
+});
+
 /** GET /api/credit-notes/:id */
 router.get("/:id", auth, async (req, res) => {
   try {

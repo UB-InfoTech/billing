@@ -493,9 +493,14 @@ GET    /api/credit-notes/invoices/search
 GET    /api/credit-notes/available/:orderId
 GET    /api/credit-notes/:id
 POST   /api/credit-notes
+PUT    /api/credit-notes/:id
 POST   /api/credit-notes/:id/cancel
-DELETE /api/credit-notes/:id   (blocked for posted notes)
+DELETE /api/credit-notes/:id
 ```
+
+`DELETE /api/credit-notes/:id` is an audit-safe cancellation operation for posted Credit Notes; it does not physically delete the financial document.
+
+For the user-facing workflow, see [docs/CREDIT_NOTE_HOW_TO_USE.md](docs/CREDIT_NOTE_HOW_TO_USE.md).
 
 ## Security
 

@@ -520,12 +520,26 @@ export default function CreditNote() {
     const deleteNote = async (id) => {
         if (!id) return;
         if (!window.confirm("Cancel this Credit Note? The accounting effect will be reversed and the record will be marked as Cancelled. This action cannot be undone.")) return;
+
+        const cancellationReason = window.prompt(
+            "Enter a cancellation reason (required for audit):",
+            ""
+        );
+        if (cancellationReason === null) return;
+        if (!cancellationReason.trim()) {
+            setError("Cancellation reason is required.");
+            return;
+        }
+
         try {
             setCancellingId(id);
             setError("");
             const response = await axios.delete(
                 `${API_BASE}/api/credit-notes/${id}`,
-                getAuthConfig()
+                {
+                    ...getAuthConfig(),
+                    data: { reason: cancellationReason.trim() },
+                }
             );
             setSuccess(response.data?.message || "Credit Note deleted successfully.");
             await loadCreditNotes(filters);

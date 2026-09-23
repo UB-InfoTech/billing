@@ -245,25 +245,40 @@ For a posted Credit Note, use:
 
 **Edit**
 
-You can edit only safe metadata:
+The edit screen supports full financial editing of the issued Credit Note while keeping the original invoice reference fixed.
 
+You can edit:
+
+- Credit Note number
 - Credit Note date
 - Reason
+- Item Based / Amount Based mode
+- Item credit quantities
+- Discount rates used by the credited items
+- Tax rates
+- Manual taxable credit amount and tax rate for Amount Based notes
+- Return Stock setting when valid for Sales Return
+- Invoice adjustment amount
+- Refund amount
+- Refund method
+- Customer credit
 - Note
 
-The following are locked after posting:
+The application recalculates the Credit Note totals on the server and replaces the previous accounting, stock and customer-credit effects with the edited values.
 
-- Original invoice
-- Credit quantities
-- Credit amount
-- Tax calculation
-- Total
-- Settlement/accounting effects
-- Stock movement
+The original invoice relationship remains fixed after posting. This prevents an issued Credit Note from being moved to an unrelated invoice.
 
-This prevents accidental changes to posted financial records.
+Before saving an edited note, the backend revalidates:
 
-A Credit Note with a stock return must keep the **Sales Return** reason.
+- Remaining invoice creditable value
+- Item quantities
+- Tax rates
+- Settlement allocation
+- Invoice due available for adjustment
+- Stock/product mapping
+- Duplicate Credit Note number
+
+A Credit Note with stock return must remain a **Sales Return** and **Item Based**.
 
 ## 13. Cancel a Credit Note
 

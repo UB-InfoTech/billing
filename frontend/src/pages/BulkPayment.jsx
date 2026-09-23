@@ -670,7 +670,7 @@ export default function BulkPayment() {
   );
 
   const totalDue = useMemo(() =>
-    parseDecimal(selectedOrdersData.reduce((sum, o) => sum + o.dueAmount, 0)),
+    parseDecimal(selectedOrdersData.reduce((sum, o) => sum + Number(o.dueAmount || 0), 0)),
     [selectedOrdersData]
   );
 

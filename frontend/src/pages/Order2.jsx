@@ -1206,6 +1206,7 @@ function Order2() {
                         </div>
                     </div>
                 </div>
+            )}
 
             {showEwayBillModal && (
                 <div className="modal fade show d-block" tabIndex="-1">

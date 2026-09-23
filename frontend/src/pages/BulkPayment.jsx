@@ -867,7 +867,10 @@ export default function BulkPayment() {
       const response = await apiClient.get(API_CONFIG.ENDPOINTS.ORDERS, {
         signal: controller.signal
       });
-      setOrders(response.data.orders || []);
+      const availableOrders = (response.data.orders || []).filter(
+        order => order.status !== 'Cancelled' && Number(order.dueAmount || 0) > 0
+      );
+      setOrders(availableOrders);
 
     } catch (error) {
       if (!controller.signal.aborted) {

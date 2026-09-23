@@ -924,6 +924,7 @@ export default function BulkPayment() {
             form={form}
             onFormChange={handleFormChange}
             totalDue={totalDue}
+            totalAllocated={totalAllocated}
             onSubmit={handleSubmit}
             submitting={submitting}
             onToggleModal={toggleModal}

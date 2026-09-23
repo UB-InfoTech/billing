@@ -383,7 +383,12 @@ router.get("/available/:orderId", auth, async (req, res) => {
     const order = await Order.findOne({ _id: req.params.orderId, createdBy: req.user.id }).lean();
     if (!order) return res.status(404).json({ message: "Invoice not found." });
 
-    const { map, total } = await getPreviouslyCredited(order._id);
+    const excludeCreditNoteId = String(req.query.excludeCreditNoteId || "").trim();
+    const { map, total } = await getPreviouslyCredited(
+      order._id,
+      null,
+      excludeCreditNoteId || null
+    );
     const invoiceTotal = getOrderInvoiceTotal(order);
 
     const items = (order.subOrders || []).map((sub) => {

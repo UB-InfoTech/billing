@@ -328,124 +328,161 @@ router.delete("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
 router.put("/orders/payments/bulk",auth,async(req,res)=>{
   const transactional=isReplicaSetAvailable();
   const session=transactional?await mongoose.startSession():null;
+  const savedAllocations=[];
 
   try{
     const {method="Cash",amountReference="",splitType="proportional",updates,paymentDate}=req.body||{};
     const amount=round2(req.body?.amount);
+    const reference=String(amountReference||"").trim();
+    const parsedDate=new Date(paymentDate);
+
     if(!METHODS.includes(method))throw new Error("Invalid payment method.");
-    if(!referenceAllowed(amountReference))throw new Error("Payment reference is required and must be at most 100 characters.");
-    if(amount<=0||amount>10000000)throw new Error("Payment amount must be between 0.01 and 10,000,000.");
+    if(!referenceAllowed(reference))throw new Error("Payment reference is required and must be at most 100 characters.");
+    if(!Number.isFinite(amount)||amount<=0||amount>10000000)throw new Error("Payment amount must be between 0.01 and 10,000,000.");
     if(!["proportional","custom"].includes(splitType))throw new Error("Invalid split type.");
     if(!Array.isArray(updates)||!updates.length)throw new Error("updates[] is required.");
-    const parsedDate=new Date(paymentDate);
     if(!paymentDate||Number.isNaN(parsedDate.getTime()))throw new Error("Valid paymentDate is required.");
 
-    if(session)session.startTransaction({writeConcern:{w:"majority"}});
-
-    const duplicateQuery=Order.exists({"payments.amountReference":String(amountReference).trim(),createdBy:userId(req)});
-    if(session)duplicateQuery.session(session);
-    const duplicate=await duplicateQuery;
-    if(duplicate)throw new Error("Payment reference already exists.");
-
-    const ids=[...new Set(updates.map(x=>String(typeof x==="string"?x:x?.orderId)).filter(mongoose.isValidObjectId))];
+    const byId=new Map();
+    for(const raw of updates){
+      const oid=String(typeof raw==="string"?raw:raw?.orderId||"");
+      if(!mongoose.isValidObjectId(oid))continue;
+      const customAmount=round2(typeof raw==="string"?0:raw?.amount);
+      const current=byId.get(oid)||0;
+      byId.set(oid,round2(current+customAmount));
+    }
+    const ids=[...byId.keys()];
     if(!ids.length)throw new Error("No valid order IDs supplied.");
+
+    if(session)session.startTransaction({writeConcern:{w:"majority",j:true}});
+
+    const duplicateQuery=Order.exists({"payments.amountReference":reference,createdBy:userId(req)});
+    if(session)duplicateQuery.session(session);
+    if(await duplicateQuery)throw new Error("Payment reference already exists.");
 
     const orderQuery=Order.find({_id:{$in:ids},createdBy:userId(req)});
     if(session)orderQuery.session(session);
     const orders=await orderQuery;
     if(orders.length!==ids.length)throw new Error("One or more selected invoices could not be found.");
 
-    const active=orders.filter(o=>Number(o.dueAmount||0)>0);
-    if(!active.length)throw new Error("All selected orders are already fully paid.");
+    const active=orders.filter(o=>o.status!=="Cancelled"&&Number(o.dueAmount||0)>0);
+    if(!active.length)throw new Error("All selected invoices are already paid or cancelled.");
+
+    const activeIds=new Set(active.map(o=>String(o._id)));
+    const skipped=orders.filter(o=>!activeIds.has(String(o._id))).map(o=>({
+      orderId:o._id,
+      reason:o.status==="Cancelled"?"cancelled":"fully_paid"
+    }));
 
     let allocations=[];
+
     if(splitType==="proportional"){
-      const totalDue=active.reduce((s,o)=>s+Math.round(Number(o.dueAmount||0)*100),0);
+      const totalDueCents=active.reduce((sum,o)=>sum+Math.round(Number(o.dueAmount||0)*100),0);
       const amountCents=Math.round(amount*100);
-      if(amountCents>totalDue)throw new Error("Payment exceeds total due amount of selected orders.");
-      let rows=active.map(o=>{
-        const due=Math.round(Number(o.dueAmount||0)*100);
-        const exact=due/totalDue*amountCents;
-        return{o,due,base:Math.floor(exact),frac:exact-Math.floor(exact)};
+      if(amountCents>totalDueCents)throw new Error("Payment exceeds total due amount of selected orders.");
+
+      const rows=active.map(order=>{
+        const due=Math.round(Number(order.dueAmount||0)*100);
+        const exact=due/totalDueCents*amountCents;
+        const base=Math.floor(exact);
+        return{order,due,base,frac:exact-base};
       });
-      let remainder=amountCents-rows.reduce((s,x)=>s+x.base,0);
+      let remainder=amountCents-rows.reduce((sum,row)=>sum+row.base,0);
       rows.sort((a,b)=>b.frac-a.frac);
       for(const row of rows){
         if(remainder<=0)break;
-        const cap=row.due-row.base;
-        const give=Math.min(cap,remainder);
+        const give=Math.min(row.due-row.base,remainder);
         row.base+=give;
         remainder-=give;
       }
-      if(remainder>0)throw new Error("Unable to allocate payment without exceeding invoice dues.");
-      allocations=rows.filter(x=>x.base>0).map(x=>({order:x.o,appliedAmount:x.base/100}));
+      if(remainder!==0)throw new Error("Unable to allocate payment without exceeding invoice dues.");
+      allocations=rows.filter(row=>row.base>0).map(row=>({order:row.order,appliedAmount:row.base/100}));
     }else{
-      allocations=updates.map(x=>{
-        const order=active.find(o=>String(o._id)===String(x?.orderId));
-        if(!order)return null;
-        const applied=round2(x?.amount);
-        if(applied<0||applied>Number(order.dueAmount||0)+0.01)throw new Error("Custom allocation exceeds invoice due.");
+      allocations=active.map(order=>{
+        const applied=round2(byId.get(String(order._id))||0);
+        if(applied>Number(order.dueAmount||0)+0.01){
+          throw new Error(\`Custom allocation exceeds invoice due for \${order.orderNumber||order._id}.\`);
+        }
         return{order,appliedAmount:applied};
-      }).filter(Boolean);
-      const totalCustom=round2(allocations.reduce((s,x)=>s+x.appliedAmount,0));
+      }).filter(item=>item.appliedAmount>0);
+
+      const totalCustom=round2(allocations.reduce((sum,item)=>sum+item.appliedAmount,0));
       if(Math.abs(totalCustom-amount)>0.01)throw new Error("Custom allocations must equal payment amount.");
     }
 
-    if(!allocations.some(x=>x.appliedAmount>0))throw new Error("No positive payment allocations.");
+    if(!allocations.length)throw new Error("No positive payment allocations.");
 
-    const paymentDateValue=parsedDate;
+    const allocatedCents=allocations.reduce((sum,item)=>sum+Math.round(item.appliedAmount*100),0);
+    if(allocatedCents!==Math.round(amount*100))throw new Error("Payment allocation must equal payment amount.");
+
     for(const item of allocations){
-      if(item.appliedAmount<=0)continue;
       item.order.payments.push({
         amount:item.appliedAmount,
-        paymentDate:paymentDateValue,
+        paymentDate:parsedDate,
         method,
-        amountReference:String(amountReference).trim(),
+        amountReference:reference,
         processedBy:userId(req)
       });
-      item.order.lastPaymentDate=paymentDateValue;
+      item.order.lastPaymentDate=parsedDate;
       await item.order.save(session?{session}:undefined);
+      const payment=item.order.payments[item.order.payments.length-1];
+      savedAllocations.push({order:item.order,paymentId:payment?._id});
     }
 
-    const skipped=orders.filter(o=>!active.some(a=>String(a._id)===String(o._id))).map(o=>({orderId:o._id,reason:"fully_paid"}));
     const log=new PaymentLog({
-      reference:String(amountReference).trim(),
+      reference,
       method,
       totalAmount:amount,
       splitType,
-      paymentDate:paymentDateValue,
+      paymentDate:parsedDate,
       userId:userId(req),
-      allocations:allocations.filter(x=>x.appliedAmount>0).map(x=>({
-        orderId:x.order._id,
-        appliedAmount:x.appliedAmount,
-        orderNumber:x.order.orderNumber,
-        clientName:x.order.companyName
+      allocations:allocations.map(item=>({
+        orderId:item.order._id,
+        appliedAmount:item.appliedAmount,
+        orderNumber:item.order.orderNumber||"",
+        clientName:item.order.companyName||""
       })),
       skippedOrders:skipped,
-      transactionMetadata:{batchSize:ids.length}
+      transactionMetadata:{batchSize:ids.length},
+      status:skipped.length?"partially_completed":"completed"
     });
-
     await log.save(session?{session}:undefined);
+
     if(session)await session.commitTransaction();
 
-    await Promise.allSettled(allocations.map(x=>syncClientData(x.order.clientId)));
+    const clientIds=[...new Set(allocations.map(item=>String(item.order.clientId||"")).filter(Boolean))];
+    await Promise.allSettled(clientIds.map(clientId=>syncClientData(clientId)));
 
     return res.json({
+      success:true,
       message:"Bulk payment processed successfully.",
-      reference:String(amountReference).trim(),
+      reference,
       method,
       splitType,
       totalAmount:amount,
-      paymentDate:paymentDateValue,
-      allocations:allocations.map(x=>({orderId:x.order._id,appliedAmount:x.appliedAmount})),
+      paymentDate:parsedDate,
+      allocations:allocations.map(item=>({
+        orderId:item.order._id,
+        orderNumber:item.order.orderNumber||"",
+        appliedAmount:item.appliedAmount
+      })),
       skippedOrders:skipped
     });
   }catch(error){
     if(session){
       try{if(session.inTransaction())await session.abortTransaction();}catch{}
+    }else if(savedAllocations.length){
+      for(const item of savedAllocations.reverse()){
+        try{
+          item.order.payments.pull({_id:item.paymentId});
+          await item.order.save();
+        }catch(rollbackError){
+          console.error("Bulk payment rollback failed:",rollbackError);
+        }
+      }
     }
     console.error("Bulk payment error:",error);
-    return res.status(400).json({message:error.message||"Unable to process bulk payment."});
+    return res.status(400).json({success:false,message:error.message||"Unable to process bulk payment."});
   }finally{
     if(session)await session.endSession();
   }

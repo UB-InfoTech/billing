@@ -411,9 +411,25 @@ router.get("/available/:orderId", auth, async (req, res) => {
       };
     });
 
+    let editableDueAmount = Number(order.dueAmount || 0);
+    if (excludeCreditNoteId && mongoose.isValidObjectId(excludeCreditNoteId)) {
+      const excluded = await CreditNote.findOne({
+        _id: excludeCreditNoteId,
+        originalOrderId: order._id,
+        createdBy: req.user.id,
+      }).select("settlement.adjustmentAmount").lean();
+      if (excluded) {
+        editableDueAmount = Math.max(
+          0,
+          round2(editableDueAmount + Number(excluded.settlement?.adjustmentAmount || 0))
+        );
+      }
+    }
+
     return res.json({
       order: {
         ...order,
+        dueAmount: editableDueAmount,
         invoiceTotal,
         previouslyCreditedTotal: total,
         remainingCreditTotal: Math.max(0, round2(invoiceTotal - total)),

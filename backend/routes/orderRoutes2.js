@@ -401,7 +401,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
       allocations=active.map(order=>{
         const applied=round2(byId.get(String(order._id))||0);
         if(applied>Number(order.dueAmount||0)+0.01){
-          throw new Error(\`Custom allocation exceeds invoice due for \${order.orderNumber||order._id}.\`);
+          throw new Error(`Custom allocation exceeds invoice due for \${order.orderNumber||order._id}.`);
         }
         return{order,appliedAmount:applied};
       }).filter(item=>item.appliedAmount>0);

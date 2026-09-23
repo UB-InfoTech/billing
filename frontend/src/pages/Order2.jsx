@@ -1073,21 +1073,24 @@ const styles = {
     return (
         <div className="w-100 mx-3 mt-3">
 
-            <div className="d-flex align-items-center gap-4">
+            <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <div>
+                    <h2 className="fw-bold mb-1">Bill Management</h2>
+                    <div className="text-muted small">Create, edit, collect and track sales invoices.</div>
+                </div>
 
-                <h2>Bill Management</h2>
-
-                <button className="btn btn-primary" onClick={() => {
-                    setShowModal(true); setEditingOrder(null); setSubOrders([
-                        { designNumber: "", orderName: "", hsnCode: 0, qtyUnit: "", quantity: 0, cut: 0, MTR: 0, unitPrice: 0, shortPcs: 0 }
-                    ]);
+                <button className="btn btn-primary d-inline-flex align-items-center gap-2 shadow-sm" onClick={() => {
+                    const newSubOrders = [
+                        { designNumber: "", orderName: "", productId: null, hsnCode: 0, qtyUnit: "PCS", quantity: 0, cut: 0, MTR: 0, unitPrice: 0, shortPcs: 0 }
+                    ];
+                    setShowModal(true);
+                    setEditingOrder(null);
+                    setSubOrders(newSubOrders);
                     setFormData({
                         orderDate: new Date(),
                         orderNumber: OrderBillNo,
                         lrNo: "",
                         challanNumber: "",
-                        // designNumber: "",
-                        // orderName: "",
                         Address: "",
                         State: "",
                         City: "",
@@ -1096,27 +1099,20 @@ const styles = {
                         clientId: "",
                         gstNumber: "",
                         companyName: "",
-                        subOrders: subOrders,
-                        // orderType: "Custom",
-                        // fabricType: "Cotton",
-                        // priority: "Medium",
+                        subOrders: newSubOrders,
                         status: "Pending",
                         paymentTerms: "30",
-                        // quantity: 0,
-                        // shortPcs: 0,
-                        // unitPrice: 0,
                         taxPercentage: 5,
                         discountRate: 0,
-                        // otherTaxes: 0,
-                        // rawMaterialCost: 0,
-                        // labourCost: 0,
-                        // machineUsageCost: 0,
+                        note: "",
                     });
-                }}>Add New Bill</button>
-
-                <button className="btn btn-success">
-                    <Link to="/bulk-payment" className="text-light">Multi Payment</Link>
+                }}>
+                    <i className="bi bi-plus-lg"></i> Add New Bill
                 </button>
+
+                <Link to="/bulk-payment" className="btn btn-success d-inline-flex align-items-center gap-2 shadow-sm">
+                    <i className="bi bi-wallet2"></i> Multi Payment
+                </Link>
             </div>
 
             <div className="py-2">
@@ -1392,16 +1388,20 @@ const styles = {
 
 
             {showModal && (
-                <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}>
-                    <div className="modal-dialog modal-dialog-centered modal-xl">
+                <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(15, 23, 42, 0.58)' }}>
+                    <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
                         <div className="modal-content shadow-lg border-0" ref={modalRef} style={{ borderRadius: '20px', overflow: 'hidden', backgroundColor: '#f8f9fa' }}>
-                            <div className="modal-header bg-light text-dark p-4 border-bottom-0">
-                                <div className="d-flex flex-row align-items-center justify-content-between">
-                                    <h5 className="modal-title fw-bold">
-                                        {editingOrder ? "Edit Bill" : "Generate Bill"}
-                                    </h5>
+                            <div className="modal-header text-white p-4 border-bottom-0" style={{ background: 'linear-gradient(135deg, #0f172a, #1e3a8a)' }}>
+                                <div className="d-flex flex-wrap align-items-center justify-content-between gap-3 w-100">
+                                    <div>
+                                        <div className="small text-uppercase opacity-75 fw-semibold">Sales Invoice</div>
+                                        <h5 className="modal-title fw-bold mb-1">
+                                            {editingOrder ? "Edit Bill" : "Generate Bill"}
+                                        </h5>
+                                        <div className="small opacity-75">Totals, tax, discount and due balance update automatically.</div>
+                                    </div>
                                     <input
-                                        className={`w-50 form-control shadow-sm bg-white ${formData.lrNo ? 'is-valid' : ''}`}
+                                        className={`w-100 form-control shadow-sm bg-white text-dark ${formData.lrNo ? 'is-valid' : ''}`}
                                         name="lrNo"
                                         value={formData.lrNo}
                                         onChange={handleInputChange}
@@ -1415,7 +1415,7 @@ const styles = {
                                     aria-label="Close"
                                 ></button>
                             </div>
-                            <div className="modal-body p-4">
+                            <div className="modal-body p-4" style={{ background: '#f1f5f9' }}>
                                 <form onSubmit={handleSubmit}>
                                     <div className="row g-4">
                                         {/* <div className=""> */}
@@ -1821,11 +1821,38 @@ const styles = {
 
                                     </div>
 
+                                    <div className="card border-0 shadow-sm mt-4" style={{ borderRadius: '14px' }}>
+                                        <div className="card-body p-4">
+                                            <div className="row g-3 align-items-center">
+                                                <div className="col-md-7">
+                                                    <div className="fw-bold text-dark mb-1">
+                                                        <i className="bi bi-calculator me-2 text-primary"></i>Live Invoice Summary
+                                                    </div>
+                                                    <div className="small text-muted">Values are recalculated as you change quantity, rate, discount or tax.</div>
+                                                </div>
+                                                <div className="col-md-5">
+                                                    <div className="d-flex justify-content-between small mb-1"><span className="text-muted">Items Subtotal</span><strong>₹{orderTotals.subtotal.toFixed(2)}</strong></div>
+                                                    <div className="d-flex justify-content-between small mb-1"><span className="text-muted">Discount</span><strong className="text-danger">- ₹{orderTotals.discount.toFixed(2)}</strong></div>
+                                                    <div className="d-flex justify-content-between small mb-1"><span className="text-muted">Tax</span><strong>₹{orderTotals.tax.toFixed(2)}</strong></div>
+                                                    <div className="d-flex justify-content-between small mb-2"><span className="text-muted">Round Off</span><strong>₹{orderTotals.roundOff.toFixed(2)}</strong></div>
+                                                    <div className="d-flex justify-content-between align-items-center border-top pt-2">
+                                                        <span className="fw-bold">Invoice Total</span>
+                                                        <span className="fs-4 fw-bold text-primary">₹{orderTotals.grandTotal.toFixed(2)}</span>
+                                                    </div>
+                                                    <div className="d-flex justify-content-between mt-2"><span className="text-muted">Paid</span><strong className="text-success">₹{orderTotals.paid.toFixed(2)}</strong></div>
+                                                    <div className="d-flex justify-content-between"><span className="text-muted">Current Due</span><strong className="text-danger">₹{orderTotals.due.toFixed(2)}</strong></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {/* Submit Button */}
                                     <div className="text-center mt-4">
                                         <button
                                             type="submit"
                                             className="btn btn-primary btn-lg px-5 shadow"
+                                            disabled={orderSubmitting}
+
                                             style={{
                                                 backgroundColor: '#b8d4ff',
                                                 borderColor: '#b8d4ff',
@@ -1844,7 +1871,7 @@ const styles = {
                                                 e.target.style.transform = 'scale(1)';
                                             }}
                                         >
-                                            {editingOrder ? "Update Order" : "Save Order"}
+                                            {orderSubmitting ? "Saving..." : (editingOrder ? "Update Order" : "Save Order")}
                                         </button>
                                     </div>
                                 </form>

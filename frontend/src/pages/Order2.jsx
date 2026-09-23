@@ -68,6 +68,7 @@ function Order2() {
     const [search, setSearch] = useState('');
 
     const [loading, setLoading] = useState(false);
+    const [orderSubmitting, setOrderSubmitting] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
     // const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
@@ -472,27 +473,121 @@ function Order2() {
         // }
     };
 
+    const orderTotals = useMemo(() => {
+        const round = value => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+        const discountRate = Math.min(100, Math.max(0, Number(formData.discountRate ?? 0)));
+        const taxRate = Math.min(100, Math.max(0, Number(formData.taxPercentage ?? 0)));
+
+        const lines = subOrders.map(item => {
+            const unit = item.qtyUnit || "PCS";
+            const quantity = Math.max(0, Number(item.quantity || 0));
+            const mtr = Math.max(0, Number(item.MTR || 0));
+            const shortPcs = Math.max(0, Number(item.shortPcs || 0));
+            const unitPrice = Math.max(0, Number(item.unitPrice || 0));
+            const billableQty = unit === "MTR"
+                ? Math.max(0, mtr - shortPcs)
+                : Math.max(0, quantity - shortPcs);
+
+            return {
+                billableQty,
+                amount: round(billableQty * unitPrice),
+                unit,
+            };
+        });
+
+        const subtotal = round(lines.reduce((sum, line) => sum + line.amount, 0));
+        const discount = round(subtotal * discountRate / 100);
+        const taxable = round(subtotal - discount);
+        const tax = round(taxable * taxRate / 100);
+        const finalRevenue = round(taxable + tax);
+        const grandTotal = Math.round(finalRevenue);
+        const roundOff = round(grandTotal - finalRevenue);
+        const paid = round(
+            Array.isArray(formData.payments)
+                ? formData.payments.reduce((sum, payment) => sum + Math.max(0, Number(payment.amount || 0)), 0)
+                : Number(formData.paidAmount ?? editingOrder?.paidAmount ?? 0)
+        );
+        const creditApplied = Math.min(
+            grandTotal,
+            Math.max(0, round(Number(formData.creditAppliedAmount || editingOrder?.creditAppliedAmount || 0)))
+        );
+        const due = Math.max(0, round(grandTotal - paid - creditApplied));
+
+        return { lines, subtotal, discount, taxable, taxRate, tax, finalRevenue, grandTotal, roundOff, paid, creditApplied, due };
+    }, [
+        subOrders,
+        formData.discountRate,
+        formData.taxPercentage,
+        formData.payments,
+        formData.paidAmount,
+        formData.creditAppliedAmount,
+        editingOrder?.paidAmount,
+        editingOrder?.creditAppliedAmount,
+    ]);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (editingOrder) {
 
-            // await axios.patch(`${linkone}/api/order/orders/${editingOrder._id}/update`, formData);
-            await axios.put(`${linkone}/api/order/orders/${editingOrder._id}/update`, formData, authConfig());
+        const cleanItems = subOrders.map(item => ({
+            ...item,
+            quantity: Math.max(0, Number(item.quantity || 0)),
+            cut: Math.max(0, Number(item.cut || 0)),
+            MTR: Math.max(0, Number(item.MTR || 0)),
+            unitPrice: Math.max(0, Number(item.unitPrice || 0)),
+            shortPcs: Math.max(0, Number(item.shortPcs || 0)),
+            hsnCode: item.hsnCode === "" ? 0 : Number(item.hsnCode || 0),
+        }));
 
-            alert("✅ Order Update Sucessfully");
-        } else {
-            await axios.post(`${linkone}/api/order/orders/create`, formData, {
-                headers: {
-                    'x-auth-token': token
-                }
-            });
-            incrementBillNoSequence();
-            alert("✅ Order Created Sucessfully");
+        if (!String(formData.orderNumber || "").trim()) {
+            alert("❌ Invoice number is required.");
+            return;
         }
-        setShowModal(false);
-        setEditingOrder(null);
-        setSubOrders([]);
-        fetchOrders();
+        if (!String(formData.companyName || "").trim()) {
+            alert("❌ Please select or enter a client.");
+            return;
+        }
+        if (!cleanItems.length || cleanItems.every(item => !String(item.orderName || "").trim())) {
+            alert("❌ Add at least one bill item.");
+            return;
+        }
+
+        try {
+            setOrderSubmitting(true);
+            const payload = {
+                ...formData,
+                orderNumber: String(formData.orderNumber || "").trim(),
+                companyName: String(formData.companyName || "").trim(),
+                taxPercentage: Math.min(100, Math.max(0, Number(formData.taxPercentage ?? 0))),
+                discountRate: Math.min(100, Math.max(0, Number(formData.discountRate ?? 0))),
+                subOrders: cleanItems,
+            };
+
+            if (editingOrder) {
+                await axios.put(
+                    `${linkone}/api/order/orders/${editingOrder._id}/update`,
+                    payload,
+                    authConfig()
+                );
+                alert("✅ Order updated successfully.");
+            } else {
+                await axios.post(
+                    `${linkone}/api/order/orders/create`,
+                    payload,
+                    authConfig()
+                );
+                await incrementBillNoSequence();
+                alert("✅ Order created successfully.");
+            }
+
+            setShowModal(false);
+            setEditingOrder(null);
+            setSubOrders([]);
+            await fetchOrders();
+        } catch (error) {
+            alert("❌ " + (error.response?.data?.message || error.message || "Unable to save order."));
+        } finally {
+            setOrderSubmitting(false);
+        }
     };
 
     const handleEdit = (order) => {

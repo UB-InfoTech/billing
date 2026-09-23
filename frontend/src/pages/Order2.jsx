@@ -68,7 +68,6 @@ function Order2() {
     const [search, setSearch] = useState('');
 
     const [loading, setLoading] = useState(false);
-    const [orderSubmitting, setOrderSubmitting] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
     // const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
@@ -209,45 +208,37 @@ function Order2() {
     };
 
     const handleSubOrderChange = (index, e) => {
+        // console.log(index, e.target.name, e.target.value, "index e.target.name e.target.value")
         const { name, value } = e.target;
-        const numericFields = new Set(["hsnCode", "quantity", "cut", "unitPrice", "shortPcs"]);
-        const nextValue = numericFields.has(name)
-            ? (value === "" ? "" : Math.max(0, Number(value)))
-            : value;
+        const updatedOrders = [...subOrders];
+        updatedOrders[index][name] = value;
+        if (name === "orderName") {
+            // const selectedProduct = products.find(product => product._id === value);
+            const selectedProduct = products.find(product => product.productName === value);
 
-        setSubOrders(prev => {
-            const updatedOrders = prev.map((row, rowIndex) => {
-                if (rowIndex !== index) return row;
+            if (selectedProduct) {
+                updatedOrders[index].unitPrice = selectedProduct.rate || "";
+                updatedOrders[index].designNumber = selectedProduct.designNo || "";
+                // updatedOrders[index].quantity = selectedProduct.quantity || "";
+            }
+        }
 
-                const updated = { ...row, [name]: nextValue };
+        if (name === "cut" || name === "quantity") {
+            const qty = updatedOrders[index].quantity || 0;
+            const cut = updatedOrders[index].cut || 0;
+            updatedOrders[index].MTR = qty * cut;
+        }
+        // if (name === "quantity" || name === "unitPrice") {
+        //     updatedOrders[index].totalPrice = (updatedOrders[index].quantity - updatedOrders[index].shortPcs) * updatedOrders[index].unitPrice;
+        // }
+        // if (name === "shortPcs") {
+        //     updatedOrders[index].totalPrice = (updatedOrders[index].quantity - updatedOrders[index].shortPcs) * updatedOrders[index].unitPrice;
+        // }
 
-                if (name === "orderName") {
-                    const selectedProduct = products.find(
-                        product => product.productName === value
-                    );
-                    if (selectedProduct) {
-                        updated.productId = selectedProduct._id || null;
-                        updated.unitPrice = Number(selectedProduct.rate || 0);
-                        updated.designNumber = selectedProduct.designNo || "";
-                        updated.hsnCode = Number(selectedProduct.hsnCode || 0);
-                    }
-                }
-
-                if (name === "quantity" || name === "cut") {
-                    const qty = Number(updated.quantity || 0);
-                    const cut = Number(updated.cut || 0);
-                    updated.MTR = Math.round((qty * cut + Number.EPSILON) * 100) / 100;
-                }
-
-                return updated;
-            });
-
-            setFormData(prevForm => ({
-                ...prevForm,
-                subOrders: updatedOrders,
-            }));
-
-            return updatedOrders;
+        setSubOrders(updatedOrders);
+        setFormData({
+            ...formData,
+            subOrders: updatedOrders,
         });
     };
 
@@ -260,32 +251,25 @@ function Order2() {
     // };
 
     const addSubOrderRow = useCallback(() => {
-        const newRow = {
-            designNumber: "",
-            orderName: "",
-            productId: null,
-            hsnCode: 0,
-            qtyUnit: "PCS",
-            quantity: 0,
-            cut: 0,
-            MTR: 0,
-            unitPrice: 0,
-            shortPcs: 0
-        };
-
-        setSubOrders(prev => {
-            const updated = [...prev, newRow];
-            setFormData(prevForm => ({ ...prevForm, subOrders: updated }));
-            return updated;
-        });
+        setSubOrders(prev => [
+            ...prev,
+            {
+                designNumber: "",
+                orderName: "",
+                hsnCode: 0,
+                qtyUnit: "",
+                quantity: 0,
+                cut: 0,
+                MTR: 0,
+                unitPrice: 0,
+                shortPcs: 0
+            }
+        ]);
     }, []);
 
     const deleteSubOrder = (index) => {
-        setSubOrders(prev => {
-            const updated = prev.filter((_, rowIndex) => rowIndex !== index);
-            setFormData(prevForm => ({ ...prevForm, subOrders: updated }));
-            return updated;
-        });
+        const updated = subOrders.filter((_, i) => i !== index);
+        setSubOrders(updated);
     };
 
     // Bind '+' key only when modal is open
@@ -488,153 +472,527 @@ function Order2() {
         // }
     };
 
-    const orderTotals = useMemo(() => {
-        const round = value => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
-        const discountRate = Math.min(100, Math.max(0, Number(formData.discountRate ?? 0)));
-        const taxRate = Math.min(100, Math.max(0, Number(formData.taxPercentage ?? 0)));
-
-        const lines = subOrders.map(item => {
-            const unit = item.qtyUnit || "PCS";
-            const quantity = Math.max(0, Number(item.quantity || 0));
-            const mtr = Math.max(0, Number(item.MTR || 0));
-            const shortPcs = Math.max(0, Number(item.shortPcs || 0));
-            const unitPrice = Math.max(0, Number(item.unitPrice || 0));
-            const billableQty = unit === "MTR"
-                ? Math.max(0, mtr - shortPcs)
-                : Math.max(0, quantity - shortPcs);
-
-            return {
-                billableQty,
-                amount: round(billableQty * unitPrice),
-                unit,
-            };
-        });
-
-        const subtotal = round(lines.reduce((sum, line) => sum + line.amount, 0));
-        const discount = round(subtotal * discountRate / 100);
-        const taxable = round(subtotal - discount);
-        const tax = round(taxable * taxRate / 100);
-        const finalRevenue = round(taxable + tax);
-        const grandTotal = Math.round(finalRevenue);
-        const roundOff = round(grandTotal - finalRevenue);
-
-        const paid = round(
-            Array.isArray(formData.payments)
-                ? formData.payments.reduce((sum, payment) => sum + Math.max(0, Number(payment.amount || 0)), 0)
-                : Number(formData.paidAmount ?? editingOrder?.paidAmount ?? 0)
-        );
-        const creditApplied = Math.min(
-            grandTotal,
-            Math.max(0, round(Number(formData.creditAppliedAmount || editingOrder?.creditAppliedAmount || 0)))
-        );
-        const due = Math.max(0, round(grandTotal - paid - creditApplied));
-
-        return {
-            lines,
-            subtotal,
-            discount,
-            discountRate,
-            taxable,
-            tax,
-            taxRate,
-            finalRevenue,
-            grandTotal,
-            roundOff,
-            paid,
-            creditApplied,
-            due,
-        };
-    }, [
-        subOrders,
-        formData.discountRate,
-        formData.taxPercentage,
-        formData.payments,
-        formData.paidAmount,
-        formData.creditAppliedAmount,
-        editingOrder?.paidAmount,
-        editingOrder?.creditAppliedAmount,
-    ]);
-
     const handleSubmit = async (e) => {
         e.preventDefault();
+        if (editingOrder) {
 
-        const cleanItems = subOrders.map(item => ({
-            ...item,
-            quantity: Math.max(0, Number(item.quantity || 0)),
-            cut: Math.max(0, Number(item.cut || 0)),
-            MTR: Math.max(0, Number(item.MTR || 0)),
-            unitPrice: Math.max(0, Number(item.unitPrice || 0)),
-            shortPcs: Math.max(0, Number(item.shortPcs || 0)),
-            hsnCode: item.hsnCode === "" ? 0 : Number(item.hsnCode || 0),
-        }));
+            // await axios.patch(`${linkone}/api/order/orders/${editingOrder._id}/update`, formData);
+            await axios.put(`${linkone}/api/order/orders/${editingOrder._id}/update`, formData, authConfig());
 
-        if (!String(formData.orderNumber || "").trim()) {
-            alert("❌ Invoice number is required.");
-            return;
+            alert("✅ Order Update Sucessfully");
+        } else {
+            await axios.post(`${linkone}/api/order/orders/create`, formData, {
+                headers: {
+                    'x-auth-token': token
+                }
+            });
+            incrementBillNoSequence();
+            alert("✅ Order Created Sucessfully");
         }
-        if (!String(formData.companyName || "").trim()) {
-            alert("❌ Please select or enter a client.");
-            return;
-        }
-        if (!cleanItems.length || cleanItems.every(item => !String(item.orderName || "").trim())) {
-            alert("❌ Add at least one bill item.");
-            return;
-        }
-        if (cleanItems.some(item => item.unitPrice < 0 || item.quantity < 0 || item.cut < 0 || item.MTR < 0 || item.shortPcs < 0)) {
-            alert("❌ Item values cannot be negative.");
-            return;
+        setShowModal(false);
+        setEditingOrder(null);
+        setSubOrders([]);
+        fetchOrders();
+    };
+
+    const handleEdit = (order) => {
+        setEditingOrder(order);
+        setSubOrders(order.subOrders || []);
+        setFormData(order);
+        setShowModal(true);
+    };
+
+    const handlePaymentEdit = (order) => {
+        setEditingOrder(order);
+        setFormData(order);
+        setEditPayment(null);
+        setNewPayment({
+            amount: "",
+            method: "Cash",
+            amountReference: "",
+            paymentDate: new Date().toISOString().slice(0, 10),
+        });
+        setShowPaymentModal(true);
+    };
+
+    const handleStatus = (order) => {
+        setEditingOrder(order);
+        setStatusModal(true);
+    };
+
+    const handleStatusChange = async (orderId, newStatus) => {
+        const updatedOrder = orders.find(order => order._id === orderId);
+
+        if (!updatedOrder) return;
+
+        // Ensure statusHistory is initialized
+        if (!updatedOrder.statusHistory) {
+            updatedOrder.statusHistory = [];
         }
 
-        const payload = {
-            ...formData,
-            orderNumber: String(formData.orderNumber || "").trim(),
-            companyName: String(formData.companyName || "").trim(),
-            taxPercentage: Math.min(100, Math.max(0, Number(formData.taxPercentage ?? 0))),
-            discountRate: Math.min(100, Math.max(0, Number(formData.discountRate ?? 0))),
-            subOrders: cleanItems,
-        };
+        updatedOrder.status = newStatus;
+        updatedOrder.statusHistory.push({ status: newStatus, timestamp: new Date().toISOString() });
+
+        await axios.patch(`${linkone}/api/order/orders/${orderId}/upd`, updatedOrder, authConfig());
+
+        alert("✅ Status change to " + newStatus);
+        fetchOrders();
+    };
+
+
+    useEffect(() => {
+        // setLoading(true);
+        if (showPaymentModal) fetchPayments();
+        // setLoading(false);
+    }, [showPaymentModal]);
+
+    const fetchPayments = async () => {
+        try {
+            const response = await axios.get(`${linkone}/api/order/orders/${editingOrder._id}/payments`, authConfig());
+            setPayments(response.data);
+        } catch (error) {
+            console.error("Error fetching payments" + error.response.data.message);
+        }
+    };
+
+    const addPayment = async (orderId) => {
+        const amount = Number(newPayment.amount);
+        const due = Number(editingOrder?.dueAmount || 0);
+
+        if (!Number.isFinite(amount) || amount <= 0) {
+            alert("❌ Enter a valid payment amount.");
+            return;
+        }
+        if (amount > due + 0.01) {
+            alert(`❌ Payment cannot exceed the current due balance of ₹${due.toFixed(2)}.`);
+            return;
+        }
 
         try {
-            setOrderSubmitting(true);
+            const response = await axios.post(
+                `${linkone}/api/order/orders/${orderId}/pay`,
+                {
+                    ...newPayment,
+                    amount,
+                    paymentDate: newPayment.paymentDate || new Date().toISOString().slice(0, 10),
+                },
+                authConfig()
+            );
+            await fetchPayments();
+            setEditingOrder(response.data?.order || editingOrder);
+            setNewPayment({ amount: "", method: "Cash", amountReference: "", paymentDate: new Date().toISOString().slice(0, 10) });
+            await fetchOrders();
+            alert("✅ Payment added successfully.");
+        } catch (error) {
+            alert("❌ " + (error.response?.data?.message || error.message || "Unable to add payment."));
+        }
+    };
 
-            if (editingOrder) {
-                await axios.put(
-                    `${linkone}/api/order/orders/${editingOrder._id}/update`,
-                    payload,
-                    authConfig()
-                );
-                alert("✅ Order updated successfully.");
-            } else {
-                await axios.post(
-                    `${linkone}/api/order/orders/create`,
-                    payload,
-                    authConfig()
-                );
-                await incrementBillNoSequence();
-                alert("✅ Order created successfully.");
+    const updatePayment = async () => {
+        if (!editingOrder || !editPayment) return;
+        try {
+            const response = await axios.put(
+                `${linkone}/api/order/orders/${editingOrder._id}/payments/${editPayment._id}`,
+                {
+                    ...editPayment,
+                    amount: Number(editPayment.amount),
+                    paymentDate: editPayment.paymentDate || new Date().toISOString().slice(0, 10),
+                },
+                authConfig()
+            );
+            await fetchPayments();
+            setEditingOrder(response.data?.order || editingOrder);
+            setEditPayment(null);
+            await fetchOrders();
+            alert("✅ Payment updated successfully.");
+        } catch (error) {
+            alert("❌ Error updating payment: " + (error.response?.data?.message || error.message || "Unable to update payment."));
+        }
+    };
+
+    const deletePayment = async (paymentId) => {
+        if (!editingOrder?._id || !paymentId) return;
+        if (!window.confirm("Delete this payment? The invoice balance will be recalculated.")) return;
+
+        try {
+            const response = await axios.delete(
+                `${linkone}/api/order/orders/${editingOrder._id}/payments/${paymentId}`,
+                authConfig()
+            );
+            await fetchPayments();
+            setEditingOrder(response.data?.order || editingOrder);
+            await fetchOrders();
+            alert("✅ Payment deleted successfully.");
+        } catch (error) {
+            alert("❌ Error deleting payment: " + (error.response?.data?.message || error.message || "Unable to delete payment."));
+        }
+    };
+
+    const handleDeleteOrder = async (order) => {
+        const password = prompt("Enter password to delete:");
+        if (password === "123") {
+
+            try {
+                await axios.delete(`${linkone}/api/order/orders/${order}/delete`, authConfig());
+                fetchOrders();
+                alert("✅ Order Delete Sucessfully")
+            } catch (error) {
+                alert("❌ " + error.response.data.message || "Error deleting order");
+                // alert("dc " , error.response.data.message)
+                // console.error('Error deleting client', error);
+            }
+        } else {
+            alert("❌ Incorrect password");
+        }
+    };
+
+    const printKachuBill = (order) => {
+        window.open(`${linkone}/api/order/${order}/KachuBill`, "_blank");
+    };
+    const printInvoice = async (order) => {
+        const printWindow = window.open("", "_blank");
+        if (!printWindow) {
+            alert("Please allow pop-ups to open the invoice.");
+            return;
+        }
+
+        const esc = (value) => String(value ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+
+        const buildFallbackInvoice = () => {
+            const rows = (order.subOrders || []).map((item, index) => {
+                const unit = item.qtyUnit || "PCS";
+                const qty = unit === "MTR" ? Number(item.MTR || 0) : Number(item.quantity || 0);
+                const amount = qty * Number(item.unitPrice || 0);
+                return `<tr><td>${index + 1}</td><td>${esc(item.orderName)}</td><td>${esc(item.designNumber)}</td><td>${esc(item.hsnCode)}</td><td>${qty.toFixed(2)} ${esc(unit)}</td><td>${Number(item.unitPrice || 0).toFixed(2)}</td><td>${amount.toFixed(2)}</td></tr>`;
+            }).join("");
+
+            return `<!doctype html><html><head><meta charset="utf-8"><title>Invoice ${esc(order.orderNumber)}</title><style>
+            body{font-family:Arial,sans-serif;padding:24px;color:#111} .wrap{max-width:1100px;margin:auto}
+            .head{display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:14px}
+            table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #222;padding:7px;font-size:13px}
+            th{background:#f2f2f2}.right{text-align:right}@media print{body{padding:0}}
+            </style></head><body><div class="wrap"><div class="head">
+            <div><h2>${esc(profile.companyName || "Company")}</h2><div>${esc(profile.companyAddress || "")}</div><div>GSTIN: ${esc(profile.gstin || "")}</div></div>
+            <div><h2>INVOICE</h2><div>Invoice: <b>${esc(order.orderNumber)}</b></div><div>Date: ${new Date(order.orderDate).toLocaleDateString("en-IN")}</div></div>
+            </div><p><b>Bill To:</b> ${esc(order.companyName || "Customer")}</p><p>${esc(order.Address || "")}</p>
+            <table><thead><tr><th>#</th><th>Item</th><th>Design</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${rows || '<tr><td colspan="7">No items</td></tr>'}</tbody></table>
+            <div class="right" style="margin-top:18px"><div>Taxable: ₹${Number(order.totalCost || 0).toFixed(2)}</div><div>Tax: ₹${Number(order.taxAmount || 0).toFixed(2)}</div><h3>Total: ₹${Number(order.roundOffFinalRevenue || 0).toFixed(2)}</h3><div>Paid: ₹${Number(order.paidAmount || 0).toFixed(2)} | Due: ₹${Number(order.dueAmount || 0).toFixed(2)}</div></div>
+            </div></body></html>`;
+        };
+
+        printWindow.document.write("<p style='font-family:sans-serif;padding:24px'>Loading invoice...</p>");
+
+        try {
+            const response = await axios.get(
+                `${linkone}/api/order/${order._id}/invoice`,
+                {
+                    ...authConfig(),
+                    responseType: "text"
+                }
+            );
+
+            printWindow.document.open();
+            printWindow.document.write(response.data);
+            printWindow.document.close();
+            printWindow.focus();
+        } catch (error) {
+            console.error("Error opening invoice:", error);
+            try {
+                printWindow.document.open();
+                printWindow.document.write(buildFallbackInvoice());
+                printWindow.document.close();
+                printWindow.focus();
+            } catch (fallbackError) {
+                console.error("Fallback invoice error:", fallbackError);
+                printWindow.close();
+                alert(error.response?.data?.message || error.message || "Failed to open invoice.");
+            }
+        }
+    };
+
+    const printReceipt = async (paymentId) => {
+        if (!editingOrder?._id || !paymentId) return;
+
+        const printWindow = window.open("", "_blank");
+        if (!printWindow) {
+            alert("Please allow pop-ups to print the payment receipt.");
+            return;
+        }
+
+        printWindow.document.open();
+        printWindow.document.write("<p style='font-family:Arial,sans-serif;padding:24px'>Preparing receipt...</p>");
+        printWindow.document.close();
+
+        try {
+            const response = await axios.get(
+                `${linkone}/api/order/${editingOrder._id}/payments/${paymentId}/invoice`,
+                { ...authConfig(), responseType: "text" }
+            );
+            printWindow.document.open();
+            printWindow.document.write(response.data);
+            printWindow.document.close();
+            printWindow.focus();
+        } catch (error) {
+            printWindow.close();
+            alert("❌ Unable to print receipt: " + (error.response?.data?.message || error.message || "Unknown error"));
+        }
+    };
+
+    const sortedOrders = useMemo(() => {
+        let sortableOrders = [...orders];
+        if (sortConfig.key) {
+            sortableOrders.sort((a, b) => {
+                if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
+                if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+        }
+        return sortableOrders;
+    }, [orders, sortConfig]);
+
+    // Filtering
+    const filteredOrders = useMemo(() => {
+        return sortedOrders.filter(order => {
+            const clientName = clients.find(client => client._id === order.clientId)?.companyName || '';
+            return (
+                (clientName.toLowerCase().includes(search.toLowerCase()) || order.orderNumber.toLowerCase().includes(search.toLowerCase())) &&
+                (filters.status === '' || order.status === filters.status) &&
+                (filters.paymentStatus === '' || order.paymentStatus === filters.paymentStatus) &&
+                (filters.dateRange.length === 0 || (new Date(order.orderDate) >= new Date(filters.dateRange[0]) && new Date(order.orderDate) <= new Date(filters.dateRange[1]))) &&
+                // (filters.minTotal === '' || order.totalCost >= parseInt(filters.minTotal)) &&
+                // (filters.maxTotal === '' || order.totalCost <= parseInt(filters.maxTotal)) &&
+                (filters.startDate === '' || new Date(order.orderDate) >= new Date(filters.startDate)) &&
+                (filters.endDate === '' || new Date(order.orderDate) <= new Date(filters.endDate))
+            );
+        });
+    }, [sortedOrders, search, filters, clients]);
+
+    // Pagination
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentOrders = filteredOrders.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
+
+    // // Handlers
+    // const handleSort = (key) => {
+    //     setSortConfig({
+    //         key,
+    //         direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc'
+    //     });
+    // };
+
+    // const handleSort = (key) => {
+    //     setSortConfig(prev => {
+    //         const direction = prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc';
+    //         return { key, direction };
+    //     });
+    // };
+
+    const handleSort = (key) => {
+        if (sortKey === key) {
+            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+        } else {
+            setSortKey(key);
+            setSortOrder('asc');
+        }
+    };
+
+
+    // -----------------------------
+    // using    
+    // const sortedData = [...filteredOrders].sort((a, b) => {
+
+    //         // const sortedData = [...orders].sort((a, b) => {
+    //         let aVal = a[sortKey];
+    //         let bVal = b[sortKey];
+
+    //         // Handle date comparison
+    //         if (sortKey === 'orderDate') {
+    //             aVal = new Date(aVal);
+    //             bVal = new Date(bVal);
+    //         }
+
+    //         // Handle number comparison
+    //         if (typeof aVal === 'number' && typeof bVal === 'number') {
+    //             return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+    //         }
+
+    //         // Default string comparison
+    //         return sortOrder === 'asc'
+    //             ? aVal?.toString().localeCompare(bVal?.toString())
+    //             : bVal?.toString().localeCompare(aVal?.toString());
+    //     });
+    // ---------------
+    const sortedData = [...filteredOrders].sort((a, b) => {
+        let aVal = a[sortKey];
+        let bVal = b[sortKey];
+
+        // OrderNumber (natural sort: SS-1, SS-2, ..., SS-100)
+        if (sortKey === 'orderNumber') {
+            const numA = parseInt(aVal.match(/\d+/)?.[0] ?? 0, 10);
+            const numB = parseInt(bVal.match(/\d+/)?.[0] ?? 0, 10);
+
+            if (numA !== numB) {
+                return sortOrder === 'asc' ? numA - numB : numB - numA;
             }
 
-            setShowModal(false);
-            setEditingOrder(null);
-            setSubOrders([]);
-            const newSubOrders = [{
-                        designNumber: "",
-                        orderName: "",
-                        productId: null,
-                        hsnCode: 0,
-                        qtyUnit: "PCS",
-                        quantity: 0,
-                        cut: 0,
-                        MTR: 0,
-                        unitPrice: 0,
-                        shortPcs: 0,
-                    }];
-                    setSubOrders(newSubOrders);
+            // if numbers are equal, fallback to string compare (handles SS-09 vs SS-9)
+            return sortOrder === 'asc'
+                ? aVal.localeCompare(bVal, undefined, { sensitivity: 'base' })
+                : bVal.localeCompare(aVal, undefined, { sensitivity: 'base' });
+        }
+
+        // Date comparison
+        if (sortKey === 'orderDate') {
+            return sortOrder === 'asc'
+                ? new Date(aVal) - new Date(bVal)
+                : new Date(bVal) - new Date(aVal);
+        }
+
+        // Number comparison
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+            return sortOrder === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+
+        // String (default) comparison
+        const strA = aVal?.toString() ?? "";
+        const strB = bVal?.toString() ?? "";
+        return sortOrder === 'asc'
+            ? strA.localeCompare(strB, undefined, { sensitivity: 'base' })
+            : strB.localeCompare(strA, undefined, { sensitivity: 'base' });
+    });
+
+
+    const handleExportExcel = () => {
+        // const exportData = filteredOrders.map(order => ({
+        const exportData = sortedData.map(order => ({
+            Bill_Date: new Date(order.orderDate).toLocaleDateString("en-IN", {
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+            }),
+            Inv_No: order.orderNumber,
+            Ch_No: order.challanNumber,
+            Company_Name: order.companyName,
+            Qty: order.subOrders.reduce((acc, subOrder) => acc + parseInt(subOrder.quantity), 0),
+            Cut: order.subOrders.reduce((acc, subOrder) => acc + parseInt(subOrder.cut), 0),
+            Inv_Amt: order.roundOffFinalRevenue,
+            Paid_Amt: order.paidAmount,
+            Due_Amt: order.dueAmount,
+            // new Date(order.orderDate).toLocaleDateString("en-IN", {
+            //     year: "numeric",
+            //     month: "2-digit",
+            //     day: "2-digit",
+            //     hour: "2-digit",
+            //     minute: "2-digit",
+            //     second: "2-digit",
+            // }),
+            Due_Date: new Date(Date.parse(order.orderDate) + order.paymentTerms * 86400000),
+            Due_Days: Math.floor((new Date(order.orderDate) - new Date()) / 86400000),
+
+            // Due_Date: new Date(order.orderDate.getTime() + order.paymentTerms * 86400000),
+            // Due_Days: Math.floor((order.orderDate - new Date()) / 86400000),
+            // ...order,
+
+        }));
+        const worksheet = XLSX.utils.json_to_sheet(exportData);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, 'Orders');
+        XLSX.writeFile(workbook, 'orders_report.xlsx');
+    };
+
+    // const getSortIcon = (key) => {
+    //     if (sortConfig.key !== key) return '↕';
+    //     return sortConfig.direction === 'asc' ? '↑' : '↓';
+    // };
+    const getSortIcon = (key) => {
+        if (sortConfig.key !== key) return null;
+        return sortConfig.direction === 'asc' ? '↑' : '↓';
+    };
+
+    const reportRef = useRef();
+    const contentRef = useRef(null);
+    const reactToPrintFn = useReactToPrint({ contentRef });
+
+    if (loading) {
+        return (
+            <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh' }}>
+                <div className="spinner-border" role="status">
+                    <span className="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        );
+    }
+
+    // const handleDelete = (index) => {
+    //     const updated = subOrders.filter((_, i) => i !== index);
+    //     setSubOrders(updated);
+    // };
+    const handleDownloadEwayBill = async (ewbNo) => {
+        if (!ewbNo) return alert('❌ Invalid EWB number');
+
+        // setLoading(true); // Start spinner
+        alert('Downloading PDF...');
+        try {
+            const response = await axios.get(`${linkone}/api/ewaybill/pdf/${ewbNo}/${profile.gstin}/${profile.eWayUserName}/${profile.eWayPassword}`, {
+                responseType: 'blob',
+                headers: { 'x-auth-token': localStorage.getItem('token') || '' }
+            });
+
+            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const url = window.URL.createObjectURL(blob);
+
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `ewaybill_${ewbNo}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+
+            // Cleanup
+            link.remove();
+            window.URL.revokeObjectURL(url);
+
+        } catch (err) {
+            console.error('Error downloading PDF:', err);
+            alert('❌ Failed to download PDF');
+        } finally {
+            // setLoading(false); // Stop spinner
+            alert('✅ Download complete');
+        }
+    }
+const styles = {
+        pageReport: {
+            '@media print': {
+                body: {
+                    '-webkit-print-color-adjust': 'exact',
+                },
+            },
+        },
+    };
+
+
+    return (
+        <div className="w-100 mx-3 mt-3">
+
+            <div className="d-flex align-items-center gap-4">
+
+                <h2>Bill Management</h2>
+
+                <button className="btn btn-primary" onClick={() => {
+                    setShowModal(true); setEditingOrder(null); setSubOrders([
+                        { designNumber: "", orderName: "", hsnCode: 0, qtyUnit: "", quantity: 0, cut: 0, MTR: 0, unitPrice: 0, shortPcs: 0 }
+                    ]);
                     setFormData({
                         orderDate: new Date(),
                         orderNumber: OrderBillNo,
                         lrNo: "",
                         challanNumber: "",
+                        // designNumber: "",
+                        // orderName: "",
                         Address: "",
                         State: "",
                         City: "",
@@ -643,12 +1001,21 @@ function Order2() {
                         clientId: "",
                         gstNumber: "",
                         companyName: "",
-                        subOrders: newSubOrders,
+                        subOrders: subOrders,
+                        // orderType: "Custom",
+                        // fabricType: "Cotton",
+                        // priority: "Medium",
                         status: "Pending",
                         paymentTerms: "30",
+                        // quantity: 0,
+                        // shortPcs: 0,
+                        // unitPrice: 0,
                         taxPercentage: 5,
                         discountRate: 0,
-                        note: "",
+                        // otherTaxes: 0,
+                        // rawMaterialCost: 0,
+                        // labourCost: 0,
+                        // machineUsageCost: 0,
                     });
                 }}>Add New Bill</button>
 
@@ -930,278 +1297,462 @@ function Order2() {
 
 
             {showModal && (
-                <div className="modal show d-block" tabIndex="-1" role="dialog" aria-modal="true" style={{ backgroundColor: "rgba(15, 23, 42, 0.58)" }}>
-                    <div className="modal-dialog modal-dialog-centered modal-xl modal-dialog-scrollable">
-                        <div className="modal-content border-0 shadow-lg" ref={modalRef} style={{ borderRadius: "18px", overflow: "hidden" }}>
-                            <div className="modal-header border-0 px-4 py-3" style={{ background: "linear-gradient(135deg, #0f172a, #1e3a8a)", color: "#fff" }}>
-                                <div className="d-flex flex-wrap align-items-center justify-content-between w-100 gap-3">
-                                    <div>
-                                        <div className="small text-uppercase opacity-75 fw-semibold">
-                                            {editingOrder ? "Sales Invoice • Edit" : "Sales Invoice • New"}
+                <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}>
+                    <div className="modal-dialog modal-dialog-centered modal-xl">
+                        <div className="modal-content shadow-lg border-0" ref={modalRef} style={{ borderRadius: '20px', overflow: 'hidden', backgroundColor: '#f8f9fa' }}>
+                            <div className="modal-header bg-light text-dark p-4 border-bottom-0">
+                                <div className="d-flex flex-row align-items-center justify-content-between">
+                                    <h5 className="modal-title fw-bold">
+                                        {editingOrder ? "Edit Bill" : "Generate Bill"}
+                                    </h5>
+                                    <input
+                                        className={`w-50 form-control shadow-sm bg-white ${formData.lrNo ? 'is-valid' : ''}`}
+                                        name="lrNo"
+                                        value={formData.lrNo}
+                                        onChange={handleInputChange}
+                                        placeholder="Enter Lr No."
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    className="btn-close"
+                                    onClick={() => setShowModal(false)}
+                                    aria-label="Close"
+                                ></button>
+                            </div>
+                            <div className="modal-body p-4">
+                                <form onSubmit={handleSubmit}>
+                                    <div className="row g-4">
+                                        {/* <div className=""> */}
+                                        {/* Top Row: Order Information and Client Details */}
+                                        <div className="d-flex flex-column flex-sm-row col-md-12 gap-3">
+
+                                            <div className="">
+                                                <div className="card shadow-sm border-0" style={{ borderRadius: '15px', backgroundColor: '#fff' }}>
+                                                    {/* <div className="d-flex align-items-center justify-content-between flex-row card-header bg-white p-3"> */}
+                                                    <div className="card-header bg-white p-3">
+                                                        <h6 className="fw-semibold text-muted">
+                                                            <i className="bi bi-truck me-2 text-primary"></i>Shipping Details
+                                                        </h6>
+                                                    </div>
+                                                    <div className="card-body p-4 bg-light">
+                                                        <div className="row g-3">
+                                                            <div className="col-md-3">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-hash me-1"></i>Inv No.
+                                                                </label>
+                                                                <input
+                                                                    className={`form-control shadow-sm bg-white ${formData.orderNumber ? 'is-valid' : ''}`}
+                                                                    name="orderNumber"
+                                                                    value={formData.orderNumber}
+                                                                    onChange={handleInputChange}
+                                                                    placeholder="Enter Invoice No."
+                                                                    required
+                                                                />
+                                                            </div>
+                                                            <div className="col-md-5">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-calendar me-1"></i> Bill Date
+                                                                </label>
+                                                                <input
+                                                                    type="date"
+                                                                    className={`form-control shadow-sm bg-white ${formData.orderDate ? 'is-valid' : ''}`}
+                                                                    name="orderDate"
+                                                                    value={formData.orderDate ? new Date(formData.orderDate).toISOString().split('T')[0] : ''}
+                                                                    onChange={handleInputChange}
+                                                                    placeholder="Enter order date"
+                                                                    required
+                                                                />
+                                                            </div>
+
+                                                            <div className="col-md-4">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-map me-1"></i> State
+                                                                </label>
+                                                                <input
+                                                                    className={`form-control shadow-sm bg-white ${formData.State ? 'is-valid' : ''}`}
+                                                                    name="State"
+                                                                    value={formData.State}
+                                                                    onChange={handleInputChange}
+                                                                    placeholder="Enter state"
+                                                                    required
+                                                                />
+                                                            </div>
+
+                                                            <div className="col-md-8">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-geo-alt me-1"></i> Address
+                                                                </label>
+                                                                <input
+                                                                    className={`form-control shadow-sm bg-white ${formData.Address ? 'is-valid' : ''}`}
+                                                                    name="Address"
+                                                                    value={formData.Address}
+                                                                    onChange={handleInputChange}
+                                                                    placeholder="Enter address"
+                                                                    required
+                                                                />
+                                                            </div>
+
+                                                            <div className="col-md-4">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-building me-1"></i> City
+                                                                </label>
+                                                                <input
+                                                                    className={`form-control shadow-sm bg-white ${formData.City ? 'is-valid' : ''}`}
+                                                                    name="City"
+                                                                    value={formData.City}
+                                                                    onChange={handleInputChange}
+                                                                    placeholder="Enter city"
+                                                                    required
+                                                                />
+                                                            </div>
+
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                            </div>
+                                            <div className="">
+
+                                                <div className="card shadow-sm border-0" style={{ borderRadius: '15px', backgroundColor: '#fff' }}>
+                                                    <div className="card-header bg-white p-3">
+                                                        <h6 className="fw-semibold text-muted">
+                                                            <i className="bi bi-person me-2 text-primary"></i>Client Details
+                                                        </h6>
+                                                    </div>
+                                                    <div className="card-body p-4 bg-light">
+                                                        <div className="row g-3">
+
+                                                            <div className="col-md-4">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-building me-1"></i> Company Name
+                                                                </label>
+                                                                <input
+                                                                    className={`form-control shadow-sm bg-white ${formData.companyName ? 'is-valid' : 'is-invalid'}`}
+                                                                    name="companyName"
+                                                                    value={formData.companyName}
+                                                                    onChange={handleInputChange}
+                                                                    placeholder="Enter company name"
+                                                                    list="companyName"
+                                                                    required
+                                                                />
+                                                                <datalist id="companyName">
+                                                                    <option value="">Select Client</option>
+                                                                    {clients.map((client) => (
+                                                                        // console.log(client.companyName, "client.companyName"),
+                                                                        <option key={client._id} value={client.companyName} >
+                                                                        </option>
+                                                                    ))}
+                                                                </datalist>
+
+                                                            </div>
+                                                            <div className="col-md-4">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-card-text me-1"></i> GST No.
+                                                                </label>
+                                                                <input
+                                                                    className={`form-control shadow-sm bg-white ${formData.gstNumber ? 'is-valid' : ''}`}
+                                                                    name="gstNumber"
+                                                                    value={formData.gstNumber}
+                                                                    onChange={handleInputChange}
+                                                                    placeholder="Enter GST number"
+                                                                />
+                                                            </div>
+                                                            <div className="col-md-4">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-calendar-check me-1"></i>Payment Terms
+                                                                </label>
+                                                                <select
+                                                                    className={`form-select shadow-sm bg-white ${formData.paymentTerms ? 'is-valid' : ''}`}
+                                                                    name="paymentTerms"
+                                                                    value={formData.paymentTerms}
+                                                                    onChange={handleInputChange}
+                                                                    required
+                                                                >
+                                                                    <option value="30">30 days</option>
+                                                                    <option value="60">60 days</option>
+                                                                    <option value="90">90 days</option>
+                                                                    <option value="Advance">Advance</option>
+                                                                </select>
+                                                            </div>
+                                                            <div className="col-md-4">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-receipt-cutoff"></i> Challan No.
+                                                                </label>
+                                                                <input
+                                                                    className={`form-control shadow-sm bg-white ${formData.challanNumber ? 'is-valid' : 'is-invalid'}`}
+                                                                    name="challanNumber"
+                                                                    value={formData.challanNumber}
+                                                                    onChange={handleInputChange}
+                                                                    placeholder="Enter Challan No."
+                                                                    required
+                                                                />
+                                                            </div>
+                                                            <div className="col-md-4">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-percent me-1"></i> Tax
+                                                                </label>
+                                                                <input
+                                                                    type="number"
+                                                                    className={`form-control shadow-sm bg-white ${formData.taxPercentage ? 'is-valid' : ''}`}
+                                                                    name="taxPercentage"
+                                                                    value={formData.taxPercentage}
+                                                                    onChange={handleInputChange}
+                                                                    placeholder="Enter tax percentage"
+                                                                />
+                                                            </div>
+                                                            <div className="col-md-4">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-percent me-1"></i> Discount
+                                                                </label>
+                                                                <input
+                                                                    type="number"
+                                                                    className={`form-control shadow-sm bg-white ${formData.discountRate ? 'is-valid' : ''}`}
+                                                                    name="discountRate"
+                                                                    value={formData.discountRate}
+                                                                    onChange={handleInputChange}
+                                                                    placeholder="Enter tax percentage"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                            </div>
+
                                         </div>
-                                        <h4 className="modal-title fw-bold mb-1">
-                                            {editingOrder ? "Edit Invoice " + (formData.orderNumber || "") : "Create Sales Invoice"}
-                                        </h4>
-                                        <div className="small opacity-75">
-                                            Enter items and the invoice totals, tax, round-off and due balance update automatically.
+
+                                        <div className="d-flex flex-column col-md-12 mt-3">
+                                            {/* 
+@media (min-width:1400px) {
+    .modal-xl {
+        --bs-modal-width: 75vw
+    }
+}
+ */}
+                                            <div className="">
+                                                <div className="card shadow-sm border-0" style={{ borderRadius: '15px', backgroundColor: '#fff' }}>
+                                                    <div className="card-header bg-white p-3 d-flex justify-content-between align-items-center">
+                                                        <h6 className="fw-semibold text-muted mb-0">
+                                                            <i className="bi bi-box me-2 text-primary"></i>Bill Information
+                                                        </h6>
+                                                        <div className="btn btn-outline-primary btn-sm" onClick={addSubOrderRow}>
+                                                            <i className="bi bi-plus-circle"></i>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="card-body p-4 bg-light">
+                                                        <div className="row g-3">
+                                                            <div className="col-md-2">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-tag me-1"></i>Design No.
+                                                                </label>
+                                                            </div>
+                                                            <div className="col-md-2">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-bag-check me-1"></i>Product Name
+                                                                </label>
+                                                            </div>
+                                                            <div className="col-md-2">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-upc-scan me-1"></i>HSN Code
+                                                                </label>
+                                                            </div>
+
+                                                            <div className="col-md-1">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-stack me-1"></i>Qty
+                                                                </label>
+                                                            </div>
+                                                            <div className="col-md-1">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-scissors me-1"></i>Cut
+                                                                </label>
+                                                            </div>
+                                                            <div className="col-md-1">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    <i className="bi bi-rulers me-1"></i>MTR
+                                                                </label>
+                                                            </div>
+
+                                                            <div className="col-md-1">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    {/* <i className="bi bi-currency-exchange me-1"></i> */}
+                                                                    <i className="bi bi-currency-rupee me-1"></i>Rate
+                                                                </label>
+                                                            </div>
+                                                            <div className="col-md-2">
+                                                                <label className="form-label fw-semibold text-muted">
+                                                                    {/* <i className="bi bi-tag me-1"></i> */}
+                                                                    <i className="bi bi-box-seam me-1"></i>QtyUnit
+                                                                </label>
+                                                            </div>
+
+                                                        </div>
+                                                        {subOrders.map((order, index) => (
+                                                            <div key={index} className="row g-3 mb-2">
+                                                                <div className="col-md-2">
+                                                                    {/* <label className="form-label fw-semibold text-muted">Design No.</label> */}
+                                                                    <input
+                                                                        className="form-control"
+                                                                        name="designNumber"
+                                                                        value={order.designNumber}
+                                                                        onChange={(e) => handleSubOrderChange(index, e)}
+                                                                        placeholder="Enter Design No."
+                                                                    />
+                                                                </div>
+                                                                <div className="col-md-2">
+                                                                    {/* <label className="form-label fw-semibold text-muted">Order Name</label> */}
+                                                                    <input
+                                                                        className="form-control"
+                                                                        name="orderName"
+                                                                        value={order.orderName}
+                                                                        onChange={(e) => handleSubOrderChange(index, e)}
+                                                                        placeholder="Enter Order Name"
+                                                                        list="orderName"
+                                                                    />
+                                                                    <datalist id="orderName">
+                                                                        {products.map((p) => (
+                                                                            <option key={p._id} value={p.productName}></option>
+                                                                        ))}
+                                                                    </datalist>
+                                                                </div>
+                                                                <div className="col-md-2">
+                                                                    <input
+                                                                        type="number"
+                                                                        className="form-control"
+                                                                        name="hsnCode"
+                                                                        value={order.hsnCode}
+                                                                        onChange={(e) => handleSubOrderChange(index, e)}
+                                                                        placeholder="Enter hsnCode"
+                                                                    />
+                                                                </div>
+
+
+                                                                <div className="col-md-1">
+                                                                    {/* <label className="form-label fw-semibold text-muted">Quantity</label> */}
+                                                                    <input
+                                                                        type="number"
+                                                                        className="form-control"
+                                                                        name="quantity"
+                                                                        value={order.quantity}
+                                                                        onChange={(e) => handleSubOrderChange(index, e)}
+                                                                        placeholder="Enter quantity"
+                                                                    />
+                                                                </div>
+                                                                <div className="col-md-1">
+                                                                    {/* <label className="form-label fw-semibold text-muted">Short Pcs</label> */}
+                                                                    <input
+                                                                        type="number"
+                                                                        className="form-control"
+                                                                        name="cut"
+                                                                        value={order.cut}
+                                                                        onChange={(e) => handleSubOrderChange(index, e)}
+                                                                        placeholder="Enter cut"
+                                                                    />
+                                                                </div>
+                                                                {/* <label className="form-label fw-semibold text-muted">Short Pcs</label> */}
+                                                                {/* <div className="col-md-1">
+                                                                    <input
+                                                                        type="number"
+                                                                        className="form-control"
+                                                                        name="shortPcs"
+                                                                        value={order.shortPcs}
+                                                                        onChange={(e) => handleSubOrderChange(index, e)}
+                                                                        placeholder="Enter Short Pcs"
+                                                                    />
+                                                                </div> */}
+                                                                <div className="col-md-1">
+                                                                    <input
+                                                                        type="number"
+                                                                        className="form-control"
+                                                                        name="MTR"
+                                                                        value={order.MTR}
+                                                                        onChange={(e) => handleSubOrderChange(index, e)}
+                                                                        placeholder="Enter MTR"
+                                                                    />
+                                                                </div>
+                                                                <div className="col-md-1">
+                                                                    {/* <label className="form-label fw-semibold text-muted">Unit Price</label> */}
+                                                                    <input
+                                                                        type="number"
+                                                                        className="form-control"
+                                                                        name="unitPrice"
+                                                                        value={order.unitPrice}
+                                                                        onChange={(e) => handleSubOrderChange(index, e)}
+                                                                        placeholder="Enter Unit Price"
+                                                                    />
+                                                                </div>
+                                                                <div className="col-md-1">
+                                                                    {/* <input
+                                                                        type="text"
+                                                                        className="form-control"
+                                                                        name="qtyUnit"
+                                                                        value={order.qtyUnit}
+                                                                        onChange={(e) => handleSubOrderChange(index, e)}
+                                                                        placeholder="Enter qtyUnit"
+                                                                    /> */}
+                                                                    <select
+                                                                        className={`form-select shadow-sm bg-white`}
+                                                                        name="qtyUnit"
+                                                                        value={order.qtyUnit}
+                                                                        onChange={(e) => handleSubOrderChange(index, e)}
+                                                                        required
+                                                                    >
+                                                                        <option value="">Select QtyUnit</option>
+                                                                        <option value="MTR">MTR</option>
+                                                                        <option value="PCS">PCS</option>
+                                                                        <option value="BOX">BOX</option>
+                                                                        <option value="UNT">UNT</option>
+                                                                    </select>
+                                                                </div>
+
+                                                                <div className="col-md-1 d-flex align-items-center">
+                                                                    {subOrders.length > 1 && (
+                                                                        <button className="btn btn-danger btn-sm" onClick={() => deleteSubOrder(index)}>
+                                                                            <i className="bi bi-trash"></i>
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+
                                         </div>
+
+
                                     </div>
-                                    <div className="d-flex align-items-center gap-2">
-                                        <span className="badge rounded-pill bg-light text-dark px-3 py-2">
-                                            {subOrders.length} item{subOrders.length === 1 ? "" : "s"}
-                                        </span>
-                                        <button type="button" className="btn btn-light btn-sm" onClick={() => setShowModal(false)} aria-label="Close order form">
-                                            <i className="bi bi-x-lg"></i>
+
+                                    {/* Submit Button */}
+                                    <div className="text-center mt-4">
+                                        <button
+                                            type="submit"
+                                            className="btn btn-primary btn-lg px-5 shadow"
+                                            style={{
+                                                backgroundColor: '#b8d4ff',
+                                                borderColor: '#b8d4ff',
+                                                color: '#1e40af',
+                                                borderRadius: '12px',
+                                                transition: 'all 0.3s ease',
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.target.style.backgroundColor = '#93c5fd';
+                                                e.target.style.borderColor = '#93c5fd';
+                                                e.target.style.transform = 'scale(1.05)';
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.target.style.backgroundColor = '#b8d4ff';
+                                                e.target.style.borderColor = '#b8d4ff';
+                                                e.target.style.transform = 'scale(1)';
+                                            }}
+                                        >
+                                            {editingOrder ? "Update Order" : "Save Order"}
                                         </button>
                                     </div>
-                                </div>
-                            </div>
-
-                            <div className="modal-body p-3 p-lg-4" style={{ background: "#f1f5f9" }}>
-                                <form onSubmit={handleSubmit}>
-                                    <div className="row g-3">
-                                        <div className="col-12 col-xl-7">
-                                            <div className="card border-0 shadow-sm h-100" style={{ borderRadius: "14px" }}>
-                                                <div className="card-header bg-white border-0 px-4 py-3">
-                                                    <div className="fw-bold text-dark"><i className="bi bi-receipt me-2 text-primary"></i>Invoice Details</div>
-                                                    <div className="small text-muted">Customer, invoice and delivery references</div>
-                                                </div>
-                                                <div className="card-body px-4 pb-4">
-                                                    <div className="row g-3">
-                                                        <div className="col-md-4">
-                                                            <label className="form-label small fw-semibold text-secondary">Invoice No.</label>
-                                                            <input className="form-control" name="orderNumber" value={formData.orderNumber || ""} onChange={handleInputChange} placeholder="e.g. INV-00001" required />
-                                                        </div>
-                                                        <div className="col-md-4">
-                                                            <label className="form-label small fw-semibold text-secondary">Bill Date</label>
-                                                            <input type="date" className="form-control" name="orderDate" value={formData.orderDate ? new Date(formData.orderDate).toISOString().split("T")[0] : ""} onChange={handleInputChange} required />
-                                                        </div>
-                                                        <div className="col-md-4">
-                                                            <label className="form-label small fw-semibold text-secondary">LR No.</label>
-                                                            <input className="form-control" name="lrNo" value={formData.lrNo || ""} onChange={handleInputChange} placeholder="Optional" />
-                                                        </div>
-
-                                                        <div className="col-md-7">
-                                                            <label className="form-label small fw-semibold text-secondary">Client / Company</label>
-                                                            <div className="input-group">
-                                                                <span className="input-group-text bg-white"><i className="bi bi-building"></i></span>
-                                                                <input className="form-control" name="companyName" value={formData.companyName || ""} onChange={handleInputChange} placeholder="Select or type client" list="clientNameOptions" required />
-                                                            </div>
-                                                            <datalist id="clientNameOptions">
-                                                                {clients.map(client => <option key={client._id} value={client.companyName || client.name || ""} />)}
-                                                            </datalist>
-                                                        </div>
-                                                        <div className="col-md-5">
-                                                            <label className="form-label small fw-semibold text-secondary">GSTIN</label>
-                                                            <input className="form-control" name="gstNumber" value={formData.gstNumber || ""} onChange={handleInputChange} placeholder="Customer GSTIN" maxLength={15} />
-                                                        </div>
-
-                                                        <div className="col-md-7">
-                                                            <label className="form-label small fw-semibold text-secondary">Billing Address</label>
-                                                            <textarea className="form-control" name="Address" value={formData.Address || ""} onChange={handleInputChange} rows="2" placeholder="Address" required></textarea>
-                                                        </div>
-                                                        <div className="col-md-5">
-                                                            <div className="row g-2">
-                                                                <div className="col-12">
-                                                                    <label className="form-label small fw-semibold text-secondary">City</label>
-                                                                    <input className="form-control" name="City" value={formData.City || ""} onChange={handleInputChange} required />
-                                                                </div>
-                                                                <div className="col-7">
-                                                                    <label className="form-label small fw-semibold text-secondary">State</label>
-                                                                    <input className="form-control" name="State" value={formData.State || ""} onChange={handleInputChange} required />
-                                                                </div>
-                                                                <div className="col-5">
-                                                                    <label className="form-label small fw-semibold text-secondary">PIN</label>
-                                                                    <input className="form-control" name="pinCode" value={formData.pinCode || ""} onChange={handleInputChange} inputMode="numeric" />
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="col-md-4">
-                                                            <label className="form-label small fw-semibold text-secondary">Challan No.</label>
-                                                            <input className="form-control" name="challanNumber" value={formData.challanNumber || ""} onChange={handleInputChange} placeholder="Enter challan no." />
-                                                        </div>
-                                                        <div className="col-md-4">
-                                                            <label className="form-label small fw-semibold text-secondary">Payment Terms</label>
-                                                            <select className="form-select" name="paymentTerms" value={formData.paymentTerms || "30"} onChange={handleInputChange} required>
-                                                                <option value="30">30 Days</option>
-                                                                <option value="60">60 Days</option>
-                                                                <option value="90">90 Days</option>
-                                                                <option value="Advance">Advance</option>
-                                                            </select>
-                                                        </div>
-                                                        <div className="col-md-4">
-                                                            <label className="form-label small fw-semibold text-secondary">Status</label>
-                                                            <select className="form-select" name="status" value={formData.status || "Pending"} onChange={handleInputChange}>
-                                                                <option value="Pending">Pending</option>
-                                                                <option value="In Process">In Process</option>
-                                                                <option value="Completed">Completed</option>
-                                                                <option value="Dispatched">Dispatched</option>
-                                                                <option value="Cancelled">Cancelled</option>
-                                                            </select>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="col-12 col-xl-5">
-                                            <div className="card border-0 shadow-sm h-100" style={{ borderRadius: "14px" }}>
-                                                <div className="card-header bg-white border-0 px-4 py-3">
-                                                    <div className="fw-bold text-dark"><i className="bi bi-calculator me-2 text-primary"></i>Pricing & Tax</div>
-                                                    <div className="small text-muted">Live totals from the items below</div>
-                                                </div>
-                                                <div className="card-body px-4">
-                                                    <div className="row g-3">
-                                                        <div className="col-6">
-                                                            <label className="form-label small fw-semibold text-secondary">Tax %</label>
-                                                            <div className="input-group">
-                                                                <input type="number" min="0" max="100" step="0.01" className="form-control" name="taxPercentage" value={formData.taxPercentage ?? 0} onChange={handleInputChange} />
-                                                                <span className="input-group-text">%</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="col-6">
-                                                            <label className="form-label small fw-semibold text-secondary">Discount %</label>
-                                                            <div className="input-group">
-                                                                <input type="number" min="0" max="100" step="0.01" className="form-control" name="discountRate" value={formData.discountRate ?? 0} onChange={handleInputChange} />
-                                                                <span className="input-group-text">%</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="mt-4 p-3 rounded-3" style={{ background: "#eff6ff" }}>
-                                                        <div className="d-flex justify-content-between small mb-2"><span className="text-muted">Item Subtotal</span><strong>₹{orderTotals.subtotal.toFixed(2)}</strong></div>
-                                                        <div className="d-flex justify-content-between small mb-2"><span className="text-muted">Discount</span><strong className="text-danger">- ₹{orderTotals.discount.toFixed(2)}</strong></div>
-                                                        <div className="d-flex justify-content-between small mb-2"><span className="text-muted">Taxable Value</span><strong>₹{orderTotals.taxable.toFixed(2)}</strong></div>
-                                                        <div className="d-flex justify-content-between small mb-2"><span className="text-muted">Tax ({orderTotals.taxRate.toFixed(2)}%)</span><strong>₹{orderTotals.tax.toFixed(2)}</strong></div>
-                                                        <div className="d-flex justify-content-between small mb-2"><span className="text-muted">Round Off</span><strong>{orderTotals.roundOff >= 0 ? "+" : ""}₹{orderTotals.roundOff.toFixed(2)}</strong></div>
-                                                        <hr className="my-2" />
-                                                        <div className="d-flex justify-content-between align-items-center"><span className="fw-bold">Grand Total</span><span className="fs-4 fw-bold text-primary">₹{orderTotals.grandTotal.toFixed(2)}</span></div>
-                                                    </div>
-
-                                                    <div className="row g-2 mt-3">
-                                                        <div className="col-6">
-                                                            <div className="border rounded-3 p-3 bg-white"><div className="small text-muted">Already Paid</div><div className="fw-bold text-success">₹{orderTotals.paid.toFixed(2)}</div></div>
-                                                        </div>
-                                                        <div className="col-6">
-                                                            <div className="border rounded-3 p-3 bg-white"><div className="small text-muted">Current Due</div><div className="fw-bold text-danger">₹{orderTotals.due.toFixed(2)}</div></div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="col-12">
-                                            <div className="card border-0 shadow-sm" style={{ borderRadius: "14px" }}>
-                                                <div className="card-header bg-white border-0 px-4 py-3">
-                                                    <div className="d-flex flex-wrap justify-content-between align-items-center gap-2">
-                                                        <div>
-                                                            <div className="fw-bold text-dark"><i className="bi bi-box-seam me-2 text-primary"></i>Invoice Items</div>
-                                                            <div className="small text-muted">Line amount = billable quantity × rate. MTR = Qty × Cut.</div>
-                                                        </div>
-                                                        <button type="button" className="btn btn-primary btn-sm" onClick={addSubOrderRow}><i className="bi bi-plus-lg me-1"></i>Add Item</button>
-                                                    </div>
-                                                </div>
-
-                                                <div className="card-body p-0">
-                                                    <div className="table-responsive">
-                                                        <table className="table table-hover align-middle mb-0" style={{ minWidth: "1250px" }}>
-                                                            <thead className="table-light">
-                                                                <tr>
-                                                                    <th style={{ width: "42px" }}>#</th>
-                                                                    <th>Design</th>
-                                                                    <th style={{ minWidth: "190px" }}>Product / Description</th>
-                                                                    <th style={{ width: "90px" }}>HSN</th>
-                                                                    <th style={{ width: "90px" }}>Qty</th>
-                                                                    <th style={{ width: "90px" }}>Cut</th>
-                                                                    <th style={{ width: "95px" }}>MTR</th>
-                                                                    <th style={{ width: "90px" }}>Short</th>
-                                                                    <th style={{ width: "105px" }}>Unit</th>
-                                                                    <th style={{ width: "110px" }}>Rate</th>
-                                                                    <th style={{ width: "125px" }} className="text-end">Amount</th>
-                                                                    <th style={{ width: "58px" }}></th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                {subOrders.map((item, index) => {
-                                                                    const line = orderTotals.lines[index] || { amount: 0 };
-                                                                    return (
-                                                                        <tr key={item._id || index}>
-                                                                            <td className="text-muted fw-semibold">{index + 1}</td>
-                                                                            <td><input className="form-control form-control-sm" name="designNumber" value={item.designNumber || ""} onChange={(e) => handleSubOrderChange(index, e)} placeholder="Design" /></td>
-                                                                            <td><input className="form-control form-control-sm" name="orderName" value={item.orderName || ""} onChange={(e) => handleSubOrderChange(index, e)} placeholder="Product / saree name" list="productNameOptions" required={index === 0} /></td>
-                                                                            <td><input type="number" min="0" step="1" className="form-control form-control-sm" name="hsnCode" value={item.hsnCode ?? ""} onChange={(e) => handleSubOrderChange(index, e)} placeholder="HSN" /></td>
-                                                                            <td><input type="number" min="0" step="0.01" className="form-control form-control-sm" name="quantity" value={item.quantity ?? 0} onChange={(e) => handleSubOrderChange(index, e)} /></td>
-                                                                            <td><input type="number" min="0" step="0.01" className="form-control form-control-sm" name="cut" value={item.cut ?? 0} onChange={(e) => handleSubOrderChange(index, e)} /></td>
-                                                                            <td><input type="number" className="form-control form-control-sm bg-light" value={item.MTR ?? 0} readOnly tabIndex="-1" title="Automatically calculated as Qty × Cut" /></td>
-                                                                            <td><input type="number" min="0" step="0.01" className="form-control form-control-sm" name="shortPcs" value={item.shortPcs ?? 0} onChange={(e) => handleSubOrderChange(index, e)} /></td>
-                                                                            <td>
-                                                                                <select className="form-select form-select-sm" name="qtyUnit" value={item.qtyUnit || "PCS"} onChange={(e) => handleSubOrderChange(index, e)}>
-                                                                                    <option value="PCS">PCS</option>
-                                                                                    <option value="MTR">MTR</option>
-                                                                                    <option value="BOX">BOX</option>
-                                                                                    <option value="UNT">UNT</option>
-                                                                                </select>
-                                                                            </td>
-                                                                            <td><input type="number" min="0" step="0.01" className="form-control form-control-sm" name="unitPrice" value={item.unitPrice ?? 0} onChange={(e) => handleSubOrderChange(index, e)} /></td>
-                                                                            <td className="text-end fw-bold text-dark">₹{line.amount.toFixed(2)}</td>
-                                                                            <td className="text-center">
-                                                                                {subOrders.length > 1 && <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => deleteSubOrder(index)} title="Remove item"><i className="bi bi-trash"></i></button>}
-                                                                            </td>
-                                                                        </tr>
-                                                                    );
-                                                                })}
-                                                                {!subOrders.length && <tr><td colSpan="12" className="text-center text-muted py-4">No items. Click “Add Item” to start.</td></tr>}
-                                                            </tbody>
-                                                            <tfoot className="table-light">
-                                                                <tr>
-                                                                    <td colSpan="10" className="text-end fw-semibold">Items subtotal</td>
-                                                                    <td className="text-end fw-bold">₹{orderTotals.subtotal.toFixed(2)}</td>
-                                                                    <td></td>
-                                                                </tr>
-                                                            </tfoot>
-                                                        </table>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="col-12">
-                                            <div className="card border-0 shadow-sm" style={{ borderRadius: "14px" }}>
-                                                <div className="card-body p-3 p-lg-4">
-                                                    <div className="row align-items-center g-3">
-                                                        <div className="col-lg-7">
-                                                            <label className="form-label small fw-semibold text-secondary">Internal Note</label>
-                                                            <textarea className="form-control" name="note" value={formData.note || ""} onChange={handleInputChange} rows="2" placeholder="Optional note for this invoice"></textarea>
-                                                        </div>
-                                                        <div className="col-lg-5">
-                                                            <div className="d-flex justify-content-between align-items-center p-3 rounded-3" style={{ background: "#0f172a", color: "#fff" }}>
-                                                                <div><div className="small opacity-75">Amount to collect</div><div className="fs-4 fw-bold">₹{orderTotals.due.toFixed(2)}</div></div>
-                                                                <i className="bi bi-cash-coin fs-2"></i>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="col-12">
-                                            <div className="d-flex flex-wrap justify-content-end align-items-center gap-2">
-                                                <button type="button" className="btn btn-outline-secondary px-4" onClick={() => setShowModal(false)} disabled={orderSubmitting}>Cancel</button>
-                                                <button type="submit" className="btn btn-primary px-5 py-2 fw-semibold" disabled={orderSubmitting}>
-                                                    {orderSubmitting ? (
-                                                        <><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving...</>
-                                                    ) : (
-                                                        <><i className="bi bi-check2-circle me-2"></i>{editingOrder ? "Update Invoice" : "Save Invoice"}</>
-                                                    )}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
                                 </form>
-                                <datalist id="productNameOptions">
-                                    {products.map(product => <option key={product._id} value={product.productName || ""} />)}
-                                </datalist>
                             </div>
                         </div>
                     </div>

@@ -305,14 +305,22 @@ export default function CreditNote() {
             });
             }));
 
-            const due = Math.max(0, n(payload.dueAmount) - n(payload.alreadyAppliedCreditAmount));
-            setForm((current) => ({
-                ...current,
-                originalOrderId: payload._id,
-                adjustmentAmount: due > 0 ? 0 : 0,
-                refundAmount: 0,
-                manualTaxRate: n(payload.taxPercentage ?? 5),
-            }));
+            if (!existingNote) {
+                const due = Math.max(0, n(payload.dueAmount) - n(payload.alreadyAppliedCreditAmount));
+                setForm((current) => ({
+                    ...current,
+                    originalOrderId: payload._id,
+                    adjustmentAmount: 0,
+                    refundAmount: 0,
+                    manualTaxRate: n(payload.taxPercentage ?? 5),
+                }));
+            } else {
+                setForm((current) => ({
+                    ...current,
+                    originalOrderId: payload._id,
+                    manualTaxRate: current.manualTaxRate || n(payload.taxPercentage ?? 5),
+                }));
+            }
         } catch (error) {
             setError(getErrorMessage(error));
         } finally {
@@ -366,11 +374,11 @@ export default function CreditNote() {
     };
 
     useEffect(() => {
-        if (!selectedOrder) return;
+        if (!selectedOrder || !form.autoSettlement) return;
         const total = totals.grandTotal;
         const dueAvailable = invoiceDueAvailableForAdjustment;
         if (total <= 0) {
-            setForm((current) => ({ ...current, adjustmentAmount: 0, refundAmount: 0 }));
+            setForm((current) => ({ ...current, adjustmentAmount: 0, refundAmount: 0, customerCreditAmount: 0 }));
             return;
         }
         const adjustment = Math.min(total, dueAvailable);
@@ -379,8 +387,9 @@ export default function CreditNote() {
             ...current,
             adjustmentAmount: adjustment,
             refundAmount: refund,
+            customerCreditAmount: 0,
         }));
-    }, [totals.grandTotal, selectedOrder, invoiceDueAvailableForAdjustment]);
+    }, [totals.grandTotal, selectedOrder, invoiceDueAvailableForAdjustment, form.autoSettlement]);
 
     const validateClient = () => {
         if (!form.creditNoteDate) return "Credit Note date is required.";
@@ -411,6 +420,8 @@ export default function CreditNote() {
         if (n(form.refundAmount) > 0 && !form.refundMethod) return "Select a refund method.";
         if (r2(n(form.adjustmentAmount) + n(form.refundAmount) + n(form.customerCreditAmount)) !== r2(totals.grandTotal)) return "Adjustment, refund and customer credit must exactly equal the Credit Note total.";
         if (form.stockAffecting && (form.creditMode !== "ITEM" || form.reason !== "Sales Return")) return "Stock return is allowed only for item-based Sales Return credits.";
+        if (view === "edit" && !String(form.creditNoteNumber || "").trim()) return "Credit Note number is required.";
+        if (n(form.customerCreditAmount) > 0 && !selectedOrder?.clientId) return "Customer credit requires a client on the original invoice.";
         return "";
     };
 

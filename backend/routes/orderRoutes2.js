@@ -536,7 +536,72 @@ router.get("/:orderId/invoice",auth,async(req,res)=>{try{const order=await Order
 router.get("/:orderId/KachuBill",auth,async(req,res)=>{try{const order=await Order.findOne({_id:req.params.orderId,createdBy:userId(req)}).lean();if(!order)return res.status(404).json({message:"Order not found"});await renderInvoice(order,res);}catch(error){res.status(500).json({message:"Error generating bill",error:error.message});}});
 
 router.get("/:orderId/payments/:paymentId/invoice",auth,async(req,res)=>{
-  try{const order=await Order.findOne({_id:req.params.orderId,createdBy:userId(req)}).lean();if(!order)return res.status(404).json({message:"Order not found"});const payment=(order.payments||[]).find(p=>String(p._id)===String(req.params.paymentId));if(!payment)return res.status(404).json({message:"Payment not found"});const template=fs.readFileSync(path.join(__dirname,"../public/reciptTable.html"),"utf8");let html=template.replaceAll("VorderNumber",order.orderNumber||"N/A").replace("VorderName",order.companyName||"N/A").replace("VpaymentId",String(payment._id)).replace("VreceiptCreatedDate",new Date(payment.paymentDate||payment.createdAt||new Date()).toLocaleString("en-IN")).replace("VreceiptPaymentMode",payment.method||"N/A").replace("VreceiptPaymentReference",payment.amountReference||"N/A").replace("VclintCompanyName",order.companyName||"N/A").replace("VclintAddress",order.Address||"N/A").replace("VclintEmail","N/A").replace("VclintPhoneNumber","N/A").replace("VclintGstNumber",order.gstNumber||"N/A").replace("VclintChallanNumber",order.challanNumber||"N/A").replaceAll("VamountReceived",String(payment.amount||0)).replaceAll("VorderFinalRevenue",String(order.roundOffFinalRevenue||0));res.type("html").send(html);}catch(error){res.status(500).json({message:"Server error",error:error.message});}
+  try{
+    const order=await Order.findOne({_id:req.params.orderId,createdBy:userId(req)}).lean();
+    if(!order)return res.status(404).json({message:"Order not found"});
+
+    const payment=(order.payments||[]).find(p=>String(p._id)===String(req.params.paymentId));
+    if(!payment)return res.status(404).json({message:"Payment not found"});
+
+    const profile=await Profile.findOne({createdBy:String(req.user.id)}).lean()||{};
+    const client=order.clientId
+      ? await Client.findOne({_id:order.clientId,createdBy:userId(req)}).lean()
+      : null;
+
+    const paymentAmount=Number(payment.amount||0);
+    const invoiceTotal=Number(order.roundOffFinalRevenue||order.finalRevenue||order.totalAmount||0);
+    const previousDue=Math.max(0,round2(Number(order.dueAmount||0)+paymentAmount));
+    const balanceAfter=Math.max(0,round2(previousDue-paymentAmount));
+
+    const paymentDate=new Date(payment.paymentDate||payment.createdAt||new Date());
+    const receiptDate=paymentDate.toLocaleString("en-IN");
+    const invoiceDate=new Date(order.orderDate||new Date()).toLocaleDateString("en-IN");
+
+    const template=fs.readFileSync(path.join(__dirname,"../public/reciptTable.html"),"utf8");
+    const replacements={
+      VorderNumber:order.orderNumber||"N/A",
+      VorderName:order.companyName||"N/A",
+      VpaymentId:String(payment._id),
+      VreceiptCreatedDate:receiptDate,
+      VreceiptPaymentMode:payment.method||"N/A",
+      VreceiptPaymentReference:payment.amountReference||"N/A",
+      VclintCompanyName:order.companyName||client?.companyName||client?.name||"N/A",
+      VclintAddress:order.Address||client?.address||"N/A",
+      VclintCityStatePin:[order.City||client?.city,order.State||client?.state,order.pinCode||client?.pinCode].filter(Boolean).join(", ")||"N/A",
+      VclintEmail:client?.email||"N/A",
+      VclintPhoneNumber:client?.phone||client?.phoneNumber||"N/A",
+      VclintGstNumber:order.gstNumber||client?.gstNumber||"N/A",
+      VclintChallanNumber:order.challanNumber||"N/A",
+      VamountReceived:paymentAmount.toFixed(2),
+      VorderFinalRevenue:invoiceTotal.toFixed(2),
+      VpreviousDue:previousDue.toFixed(2),
+      VbalanceAfterPayment:balanceAfter.toFixed(2),
+      VtodayDate:paymentDate.toLocaleDateString("en-IN"),
+      VcreatedAt:invoiceDate,
+      VcompanyTitle:profile.headerTitle||"",
+      VcompanyName:profile.companyName||"Company",
+      VcompanyAddress:profile.companyAddress||"",
+      VcompanyPhone:[profile.phoneNumber1,profile.phoneNumber2].filter(Boolean).join(" / ")||"",
+      VcompanyGstin:profile.gstin||"",
+      VcompanyPan:profile.pan||"",
+      VbankName:profile.bankName||"",
+      VaccountNo:profile.accountNo||"",
+      VbranchName:profile.branchName||"",
+      Vifsc:profile.ifsc||"",
+      VamountInWords:numberToWords(paymentAmount)
+    };
+
+    let html=template;
+    for(const [key,value] of Object.entries(replacements)){
+      html=html.replaceAll(key,invoiceEscape(value));
+    }
+
+    res.set("Cache-Control","no-store");
+    return res.type("html").send(html);
+  }catch(error){
+    console.error("Payment receipt render error:",error);
+    return res.status(500).json({message:error?.message||"Unable to generate payment receipt."});
+  }
 });
 
 router.post("/payment-reminders/send",auth,async(req,res)=>{

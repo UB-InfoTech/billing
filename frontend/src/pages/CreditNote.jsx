@@ -927,7 +927,7 @@ export default function CreditNote() {
                                                             <td>{item.orderName || "-"}</td>
                                                             <td>{item.hsnCode || "-"}</td>
                                                             <td>{item.qtyUnit || "PCS"}</td>
-                                                            <td>{n(item.billedQuantity) > 0 ? n(item.billedQuantity).toFixed(2) : (n(item.availableCreditQty) + (item.qtyUnit === "MTR" ? n(item.previouslyCreditedMTR) : n(item.previouslyCreditedQuantity)).toFixed(2))}</td>
+                                                            <td>{n(item.billedQuantity) > 0 ? n(item.billedQuantity).toFixed(2) : (n(item.availableCreditQty) + (item.qtyUnit === "MTR" ? n(item.previouslyCreditedMTR) : n(item.previouslyCreditedQuantity))).toFixed(2)}</td>
                                                             <td>{item.qtyUnit === "MTR" ? n(item.previouslyCreditedMTR).toFixed(2) : n(item.previouslyCreditedQuantity).toFixed(2)}</td>
                                                             <td className="fw-semibold text-success">{n(item.availableCreditQty).toFixed(2)}</td>
                                                             <td>

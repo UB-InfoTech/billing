@@ -184,6 +184,7 @@ const PaymentForm = React.memo(({
   form,
   onFormChange,
   totalDue,
+  totalAllocated,
   onSubmit,
   submitting,
   onToggleModal,
@@ -218,7 +219,7 @@ const PaymentForm = React.memo(({
           onChange={(e) => onFormChange('amount', e.target.value)}
           placeholder="0.00"
           min="0"
-          max="10000000"
+          max={Math.max(totalDue, 0)}
           step="0.01"
           aria-label="Total payment amount"
           required

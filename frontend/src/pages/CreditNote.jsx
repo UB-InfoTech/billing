@@ -53,6 +53,7 @@ function emptyForm() {
         refundAmount: 0,
         refundMethod: "Cash",
         customerCreditAmount: 0,
+        autoSettlement: true,
         stockAffecting: false,
         manualTaxableAmount: 0,
         manualTaxRate: 5,
@@ -255,11 +256,14 @@ export default function CreditNote() {
         }, 300);
     };
 
-    const loadOrder = async (orderId) => {
+    const loadOrder = async (orderId, excludeCreditNoteId = "", existingNote = null) => {
         try {
             setLoading(true);
             setError("");
-            const response = await axios.get(`${API_BASE}/api/credit-notes/available/${orderId}`, getAuthConfig());
+            const response = await axios.get(`${API_BASE}/api/credit-notes/available/${orderId}`, {
+                ...getAuthConfig(),
+                params: excludeCreditNoteId ? { excludeCreditNoteId } : undefined,
+            });
             const availableResponse = response.data;
             const payload = availableResponse?.order;
             if (!payload) throw new Error("Invoice not found.");
@@ -276,7 +280,11 @@ export default function CreditNote() {
             setInvoiceSearch(payload.orderNumber || "");
             setSearchResultsOpen(false);
             setOrders([]);
-            setItems(availableItems.map((item) => calculateCreditLine({
+            const existingItems = Array.isArray(existingNote?.items) ? existingNote.items : [];
+            setItems(availableItems.map((item) => {
+                const existing = existingItems.find((x) => String(x.sourceSubOrderId) === String(item._id));
+                return calculateCreditLine({
+
                 _id: item._id,
                 designNumber: item.designNumber || "",
                 orderName: item.orderName || "",
@@ -291,10 +299,11 @@ export default function CreditNote() {
                 unitPrice: n(item.unitPrice),
                 discountRate: n(payload.discountRate),
                 taxRate: n(payload.taxPercentage),
-                creditQuantity: 0,
                 billedQuantity: n(item.billedQuantity),
-                creditMTR: 0,
-            })));
+                creditMTR: existing?.MTR > 0 ? n(existing.MTR) : 0,
+                creditQuantity: existing?.quantity > 0 ? n(existing.quantity) : 0,
+            });
+            }));
 
             const due = Math.max(0, n(payload.dueAmount) - n(payload.alreadyAppliedCreditAmount));
             setForm((current) => ({
@@ -474,42 +483,113 @@ export default function CreditNote() {
         }
     };
 
-    const startEditNote = (note) => {
+    const startEditNote = async (note) => {
         if (!note || note.status === "Cancelled") {
             setError("Cancelled Credit Notes cannot be edited.");
             return;
         }
-        setEditingNote({
-            _id: note._id,
-            creditNoteDate: note.creditNoteDate ? new Date(note.creditNoteDate).toISOString().split("T")[0] : today(),
-            reason: note.reason || "Other",
-            note: note.note || "",
-        });
-        setError("");
-        setSuccess("");
-        setView("edit");
+
+        try {
+            setLoading(true);
+            setError("");
+            const response = await axios.get(
+                `${API_BASE}/api/credit-notes/${note._id}`,
+                getAuthConfig()
+            );
+            const fullNote = response.data?.creditNote;
+            if (!fullNote) throw new Error("Credit Note not found.");
+
+            const orderId = fullNote.originalOrderId?._id || fullNote.originalOrderId;
+            const settlement = fullNote.settlement || {};
+
+            setEditingNote({ _id: fullNote._id });
+            setForm({
+                ...emptyForm(),
+                creditNoteNumber: fullNote.creditNoteNumber || "",
+                creditNoteDate: fullNote.creditNoteDate
+                    ? new Date(fullNote.creditNoteDate).toISOString().slice(0, 10)
+                    : today(),
+                reason: fullNote.reason || "Other",
+                originalOrderId: orderId || "",
+                creditMode: fullNote.creditMode || "ITEM",
+                adjustmentType: settlement.adjustmentType || "Outstanding",
+                adjustmentAmount: n(settlement.adjustmentAmount),
+                refundAmount: n(settlement.refundAmount),
+                refundMethod: settlement.refundMethod || "Cash",
+                customerCreditAmount: n(settlement.customerCreditAmount),
+                autoSettlement: false,
+                stockAffecting: Boolean(fullNote.stockAffecting),
+                manualTaxableAmount: n(fullNote.manualCredit?.taxableAmount),
+                manualTaxRate: n(fullNote.manualCredit?.taxRate ?? fullNote.originalOrder?.taxPercentage ?? 5),
+                note: fullNote.note || "",
+            });
+
+            setView("edit");
+            await loadOrder(orderId, fullNote._id, fullNote);
+            setPreviewNote(fullNote);
+            setSuccess("");
+        } catch (error) {
+            setError(getErrorMessage(error));
+        } finally {
+            setLoading(false);
+        }
     };
 
     const updateNote = async () => {
         if (!editingNote?._id) return;
+
+        const message = validateClient();
+        if (message) {
+            setError(message);
+            return;
+        }
+
         try {
             setSaving(true);
             setError("");
+
             const response = await axios.put(
                 `${API_BASE}/api/credit-notes/${editingNote._id}`,
                 {
-                    creditNoteDate: editingNote.creditNoteDate,
-                    reason: editingNote.reason,
-                    note: editingNote.note,
+                    creditNoteNumber: form.creditNoteNumber.trim(),
+                    creditNoteDate: form.creditNoteDate,
+                    reason: form.reason,
+                    creditMode: form.creditMode,
+                    originalOrderId: form.originalOrderId,
+                    stockAffecting: Boolean(form.stockAffecting),
+                    settlement: {
+                        adjustmentType: "Outstanding",
+                        adjustmentAmount: r2(form.adjustmentAmount),
+                        refundAmount: r2(form.refundAmount),
+                        refundMethod: form.refundAmount > 0 ? form.refundMethod : null,
+                        customerCreditAmount: r2(form.customerCreditAmount),
+                    },
+                    manualCredit: form.creditMode === "AMOUNT"
+                        ? {
+                            taxableAmount: r2(form.manualTaxableAmount),
+                            taxRate: r2(form.manualTaxRate),
+                        }
+                        : undefined,
+                    note: form.note.trim(),
+                    items: form.creditMode === "ITEM"
+                        ? items.filter((item) => getCreditQty(item) > 0).map((item) => ({
+                            sourceSubOrderId: item._id,
+                            quantity: item.qtyUnit === "MTR" ? 0 : r2(item.creditQuantity),
+                            MTR: item.qtyUnit === "MTR" ? r2(item.creditMTR) : 0,
+                            discountRate: r2(item.discountRate),
+                            taxRate: r2(item.taxRate),
+                        }))
+                        : [],
                 },
                 getAuthConfig()
             );
+
             const updated = response.data?.creditNote;
             setPreviewNote(updated);
             setEditingNote(null);
             setSuccess(response.data?.message || "Credit Note updated successfully.");
             setView("preview");
-            await loadCreditNotes(filters);
+            await loadCreditNotes({ ...filters, page: 1 });
         } catch (error) {
             setError(getErrorMessage(error));
         } finally {

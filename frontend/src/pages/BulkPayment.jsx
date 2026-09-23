@@ -16,7 +16,7 @@ const API_CONFIG = {
   REQUEST_TIMEOUT: 30000
 };
 
-const PAYMENT_METHODS = ['Cash', 'Bank Transfer', 'UPI', 'Cheque'];
+const PAYMENT_METHODS = ['Cash', 'Bank Transfer', 'UPI', 'Cheque', 'Bank'];
 const SPLIT_TYPES = ['proportional', 'custom'];
 
 
@@ -109,26 +109,31 @@ const paymentValidationSchema = Yup.object({
 //   .min(new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), 'Date cannot be more than 1 year ago')
 //   .max(new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), 'Date cannot be more than 1 year in the future')
 
-const validateCustomSplits = (customSplits, selectedOrders, totalAmount) => {
+const validateCustomSplits = (customSplits, selectedOrders, selectedOrdersData, totalAmount) => {
   const errors = {};
   let totalAllocated = 0;
+  const orderById = new Map(selectedOrdersData.map(order => [order._id, order]));
 
   selectedOrders.forEach(orderId => {
     const amount = parseDecimal(customSplits[orderId] || 0);
+    const order = orderById.get(orderId);
+    const due = parseDecimal(order?.dueAmount || 0);
+
     if (amount < 0) {
       errors[orderId] = 'Amount cannot be negative';
+    } else if (amount > due + 0.01) {
+      errors[orderId] = `Amount cannot exceed invoice due (₹${due.toFixed(2)})`;
     }
-    if (amount > totalAmount) {
-      errors[orderId] = 'Amount exceeds total payment';
-    }
+
     totalAllocated += amount;
   });
 
   totalAllocated = parseDecimal(totalAllocated);
-  const difference = Math.abs(parseDecimal(totalAllocated - totalAmount));
+  const payment = parseDecimal(totalAmount);
+  const difference = Math.abs(parseDecimal(totalAllocated - payment));
 
-  if (difference > 0.01) { // Allow for 1 cent tolerance
-    errors._total = `Total allocated (₹${totalAllocated}) must equal payment amount (₹${totalAmount})`;
+  if (difference > 0.01) {
+    errors._total = `Total allocated (₹${totalAllocated.toFixed(2)}) must equal payment amount (₹${payment.toFixed(2)})`;
   }
 
   return { errors, isValid: Object.keys(errors).length === 0 };
@@ -290,9 +295,16 @@ const PaymentForm = React.memo(({
 
     <div className="row d-flex justify-content-between align-items-center">
       <div className="col-md-2">
-        <label className="form-label mb-0">Total Due</label>
-        <span className="form-control-plaintext fw-bold mt-0 pt-0">
+        <label className="form-label mb-0">Selected Due</label>
+        <span className="form-control-plaintext fw-bold mt-0 pt-0 text-primary">
           ₹{totalDue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        </span>
+      </div>
+
+      <div className="col-md-2">
+        <label className="form-label mb-0">Allocated</label>
+        <span className={`form-control-plaintext fw-bold mt-0 pt-0 ${Math.abs(parseDecimal(form.amount || 0) - totalAllocated) <= 0.01 ? 'text-success' : 'text-danger'}`}>
+          ₹{totalAllocated.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       </div>
 
@@ -628,7 +640,10 @@ export default function BulkPayment() {
         const response = await apiClient.get(API_CONFIG.ENDPOINTS.ORDERS, {
           signal: controller.signal
         });
-        setOrders(response.data.orders || []);
+        const availableOrders = (response.data.orders || []).filter(
+          order => order.status !== 'Cancelled' && Number(order.dueAmount || 0) > 0
+        );
+        setOrders(availableOrders);
       } catch (error) {
         if (!controller.signal.aborted) {
           console.error('Failed to fetch orders:', error);
@@ -736,11 +751,20 @@ export default function BulkPayment() {
     try {
       await paymentValidationSchema.validate(form, { abortEarly: false });
 
+      const paymentAmount = parseDecimal(form.amount);
+      if (paymentAmount > totalDue + 0.01) {
+        setValidationErrors({
+          _total: `Payment amount cannot exceed selected invoice dues of ₹${totalDue.toFixed(2)}`
+        });
+        return false;
+      }
+
       if (form.splitType === 'custom') {
         const { errors, isValid } = validateCustomSplits(
           customSplits,
           selectedOrders,
-          parseDecimal(form.amount)
+          selectedOrdersData,
+          paymentAmount
         );
         if (!isValid) {
           setValidationErrors(errors);
@@ -760,7 +784,7 @@ export default function BulkPayment() {
     }
   };
 
-  const handleSubmit = useCallback(async (e) => {
+    const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
 
     if (selectedOrders.length === 0) {
@@ -854,7 +878,7 @@ export default function BulkPayment() {
         setSubmitting(false);
       }
     }
-  }, [form, selectedOrders, customSplits]);
+  }, [form, selectedOrders, customSplits, orders, totalDue, selectedOrdersData]);
   const reportRef = useRef();
   const contentRef = useRef(null);
   const reactToPrintFn = useReactToPrint({ contentRef });

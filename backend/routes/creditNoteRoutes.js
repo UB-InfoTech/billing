@@ -168,11 +168,17 @@ function calculateSettlement(settlement, grandTotal, orderDue) {
   };
 }
 
-async function getPreviouslyCredited(orderId, session) {
-  const rows = await CreditNote.find({
+async function getPreviouslyCredited(orderId, session, excludeCreditNoteId = null) {
+  const filter = {
     originalOrderId: orderId,
     status: { $ne: "Cancelled" },
-  })
+  };
+
+  if (excludeCreditNoteId && mongoose.isValidObjectId(excludeCreditNoteId)) {
+    filter._id = { $ne: excludeCreditNoteId };
+  }
+
+  const rows = await CreditNote.find(filter)
     .select("items totals.grandTotal creditMode")
     .session(session || null)
     .lean();
@@ -1083,46 +1089,356 @@ router.post("/", auth, async (req, res) => {
   }
 });
 
-/** POST /api/credit-notes/:id/cancel */
-router.put("/:id", auth, async (req, res) => {
-  try {
-    if (!mongoose.isValidObjectId(req.params.id)) {
-      return res.status(400).json({ message: "Invalid credit note ID." });
+async function prepareCreditNoteUpdate({
+  order, reason, creditMode, items, manualCredit, stockAffecting, settlement, excludeCreditNoteId, session,
+}) {
+  if (!REASONS.includes(reason)) throw new Error("Invalid credit note reason.");
+  if (!MODES.includes(creditMode)) throw new Error("Invalid credit mode.");
+  if (!order) throw new Error("Original invoice not found.");
+
+  const { map: previousCredits, total: previousCreditTotal } =
+    await getPreviouslyCredited(order._id, session, excludeCreditNoteId);
+
+  const invoiceTotal = getOrderInvoiceTotal(order);
+  const remainingCreditTotal = Math.max(0, round2(invoiceTotal - previousCreditTotal));
+  if (remainingCreditTotal <= EPSILON) throw new Error("This invoice has no remaining creditable value.");
+
+  const finalItems = [];
+  let subtotal = 0, discountAmount = 0, taxableAmount = 0, taxAmount = 0;
+
+  if (creditMode === "ITEM") {
+    if (!Array.isArray(items) || !items.length) throw new Error("At least one item is required for item-based credit.");
+    const seen = new Set();
+
+    for (const requested of items) {
+      const sourceId = String(requested?.sourceSubOrderId || "");
+      if (!sourceId || seen.has(sourceId)) throw new Error("Each invoice item can appear only once.");
+      seen.add(sourceId);
+
+      const source = order.subOrders.id(sourceId);
+      if (!source) throw new Error("One or more selected invoice items are invalid.");
+
+      const qtyUnit = source.qtyUnit || "PCS";
+      const quantity = requestedQty(requested, qtyUnit);
+      const billedQty = invoiceBilledQty(source);
+      const previousQty = qtyUnit === "MTR"
+        ? Number(previousCredits.get(sourceId)?.MTR || 0)
+        : Number(previousCredits.get(sourceId)?.quantity || 0);
+      const available = Math.max(0, round2(billedQty - previousQty));
+
+      if (quantity <= 0) continue;
+      if (quantity > available + EPSILON) {
+        throw new Error(`Credit quantity exceeded for ${source.orderName || source.designNumber || "item"}. Available: ${available} ${qtyUnit}.`);
+      }
+
+      const unitPrice = Number(source.unitPrice || 0);
+      const discountRate = Number(requested.discountRate ?? order.discountRate ?? 0);
+      const taxRate = Number(requested.taxRate ?? order.taxPercentage ?? 0);
+      if (unitPrice < 0) throw new Error("Invoice contains an invalid item rate.");
+      if (discountRate < 0 || discountRate > 100) throw new Error("Invalid discount rate.");
+      if (taxRate < 0 || taxRate > 100) throw new Error("Invalid tax rate.");
+
+      const calculated = calculateLine({ quantity, unitPrice, discountRate, taxRate });
+      finalItems.push({
+        sourceSubOrderId: source._id,
+        productId: source.productId || null,
+        designNumber: source.designNumber || "",
+        orderName: source.orderName || "",
+        hsnCode: source.hsnCode ?? null,
+        qtyUnit,
+        quantity: qtyUnit === "MTR" ? 0 : quantity,
+        MTR: qtyUnit === "MTR" ? quantity : 0,
+        cut: Number(source.cut || 0),
+        shortPcs: Number(source.shortPcs || 0),
+        unitPrice,
+        discountRate,
+        taxRate,
+        ...calculated,
+      });
+
+      subtotal += calculated.lineTotalBeforeDiscount;
+      discountAmount += calculated.discountAmount;
+      taxableAmount += calculated.taxableAmount;
+      taxAmount += calculated.taxAmount;
     }
+
+    if (!finalItems.length) throw new Error("Enter a credit quantity for at least one item.");
+  } else {
+    const manualTaxable = Number(manualCredit?.taxableAmount || 0);
+    const manualTaxRate = Number(manualCredit?.taxRate ?? order.taxPercentage ?? 0);
+    if (manualTaxable <= 0) throw new Error("Enter a valid taxable credit amount.");
+    if (manualTaxRate < 0 || manualTaxRate > 100) throw new Error("Invalid manual credit tax rate.");
+
+    const manual = calculateManualCredit({ taxableAmount: manualTaxable, taxRate: manualTaxRate });
+    subtotal = manual.taxableAmount;
+    taxableAmount = manual.taxableAmount;
+    taxAmount = manual.taxAmount;
+  }
+
+  subtotal = round2(subtotal);
+  discountAmount = round2(discountAmount);
+  taxableAmount = round2(taxableAmount);
+  taxAmount = round2(taxAmount);
+
+  const beforeRound = round2(taxableAmount + taxAmount);
+  const grandTotal = Math.round(beforeRound);
+  const roundOff = round2(grandTotal - beforeRound);
+
+  if (grandTotal <= 0) throw new Error("Credit note total must be greater than zero.");
+  if (grandTotal > remainingCreditTotal + EPSILON) {
+    throw new Error(`Credit note amount cannot exceed the remaining invoice credit limit of ₹ ${remainingCreditTotal}.`);
+  }
+
+  const paymentTotal = (order.payments || []).reduce(
+    (sum, payment) => sum + (Number(payment.amount) || 0),
+    0
+  );
+
+  const oldAdjustment = excludeCreditNoteId
+    ? Number((await CreditNote.findById(excludeCreditNoteId)
+      .select("settlement.adjustmentAmount")
+      .session(session || null)
+      .lean())?.settlement?.adjustmentAmount || 0)
+    : 0;
+
+  const replacementDue = Math.max(
+    0,
+    round2(getOrderInvoiceTotal(order) - paymentTotal - Number(order.creditAppliedAmount || 0) + oldAdjustment)
+  );
+
+  const finalSettlement = calculateSettlement(settlement, grandTotal, replacementDue);
+
+  if (Boolean(stockAffecting) && (reason !== "Sales Return" || creditMode !== "ITEM")) {
+    throw new Error("Stock return is allowed only for item-based Sales Return credits.");
+  }
+
+  const inventoryMovements = [];
+  let inventoryStatus = "Not Applicable";
+
+  if (Boolean(stockAffecting)) {
+    let Product;
+    try { Product = require("../models/Product"); }
+    catch { throw new Error("Product model not found. Stock return cannot be enabled."); }
+
+    if (!Product.schema.path("quantity")) throw new Error("Product.quantity field was not found.");
+
+    for (const item of finalItems) {
+      if (!item.productId) throw new Error(`Product mapping is missing for ${item.orderName || item.designNumber || "an invoice item"}.`);
+      const stockQty = item.qtyUnit === "MTR" ? Number(item.MTR || 0) : Number(item.quantity || 0);
+      if (stockQty <= 0) continue;
+
+      const product = await Product.findById(item.productId)
+        .select("_id quantity")
+        .session(session || null)
+        .lean();
+      if (!product) throw new Error(`Product not found for ${item.orderName || item.designNumber || "item"}.`);
+
+      inventoryMovements.push({ productId: item.productId, unit: item.qtyUnit, quantity: stockQty });
+    }
+
+    inventoryStatus = "Processed";
+  }
+
+  const settled = round2(
+    finalSettlement.adjustmentAmount +
+    finalSettlement.refundAmount +
+    finalSettlement.customerCreditAmount
+  );
+
+  return {
+    invoiceTotal, finalItems, subtotal, discountAmount, taxableAmount, taxAmount,
+    roundOff, grandTotal, finalSettlement, settled, inventoryStatus, inventoryMovements,
+  };
+}
+
+/** PUT /api/credit-notes/:id */
+router.put("/:id", auth, async (req, res) => {
+  const userId = getAuthenticatedUserId(req);
+  if (!userId) return res.status(401).json({ message: "Authentication required." });
+  if (!mongoose.isValidObjectId(req.params.id)) {
+    return res.status(400).json({ message: "Invalid credit note ID." });
+  }
+
+  const transactional = isReplicaSetAvailable();
+  const session = transactional ? await mongoose.startSession() : null;
+
+  try {
+    if (session) session.startTransaction();
 
     const note = await CreditNote.findOne({
       _id: req.params.id,
-      createdBy: req.user.id,
+      createdBy: userId,
+    }).session(session);
+
+    if (!note) throw new Error("Credit note not found.");
+    if (note.status !== "Posted") throw new Error("Only posted Credit Notes can be edited.");
+
+    // The original invoice link is kept fixed because the document is an issued
+    // financial reference. All Credit Note content, amounts, quantities and
+    // settlement information can be changed and are recalculated server-side.
+    const order = await Order.findOne({
+      _id: note.originalOrderId,
+      createdBy: userId,
+    }).session(session);
+    if (!order) throw new Error("Original invoice no longer exists.");
+
+    const dateValue = req.body?.creditNoteDate !== undefined
+      ? new Date(req.body.creditNoteDate)
+      : new Date(note.creditNoteDate);
+    if (Number.isNaN(dateValue.getTime())) throw new Error("Invalid credit note date.");
+
+    const number = String(req.body?.creditNoteNumber ?? note.creditNoteNumber ?? "").trim().toUpperCase();
+    if (!number) throw new Error("Credit Note number is required.");
+    if (number.length > 16) throw new Error("Credit Note number cannot exceed 16 characters.");
+
+    const duplicate = await CreditNote.findOne({
+      creditNoteNumber: number,
+      _id: { $ne: note._id },
+    }).session(session).lean();
+    if (duplicate) throw new Error("Credit Note number already exists.");
+
+    const reason = req.body?.reason ?? note.reason;
+    const creditMode = req.body?.creditMode ?? note.creditMode;
+    const stockAffecting = req.body?.stockAffecting !== undefined
+      ? Boolean(req.body.stockAffecting)
+      : Boolean(note.stockAffecting);
+
+    const settlement = req.body?.settlement || {
+      adjustmentType: note.settlement?.adjustmentType || "Outstanding",
+      adjustmentAmount: Number(note.settlement?.adjustmentAmount || 0),
+      refundMethod: note.settlement?.refundMethod || null,
+      refundAmount: Number(note.settlement?.refundAmount || 0),
+      customerCreditAmount: Number(note.settlement?.customerCreditAmount || 0),
+    };
+
+    const manualCredit = req.body?.manualCredit || {
+      taxableAmount: Number(note.manualCredit?.taxableAmount || 0),
+      taxRate: Number(note.manualCredit?.taxRate ?? order.taxPercentage ?? 0),
+    };
+
+    const requestedItems = Array.isArray(req.body?.items)
+      ? req.body.items
+      : (note.items || []).map(item => ({
+          sourceSubOrderId: item.sourceSubOrderId,
+          quantity: item.quantity,
+          MTR: item.MTR,
+          discountRate: item.discountRate,
+          taxRate: item.taxRate,
+        }));
+
+    const prepared = await prepareCreditNoteUpdate({
+      order, reason, creditMode, items: requestedItems, manualCredit,
+      stockAffecting, settlement, excludeCreditNoteId: note._id, session,
     });
 
-    if (!note) return res.status(404).json({ message: "Credit note not found." });
-    if (note.status === "Cancelled") {
-      return res.status(400).json({ message: "Cancelled credit notes cannot be edited." });
-    }
+    const oldAdjustment = Number(note.settlement?.adjustmentAmount || 0);
+    const oldCustomerCredit = Number(note.settlement?.customerCreditAmount || 0);
 
-    if (req.body?.creditNoteDate !== undefined) {
-      const date = new Date(req.body.creditNoteDate);
-      if (Number.isNaN(date.getTime())) {
-        return res.status(400).json({ message: "Invalid credit note date." });
+    // Reverse old stock/customer-credit effects only after the replacement
+    // content has passed every validation above.
+    if (note.stockAffecting && note.inventoryMovements?.length) {
+      const Product = require("../models/Product");
+      for (const movement of note.inventoryMovements) {
+        const updated = await Product.findByIdAndUpdate(
+          movement.productId,
+          { $inc: { quantity: -Number(movement.quantity || 0) } },
+          { new: true, session }
+        );
+        if (!updated) throw new Error("A stock product no longer exists.");
+        if (Number(updated.quantity || 0) < -EPSILON) {
+          throw new Error("Editing this Credit Note would make stock negative.");
+        }
       }
-      note.creditNoteDate = date;
     }
 
-    if (req.body?.reason !== undefined) {
-      if (note.stockAffecting && req.body.reason !== "Sales Return") {
-        return res.status(400).json({ message: "A credit note with a stock return must keep the Sales Return reason." });
+    if (oldCustomerCredit > 0) {
+      const Client = require("../models/Client");
+      if (!Client.schema.path("creditBalance")) {
+        throw new Error("Client.creditBalance is required for this Credit Note.");
       }
-      if (!REASONS.includes(req.body.reason)) {
-        return res.status(400).json({ message: "Invalid credit note reason." });
+      const updatedClient = await Client.findByIdAndUpdate(
+        note.clientId,
+        { $inc: { creditBalance: -oldCustomerCredit } },
+        { new: true, session }
+      );
+      if (!updatedClient) throw new Error("Customer for this Credit Note no longer exists.");
+    }
+
+    order.creditAppliedAmount = Math.max(
+      0,
+      round2(Number(order.creditAppliedAmount || 0) - oldAdjustment)
+    );
+
+    if (prepared.finalSettlement.customerCreditAmount > 0) {
+      const Client = require("../models/Client");
+      if (!order.clientId) throw new Error("Customer credit requires an invoice client.");
+      if (!Client.schema.path("creditBalance")) {
+        throw new Error("Client.creditBalance is required for customer credit settlement.");
       }
-      note.reason = req.body.reason;
+      const updatedClient = await Client.findByIdAndUpdate(
+        order.clientId,
+        { $inc: { creditBalance: prepared.finalSettlement.customerCreditAmount } },
+        { new: true, session }
+      );
+      if (!updatedClient) throw new Error("Customer for this Credit Note no longer exists.");
     }
 
-    if (req.body?.note !== undefined) {
-      note.note = String(req.body.note || "").trim().slice(0, 1000);
+    order.creditAppliedAmount = round2(
+      Number(order.creditAppliedAmount || 0) +
+      prepared.finalSettlement.adjustmentAmount
+    );
+
+    if (prepared.inventoryMovements.length) {
+      const Product = require("../models/Product");
+      for (const movement of prepared.inventoryMovements) {
+        const updated = await Product.findByIdAndUpdate(
+          movement.productId,
+          { $inc: { quantity: Number(movement.quantity || 0) } },
+          { new: true, session }
+        );
+        if (!updated) throw new Error("A stock product no longer exists.");
+      }
     }
 
-    await note.save();
+    await order.save(session ? { session } : undefined);
+
+    note.creditNoteNumber = number;
+    note.creditNoteDate = dateValue;
+    note.reason = reason;
+    note.creditMode = creditMode;
+    note.stockAffecting = stockAffecting;
+    note.inventoryStatus = prepared.inventoryStatus;
+    note.inventoryMovements = prepared.inventoryMovements;
+    note.settlement = prepared.finalSettlement;
+    note.items = prepared.finalItems;
+    note.totals = {
+      subtotal: prepared.subtotal,
+      discountAmount: prepared.discountAmount,
+      taxableAmount: prepared.taxableAmount,
+      taxAmount: prepared.taxAmount,
+      roundOff: prepared.roundOff,
+      grandTotal: prepared.grandTotal,
+    };
+    note.originalInvoiceTotal = prepared.invoiceTotal;
+    note.manualCredit = creditMode === "AMOUNT"
+      ? {
+          taxableAmount: prepared.taxableAmount,
+          taxRate: Number(manualCredit?.taxRate ?? order.taxPercentage ?? 0),
+          taxAmount: prepared.taxAmount,
+        }
+      : {
+          taxableAmount: 0,
+          taxRate: Number(order.taxPercentage || 0),
+          taxAmount: 0,
+        };
+    note.settlementStatus =
+      prepared.settled >= prepared.grandTotal - EPSILON ? "Settled" : "Partially Settled";
+    note.note = String(req.body?.note ?? note.note ?? "").trim().slice(0, 1000);
+
+    await note.save(session ? { session } : undefined);
+    if (session) await session.commitTransaction();
+
+    await syncClientData(order.clientId);
 
     const updated = await CreditNote.findById(note._id)
       .populate(
@@ -1132,14 +1448,20 @@ router.put("/:id", auth, async (req, res) => {
       .lean();
 
     return res.json({
-      message: "Credit note updated successfully.",
+      message: "Credit Note updated successfully.",
       creditNote: { ...updated, originalOrder: updated?.originalOrderId },
     });
   } catch (error) {
+    if (session) {
+      try { if (session.inTransaction()) await session.abortTransaction(); } catch {}
+    }
     console.error("Credit note update error:", error);
-    return res.status(400).json({ message: error.message || "Unable to update credit note." });
+    return res.status(400).json({ message: error.message || "Unable to update Credit Note." });
+  } finally {
+    if (session) await session.endSession();
   }
 });
+
 
 async function cancelCreditNote(req, res) {
   const userId = getAuthenticatedUserId(req);

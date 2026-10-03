@@ -162,7 +162,7 @@ export default function DynamicTable({
     if(column.kind==="merged"){
       return column.sourceKeys
         .map(sourceKey=>{
-          const value=displayValue(getValue(row,sourceKey));
+          let value=displayValue(getValue(row,sourceKey));
           const sourceColumn=findBaseColumn(sourceKey);
           if(sourceColumn?.format)value=sourceColumn.format(value,row,rowIndex);
           return value;

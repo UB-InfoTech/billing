@@ -19,6 +19,7 @@ import { saveAs } from 'file-saver';
 import 'react-date-picker/dist/DatePicker.css';
 import 'react-calendar/dist/Calendar.css';
 import infoSVG from '../assets/info.svg';
+import DynamicTable from "../components/DynamicTable";
 
 // Register Chart.js components
 ChartJS.register(
@@ -699,29 +700,20 @@ const SalesAnalytics = () => {
                   <div className="mt-3 p-3 bg-light rounded shadow">
                     <h5 className="text-center mb-3">{selectedState} Details</h5>
                     {stateData[selectedState] ? (
-                      <table className="table table-striped table-hover">
-                        <thead>
-                          <tr>
-                            <th>City</th>
-                            <th>Order Count</th>
-                            <th>Total Sales</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {Object.entries(stateData[selectedState].cities || {}).map(([city, count]) => (
-                            <tr key={city}>
-                              <td>{city || 'Unknown'}</td>
-                              <td>{count}</td>
-                              <td>
-                                ₹{allOrders
-                                  .filter(o => o.State === selectedState && o.City === city)
-                                  .reduce((sum, o) => sum + (o.roundOffFinalRevenue || 0), 0)
-                                  .toFixed(2)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                      <DynamicTable
+                          tableKey="sales-analytics.state-cities"
+                          rows={Object.entries(stateData[selectedState].cities || {}).map(([city,count])=>({
+                            city:city||"Unknown",
+                            orderCount:count,
+                            totalSales:allOrders.filter(o=>o.State===selectedState&&o.City===city).reduce((sum,o)=>sum+Number(o.roundOffFinalRevenue||0),0)
+                          }))}
+                          getRowKey={row=>row.city}
+                          columns={[
+                            {key:"city",label:"City"},
+                            {key:"orderCount",label:"Order Count"},
+                            {key:"totalSales",label:"Total Sales",render:row=>`₹${Number(row.totalSales||0).toFixed(2)}`}
+                          ]}
+                        />
                     ) : (
                       <p className="text-center">No data available for {selectedState}</p>
                     )}
@@ -802,75 +794,23 @@ const SalesAnalytics = () => {
 
                 {/* Table */}
                 <div className="table-responsive">
-                  <table className="table table-striped table-hover">
-                    <thead>
-                      <tr>
-                        <th>
-                          <input
-                            type="checkbox"
-                            checked={selectedOrders.length === filteredOrders.length && filteredOrders.length > 0}
-                            onChange={toggleSelectAll}
-                          />
-                        </th>
-                        <th onClick={() => handleSort('orderDate')} style={{ cursor: 'pointer' }}>
-                          Date {sortField === 'orderDate' && (sortDirection === 'asc' ? '↑' : '↓')}
-                        </th>
-                        <th onClick={() => handleSort('orderNumber')} style={{ cursor: 'pointer' }}>
-                          Bill No. {sortField === 'orderNumber' && (sortDirection === 'asc' ? '↑' : '↓')}
-                        </th>
-                        {/* <th onClick={() => handleSort('orderName')} style={{ cursor: 'pointer' }}>
-                          Order Name {sortField === 'orderName' && (sortDirection === 'asc' ? '↑' : '↓')}
-                        </th> */}
-                        <th onClick={() => handleSort('status')} style={{ cursor: 'pointer' }}>
-                          Status {sortField === 'status' && (sortDirection === 'asc' ? '↑' : '↓')}
-                        </th>
-                        <th onClick={() => handleSort('roundOffFinalRevenue')} style={{ cursor: 'pointer' }}>
-                          Revenue {sortField === 'roundOffFinalRevenue' && (sortDirection === 'asc' ? '↑' : '↓')}
-                        </th>
-                        {/* <th>Address</th> */}
-                        <th>State</th>
-                        {/* <th>City</th> */}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {currentOrders.length > 0 ? (
-                        currentOrders.map(order => (
-                          <tr key={order._id}>
-                            <td>
-                              <input
-                                type="checkbox"
-                                checked={selectedOrders.includes(order._id)}
-                                onChange={() => toggleSelectOrder(order._id)}
-                              />
-                            </td>
-                            <td>{new Date(order.orderDate).toLocaleDateString()}</td>
-                            <td>{order.orderNumber || 'N/A'}</td>
-                            {/* <td>{order.orderName || 'N/A'}</td> */}
-                            <td>
-                              <span
-                                className={`badge ${order.status === 'Pending' ? 'bg-warning' :
-                                  order.status === 'In Process' ? 'bg-info' :
-                                    order.status === 'Completed' ? 'bg-success' :
-                                      order.status === 'Cancelled' ? 'bg-danger' :
-                                        'bg-primary'
-                                  }`}
-                              >
-                                {order.status}
-                              </span>
-                            </td>
-                            <td>₹{order.roundOffFinalRevenue || 0}</td>
-                            {/* <td>{order.Address || 'N/A'}</td> */}
-                            <td>{order.State || 'N/A'}</td>
-                            {/* <td>{order.City || 'N/A'}</td> */}
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan="7" className="text-center">No orders match the filters</td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+                  <DynamicTable
+                    tableKey="sales-analytics.orders"
+                    rows={currentOrders}
+                    getRowKey={order=>order._id}
+                    selectable
+                    selectedIds={selectedOrders}
+                    onToggleRow={id=>toggleSelectOrder(id)}
+                    onToggleAll={()=>toggleSelectAll()}
+                    onSort={handleSort}
+                    columns={[
+                      {key:"orderDate",label:"Date",render:order=>order.orderDate?new Date(order.orderDate).toLocaleDateString():""},
+                      {key:"orderNumber",label:"Bill No."},
+                      {key:"status",label:"Status",render:order=><span className={`badge ${order.status==="Pending"?"bg-warning":order.status==="In Process"?"bg-info":order.status==="Completed"?"bg-success":order.status==="Cancelled"?"bg-danger":"bg-primary"}`}>{order.status}</span>},
+                      {key:"roundOffFinalRevenue",label:"Revenue",render:order=>`₹${Number(order.roundOffFinalRevenue||0).toFixed(2)}`},
+                      {key:"State",label:"State",render:order=>order.State||"N/A"},
+                    ]}
+                  />
                 </div>
 
                 {/* Pagination */}
@@ -933,39 +873,18 @@ const SalesAnalytics = () => {
                 />
               </div>
               {modalData.orders.length > 0 ? (
-                <table className="table table-striped">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Bill No.</th>
-                      <th>Client</th>
-                      <th>Revenue</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {modalData.orders
-                      .filter(order =>
-                        // order.orderName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase())
-                      )
-                      .map(order => (
-
-                        <tr key={order._id}>
-                          <td>{new Date(order.orderDate).toLocaleDateString()}</td>
-                          <td>{order.orderNumber}</td>
-                          <td>{order.companyName}</td>
-                          <td>₹{order.roundOffFinalRevenue}</td>
-                        </tr>
-                      ))}
-                    <tr>
-                      <td colSpan={1} className='text-end fw-bold'>Total: </td>
-                      <td colSpan={2}></td>
-                      <td colSpan={1} className="text-start fw-bold">₹{modalData.orders.filter(order =>
-                        order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase())
-                      ).reduce((sum, p) => sum + parseFloat(p.roundOffFinalRevenue), 0)}</td>
-                    </tr>
-                  </tbody>
-                </table>
+                <DynamicTable
+                      tableKey="sales-analytics.period-orders"
+                      rows={(modalData.orders||[]).filter(order=>order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()))}
+                      getRowKey={order=>order._id}
+                      columns={[
+                        {key:"orderDate",label:"Date",render:order=>order.orderDate?new Date(order.orderDate).toLocaleDateString():""},
+                        {key:"orderNumber",label:"Bill No."},
+                        {key:"companyName",label:"Client"},
+                        {key:"roundOffFinalRevenue",label:"Revenue",render:order=>`₹${Number(order.roundOffFinalRevenue||0).toFixed(2)}`},
+                      ]}
+                      footer={({visibleColumnCount})=><tr><td colSpan={Math.max(1,visibleColumnCount-1)} className="text-end fw-bold">Total:</td><td className="fw-bold">₹{(modalData.orders||[]).filter(order=>order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase())).reduce((sum,p)=>sum+Number(p.roundOffFinalRevenue||0),0).toFixed(2)}</td></tr>}
+                    />
               ) : (
                 <p>No orders available for this period.</p>
               )}

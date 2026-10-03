@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import "bootstrap/dist/css/bootstrap.min.css";
+import DynamicTable from "../components/DynamicTable";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
@@ -768,25 +769,36 @@ export default function CreditNote() {
                                 <div className="col-xl-2 col-lg-2"><button className="btn btn-outline-secondary w-100" onClick={() => setFilters({ search: "", reason: "", status: "", from: "", to: "", page: 1 })}>Reset Filters</button></div>
                             </div>
 
-                            <div className="table-responsive">
-                                <table className="table table-bordered table-hover align-middle mb-0">
-                                    <thead className="table-light"><tr><th>CN No.</th><th>Date</th><th>Invoice</th><th>Client</th><th>Reason</th><th>Status</th><th className="text-end">Total</th><th className="text-end">Adjustment</th><th className="text-end">Refund</th><th className="text-end no-print">Actions</th></tr></thead>
-                                    <tbody>
-                                        {loading ? <tr><td colSpan="10" className="text-center py-5"><span className="spinner-border spinner-border-sm me-2" />Loading...</td></tr> : creditNotes.length === 0 ? <tr><td colSpan="10" className="text-center py-5 text-muted">No Credit Notes found.</td></tr> : creditNotes.map((note) => <tr key={note._id}>
-                                            <td className="fw-semibold">{note.creditNoteNumber}</td>
-                                            <td>{formatDate(note.creditNoteDate)}</td>
-                                            <td>{note.originalInvoiceNumber || note.originalOrder?.orderNumber || "-"}</td>
-                                            <td>{note.companyName || "-"}</td>
-                                            <td>{note.reason}</td>
-                                            <td><span className={`badge ${note.status === "Cancelled" ? "text-bg-danger" : "text-bg-success"}`}>{note.status}</span></td>
-                                            <td className="text-end">{money(note?.totals?.grandTotal)}</td>
-                                            <td className="text-end">{money(note?.settlement?.adjustmentAmount)}</td>
-                                            <td className="text-end">{money(note?.settlement?.refundAmount)}</td>
-                                            <td className="text-end no-print"><div className="btn-group btn-group-sm"><button className="btn btn-outline-primary" onClick={() => openNote(note._id)}>View</button><button className="btn btn-outline-secondary" onClick={async () => { setPreviewNote(note); setView("preview"); }} title="Open Credit Note">Print</button>{note.status === "Posted" && <button className="btn btn-outline-warning" onClick={() => startEditNote(note)}>Edit</button>}{note.status === "Posted" && <button className="btn btn-outline-danger" disabled={cancellingId === note._id} onClick={() => deleteNote(note._id)}>{cancellingId === note._id ? "..." : "Cancel"}</button>}</div></td>
-                                        </tr>)}
-                                    </tbody>
-                                </table>
-                            </div>
+                                                        <DynamicTable
+                                tableKey="credit-notes.list"
+                                rows={creditNotes}
+                                getRowKey={note=>note._id}
+                                loading={loading}
+                                emptyText="No Credit Notes found."
+                                columns={[
+                                    {key:"creditNoteNumber",label:"CN No."},
+                                    {key:"creditNoteDate",label:"Date",render:note=>formatDate(note.creditNoteDate)},
+                                    {key:"originalInvoiceNumber",label:"Invoice",render:note=>note.originalInvoiceNumber||note.originalOrder?.orderNumber||"-"},
+                                    {key:"companyName",label:"Client",render:note=>note.companyName||"-"},
+                                    {key:"reason",label:"Reason"},
+                                    {key:"status",label:"Status",render:note=><span className={`badge ${note.status==="Cancelled"?"text-bg-danger":"text-bg-success"}`}>{note.status}</span>},
+                                    {key:"totals.grandTotal",label:"Total",render:note=>money(note?.totals?.grandTotal)},
+                                    {key:"settlement.adjustmentAmount",label:"Adjustment",render:note=>money(note?.settlement?.adjustmentAmount)},
+                                    {key:"settlement.refundAmount",label:"Refund",render:note=>money(note?.settlement?.refundAmount)},
+                                ]}
+                                actionColumn={{
+                                    label:"Actions",
+                                    locked:true,
+                                    render:note=>(
+                                        <div className="btn-group btn-group-sm">
+                                            <button className="btn btn-outline-primary" onClick={()=>openNote(note._id)}>View</button>
+                                            <button className="btn btn-outline-secondary" onClick={async()=>{setPreviewNote(note);setView("preview");}}>Print</button>
+                                            {note.status==="Posted"&&<button className="btn btn-outline-warning" onClick={()=>startEditNote(note)}>Edit</button>}
+                                            {note.status==="Posted"&&<button className="btn btn-outline-danger" disabled={cancellingId===note._id} onClick={()=>deleteNote(note._id)}>{cancellingId===note._id?"...":"Cancel"}</button>}
+                                        </div>
+                                    )
+                                }}
+                            />
 
                             <div className="d-flex justify-content-between align-items-center mt-3 no-print">
                                 <small className="text-muted">Total records: {pagination.total || 0}</small>

@@ -1260,15 +1260,23 @@ const styles = {
                                 </div>
                             )
                         }}
-                        footer={({visibleColumnCount})=>(
-                            <tr>
-                                <td colSpan={Math.max(1,visibleColumnCount-3)} className="text-end fw-bold">Total:</td>
-                                <td className="fw-bold">₹{sortedData.reduce((sum,order)=>sum+Number(order.roundOffFinalRevenue||0),0).toFixed(2)}</td>
-                                <td className="fw-bold">₹{sortedData.reduce((sum,order)=>sum+Number(order.paidAmount||0),0).toFixed(2)}</td>
-                                <td className="fw-bold">₹{sortedData.reduce((sum,order)=>sum+Number(order.dueAmount||0),0).toFixed(2)}</td>
-                                <td></td>
-                            </tr>
-                        )}
+                        footer={({visibleColumns,hasActions})=>{
+                            const totals={
+                                roundOffFinalRevenue:sortedData.reduce((sum,item)=>sum+Number(item.roundOffFinalRevenue||0),0).toFixed(2),
+                                paidAmount:sortedData.reduce((sum,item)=>sum+Number(item.paidAmount||0),0).toFixed(2),
+                                dueAmount:sortedData.reduce((sum,item)=>sum+Number(item.dueAmount||0),0).toFixed(2)
+                            };
+                            return (
+                                <tr>
+                                    {visibleColumns.map((column,index)=>(
+                                        <td key={column.key} className={totals[column.key]?"fw-bold":index===0?"text-end fw-bold":""}>
+                                            {totals[column.key] ? "₹"+totals[column.key] : index===0 ? "Total:" : ""}
+                                        </td>
+                                    ))}
+                                    {hasActions&&<td></td>}
+                                </tr>
+                            );
+                        }}
                     />
 
                     {/* Pagination */}
@@ -1953,12 +1961,19 @@ const styles = {
                                                 </div>
                                             )
                                         }}
-                                        footer={({visibleColumnCount})=>(
-                                            <tr>
-                                                <td colSpan={Math.max(1,visibleColumnCount-1)} className="text-end fw-bold">Total:</td>
-                                                <td className="fw-bold">₹{payments.reduce((sum,p)=>sum+Number(p.amount||0),0).toFixed(2)}</td>
-                                            </tr>
-                                        )}
+                                        footer={({visibleColumns,hasActions})=>{
+                                            const total=payments.reduce((sum,p)=>sum+Number(p.amount||0),0).toFixed(2);
+                                            return (
+                                                <tr>
+                                                    {visibleColumns.map((column,index)=>(
+                                                        <td key={column.key} className={column.key==="amount"?"fw-bold":index===0?"text-end fw-bold":""}>
+                                                            {column.key==="amount" ? "₹"+total : index===0 ? "Total:" : ""}
+                                                        </td>
+                                                    ))}
+                                                    {hasActions&&<td></td>}
+                                                </tr>
+                                            );
+                                        }}
                                     />
 
                                     {editPayment && (

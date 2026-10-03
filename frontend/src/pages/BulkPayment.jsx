@@ -500,7 +500,6 @@ const AllocationPreview = React.memo(({
           {key:"remaining",label:"Remaining",render:allocation=><span className={allocation.remaining<0?"text-danger":allocation.remaining>0?"text-warning":"text-success"}>₹{Number(allocation.remaining||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>},
         ]}
       />
-      </div>
 
       <div className="d-flex justify-content-between">
         <strong>Total Payment Due: ₹{totalDue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>

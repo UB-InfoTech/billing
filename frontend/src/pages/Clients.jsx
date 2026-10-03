@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import axios from 'axios';
 import editSVG from '../assets/edit.svg';
 import deleteSVG from '../assets/delete.svg';
+import DynamicTable from '../components/DynamicTable';
 import * as XLSX from 'xlsx';
 
 function Clients() {
@@ -494,73 +495,47 @@ function Clients() {
             </div>
 
             {/* Table */}
-            <div className="table-responsive">
-              <table className="table table-bordered table-striped table-hover">
-                <thead className="">
-                  <tr>
-                    <th>#</th>
-                    {[
-                      ['companyName', 'Name'],
-                      ['phone', 'Phone'],
-                      ['address', 'Address'],
-                      ['gstNumber', 'Gst No.'],
-                      ['businessType', 'Business Type'],
-                      ['paymentTerms', 'Payment Terms'],
-                      ['discountRate', 'Dis%'],
-                      ['orderCount', 'Order'],
-                      ['totalRevenue', 'Total Revenue'],
-                      ['accountStatus', 'A/C Status'],
-                      ['notes', 'notes'],
-                    ].map(([key, label]) => (
-                      <th key={key} onClick={() => handleSort(key)} style={{ cursor: 'pointer' }}>
-                        {label} {sortKey === key && (sortClient === 'asc' ? '↑' : '↓')}
-                      </th>
-                    ))}
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {/* {currentClients.map((client, index) => ( */}
-                  {sortedData.map((client, index) => (
-                    <tr key={client._id}>
-                      <td>{index + 1}</td>
-                      {/* <td>{client.name}</td> */}
-                      <td>{client.companyName}</td>
-                      <td>{client.phone}</td>
-                      <td>{client.address}</td>
-                      <td>{client.gstNumber}</td>
-                      <td>{client.businessType}</td>
-                      <td>{client.paymentTerms} {client.paymentTerms !== 'Advance' && 'days'}</td>
-                      <td>{client.discountRate} %</td>
-                      <td>{client.orderCount}</td>
-                      <td>{client.totalRevenue}</td>
-                      <td>
-                        <span className={`badge ${client.accountStatus === 'Active' ? 'bg-success' : 'bg-danger'}`}>
-                          {client.accountStatus}
-                        </span>
-                      </td>
-                      <td>{client.notes}</td>
-                      <td>
-                        <div className="d-flex gap-1">
-                          <button className="btn btn-warning btn-sm" onClick={() => handleEditClient(client)}>
-                            <img src={editSVG} alt="Edit" />
-                          </button>
-                          <button className="btn btn-danger btn-sm" onClick={() => handleDeleteClient(client._id)}>
-                            <img src={deleteSVG} alt="Delete" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  <tr>
-                    <td colSpan={2} className='text-end fw-bold'>Total: </td>
-                    <td colSpan={7}></td>
-                    <td colSpan={1} className="text-center fw-bold">₹{currentClients.reduce((sum, p) => sum + parseFloat(p.totalRevenue), 0)}</td>
-                    <td colSpan={3}></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <DynamicTable
+              tableKey="clients.list"
+              rows={sortedData}
+              getRowKey={client => client._id}
+              columns={[
+                { key:"__rowNumber", label:"#", locked:false, render:(_row,index)=>index+1 },
+                { key:"companyName", label:"Name", sortKey:"companyName" },
+                { key:"phone", label:"Phone", sortKey:"phone" },
+                { key:"address", label:"Address" },
+                { key:"gstNumber", label:"GST No." },
+                { key:"businessType", label:"Business Type", sortKey:"businessType" },
+                { key:"paymentTerms", label:"Payment Terms", render:client=>`${client.paymentTerms||""}${client.paymentTerms!=="Advance"&&client.paymentTerms?" days":""}` },
+                { key:"discountRate", label:"Dis%", render:client=>`${client.discountRate??0} %` },
+                { key:"orderCount", label:"Orders", sortKey:"orderCount" },
+                { key:"totalRevenue", label:"Total Revenue", sortKey:"totalRevenue", render:client=>`₹${Number(client.totalRevenue||0).toFixed(2)}` },
+                { key:"accountStatus", label:"A/C Status", render:client=><span className={`badge ${client.accountStatus==="Active"?"bg-success":"bg-danger"}`}>{client.accountStatus}</span> },
+                { key:"notes", label:"Notes" },
+              ]}
+              onSort={handleSort}
+              actionColumn={{
+                label:"Actions",
+                locked:true,
+                render:client=>(
+                  <div className="d-flex gap-1 justify-content-end">
+                    <button className="btn btn-warning btn-sm" onClick={()=>handleEditClient(client)} title="Edit">
+                      <img src={editSVG} alt="Edit" />
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={()=>handleDeleteClient(client._id)} title="Delete">
+                      <img src={deleteSVG} alt="Delete" />
+                    </button>
+                  </div>
+                )
+              }}
+              footer={({visibleColumnCount})=>(
+                <tr>
+                  <td colSpan={Math.max(1,visibleColumnCount-4)} className="text-end fw-bold">Total:</td>
+                  <td className="text-center fw-bold">₹{currentClients.reduce((sum,p)=>sum+Number(p.totalRevenue||0),0).toFixed(2)}</td>
+                  <td colSpan={5}></td>
+                </tr>
+              )}
+            />
 
             {/* Pagination */}
             <nav aria-label="Page navigation">

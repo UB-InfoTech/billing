@@ -883,7 +883,19 @@ const SalesAnalytics = () => {
                         {key:"companyName",label:"Client"},
                         {key:"roundOffFinalRevenue",label:"Revenue",render:order=>`₹${Number(order.roundOffFinalRevenue||0).toFixed(2)}`},
                       ]}
-                      footer={({visibleColumnCount})=><tr><td colSpan={Math.max(1,visibleColumnCount-1)} className="text-end fw-bold">Total:</td><td className="fw-bold">₹{(modalData.orders||[]).filter(order=>order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase())).reduce((sum,p)=>sum+Number(p.roundOffFinalRevenue||0),0).toFixed(2)}</td></tr>}
+                      footer={({visibleColumns})=>{
+                        const filteredModalOrders=(modalData.orders||[]).filter(order=>order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()));
+                        const total=filteredModalOrders.reduce((sum,p)=>sum+Number(p.roundOffFinalRevenue||0),0).toFixed(2);
+                        return (
+                          <tr>
+                            {visibleColumns.map((column,index)=>(
+                              <td key={column.key} className={column.key==="roundOffFinalRevenue"?"fw-bold":index===0?"text-end fw-bold":""}>
+                                {column.key==="roundOffFinalRevenue" ? "₹"+total : index===0 ? "Total:" : ""}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      }}
                     />
               ) : (
                 <p>No orders available for this period.</p>

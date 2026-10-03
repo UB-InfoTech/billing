@@ -926,36 +926,38 @@ export default function CreditNote() {
 
                                     {form.creditMode === "ITEM" && (
                                         <div className="table-responsive border rounded mb-3">
-                                            <table className="table table-sm table-bordered align-middle mb-0">
-                                                <thead className="table-light">
-                                                    <tr>
-                                                        <th>Design</th><th>Item</th><th>HSN</th><th>Unit</th><th>Invoice Qty</th><th>Previous Credit</th><th>Available</th><th style={{ minWidth: 125 }}>Credit Qty</th><th>Rate</th><th>Disc %</th><th>Tax %</th><th className="text-end">Taxable</th><th className="text-end">Tax</th><th className="text-end">Total</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {items.map((item, index) => (
-                                                        <tr key={item._id}>
-                                                            <td>{item.designNumber || "-"}</td>
-                                                            <td>{item.orderName || "-"}</td>
-                                                            <td>{item.hsnCode || "-"}</td>
-                                                            <td>{item.qtyUnit || "PCS"}</td>
-                                                            <td>{n(item.billedQuantity) > 0 ? n(item.billedQuantity).toFixed(2) : (n(item.availableCreditQty) + (item.qtyUnit === "MTR" ? n(item.previouslyCreditedMTR) : n(item.previouslyCreditedQuantity))).toFixed(2)}</td>
-                                                            <td>{item.qtyUnit === "MTR" ? n(item.previouslyCreditedMTR).toFixed(2) : n(item.previouslyCreditedQuantity).toFixed(2)}</td>
-                                                            <td className="fw-semibold text-success">{n(item.availableCreditQty).toFixed(2)}</td>
-                                                            <td>
-                                                                <input type="number" min="0" max={n(item.availableCreditQty)} step="0.01" className="form-control form-control-sm" value={item.qtyUnit === "MTR" ? item.creditMTR : item.creditQuantity} onChange={(e) => updateItem(index, item.qtyUnit === "MTR" ? "creditMTR" : "creditQuantity", e.target.value)} />
-                                                            </td>
-                                                            <td>{money(item.unitPrice)}</td>
-                                                            <td>{n(item.discountRate).toFixed(2)}</td>
-                                                            <td>{n(item.taxRate).toFixed(2)}</td>
-                                                            <td className="text-end">{money(item.taxable)}</td>
-                                                            <td className="text-end">{money(item.tax)}</td>
-                                                            <td className="text-end fw-semibold">{money(item.total)}</td>
-                                                        </tr>
-                                                    ))}
-                                                    {items.length === 0 && <tr><td colSpan="14" className="text-center py-5 text-muted">No creditable items found.</td></tr>}
-                                                </tbody>
-                                            </table>
+                                                                                        <DynamicTable
+                                                tableKey="credit-notes.items"
+                                                rows={items}
+                                                getRowKey={item=>item._id}
+                                                emptyText="No creditable items found."
+                                                columns={[
+                                                    {key:"designNumber",label:"Design",render:item=>item.designNumber||"-"},
+                                                    {key:"orderName",label:"Item",render:item=>item.orderName||"-"},
+                                                    {key:"hsnCode",label:"HSN",render:item=>item.hsnCode||"-"},
+                                                    {key:"qtyUnit",label:"Unit",render:item=>item.qtyUnit||"PCS"},
+                                                    {key:"billedQuantity",label:"Invoice Qty",render:item=>n(item.billedQuantity)>0?n(item.billedQuantity).toFixed(2):(n(item.availableCreditQty)+(item.qtyUnit==="MTR"?n(item.previouslyCreditedMTR):n(item.previouslyCreditedQuantity))).toFixed(2)},
+                                                    {key:"previouslyCreditedQuantity",label:"Previous Credit",render:item=>item.qtyUnit==="MTR"?n(item.previouslyCreditedMTR).toFixed(2):n(item.previouslyCreditedQuantity).toFixed(2)},
+                                                    {key:"availableCreditQty",label:"Available",render:item=><span className="fw-semibold text-success">{n(item.availableCreditQty).toFixed(2)}</span>},
+                                                    {key:"creditQuantity",label:"Credit Qty",locked:true,render:(item,index)=>(
+                                                        <input
+                                                            type="number"
+                                                            min="0"
+                                                            max={n(item.availableCreditQty)}
+                                                            step="0.01"
+                                                            className="form-control form-control-sm"
+                                                            value={item.qtyUnit==="MTR"?item.creditMTR:item.creditQuantity}
+                                                            onChange={e=>updateItem(index,item.qtyUnit==="MTR"?"creditMTR":"creditQuantity",e.target.value)}
+                                                        />
+                                                    )},
+                                                    {key:"unitPrice",label:"Rate",render:item=>money(item.unitPrice)},
+                                                    {key:"discountRate",label:"Disc %",render:item=>n(item.discountRate).toFixed(2)},
+                                                    {key:"taxRate",label:"Tax %",render:item=>n(item.taxRate).toFixed(2)},
+                                                    {key:"taxable",label:"Taxable",render:item=>money(item.taxable)},
+                                                    {key:"tax",label:"Tax",render:item=>money(item.tax)},
+                                                    {key:"total",label:"Total",render:item=>money(item.total)},
+                                                ]}
+                                            />
                                         </div>
                                     )}
 

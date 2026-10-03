@@ -1932,43 +1932,34 @@ const styles = {
                                     <button className="btn btn-primary" disabled={Number(editingOrder?.dueAmount || 0) <= 0 || !newPayment.amount} onClick={() => addPayment(editingOrder._id)}>Add Payment</button>
 
 
-                                    <table className="table">
-                                        <thead>
+                                                                        <DynamicTable
+                                        tableKey="orders.payments"
+                                        rows={payments}
+                                        getRowKey={payment=>payment._id}
+                                        columns={[
+                                            {key:"paymentDate",label:"Date",render:p=>new Date(p.paymentDate||p.createdAt).toLocaleDateString("en-IN")},
+                                            {key:"method",label:"Method"},
+                                            {key:"amount",label:"Amount",render:p=>`₹${Number(p.amount||0).toFixed(2)}`},
+                                            {key:"amountReference",label:"Reference"},
+                                        ]}
+                                        actionColumn={{
+                                            label:"Actions",
+                                            locked:true,
+                                            render:p=>(
+                                                <div className="d-flex gap-1 justify-content-end">
+                                                    <button className="btn btn-warning btn-sm" onClick={()=>setEditPayment(p)} title="Edit"><img src={editSVG} alt="Edit" /></button>
+                                                    <button className="btn btn-danger btn-sm" onClick={()=>deletePayment(p._id)} title="Delete"><img src={deleteSVG} alt="Delete" /></button>
+                                                    <button className="btn btn-info btn-sm" onClick={()=>printReceipt(p._id)} title="Receipt"><img src={receiptSVG} alt="Receipt" /></button>
+                                                </div>
+                                            )
+                                        }}
+                                        footer={({visibleColumnCount})=>(
                                             <tr>
-                                                <th>Date</th>
-                                                <th>Method</th>
-                                                <th>Amount</th>
-                                                <th>Reference</th>
-                                                <th>Actions</th>
+                                                <td colSpan={Math.max(1,visibleColumnCount-1)} className="text-end fw-bold">Total:</td>
+                                                <td className="fw-bold">₹{payments.reduce((sum,p)=>sum+Number(p.amount||0),0).toFixed(2)}</td>
                                             </tr>
-                                        </thead>
-                                        <tbody>
-                                            {payments.map((p) => (
-                                                <tr key={p._id}>
-                                                    <td>{new Date(p.paymentDate || p.createdAt).toLocaleDateString()}</td>
-                                                    <td>{p.method}</td>
-                                                    <td>{p.amount}</td>
-                                                    <td>{p.amountReference}</td>
-
-                                                    <td>
-                                                        {/* <button className="btn btn-warning btn-sm me-1" onClick={() => setEditPaymentModel(p)}>Edit</button> */}
-                                                        <button className="btn btn-warning btn-sm me-1" onClick={() => setEditPayment(p)}>
-                                                            <img src={editSVG} alt="Edit" />
-                                                        </button>
-                                                        <button className="btn btn-danger btn-sm mx-1" onClick={() => deletePayment(p._id)}>
-                                                            <img src={deleteSVG} alt="Delete" />
-                                                        </button>
-                                                        <button className="btn btn-info btn-sm" onClick={() => printReceipt(p._id)}>
-                                                            <img src={receiptSVG} alt="Receipt" />
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                            <tr>
-                                                <td colSpan="3" className="text-end fw-bold">Total: ₹{payments.reduce((sum, p) => sum + parseFloat(p.amount), 0)}</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                        )}
+                                    />
 
                                     {editPayment && (
                                         <div>

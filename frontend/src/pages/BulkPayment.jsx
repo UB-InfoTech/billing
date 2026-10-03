@@ -461,7 +461,6 @@ const OrdersTable = React.memo(({
           ]:[])
         ]}
       />
-      </div>
     </div>
   );
 });

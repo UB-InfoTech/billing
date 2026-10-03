@@ -41,7 +41,7 @@ const mergeSavedColumns=(baseColumns,savedColumns)=>{
     return{
       ...column,
       label:savedColumn.label||column.label,
-      visible:savedColumn.visible!==false,
+      visible:column.locked?true:savedColumn.visible!==false,
       order:Number.isFinite(Number(savedColumn.order))?Number(savedColumn.order):index,
       separator:savedColumn.separator??column.separator,
     };
@@ -49,20 +49,27 @@ const mergeSavedColumns=(baseColumns,savedColumns)=>{
 
   saved.forEach(column=>{
     if(!merged.some(item=>item.key===column.key)&&column.kind==="merged"){
+      const availableSources=new Set(base.map(item=>item.key));
+      const sourceKeys=(Array.isArray(column.sourceKeys)?column.sourceKeys:[]).filter(sourceKey=>availableSources.has(sourceKey));
+      if(sourceKeys.length<2)return;
       merged.push({
         key:column.key,
         label:column.label||column.key,
         visible:column.visible!==false,
         locked:false,
         kind:"merged",
-        sourceKeys:Array.isArray(column.sourceKeys)?column.sourceKeys:[],
+        sourceKeys,
         separator:column.separator??" ",
-        order:Number(column.order)||merged.length,
+        order:Number.isFinite(Number(column.order))?Number(column.order):merged.length,
       });
     }
   });
 
-  return merged.sort((a,b)=>(a.order??0)-(b.order??0)).map((column,index)=>({...column,order:index}));
+  const normalized=merged.sort((a,b)=>(a.order??0)-(b.order??0)).map((column,index)=>({...column,order:index}));
+  if(normalized.length&&!normalized.some(column=>column.visible!==false)){
+    normalized[0]={...normalized[0],visible:true};
+  }
+  return normalized;
 };
 
 const ColumnIcon=({column,onUp,onDown,onToggle,onRemove,isFirst,isLast})=>(
@@ -117,7 +124,7 @@ export default function DynamicTable({
   footer,
 }) {
   const [savedConfig,setSavedConfig]=useState(null);
-  const [draft,setDraft]=useState([]);
+  const [draft,setDraft]=useState(()=>cloneColumns(columns));
   const [loadingConfig,setLoadingConfig]=useState(true);
   const [saving,setSaving]=useState(false);
   const [showSettings,setShowSettings]=useState(false);
@@ -134,6 +141,7 @@ export default function DynamicTable({
         setLoadingConfig(true);
         const response=await axios.get(`${apiBase}/api/table-config/${encodeURIComponent(tableKey)}`,authConfig());
         if(cancelled)return;
+        setError("");
         setSavedConfig(response.data);
         setDraft(mergeSavedColumns(columns,response.data?.columns));
       }catch(loadError){
@@ -188,12 +196,18 @@ export default function DynamicTable({
   };
 
   const toggleColumn=(index)=>{
-    setDraft(prev=>prev.map((column,i)=>i===index?{...column,visible:!column.visible}:column));
+    setDraft(prev=>{
+      const target=prev[index];
+      if(!target||target.locked)return prev;
+      const visibleCount=prev.filter(column=>column.visible!==false).length;
+      if(target.visible!==false&&visibleCount<=1)return prev;
+      return prev.map((column,i)=>i===index?{...column,visible:!column.visible}:column);
+    });
   };
 
   const addMergedColumn=()=>{
     const label=mergedLabel.trim();
-    const sources=mergedSources.filter(Boolean);
+    const sources=[...new Set(mergedSources.filter(Boolean))];
     if(!label||sources.length<2)return;
     const key=`custom_${Date.now()}`;
     setDraft(prev=>[...prev,{
@@ -239,6 +253,7 @@ export default function DynamicTable({
       await axios.delete(`${apiBase}/api/table-config/${encodeURIComponent(tableKey)}`,authConfig());
       setSavedConfig(null);
       setDraft(cloneColumns(columns));
+      setError("");
       setShowSettings(false);
     }catch(resetError){
       setError(resetError.response?.data?.message||"Unable to reset table settings.");
@@ -257,7 +272,8 @@ export default function DynamicTable({
           type="button"
           className="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-2"
           onClick={()=>setShowSettings(true)}
-          title="Customize table"
+          disabled={loadingConfig}
+          title={loadingConfig?"Loading table settings...":"Customize table"}
         >
           <i className="bi bi-layout-three-columns"></i>
           Customize Columns
@@ -319,7 +335,12 @@ export default function DynamicTable({
           </tbody>
           {footer&&(
             <tfoot>
-              {footer({visibleColumns,visibleColumnCount:visibleColumns.length+(selectable?1:0)+(actionColumn?1:0)})}
+              {footer({
+                visibleColumns,
+                visibleColumnCount:visibleColumns.length+(selectable?1:0)+(actionColumn?1:0),
+                hasSelection:Boolean(selectable),
+                hasActions:Boolean(actionColumn)
+              })}
             </tfoot>
           )}
         </table>

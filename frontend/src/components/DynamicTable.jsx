@@ -125,6 +125,7 @@ export default function DynamicTable({
   const [mergedSources,setMergedSources]=useState([]);
   const [separator,setSeparator]=useState(" - ");
   const [error,setError]=useState("");
+  const baseColumnSignature=useMemo(()=>JSON.stringify(columns.map(column=>({key:column.key,label:column.label,locked:column.locked,kind:column.kind}))),[columns]);
 
   useEffect(()=>{
     let cancelled=false;
@@ -146,9 +147,7 @@ export default function DynamicTable({
     };
     load();
     return()=>{cancelled=true;};
-  },[tableKey,JSON.stringify(columns.map(column=>({
-    key:column.key,label:column.label,locked:column.locked,kind:column.kind
-  })))]);
+  },[tableKey,baseColumnSignature]);
 
   useEffect(()=>{
     if(!loadingConfig&&savedConfig==null)setDraft(cloneColumns(columns));

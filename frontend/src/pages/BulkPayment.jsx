@@ -487,32 +487,20 @@ const AllocationPreview = React.memo(({
         )}
       </div>
 
-      <div className="table-responsive" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-        <table className="table table-bordered mb-3">
-          <thead className="table-light sticky-top">
-            <tr>
-              <th scope="col">Bill No</th>
-              <th scope="col">Due Amount</th>
-              <th scope="col">Allocated</th>
-              <th scope="col">Remaining</th>
-            </tr>
-          </thead>
-          <tbody>
-            {allocatedPreview.map((allocation) => {
-              const remaining = parseDecimal(allocation.dueAmount - allocation.allocated);
-              return (
-                <tr key={allocation.orderId}>
-                  <td>{allocation.orderNumber}</td>
-                  <td>₹{allocation.dueAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td>₹{allocation.allocated.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                  <td className={remaining < 0 ? 'text-danger' : remaining > 0 ? 'text-warning' : 'text-success'}>
-                    ₹{remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+            <DynamicTable
+        tableKey="bulk-payments.allocation-preview"
+        rows={allocatedPreview.map(allocation=>({
+          ...allocation,
+          remaining:parseDecimal(allocation.dueAmount-allocation.allocated)
+        }))}
+        getRowKey={allocation=>allocation.orderId}
+        columns={[
+          {key:"orderNumber",label:"Bill No"},
+          {key:"dueAmount",label:"Due Amount",render:allocation=>`₹${Number(allocation.dueAmount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`},
+          {key:"allocated",label:"Allocated",render:allocation=>`₹${Number(allocation.allocated||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`},
+          {key:"remaining",label:"Remaining",render:allocation=><span className={allocation.remaining<0?"text-danger":allocation.remaining>0?"text-warning":"text-success"}>₹{Number(allocation.remaining||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}</span>},
+        ]}
+      />
       </div>
 
       <div className="d-flex justify-content-between">

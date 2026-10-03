@@ -114,6 +114,7 @@ export default function DynamicTable({
   onToggleAll,
   renderCell,
   actionColumn,
+  footer,
 }) {
   const [savedConfig,setSavedConfig]=useState(null);
   const [draft,setDraft]=useState([]);
@@ -317,6 +318,11 @@ export default function DynamicTable({
               ))
             )}
           </tbody>
+          {footer&&(
+            <tfoot>
+              {footer({visibleColumns,visibleColumnCount:visibleColumns.length+(selectable?1:0)+(actionColumn?1:0)})}
+            </tfoot>
+          )}
         </table>
       </div>
 

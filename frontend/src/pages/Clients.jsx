@@ -528,13 +528,19 @@ function Clients() {
                   </div>
                 )
               }}
-              footer={({visibleColumnCount})=>(
-                <tr>
-                  <td colSpan={Math.max(1,visibleColumnCount-4)} className="text-end fw-bold">Total:</td>
-                  <td className="text-center fw-bold">₹{currentClients.reduce((sum,p)=>sum+Number(p.totalRevenue||0),0).toFixed(2)}</td>
-                  <td colSpan={5}></td>
-                </tr>
-              )}
+              footer={({visibleColumns,hasActions})=>{
+                const totalRevenue=currentClients.reduce((sum,p)=>sum+Number(p.totalRevenue||0),0).toFixed(2);
+                return (
+                  <tr>
+                    {visibleColumns.map((column,index)=>(
+                      <td key={column.key} className={column.key==="totalRevenue"?"text-center fw-bold":index===0?"text-end fw-bold":""}>
+                        {column.key==="totalRevenue" ? "₹"+totalRevenue : index===0 ? "Total:" : ""}
+                      </td>
+                    ))}
+                    {hasActions&&<td></td>}
+                  </tr>
+                );
+              }}
             />
 
             {/* Pagination */}

@@ -8,6 +8,7 @@ import invoiceSVG from '../assets/invoice.svg';
 import receiptSVG from '../assets/receipt.svg';
 import 'bootstrap/dist/css/bootstrap.min.css'; // Ensure Bootstrap CSS is imported
 import EWayBillForm from "../components/EWayBillForm";
+import DynamicTable from "../components/DynamicTable";
 import * as XLSX from 'xlsx';
 import Report from '../components/Report';
 import { useReactToPrint } from "react-to-print";
@@ -1208,150 +1209,67 @@ const styles = {
                         </div>
                     </div>
                     {/* Table */}
-                    <div className="table-responsive">
-                        <table className="table table-striped table-bordered table-hover">
-                            <thead className="lh-sm">
-                                <tr>
-                                    <th>#</th>
-                                    {/* <th>Date</th>
-                                    {['Bill No', 'client', 'status', 'payment Status', 'qty', 'cut',
-                                        'unit Price', 'total Cost', 'paid Amount', 'due Amount'].map(key => (
-                                            <th key={key} onClick={() => handleSort(key === 'clientName' ? 'clientId' : key)} style={{ cursor: 'pointer' }}>
-                                                {key === 'clientName' ? 'Client' : key.charAt(0).toUpperCase() + key.slice(1)}
-                                                {getSortIcon(key === 'clientName' ? 'clientId' : key)}
-                                            </th>
-                                        ))}
-                                     */}
-
-                                    {/* <th onClick={() => handleSort('orderDate')} style={{ cursor: 'pointer' }}>
-                                        Date {sortKey === 'orderDate' && (sortOrder === 'asc' ? '▲' : '▼')}
-                                    </th> */}
-                                    {[
-                                        ['orderDate', 'Date'],
-                                        ['orderNumber', 'Bill No'],
-                                        ['challanNumber', 'challan No'],
-                                        ['companyName', 'Client'],
-                                        ['status', 'Status'],
-                                        ['paymentStatus', 'Payment Status'],
-                                        ['quantity', 'Qty'],
-                                        ['cut', 'Cut'],
-                                        ['unitPrice', 'Unit Price'],
-                                        ['totalCost', 'Total Cost'],
-                                        ['paidAmount', 'Paid Amount'],
-                                        ['dueAmount', 'Due Amount'],
-                                    ].map(([key, label]) => (
-                                        <th key={key} onClick={() => handleSort(key)} style={{ cursor: 'pointer' }}>
-                                            {label} {sortKey === key && (sortOrder === 'asc' ? '↑' : '↓')}
-                                        </th>
-                                    ))}
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {/* {currentOrders.map((order, index) => ( */}
-                                {sortedData.map((order, index) => (
-                                    <tr key={order._id}>
-                                        <td>{index + 1}</td>
-                                        {/* <td>{(order.createdAt)}</td> */}
-                                        <td>{new Date(order.orderDate).toLocaleDateString("en-IN", {
-                                            year: "numeric",
-                                            month: "2-digit",
-                                            day: "2-digit",
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                            second: "2-digit",
-                                        })}</td>
-                                        <td>{order.orderNumber}</td>
-                                        <td>{order.challanNumber}</td>
-                                        {/* <td>{clients.find(client => client._id === order.clientId)?.name}</td> */}
-                                        <td>{clients.find(client => client._id === order.clientId)?.companyName}</td>
-
-                                        <td>
-                                            <select
-                                                className="form-select w-auto"
-                                                value={order.status}
-                                                onChange={(e) => handleStatusChange(order._id, e.target.value)}
-                                            >
-                                                <option value="Pending">Pending</option>
-                                                <option value="In Process">In Process</option>
-                                                <option value="Cancelled">Cancelled</option>
-                                                <option value="Completed">Completed</option>
-                                                <option value="Dispatched">Dispatched</option>
-                                            </select>
-                                        </td>
-                                        <td>
-                                            <span className={`badge ${order.paymentStatus === 'Paid' ? 'bg-success' :
-                                                order.paymentStatus === 'Partial' ? 'bg-warning' : 'bg-danger'}`}>
-                                                {order.paymentStatus}
-                                            </span>
-                                        </td>
-
-                                        {/* <td>{order.subOrders.reduce((acc, subOrder) => acc + parseInt(subOrder.quantity), 0).toFixed(2) || 0}</td> */}
-                                        {/* <td>{(order.subOrders.reduce((acc, subOrder) => acc + parseFloat(subOrder.cut), 0).toFixed(2)) || 0}</td> */}
-                                        {/* <td>{(order.subOrders.reduce((acc, subOrder) => acc + parseInt(subOrder.unitPrice), 0) / order.subOrders.length).toFixed(2) || 0}</td> */}
-                                        <td>{order.subOrders.reduce((acc, subOrder) => acc + (Number(subOrder.quantity) || 0), 0).toFixed(2)}</td>
-                                        <td>{order.subOrders.reduce((acc, subOrder) => acc + (parseFloat(subOrder.cut) || 0), 0).toFixed(2)}</td>
-                                        <td>{order.subOrders.length > 0 ? (order.subOrders.reduce((acc, subOrder) => acc + (parseFloat(subOrder.unitPrice) || 0), 0) / order.subOrders.length).toFixed(2) : "0.00"}</td>
-                                        {/* <td>{order.totalCost}</td> */}
-                                        <td>{order.roundOffFinalRevenue}</td>
-                                        <td>{order.paidAmount}</td>
-                                        <td>{order.dueAmount}</td>
-
-                                        <td className="d-flex gap-1 h-auto">
-                                            <button className="btn btn-warning" onClick={() => handleEdit(order)}>
-                                                <img src={editSVG} alt="Edit" />
-                                            </button>
-                                            <button className="btn btn-info" onClick={() => handleStatus(order)}>
-                                                <img src={infoSVG} alt="Info" />
-                                            </button>
-                                            <button className="btn btn-success" onClick={() => handlePaymentEdit(order)} >
-                                                <img src={paymentsSVG} alt="Payment" />
-                                            </button>
-                                            <button className="btn btn-danger" onClick={() => handleDeleteOrder(order._id)}>
-                                                <img src={deleteSVG} alt="Delete" />
-                                            </button>
-                                            <button className="btn btn-primary" onClick={() => printInvoice(order)}>
-                                                <img src={invoiceSVG} alt="Invoice" />
-                                                {/* <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#1f1f1f"><path d="M120-80v-800l60 60 60-60 60 60 60-60 60 60 60-60 60 60 60-60 60 60 60-60 60 60 60-60v800l-60-60-60 60-60-60-60 60-60-60-60 60-60-60-60 60-60-60-60 60-60-60-60 60Zm120-200h480v-80H240v80Zm0-160h480v-80H240v80Zm0-160h480v-80H240v80Zm-40 404h560v-568H200v568Zm0-568v568-568Z" /></svg> */}
-                                            </button>
-                                            {/* Eway bill form */}
-                                            <button
-                                                className="btn btn-secondary btn-sm"
-                                                onClick={() => {
-                                                    setShowEwayBillModal(true);
-                                                    setOrderId(order._id);
-                                                }}
-                                                {...order.ewbDetails.ewbNo ? { disabled: true } : {}}
-                                            >
-                                                {/* <button className="btn btn-secondary" onClick={() => EWayBillForm(order._id)}> */}
-                                                {/* <img src={ewaybillSVG} alt="Eway Bill" /> */}
-                                                <p className="p-0 m-0">Eway</p>
-                                            </button>
-
-                                            {/* <button className="btn btn-secondary" onClick={() => printKachuBill(order._id)}>
-                                                <img src={invoiceSVG} alt="Invoice" />
-                                            </button> */}
-                                            {/* <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#1f1f1f"><path d="M120-80v-800l60 60 60-60 60 60 60-60 60 60 60-60 60 60 60-60 60 60 60-60 60 60 60-60v800l-60-60-60 60-60-60-60 60-60-60-60 60-60-60-60 60-60-60-60 60-60-60-60 60Zm120-200h480v-80H240v80Zm0-160h480v-80H240v80Zm0-160h480v-80H240v80Zm-40 404h560v-568H200v568Zm0-568v568-568Z" /></svg> */}
-                                        </td>
-                                    </tr>
-                                ))}
-                                <tr>
-                                    <td colSpan="3" className="text-end fw-bold">Total:</td>
-                                    <td colSpan={7}></td>
-                                    <td colSpan="1" className="fw-bold">₹{sortedData.reduce((sum, order) => sum + parseFloat(order.roundOffFinalRevenue), 0).toFixed(2)}</td>
-                                    <td colSpan="1" className="fw-bold">₹{sortedData.reduce((sum, order) => sum + parseFloat(order.paidAmount), 0).toFixed(2)}</td>
-                                    <td colSpan="1" className="fw-bold">₹{sortedData.reduce((sum, order) => sum + parseFloat(order.dueAmount), 0).toFixed(2)}</td>
-                                    <td colSpan={1}></td>
-                                    {/* <td colSpan="3" className="text-end fw-bold">Total: ₹{filteredOrders.reduce((sum, order) => sum + parseFloat(order.totalCost), 0)}</td> */}
-
-                                    {/* <td colSpan="3" className="text-end fw-bold">
-                                                    Total Paid: ₹{payments.reduce((sum, p) => sum + Number(p.amount || 0), 0).toFixed(2)}
-                                                    <div className="small text-danger fw-normal">Current Due: ₹{Number(editingOrder?.dueAmount || 0).toFixed(2)}</div>
-                                                </td> */}
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                    <DynamicTable
+                        tableKey="orders.list"
+                        rows={sortedData}
+                        getRowKey={order=>order._id}
+                        columns={[
+                            {key:"__rowNumber",label:"#",render:(_row,index)=>index+1},
+                            {key:"orderDate",label:"Date",render:order=>order.orderDate?new Date(order.orderDate).toLocaleDateString("en-IN"):""},
+                            {key:"orderNumber",label:"Bill No"},
+                            {key:"challanNumber",label:"Challan No"},
+                            {key:"companyName",label:"Client",render:order=>clients.find(client=>client._id===order.clientId)?.companyName||order.companyName||""},
+                            {key:"status",label:"Status",render:order=>(
+                                <select className="form-select form-select-sm" value={order.status||"Pending"} onChange={e=>handleStatusChange(order._id,e.target.value)}>
+                                    <option value="Pending">Pending</option>
+                                    <option value="In Process">In Process</option>
+                                    <option value="Cancelled">Cancelled</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Dispatched">Dispatched</option>
+                                </select>
+                            )},
+                            {key:"paymentStatus",label:"Payment Status",render:order=>(
+                                <span className={`badge ${order.paymentStatus==="Paid"?"bg-success":order.paymentStatus==="Partial"?"bg-warning":"bg-danger"}`}>
+                                    {order.paymentStatus||"Unpaid"}
+                                </span>
+                            )},
+                            {key:"quantity",label:"Qty",render:order=>(order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.quantity)||0),0).toFixed(2)},
+                            {key:"cut",label:"Cut",render:order=>(order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.cut)||0),0).toFixed(2)},
+                            {key:"unitPrice",label:"Unit Price",render:order=>(order.subOrders||[]).length?((order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.unitPrice)||0),0)/(order.subOrders||[]).length).toFixed(2):"0.00"},
+                            {key:"roundOffFinalRevenue",label:"Total Cost",render:order=>`₹${Number(order.roundOffFinalRevenue||0).toFixed(2)}`},
+                            {key:"paidAmount",label:"Paid Amount",render:order=>`₹${Number(order.paidAmount||0).toFixed(2)}`},
+                            {key:"dueAmount",label:"Due Amount",render:order=>`₹${Number(order.dueAmount||0).toFixed(2)}`},
+                        ]}
+                        onSort={handleSort}
+                        actionColumn={{
+                            label:"Actions",
+                            locked:true,
+                            render:order=>(
+                                <div className="d-flex gap-1 justify-content-end flex-wrap">
+                                    <button className="btn btn-warning btn-sm" onClick={()=>handleEdit(order)} title="Edit"><img src={editSVG} alt="Edit" /></button>
+                                    <button className="btn btn-info btn-sm" onClick={()=>handleStatus(order)} title="Status"><img src={infoSVG} alt="Info" /></button>
+                                    <button className="btn btn-success btn-sm" onClick={()=>handlePaymentEdit(order)} title="Payments"><img src={paymentsSVG} alt="Payment" /></button>
+                                    <button className="btn btn-danger btn-sm" onClick={()=>handleDeleteOrder(order._id)} title="Delete"><img src={deleteSVG} alt="Delete" /></button>
+                                    <button className="btn btn-primary btn-sm" onClick={()=>printInvoice(order)} title="Invoice"><img src={invoiceSVG} alt="Invoice" /></button>
+                                    <button
+                                        className="btn btn-secondary btn-sm"
+                                        onClick={()=>{setShowEwayBillModal(true);setOrderId(order._id);}}
+                                        disabled={Boolean(order.ewbDetails?.ewbNo)}
+                                        title="E-Way Bill"
+                                    >Eway</button>
+                                </div>
+                            )
+                        }}
+                        footer={({visibleColumnCount})=>(
+                            <tr>
+                                <td colSpan={Math.max(1,visibleColumnCount-3)} className="text-end fw-bold">Total:</td>
+                                <td className="fw-bold">₹{sortedData.reduce((sum,order)=>sum+Number(order.roundOffFinalRevenue||0),0).toFixed(2)}</td>
+                                <td className="fw-bold">₹{sortedData.reduce((sum,order)=>sum+Number(order.paidAmount||0),0).toFixed(2)}</td>
+                                <td className="fw-bold">₹{sortedData.reduce((sum,order)=>sum+Number(order.dueAmount||0),0).toFixed(2)}</td>
+                                <td></td>
+                            </tr>
+                        )}
+                    />
 
                     {/* Pagination */}
                     {/* <nav aria-label="Page navigation">

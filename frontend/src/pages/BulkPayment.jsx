@@ -4,6 +4,7 @@ import axios from "axios";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import * as Yup from 'yup';
+import DynamicTable from "../components/DynamicTable";
 
 // Configuration constants
 const API_CONFIG = {
@@ -326,47 +327,6 @@ const PaymentForm = React.memo(({
   </div>
 ));
 
-const OrderRow = React.memo(({
-  order,
-  isSelected,
-  onSelect,
-  showCustomAmount,
-  customAmount,
-  onCustomAmountChange
-}) => (
-  <tr>
-    <td>
-      <input
-        type="checkbox"
-        checked={isSelected}
-        onChange={() => onSelect(order._id)}
-        aria-label={`Select order ${order.orderNumber}`}
-      />
-    </td>
-    <td>{order.orderNumber}</td>
-    <td>{order.challanNumber}</td>
-    <td>{order.companyName}</td>
-    <td>₹{order.dueAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-    <td>{order.orderDate ? new Date(order.orderDate).toLocaleDateString('en-IN') : 'N/A'}</td>
-    {showCustomAmount && (
-      <td>
-        <input
-          type="number"
-          className="form-control"
-          value={customAmount || ""}
-          onChange={(e) => onCustomAmountChange(order._id, e.target.value)}
-          disabled={!isSelected}
-          min="0"
-          step="0.01"
-          placeholder="0.00"
-          aria-label={`Custom amount for order ${order.orderNumber}`}
-        />
-      </td>
-    )}
-  </tr>
-));
-
-
 const OrdersTable = React.memo(({
   orders,
   selectedOrders,
@@ -466,35 +426,41 @@ const OrdersTable = React.memo(({
         </div>
       </div>
 
-      <div className="table-responsive" style={{ maxHeight: '500px', overflowY: 'auto' }}>
-        <table className="table table-striped table-hover align-middle mb-0">
-          <thead className="table-light sticky-top">
-            <tr>
-              <th scope="col" style={{ width: '50px' }}>
-                <span className="visually-hidden">Select</span>
-              </th>
-              <th scope="col">Bill No.</th>
-              <th scope="col">CH No.</th>
-              <th scope="col">Client</th>
-              <th scope="col">Due Amount</th>
-              <th scope="col">Order Date</th>
-              {splitType === "custom" && <th scope="col">Custom Amount</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {sortedData.map(order => (
-              <OrderRow
-                key={order._id}
-                order={order}
-                isSelected={selectedOrders.includes(order._id)}
-                onSelect={onOrderSelect}
-                showCustomAmount={splitType === "custom"}
-                customAmount={customSplits[order._id]}
-                onCustomAmountChange={onCustomAmountChange}
+      <DynamicTable
+        tableKey="bulk-payments.selection"
+        rows={sortedData}
+        getRowKey={order=>order._id}
+        selectable
+        selectedIds={selectedOrders.map(String)}
+        onToggleRow={id=>onOrderSelect(id)}
+        onToggleAll={()=>{
+          const visibleIds=sortedData.map(order=>String(order._id));
+          const allSelected=visibleIds.length>0&&visibleIds.every(id=>selectedOrders.includes(id));
+          if(allSelected)visibleIds.forEach(id=>onOrderSelect(id));
+          else visibleIds.filter(id=>!selectedOrders.includes(id)).forEach(id=>onOrderSelect(id));
+        }}
+        columns={[
+          {key:"orderNumber",label:"Bill No."},
+          {key:"challanNumber",label:"CH No."},
+          {key:"companyName",label:"Client"},
+          {key:"dueAmount",label:"Due Amount",render:order=>`₹${Number(order.dueAmount||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`},
+          {key:"orderDate",label:"Order Date",render:order=>order.orderDate?new Date(order.orderDate).toLocaleDateString("en-IN"):"N/A"},
+          ...(splitType==="custom"?[
+            {key:"customAmount",label:"Custom Amount",locked:true,render:order=>(
+              <input
+                type="number"
+                className="form-control form-control-sm"
+                value={customSplits[order._id]??""}
+                onChange={e=>onCustomAmountChange(order._id,e.target.value)}
+                disabled={!selectedOrders.includes(order._id)}
+                min="0"
+                step="0.01"
+                placeholder="0.00"
               />
-            ))}
-          </tbody>
-        </table>
+            )}
+          ]:[])
+        ]}
+      />
       </div>
     </div>
   );

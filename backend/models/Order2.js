@@ -78,6 +78,7 @@ const subOrderSchema=new mongoose.Schema({
   MTR:{type:Number,default:0,min:0},
   unitPrice:{type:Number,default:0,min:0},
   shortPcs:{type:Number,default:0,min:0},
+  customFields:{type:Map,of:mongoose.Schema.Types.Mixed,default:{}},
 },{_id:true});
 
 const orderSchema=new mongoose.Schema({
@@ -114,6 +115,7 @@ const orderSchema=new mongoose.Schema({
   creditNoteCount:{type:Number,default:0,min:0},
   lastPaymentDate:{type:Date,default:null},
   note:{type:String,trim:true,default:""},
+  customFields:{type:Map,of:mongoose.Schema.Types.Mixed,default:{}},
   netProfit:{type:Number,default:0},
   createdBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true,index:true},
   ewbDetails:{

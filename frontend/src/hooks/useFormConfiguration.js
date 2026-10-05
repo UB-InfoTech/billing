@@ -97,7 +97,7 @@ export function useFormConfiguration(formKey,baseFields){
       setFields(merged);return merged;
     }catch(saveError){setError(saveError.response?.data?.message||"Unable to save form settings.");throw saveError;}
     finally{setSaving(false);}
-  },[formKey,baseSignature]);
+  },[formKey,baseSignature,baseFields]);
   const reset=useCallback(async()=>{
     try{
       setSaving(true);setError("");
@@ -105,6 +105,6 @@ export function useFormConfiguration(formKey,baseFields){
       const defaults=mergeFormFields(baseFields,[]);setFields(defaults);return defaults;
     }catch(resetError){setError(resetError.response?.data?.message||"Unable to reset form settings.");throw resetError;}
     finally{setSaving(false);}
-  },[formKey,baseSignature]);
+  },[formKey,baseSignature,baseFields]);
   return {fields,setFields,loading,saving,error,setError,save,reset,reload:load};
 };

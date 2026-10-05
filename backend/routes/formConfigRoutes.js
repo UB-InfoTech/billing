@@ -21,7 +21,7 @@ const sanitizeFields=fields=>{
     seen.add(key);
 
     const fieldType=FIELD_TYPES.includes(raw?.fieldType)?raw.fieldType:"text";
-    const section=["header","client","items","other"].includes(raw?.section)?raw.section:"header";
+    const section=cleanString(raw?.section||"header",50);
     const width=Math.min(12,Math.max(1,Number(raw?.width)||6));
     const options=Array.isArray(raw?.options)
       ? [...new Set(raw.options.map(item=>cleanString(item,200)).filter(Boolean))].slice(0,100)

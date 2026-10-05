@@ -5,7 +5,7 @@ import deleteSVG from '../assets/delete.svg';
 import DynamicTable from '../components/DynamicTable';
 import FormConfigurator from '../components/FormConfigurator';
 import ConfiguredField from '../components/ConfiguredField';
-import {useFormConfiguration} from '../hooks/useFormConfiguration';
+import {useFormConfiguration,applyFormulas} from '../hooks/useFormConfiguration';
 import * as XLSX from 'xlsx';
 
 const CLIENT_FORM_FIELDS=[
@@ -659,7 +659,7 @@ function Clients() {
                                   <div className="row g-3">
                                     {sectionFields.map(field=>{
                                       const fieldValue=newClient[field.key]??"";
-                                      const common={field,value:fieldValue,onChange:value=>setNewClient(prev=>({...prev,[field.key]:value}))};
+                                      const common={field,value:fieldValue,onChange:value=>setNewClient(prev=>applyFormulas(clientFormConfig.fields,{...prev,[field.key]:value}))};
                                       let extra=null;
                                       let options=field.options||[];
                                       if(field.key==="state")options=indianStates;

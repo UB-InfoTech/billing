@@ -90,6 +90,7 @@ app.use("/api/payments",require("./routes/bulkPayment"));
 app.use("/api/credit-notes",require("./routes/creditNoteRoutes"));
 app.use("/api/reports",require("./routes/reportRoutes"));
 app.use("/api/table-config",require("./routes/tableConfigRoutes"));
+app.use("/api/form-config",require("./routes/formConfigRoutes"));
 
 const errorHandler=(err,req,res,next)=>{
   console.error("API error:",err);

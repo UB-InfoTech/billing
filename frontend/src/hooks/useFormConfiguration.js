@@ -31,7 +31,7 @@ export const mergeFormFields=(baseFields,savedFields)=>{
     const savedField=byKey.get(field.key);
     if(!savedField)return {...field,order:index};
     return {...field,label:savedField.label||field.label,visible:field.locked?true:savedField.visible!==false,
-      required:field.required? savedField.required!==false:false,fieldType:savedField.fieldType||field.fieldType,
+      required:Object.prototype.hasOwnProperty.call(savedField,"required")?Boolean(savedField.required):Boolean(field.required),fieldType:savedField.fieldType||field.fieldType,
       width:Math.min(12,Math.max(1,Number(savedField.width)||field.width)),
       order:Number.isFinite(Number(savedField.order))?Number(savedField.order):index,formula:savedField.formula||""};
   }).sort((a,b)=>(a.order??0)-(b.order??0)).map((field,index)=>({...field,order:index}));

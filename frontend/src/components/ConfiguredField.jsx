@@ -4,10 +4,12 @@ import ArithmeticInput from "./ArithmeticInput";
 export default function ConfiguredField({field,value,onChange,placeholder,icon,options=[],listId,listOptions=[],disabled=false,required=false,suffix,help,min,max,step,readOnly=false}){
   if(!field||field.visible===false)return null;
   const label=field.label||field.key;
+  const resolvedValue=value===undefined||value===null||value==="" ? (field.defaultValue??"") : value;
+  const resolvedOptions=options.length ? options : (field.options||[]);
   const isRequired=field.required===true||required;
   const common={
     className:"form-control shadow-sm bg-white",
-    value:value??"",
+    value:resolvedValue,
     onChange:event=>onChange(event.target.value),
     placeholder:placeholder||label,
     disabled,required:isRequired,readOnly
@@ -18,7 +20,7 @@ export default function ConfiguredField({field,value,onChange,placeholder,icon,o
   }else if(field.fieldType==="select"){
     control=<select className="form-select shadow-sm bg-white" value={value??""} onChange={event=>onChange(event.target.value)} disabled={disabled} required={isRequired}>
       <option value="">Select {label}</option>
-      {options.map(option=>typeof option==="string"?<option key={option} value={option}>{option}</option>:<option key={option.value} value={option.value}>{option.label}</option>)}
+      {resolvedOptions.map(option=>typeof option==="string"?<option key={option} value={option}>{option}</option>:<option key={option.value} value={option.value}>{option.label}</option>)}
     </select>;
   }else if(field.fieldType==="boolean"){
     control=<div className="form-check form-switch pt-2"><input className="form-check-input" type="checkbox" checked={Boolean(value)} onChange={event=>onChange(event.target.checked)} disabled={disabled}/></div>;

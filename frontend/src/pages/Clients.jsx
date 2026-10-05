@@ -52,7 +52,6 @@ function Clients() {
   });
 
   // -----
-  const [editClient, setEditClient] = useState(null);
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);

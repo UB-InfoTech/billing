@@ -52,7 +52,7 @@ export function useFormConfiguration(formKey,baseFields){
       setFields(mergeFormFields(baseFields,[]));
       setError(loadError.response?.data?.message||"Unable to load form settings.");
     }finally{setLoading(false);}
-  },[formKey,baseSignature]);
+  },[formKey,baseSignature,baseFields]);
   useEffect(()=>{load();},[load]);
   const save=useCallback(async(nextFields)=>{
     try{

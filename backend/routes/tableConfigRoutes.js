@@ -60,7 +60,7 @@ const sanitizeColumns=(columns)=>{
       sourceKeys:kind==="merged"?sourceKeys:[],
       separator:kind==="merged"?cleanString(raw?.separator??" ",40):" ",
       order:Number.isFinite(Number(raw?.order))?Math.max(0,Number(raw.order)):index,
-      width:Math.min(12,Math.max(1,Number(raw?.width)||6))
+      width:Math.min(12,Math.max(0,Number(raw?.width)||0))
     };
   });
 };

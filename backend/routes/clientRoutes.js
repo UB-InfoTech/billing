@@ -6,6 +6,10 @@ const auth=require("../middleware/auth");
 
 const router=express.Router();
 const owner=req=>req.user.id;
+const cleanCustomFields=value=>{
+  if(!value||typeof value!=="object"||Array.isArray(value))return {};
+  return Object.fromEntries(Object.entries(value).slice(0,100).map(([key,val])=>[String(key).slice(0,100),val]));
+};
 
 router.get("/summary",auth,async(req,res)=>{
   try{
@@ -61,6 +65,7 @@ router.post("/",auth,async(req,res)=>{
   try{
     const body={...(req.body||{})};
     body.createdBy=owner(req);
+    body.customFields=cleanCustomFields(body.customFields);
     if(body.gstNumber)body.gstNumber=String(body.gstNumber).trim().toUpperCase();
     const client=new Client(body);
     await client.save();
@@ -73,8 +78,8 @@ router.patch("/:id",auth,async(req,res)=>{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid client ID."});
     const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)});
     if(!client)return res.status(404).json({message:"Client not found"});
-    const allowed=["name","email","phone","address","state","city","pinCode","stateCode","gstNumber","companyName","businessType","paymentTerms","loyaltyPoints","discountRate","accountStatus","notes"];
-    for(const key of allowed)if(req.body?.[key]!==undefined)client[key]=req.body[key];
+    const allowed=["name","email","phone","address","state","city","pinCode","stateCode","gstNumber","companyName","businessType","paymentTerms","loyaltyPoints","discountRate","accountStatus","notes","customFields"];
+    for(const key of allowed)if(req.body?.[key]!==undefined)client[key]=key==="customFields"?cleanCustomFields(req.body[key]):req.body[key];
     if(client.gstNumber)client.gstNumber=String(client.gstNumber).trim().toUpperCase();
     await client.save();
     res.json(client);

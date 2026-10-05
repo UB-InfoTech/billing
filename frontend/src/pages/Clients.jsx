@@ -475,7 +475,7 @@ function Clients() {
   }
 
   return (
-    <>
+
       {/* <div className="container mt-3"> */}
       <div className="w-100 mx-3 mt-3">
         <div className="d-flex align-items-center gap-4">
@@ -746,15 +746,8 @@ function Clients() {
 
 
 
-        </div>
 
-
-
-
-
-
-
-      <FormConfigurator
+        <FormConfigurator
         open={formSettingsOpen}
         onClose={()=>setFormSettingsOpen(false)}
         title="Customize Client Form"
@@ -766,6 +759,7 @@ function Clients() {
       />
 
     </>
+        </div>
 );
 }
 

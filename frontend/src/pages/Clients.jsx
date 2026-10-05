@@ -3,7 +3,28 @@ import axios from 'axios';
 import editSVG from '../assets/edit.svg';
 import deleteSVG from '../assets/delete.svg';
 import DynamicTable from '../components/DynamicTable';
+import FormConfigurator from '../components/FormConfigurator';
+import ConfiguredField from '../components/ConfiguredField';
+import {useFormConfiguration} from '../hooks/useFormConfiguration';
 import * as XLSX from 'xlsx';
+
+const CLIENT_FORM_FIELDS=[
+  {key:"name",label:"Client Name",fieldType:"text",width:12,section:"basic",order:0},
+  {key:"email",label:"Email",fieldType:"text",width:6,section:"basic",order:1},
+  {key:"phone",label:"Phone",fieldType:"text",width:6,section:"basic",order:2},
+  {key:"address",label:"Address",fieldType:"textarea",width:6,section:"address",required:true,order:3},
+  {key:"pinCode",label:"Pin Code",fieldType:"text",width:3,section:"address",required:true,order:4},
+  {key:"stateCode",label:"State Code",fieldType:"text",width:3,section:"address",required:true,order:5},
+  {key:"state",label:"State",fieldType:"select",width:6,section:"address",required:true,order:6},
+  {key:"city",label:"City",fieldType:"select",width:6,section:"address",order:7},
+  {key:"gstNumber",label:"GST Number",fieldType:"text",width:6,section:"business",required:true,order:8},
+  {key:"companyName",label:"Company Name",fieldType:"text",width:6,section:"business",required:true,order:9},
+  {key:"businessType",label:"Business Type",fieldType:"select",width:6,section:"business",order:10,options:["Retail","Wholesale","Manufacturer","Trader","Supplier"]},
+  {key:"paymentTerms",label:"Payment Terms",fieldType:"select",width:6,section:"business",required:true,order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Advance Payment"}]},
+  {key:"discountRate",label:"Discount Rate",fieldType:"number",width:4,section:"additional",order:12},
+  {key:"accountStatus",label:"Account Status",fieldType:"select",width:8,section:"additional",order:13,options:["Active","Inactive"]},
+  {key:"notes",label:"Notes",fieldType:"textarea",width:12,section:"additional",order:14}
+];
 
 function Clients() {
 
@@ -48,6 +69,8 @@ function Clients() {
 
 
   const [editingClient, setEditingClient] = useState(null);
+  const [formSettingsOpen,setFormSettingsOpen]=useState(false);
+  const clientFormConfig=useFormConfiguration("clients.form",CLIENT_FORM_FIELDS);
 
   useEffect(() => {
     // setLoading(true);
@@ -583,9 +606,14 @@ function Clients() {
               <div className="modal-dialog modal-dialog-centered modal-xl">
                 <div className="modal-content shadow-lg border-0" style={{ borderRadius: '20px', overflow: 'hidden', backgroundColor: '#f8f9fa' }}>
                   <div className="modal-header bg-light text-dark p-3 border-bottom-0 d-flex justify-content-between align-items-center">
-                    <h5 className="modal-title fw-bold">
-                      {editingClient ? "Edit Client" : "Add New Client"}
-                    </h5>
+                    <div className="d-flex align-items-center gap-2">
+                      <h5 className="modal-title fw-bold mb-0">
+                        {editingClient ? "Edit Client" : "Add New Client"}
+                      </h5>
+                      <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>setFormSettingsOpen(true)}>
+                        <i className="bi bi-sliders2 me-1"></i>Customize Form
+                      </button>
+                    </div>
                     <button
                       type="button"
                       className="btn-close"
@@ -615,384 +643,75 @@ function Clients() {
                   <form onSubmit={handleAddClient}>
                     <div className="modal-body p-3">
                       <div className="row g-0">
-                        {/* First Row: Basic Information and Address Details */}
-                        <div className="col-md-6 p-2">
-                          <div className="card shadow-sm border-0" style={{ borderRadius: '10px', backgroundColor: '#fff' }}>
-                            <div className="card-header bg-white p-2">
-                              <h6 className="fw-semibold text-muted">
-                                <i className="bi bi-person me-2 text-primary"></i> Basic Information
-                              </h6>
-                            </div>
-                            <div className="card-body p-3 bg-light">
-                              <div className="row g-3">
-                                <div className="col-md-12">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="Full name of the client">
-                                    <i className="bi bi-person-fill me-1"></i> Client Name
-                                  </label>
-                                  <input
-                                    type="text"
-                                    className={`form-control shadow-sm bg-white ${newClient.name ? 'is-valid' : ''}`}
-                                    placeholder="Client Name"
-                                    value={newClient.name}
-                                    onChange={(e) => setNewClient({ ...newClient, name: e.target.value })}
-
-                                  />
-                                  {/* {!newClient.name && <div className="invalid-feedback">Client Name is required.</div>} */}
+                        {[
+                          ["basic","Basic Information","bi-person"],
+                          ["address","Address Details","bi-geo-alt"],
+                          ["business","Business Details","bi-briefcase"],
+                          ["additional","Additional Information","bi-info-circle"]
+                        ].map(([section,title,icon])=>{
+                          const sectionFields=clientFormConfig.fields.filter(field=>field.section===section&&field.visible!==false).sort((a,b)=>(a.order??0)-(b.order??0));
+                          return (
+                            <div key={section} className="col-md-6 p-2">
+                              <div className="card shadow-sm border-0 h-100" style={{borderRadius:'10px',backgroundColor:'#fff'}}>
+                                <div className="card-header bg-white p-2">
+                                  <h6 className="fw-semibold text-muted mb-0"><i className={`bi ${icon} me-2 text-primary`}></i>{title}</h6>
                                 </div>
-                                <div className="col-md-6">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="Client's email address">
-                                    <i className="bi bi-envelope me-1"></i> Email
-                                  </label>
-                                  <input
-                                    type="email"
-                                    className={`form-control shadow-sm bg-white ${newClient.email ? 'is-valid' : ''}`}
-                                    placeholder="Email"
-                                    value={newClient.email}
-                                    onChange={(e) => setNewClient({ ...newClient, email: e.target.value })}
-                                  />
-                                </div>
-                                <div className="col-md-6">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="Client's contact number">
-                                    <i className="bi bi-telephone me-1"></i> Phone
-                                  </label>
-                                  <input
-                                    type="text"
-                                    className={`form-control shadow-sm bg-white ${newClient.phone ? 'is-valid' : ''}`}
-                                    placeholder="Phone"
-                                    value={newClient.phone}
-                                    onChange={(e) => setNewClient({ ...newClient, phone: e.target.value })}
-
-                                  />
-                                  {/* {!newClient.phone && <div className="invalid-feedback">Phone is required.</div>} */}
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="col-md-6 p-2">
-                          <div className="card shadow-sm border-0" style={{ borderRadius: '10px', backgroundColor: '#fff' }}>
-                            <div className="card-header bg-white p-2">
-                              <h6 className="fw-semibold text-muted">
-                                <i className="bi bi-geo-alt me-2 text-primary"></i> Address Details
-                              </h6>
-                            </div>
-                            <div className="card-body p-3 bg-light">
-                              <div className="row g-3">
-                                <div className="col-md-6">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="Client's full address">
-                                    <i className="bi bi-house me-1"></i> Address
-                                  </label>
-                                  <input
-                                    type="text"
-                                    className={`form-control shadow-sm bg-white ${newClient.address ? 'is-valid' : 'is-invalid'}`}
-                                    placeholder="Address"
-                                    value={newClient.address}
-                                    onChange={(e) => setNewClient({ ...newClient, address: e.target.value })}
-
-                                  />
-                                  {/* {!newClient.address && <div className="invalid-feedback">Address is required.</div>} */}
-                                </div>
-                                <div className="col-md-3">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="Client's pin code">
-                                    <i className="bi bi-geo-fill me-1"></i>Pin Code
-                                  </label>
-                                  <input
-                                    type="text"
-                                    className={`form-control shadow-sm bg-white ${newClient.pinCode ? 'is-valid' : 'is-invalid'}`}
-                                    placeholder="Pin Code"
-                                    value={newClient.pinCode}
-                                    onChange={(e) => setNewClient({ ...newClient, pinCode: e.target.value })}
-                                  />
-                                  {/* {!newClient.pinCode && <div className="invalid-feedback">Pin Code is required.</div>} */}
-                                </div>
-
-                                <div className="col-md-3">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="State code of the client">
-                                    <i className="bi bi-code-slash me-1"></i>State Code
-                                  </label>
-                                  <input
-                                    type="text"
-                                    className={`form-control shadow-sm bg-white ${newClient.stateCode ? 'is-valid' : 'is-invalid'}`}
-                                    placeholder="State Code"
-                                    value={newClient.stateCode}
-                                    onChange={(e) => setNewClient({ ...newClient, stateCode: e.target.value })}
-                                  />
-                                  {/* {!newClient.stateCode && <div className="invalid-feedback">State Code is required.</div>} */}
-                                </div>
-
-
-
-
-                                <div className="col-md-6">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="State of the client">
-                                    <i className="bi bi-map me-1"></i> State
-                                  </label>
-                                  <select
-                                    className={`form-select shadow-sm bg-white ${newClient.state ? 'is-valid' : 'is-invalid'}`}
-                                    value={newClient.state}
-                                    onChange={(e) => {
-                                      setNewClient({ ...newClient, state: e.target.value, city: '' }); // Reset city when state changes
-                                    }}
-                                  >
-                                    <option value="">Select State</option>
-                                    {indianStates.map((state) => (
-                                      <option key={state} value={state}>{state}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div className="col-md-6">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="City of the client">
-                                    <i className="bi bi-building me-1"></i> City
-                                  </label>
-                                  <select
-                                    className={`form-select shadow-sm bg-white ${newClient.city ? 'is-valid' : ''}`}
-                                    value={newClient.city}
-                                    onChange={(e) => setNewClient({ ...newClient, city: e.target.value })}
-                                    disabled={!newClient.state} // Disable if no state is selected
-                                  >
-                                    <option value="">Select City</option>
-                                    {newClient.state && stateCityMapping[newClient.state]?.map((city) => (
-                                      <option key={city} value={city}>{city}</option>
-                                    ))}
-                                  </select>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Second Row: Business Details and Additional Information */}
-                        <div className="col-md-6 p-2">
-                          <div className="card shadow-sm border-0" style={{ borderRadius: '10px', backgroundColor: '#fff' }}>
-                            <div className="card-header bg-white p-2">
-                              <h6 className="fw-semibold text-muted">
-                                <i className="bi bi-briefcase me-2 text-primary"></i> Business Details
-                              </h6>
-                            </div>
-                            <div className="card-body p-3 bg-light">
-                              <div className="row g-3">
-                                <div className="col-md-6">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="Client's GST registration number">
-                                    <i className="bi bi-card-text me-1"></i> GST Number
-                                  </label>
-                                  <div className="d-flex gap-2">
-
-                                    <input
-                                      type="text"
-                                      className={`form-control shadow-sm bg-white ${newClient.gstNumber ? 'is-valid' : 'is-invalid'}`}
-                                      placeholder="GST Number"
-                                      value={newClient.gstNumber}
-                                      onChange={(e) => setNewClient({ ...newClient, gstNumber: e.target.value })}
-
-                                    />
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm btn-outline-secondary"
-                                      onClick={() => {
-                                        // fetchGstDetails(newClient.gstNumber);
-                                        // alert("✅ GST Number fetched successfully");
-                                        if (newClient.gstNumber) {
-                                          const gstRegex = /^(0[1-9]|1[0-9]|2[0-9]|3[0-7])[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
-
-                                          if (gstRegex.test(newClient.gstNumber)) {
-                                            fetchGstDetails(newClient.gstNumber);
-                                            alert("✅ GST Number fetched successfully");
-                                            // 34AACCC1596Q002
-                                            // 24BPJPA7447A1ZB
-                                          } else {
-                                            alert("❌ Invalid GST Number format");
-                                          }
-                                        } else {
-                                          alert("❌ Please enter a GST Number");
-                                        }
-                                      }}
-                                    >get</button>
+                                <div className="card-body p-3 bg-light">
+                                  <div className="row g-3">
+                                    {sectionFields.map(field=>{
+                                      const fieldValue=newClient[field.key]??"";
+                                      const common={field,value:fieldValue,onChange:value=>setNewClient(prev=>({...prev,[field.key]:value}))};
+                                      let extra=null;
+                                      let options=field.options||[];
+                                      if(field.key==="state")options=indianStates;
+                                      if(field.key==="city")options=newClient.state?(stateCityMapping[newClient.state]||[]):[];
+                                      if(field.key==="companyName"){
+                                        extra=<ConfiguredField {...common} field={{...field,fieldType:field.fieldType||"text"}} listId="clientCompanyName" listOptions={clients.map(client=>client.companyName)} icon="bi bi-building"/>;
+                                        return <div key={field.key} className={`col-md-${field.width||6}`}>{extra}</div>;
+                                      }
+                                      if(field.key==="gstNumber"){
+                                        const suffix=(
+                                          <button type="button" className="btn btn-sm btn-outline-secondary mt-2" onClick={()=>{
+                                            if(!newClient.gstNumber){alert("❌ Please enter a GST Number");return;}
+                                            const gstRegex=/^(0[1-9]|1[0-9]|2[0-9]|3[0-7])[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+                                            if(gstRegex.test(newClient.gstNumber)){fetchGstDetails(newClient.gstNumber);alert("✅ GST Number fetched successfully");}
+                                            else alert("❌ Invalid GST Number format");
+                                          }}>Fetch GST Details</button>
+                                        );
+                                        return <div key={field.key} className={`col-md-${field.width||6}`}><ConfiguredField {...common} icon="bi bi-card-text" suffix={suffix}/></div>;
+                                      }
+                                      if(field.key==="state"){
+                                        return <div key={field.key} className={`col-md-${field.width||6}`}><ConfiguredField {...common} options={options} icon="bi bi-map" /></div>;
+                                      }
+                                      if(field.key==="city"){
+                                        return <div key={field.key} className={`col-md-${field.width||6}`}><ConfiguredField {...common} options={options} disabled={!newClient.state} icon="bi bi-building" /></div>;
+                                      }
+                                      return <div key={field.key} className={`col-md-${field.width||6}`}><ConfiguredField {...common} icon="" /></div>;
+                                    })}
                                   </div>
-                                  {/* {!newClient.gstNumber && <div className="invalid-feedback">GST Number is required.</div>} */}
-                                </div>
-                                <div className="col-md-6">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="Client's company name">
-                                    <i className="bi bi-building me-1"></i> Company Name
-                                  </label>
-                                  <input
-                                    type="text"
-                                    className={`form-control shadow-sm bg-white ${newClient.companyName ? 'is-valid' : 'is-invalid'}`}
-                                    placeholder="Company Name"
-                                    value={newClient.companyName}
-                                    onChange={(e) => setNewClient({ ...newClient, companyName: e.target.value })}
-
-                                  />
-                                  {/* {!newClient.companyName && <div className="invalid-feedback">Company Name is required.</div>} */}
-                                </div>
-                                <div className="col-md-6">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="Type of business">
-                                    <i className="bi bi-shop me-1"></i> Business Type
-                                  </label>
-                                  <select
-                                    className={`form-select shadow-sm bg-white ${newClient.businessType ? 'is-valid' : ''}`}
-                                    value={newClient.businessType}
-                                    onChange={(e) => setNewClient({ ...newClient, businessType: e.target.value })}
-
-                                  >
-                                    <option value="">Select Business Type</option>
-                                    <option value="Retail">Retail</option>
-                                    <option value="Wholesale">Wholesale</option>
-                                    <option value="Manufacturer">Manufacturer</option>
-                                    <option value="Trader">Trader</option>
-                                    <option value="Supplier">Supplier</option>
-                                  </select>
-                                  {/* {!newClient.businessType && <div className="invalid-feedback">Business Type is required.</div>} */}
-                                </div>
-                                <div className="col-md-6">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="Payment terms for transactions">
-                                    <i className="bi bi-calendar-check me-1"></i> Payment Terms
-                                  </label>
-                                  <select
-                                    className={`form-select shadow-sm bg-white ${newClient.paymentTerms ? 'is-valid' : 'is-invalid'}`}
-                                    value={newClient.paymentTerms}
-                                    onChange={(e) => setNewClient({ ...newClient, paymentTerms: e.target.value })}
-
-                                  >
-                                    <option value="">Select Payment Terms</option>
-                                    <option value="30">30 days</option>
-                                    <option value="60">60 days</option>
-                                    <option value="90">90 days</option>
-                                    <option value="Advance">Advance Payment</option>
-                                  </select>
-                                  {/* {!newClient.paymentTerms && <div className="invalid-feedback">Payment Terms are required.</div>} */}
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </div>
-
-                        <div className="col-md-6 p-2">
-                          <div className="card shadow-sm border-0" style={{ borderRadius: '10px', backgroundColor: '#fff' }}>
-                            <div className="card-header bg-white p-2">
-                              <h6 className="fw-semibold text-muted">
-                                <i className="bi bi-info-circle me-2 text-primary"></i> Additional Information
-                              </h6>
-                            </div>
-                            <div className="card-body p-3 bg-light">
-                              <div className="row g-3">
-                                <div className="col-md-4">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="Discount rate offered to the client">
-                                    <i className="bi bi-percent me-1"></i> Discount Rate
-                                  </label>
-                                  <input
-                                    type="number"
-                                    className="form-control shadow-sm bg-white"
-                                    placeholder="Discount Rate"
-                                    value={newClient.discountRate}
-                                    onChange={(e) => setNewClient({ ...newClient, discountRate: e.target.value })}
-                                  />
-                                </div>
-                                <div className="col-md-8">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="Current status of the client account">
-                                    <i className="bi bi-toggle-on me-1"></i> Account Status
-                                  </label>
-                                  <select
-                                    className={`form-select shadow-sm bg-white ${newClient.accountStatus ? 'is-valid' : ''}`}
-                                    value={newClient.accountStatus}
-                                    onChange={(e) => setNewClient({ ...newClient, accountStatus: e.target.value })}
-                                  >
-                                    <option value="">Select Account Status</option>
-                                    <option value="Active">Active</option>
-                                    <option value="Inactive">Inactive</option>
-                                  </select>
-                                  {/* {!newClient.accountStatus && <div className="invalid-feedback">Account Status is required.</div>} */}
-                                </div>
-                                <div className="col-md-12">
-                                  <label className="form-label fw-semibold text-muted" data-bs-toggle="tooltip" title="Additional notes about the client">
-                                    <i className="bi bi-sticky me-1"></i> Notes
-                                  </label>
-                                  <textarea
-                                    className="form-control shadow-sm bg-white"
-                                    placeholder="Notes"
-                                    value={newClient.notes}
-                                    onChange={(e) => setNewClient({ ...newClient, notes: e.target.value })}
-                                    style={{ height: '38px' }}
-                                  ></textarea>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                          );
+                        })}
                       </div>
-
-
-
                     </div>
-                    {/* Sticky Footer */}
-                    <div className="modal-footer bg-light p-3 border-top-0 sticky-bottom" style={{ boxShadow: '0 -2px 10px rgba(0, 0, 0, 0.1)' }}>
-                      <button
-                        type="button"
-                        className="btn btn-outline-secondary me-2"
-                        onClick={() => setShowModal(false)}
-                        style={{ borderRadius: '10px', transition: 'all 0.3s ease' }}
-                        onMouseEnter={(e) => e.target.style.transform = 'scale(1.05)'}
-                        onMouseLeave={(e) => e.target.style.transform = 'scale(1)'}
-                      >
-                        Cancel
-                      </button>
 
+                    <div className="modal-footer bg-light p-3 border-top-0 sticky-bottom">
+                      <button type="button" className="btn btn-outline-secondary me-2" onClick={()=>setShowModal(false)}>Cancel</button>
                       {editingClient ? (
                         <button
                           type="button"
-                          className="btn btn-primary px-5 shadow"
+                          className="btn btn-primary px-5"
                           onClick={handleUpdateClient}
-                          disabled={!['address', 'pinCode', 'stateCode', 'state', 'gstNumber', 'companyName', 'paymentTerms'].every((field) => newClient[field])}
-                          style={{
-                            backgroundColor: '#b8d4ff',
-                            borderColor: '#b8d4ff',
-                            color: '#1e40af',
-                            borderRadius: '12px',
-                            transition: 'all 0.3s ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            if (['address', 'pinCode', 'stateCode', 'state', 'gstNumber', 'companyName', 'paymentTerms'].every((field) => newClient[field])) {
-                              e.target.style.backgroundColor = '#93c5fd';
-                              e.target.style.borderColor = '#93c5fd';
-                              e.target.style.transform = 'scale(1.05)';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            e.target.style.backgroundColor = '#b8d4ff';
-                            e.target.style.borderColor = '#b8d4ff';
-                            e.target.style.transform = 'scale(1)';
-                          }}
-                        >
-                          Update Client
-                        </button>
+                          disabled={!clientFormConfig.fields.filter(field=>field.visible!==false&&field.required).every(field=>String(newClient[field.key]??"").trim())}
+                        >Update Client</button>
                       ) : (
-                        // <button type="submit" className="btn btn-success">Add Client</button>
                         <button
                           type="submit"
-                          className="btn btn-primary px-5 shadow"
-                          disabled={!['address', 'pinCode', 'stateCode', 'state', 'gstNumber', 'companyName', 'paymentTerms'].every((field) => newClient[field])}
-                          style={{
-                            backgroundColor: '#b8d4ff',
-                            borderColor: '#b8d4ff',
-                            color: '#1e40af',
-                            borderRadius: '12px',
-                            transition: 'all 0.3s ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            if (['address', 'pinCode', 'stateCode', 'state', 'gstNumber', 'companyName', 'paymentTerms'].every((field) => newClient[field])) {
-                              e.target.style.backgroundColor = '#93c5fd';
-                              e.target.style.borderColor = '#93c5fd';
-                              e.target.style.transform = 'scale(1.05)';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            e.target.style.backgroundColor = '#b8d4ff';
-                            e.target.style.borderColor = '#b8d4ff';
-                            e.target.style.transform = 'scale(1)';
-                          }}
-                        >
-                          Add Client
-                        </button>
+                          className="btn btn-primary px-5"
+                          disabled={!clientFormConfig.fields.filter(field=>field.visible!==false&&field.required).every(field=>String(newClient[field.key]??"").trim())}
+                        >Add Client</button>
                       )}
                     </div>
                   </form>
@@ -1139,6 +858,17 @@ function Clients() {
 
 
 
+
+      <FormConfigurator
+        open={formSettingsOpen}
+        onClose={()=>setFormSettingsOpen(false)}
+        title="Customize Client Form"
+        subtitle="Arrange Client fields, show or hide them, change field type and width, and save the layout."
+        fields={clientFormConfig.fields}
+        saving={clientFormConfig.saving}
+        onSave={clientFormConfig.save}
+        onReset={async()=>{const defaults=await clientFormConfig.reset();clientFormConfig.setFields(defaults);setFormSettingsOpen(false);}}
+      />
 
   );
 }

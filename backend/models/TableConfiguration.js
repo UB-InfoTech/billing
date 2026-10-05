@@ -12,7 +12,7 @@ const tableColumnSchema=new mongoose.Schema({
   sourceKeys:{type:[String],default:[]},
   separator:{type:String,default:" "},
   order:{type:Number,default:0,min:0},
-  width:{type:Number,default:6,min:1,max:12},
+  width:{type:Number,default:0,min:0,max:12},
 },{_id:false});
 
 const tableConfigurationSchema=new mongoose.Schema({

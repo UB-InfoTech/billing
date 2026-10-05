@@ -9,10 +9,43 @@ import receiptSVG from '../assets/receipt.svg';
 import 'bootstrap/dist/css/bootstrap.min.css'; // Ensure Bootstrap CSS is imported
 import EWayBillForm from "../components/EWayBillForm";
 import DynamicTable from "../components/DynamicTable";
+import FormConfigurator from "../components/FormConfigurator";
+import ConfiguredField from "../components/ConfiguredField";
+import {useFormConfiguration,applyFormulas} from "../hooks/useFormConfiguration";
 import * as XLSX from 'xlsx';
 import Report from '../components/Report';
 import { useReactToPrint } from "react-to-print";
 import { Link } from 'react-router-dom';
+
+const ORDER_FORM_FIELDS=[
+ {key:"orderNumber",label:"Invoice No.",fieldType:"text",width:3,section:"shipping",required:true,order:0},
+ {key:"orderDate",label:"Bill Date",fieldType:"date",width:4,section:"shipping",required:true,order:1},
+ {key:"lrNo",label:"LR No.",fieldType:"text",width:5,section:"shipping",order:2},
+ {key:"State",label:"State",fieldType:"text",width:4,section:"shipping",required:true,order:3},
+ {key:"Address",label:"Address",fieldType:"text",width:8,section:"shipping",required:true,order:4},
+ {key:"City",label:"City",fieldType:"text",width:4,section:"shipping",required:true,order:5},
+ {key:"pinCode",label:"Pin Code",fieldType:"text",width:4,section:"shipping",order:6},
+ {key:"stateCode",label:"State Code",fieldType:"text",width:4,section:"shipping",order:7},
+ {key:"status",label:"Status",fieldType:"select",width:4,section:"shipping",order:8,options:["Pending","In Process","Completed","Cancelled","Dispatched"]},
+ {key:"companyName",label:"Company Name",fieldType:"text",width:4,section:"client",required:true,order:9},
+ {key:"gstNumber",label:"GST No.",fieldType:"text",width:4,section:"client",order:10},
+ {key:"paymentTerms",label:"Payment Terms",fieldType:"select",width:4,section:"client",required:true,order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Advance"}]},
+ {key:"challanNumber",label:"Challan No.",fieldType:"text",width:4,section:"client",required:true,order:12},
+ {key:"taxPercentage",label:"Tax %",fieldType:"number",width:4,section:"client",order:13},
+ {key:"discountRate",label:"Discount %",fieldType:"number",width:4,section:"client",order:14}
+];
+
+const ORDER_ITEM_FIELDS=[
+ {key:"designNumber",label:"Design No.",fieldType:"text",width:2,section:"items",order:0},
+ {key:"orderName",label:"Product Name",fieldType:"text",width:2,section:"items",order:1},
+ {key:"hsnCode",label:"HSN Code",fieldType:"number",width:2,section:"items",order:2},
+ {key:"quantity",label:"Qty",fieldType:"number",width:1,section:"items",order:3},
+ {key:"cut",label:"Cut",fieldType:"number",width:1,section:"items",order:4},
+ {key:"MTR",label:"MTR",fieldType:"number",width:1,section:"items",order:5,formula:"quantity * cut"},
+ {key:"unitPrice",label:"Rate",fieldType:"currency",width:1,section:"items",order:6},
+ {key:"qtyUnit",label:"Qty Unit",fieldType:"select",width:1,section:"items",order:7,options:["MTR","PCS","BOX","UNT"]},
+ {key:"shortPcs",label:"Short Pcs",fieldType:"number",width:1,section:"items",order:8,visible:false}
+];
 
 function Order2() {
     const linkone = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
@@ -47,6 +80,10 @@ function Order2() {
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [showEwayBillModal, setShowEwayBillModal] = useState(false);
     const [orderId, setOrderId] = useState(null);
+    const [formSettingsOpen,setFormSettingsOpen]=useState(false);
+    const [itemSettingsOpen,setItemSettingsOpen]=useState(false);
+    const orderFormConfig=useFormConfiguration("orders.form",ORDER_FORM_FIELDS);
+    const orderItemConfig=useFormConfiguration("orders.items",ORDER_ITEM_FIELDS);
     const [editingOrder, setEditingOrder] = useState(null);
 
 
@@ -210,39 +247,42 @@ function Order2() {
     };
 
     const handleSubOrderChange = (index, e) => {
-        // console.log(index, e.target.name, e.target.value, "index e.target.name e.target.value")
-        const { name, value } = e.target;
-        const updatedOrders = [...subOrders];
-        updatedOrders[index][name] = value;
-        if (name === "orderName") {
-            // const selectedProduct = products.find(product => product._id === value);
-            const selectedProduct = products.find(product => product.productName === value);
+        handleSubOrderValueChange(index,e.target.name,e.target.value);
+    };
 
-            if (selectedProduct) {
-                updatedOrders[index].unitPrice = selectedProduct.rate || "";
-                updatedOrders[index].designNumber = selectedProduct.designNo || "";
-                // updatedOrders[index].quantity = selectedProduct.quantity || "";
+    const handleSubOrderValueChange=(index,name,value)=>{
+        const updatedOrders=[...subOrders];
+        updatedOrders[index]={...updatedOrders[index],[name]:value};
+
+        if(name==="orderName"){
+            const selectedProduct=products.find(product=>product.productName===value);
+            if(selectedProduct){
+                updatedOrders[index].unitPrice=selectedProduct.rate||"";
+                updatedOrders[index].designNumber=selectedProduct.designNo||"";
             }
         }
 
-        if (name === "cut" || name === "quantity") {
-            const qty = updatedOrders[index].quantity || 0;
-            const cut = updatedOrders[index].cut || 0;
-            updatedOrders[index].MTR = qty * cut;
-        }
-        // if (name === "quantity" || name === "unitPrice") {
-        //     updatedOrders[index].totalPrice = (updatedOrders[index].quantity - updatedOrders[index].shortPcs) * updatedOrders[index].unitPrice;
-        // }
-        // if (name === "shortPcs") {
-        //     updatedOrders[index].totalPrice = (updatedOrders[index].quantity - updatedOrders[index].shortPcs) * updatedOrders[index].unitPrice;
-        // }
+        const formulaResult=applyFormulas(orderItemConfig.fields,updatedOrders[index]);
+        updatedOrders[index]={...updatedOrders[index],...formulaResult};
 
         setSubOrders(updatedOrders);
-        setFormData({
-            ...formData,
-            subOrders: updatedOrders,
-        });
+        setFormData(prev=>({...prev,subOrders:updatedOrders}));
     };
+
+    const handleConfiguredOrderValue=(name,value)=>{
+        if(name==="companyName"){
+            const selectedClient=clients.find(client=>client.companyName===value);
+            if(selectedClient){
+                const next={...formData,companyName:value,clientId:selectedClient._id||"",Address:selectedClient.address||"",State:selectedClient.state||"",City:selectedClient.city||"",pinCode:selectedClient.pinCode||"",stateCode:selectedClient.stateCode||"",gstNumber:selectedClient.gstNumber||"",paymentTerms:selectedClient.paymentTerms||"30",discountRate:selectedClient.discountRate||"0"};
+                setFormData(applyFormulas(orderFormConfig.fields,next));
+                return;
+            }
+        }
+        const next={...formData,[name]:value};
+        setFormData(applyFormulas(orderFormConfig.fields,next));
+    };
+
+    const fieldFor=(fields,key)=>fields.find(field=>field.key===key)||{key,label:key,fieldType:"text",width:6,visible:true,order:0};
 
 
     // const addSubOrderRow = () => {
@@ -1319,20 +1359,21 @@ const styles = {
                         <div className="modal-content shadow-lg border-0" ref={modalRef} style={{ borderRadius: '20px', overflow: 'hidden', backgroundColor: '#f8f9fa' }}>
                             <div className="modal-header text-white p-4 border-bottom-0" style={{ background: 'linear-gradient(135deg, #0f172a, #1e3a8a)' }}>
                                 <div className="d-flex flex-wrap align-items-center justify-content-between gap-3 w-100">
-                                    <div>
-                                        <div className="small text-uppercase opacity-75 fw-semibold">Sales Invoice</div>
-                                        <h5 className="modal-title fw-bold mb-1">
-                                            {editingOrder ? "Edit Bill" : "Generate Bill"}
-                                        </h5>
-                                        <div className="small opacity-75">Totals, tax, discount and due balance update automatically.</div>
+                                    <div className="d-flex align-items-center gap-2">
+                                        <div>
+                                            <div className="small text-uppercase opacity-75 fw-semibold">Sales Invoice</div>
+                                            <h5 className="modal-title fw-bold mb-1">
+                                                {editingOrder ? "Edit Bill" : "Generate Bill"}
+                                            </h5>
+                                            <div className="small opacity-75">Totals, tax, discount and due balance update automatically.</div>
+                                        </div>
+                                        <button type="button" className="btn btn-sm btn-light" onClick={()=>setFormSettingsOpen(true)}>
+                                            <i className="bi bi-sliders2 me-1"></i>Form
+                                        </button>
+                                        <button type="button" className="btn btn-sm btn-light" onClick={()=>setItemSettingsOpen(true)}>
+                                            <i className="bi bi-layout-three-columns me-1"></i>Bill Items
+                                        </button>
                                     </div>
-                                    <input
-                                        className={`w-100 form-control shadow-sm bg-white text-dark ${formData.lrNo ? 'is-valid' : ''}`}
-                                        name="lrNo"
-                                        value={formData.lrNo}
-                                        onChange={handleInputChange}
-                                        placeholder="Enter Lr No."
-                                    />
                                 </div>
                                 <button
                                     type="button"
@@ -1344,407 +1385,95 @@ const styles = {
                             <div className="modal-body p-4" style={{ background: '#f1f5f9' }}>
                                 <form onSubmit={handleSubmit}>
                                     <div className="row g-4">
-                                        {/* <div className=""> */}
-                                        {/* Top Row: Order Information and Client Details */}
-                                        <div className="d-flex flex-column flex-sm-row col-md-12 gap-3">
-
-                                            <div className="">
-                                                <div className="card shadow-sm border-0" style={{ borderRadius: '15px', backgroundColor: '#fff' }}>
-                                                    {/* <div className="d-flex align-items-center justify-content-between flex-row card-header bg-white p-3"> */}
-                                                    <div className="card-header bg-white p-3">
-                                                        <h6 className="fw-semibold text-muted">
-                                                            <i className="bi bi-truck me-2 text-primary"></i>Shipping Details
-                                                        </h6>
-                                                    </div>
-                                                    <div className="card-body p-4 bg-light">
-                                                        <div className="row g-3">
-                                                            <div className="col-md-3">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-hash me-1"></i>Inv No.
-                                                                </label>
-                                                                <input
-                                                                    className={`form-control shadow-sm bg-white ${formData.orderNumber ? 'is-valid' : ''}`}
-                                                                    name="orderNumber"
-                                                                    value={formData.orderNumber}
-                                                                    onChange={handleInputChange}
-                                                                    placeholder="Enter Invoice No."
-                                                                    required
+                                        <div className="col-md-6">
+                                            <div className="card shadow-sm border-0 h-100">
+                                                <div className="card-header bg-white p-3"><h6 className="fw-semibold text-muted mb-0"><i className="bi bi-truck me-2 text-primary"></i>Shipping Details</h6></div>
+                                                <div className="card-body bg-light">
+                                                    <div className="row g-3">
+                                                        {orderFormConfig.fields.filter(field=>field.section==="shipping"&&field.visible!==false).sort((a,b)=>a.order-b.order).map(field=>{
+                                                            const value=field.key==="orderDate"?(formData.orderDate?new Date(formData.orderDate).toISOString().slice(0,10):""):(formData[field.key]??"");
+                                                            const options=field.options||[];
+                                                            return <div key={field.key} className={`col-md-${field.width||6}`}>
+                                                                <ConfiguredField
+                                                                    field={field}
+                                                                    value={value}
+                                                                    onChange={next=>handleConfiguredOrderValue(field.key,next)}
+                                                                    options={options}
+                                                                    listId={field.key==="companyName"?"orderCompanyName":undefined}
+                                                                    listOptions={field.key==="companyName"?clients.map(client=>client.companyName):[]}
+                                                                    icon={field.key==="orderNumber"?"bi bi-hash":field.key==="orderDate"?"bi bi-calendar":field.key==="lrNo"?"bi bi-truck":field.key==="State"?"bi bi-map":field.key==="Address"?"bi bi-geo-alt":field.key==="City"?"bi bi-building":"bi bi-input-cursor"}
+                                                                    required={field.required}
                                                                 />
-                                                            </div>
-                                                            <div className="col-md-5">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-calendar me-1"></i> Bill Date
-                                                                </label>
-                                                                <input
-                                                                    type="date"
-                                                                    className={`form-control shadow-sm bg-white ${formData.orderDate ? 'is-valid' : ''}`}
-                                                                    name="orderDate"
-                                                                    value={formData.orderDate ? new Date(formData.orderDate).toISOString().split('T')[0] : ''}
-                                                                    onChange={handleInputChange}
-                                                                    placeholder="Enter order date"
-                                                                    required
-                                                                />
-                                                            </div>
-
-                                                            <div className="col-md-4">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-map me-1"></i> State
-                                                                </label>
-                                                                <input
-                                                                    className={`form-control shadow-sm bg-white ${formData.State ? 'is-valid' : ''}`}
-                                                                    name="State"
-                                                                    value={formData.State}
-                                                                    onChange={handleInputChange}
-                                                                    placeholder="Enter state"
-                                                                    required
-                                                                />
-                                                            </div>
-
-                                                            <div className="col-md-8">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-geo-alt me-1"></i> Address
-                                                                </label>
-                                                                <input
-                                                                    className={`form-control shadow-sm bg-white ${formData.Address ? 'is-valid' : ''}`}
-                                                                    name="Address"
-                                                                    value={formData.Address}
-                                                                    onChange={handleInputChange}
-                                                                    placeholder="Enter address"
-                                                                    required
-                                                                />
-                                                            </div>
-
-                                                            <div className="col-md-4">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-building me-1"></i> City
-                                                                </label>
-                                                                <input
-                                                                    className={`form-control shadow-sm bg-white ${formData.City ? 'is-valid' : ''}`}
-                                                                    name="City"
-                                                                    value={formData.City}
-                                                                    onChange={handleInputChange}
-                                                                    placeholder="Enter city"
-                                                                    required
-                                                                />
-                                                            </div>
-
-                                                        </div>
+                                                            </div>;
+                                                        })}
                                                     </div>
                                                 </div>
-
                                             </div>
-                                            <div className="">
-
-                                                <div className="card shadow-sm border-0" style={{ borderRadius: '15px', backgroundColor: '#fff' }}>
-                                                    <div className="card-header bg-white p-3">
-                                                        <h6 className="fw-semibold text-muted">
-                                                            <i className="bi bi-person me-2 text-primary"></i>Client Details
-                                                        </h6>
-                                                    </div>
-                                                    <div className="card-body p-4 bg-light">
-                                                        <div className="row g-3">
-
-                                                            <div className="col-md-4">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-building me-1"></i> Company Name
-                                                                </label>
-                                                                <input
-                                                                    className={`form-control shadow-sm bg-white ${formData.companyName ? 'is-valid' : 'is-invalid'}`}
-                                                                    name="companyName"
-                                                                    value={formData.companyName}
-                                                                    onChange={handleInputChange}
-                                                                    placeholder="Enter company name"
-                                                                    list="companyName"
-                                                                    required
-                                                                />
-                                                                <datalist id="companyName">
-                                                                    <option value="">Select Client</option>
-                                                                    {clients.map((client) => (
-                                                                        // console.log(client.companyName, "client.companyName"),
-                                                                        <option key={client._id} value={client.companyName} >
-                                                                        </option>
-                                                                    ))}
-                                                                </datalist>
-
-                                                            </div>
-                                                            <div className="col-md-4">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-card-text me-1"></i> GST No.
-                                                                </label>
-                                                                <input
-                                                                    className={`form-control shadow-sm bg-white ${formData.gstNumber ? 'is-valid' : ''}`}
-                                                                    name="gstNumber"
-                                                                    value={formData.gstNumber}
-                                                                    onChange={handleInputChange}
-                                                                    placeholder="Enter GST number"
-                                                                />
-                                                            </div>
-                                                            <div className="col-md-4">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-calendar-check me-1"></i>Payment Terms
-                                                                </label>
-                                                                <select
-                                                                    className={`form-select shadow-sm bg-white ${formData.paymentTerms ? 'is-valid' : ''}`}
-                                                                    name="paymentTerms"
-                                                                    value={formData.paymentTerms}
-                                                                    onChange={handleInputChange}
-                                                                    required
-                                                                >
-                                                                    <option value="30">30 days</option>
-                                                                    <option value="60">60 days</option>
-                                                                    <option value="90">90 days</option>
-                                                                    <option value="Advance">Advance</option>
-                                                                </select>
-                                                            </div>
-                                                            <div className="col-md-4">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-receipt-cutoff"></i> Challan No.
-                                                                </label>
-                                                                <input
-                                                                    className={`form-control shadow-sm bg-white ${formData.challanNumber ? 'is-valid' : 'is-invalid'}`}
-                                                                    name="challanNumber"
-                                                                    value={formData.challanNumber}
-                                                                    onChange={handleInputChange}
-                                                                    placeholder="Enter Challan No."
-                                                                    required
-                                                                />
-                                                            </div>
-                                                            <div className="col-md-4">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-percent me-1"></i> Tax
-                                                                </label>
-                                                                <input
-                                                                    type="number"
-                                                                    className={`form-control shadow-sm bg-white ${formData.taxPercentage ? 'is-valid' : ''}`}
-                                                                    name="taxPercentage"
-                                                                    value={formData.taxPercentage}
-                                                                    onChange={handleInputChange}
-                                                                    placeholder="Enter tax percentage"
-                                                                />
-                                                            </div>
-                                                            <div className="col-md-4">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-percent me-1"></i> Discount
-                                                                </label>
-                                                                <input
-                                                                    type="number"
-                                                                    className={`form-control shadow-sm bg-white ${formData.discountRate ? 'is-valid' : ''}`}
-                                                                    name="discountRate"
-                                                                    value={formData.discountRate}
-                                                                    onChange={handleInputChange}
-                                                                    placeholder="Enter tax percentage"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                            </div>
-
                                         </div>
 
-                                        <div className="d-flex flex-column col-md-12 mt-3">
-                                            {/* 
-@media (min-width:1400px) {
-    .modal-xl {
-        --bs-modal-width: 75vw
-    }
-}
- */}
-                                            <div className="">
-                                                <div className="card shadow-sm border-0" style={{ borderRadius: '15px', backgroundColor: '#fff' }}>
-                                                    <div className="card-header bg-white p-3 d-flex justify-content-between align-items-center">
-                                                        <h6 className="fw-semibold text-muted mb-0">
-                                                            <i className="bi bi-box me-2 text-primary"></i>Bill Information
-                                                        </h6>
-                                                        <div className="btn btn-outline-primary btn-sm" onClick={addSubOrderRow}>
-                                                            <i className="bi bi-plus-circle"></i>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="card-body p-4 bg-light">
-                                                        <div className="row g-3">
-                                                            <div className="col-md-2">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-tag me-1"></i>Design No.
-                                                                </label>
-                                                            </div>
-                                                            <div className="col-md-2">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-bag-check me-1"></i>Product Name
-                                                                </label>
-                                                            </div>
-                                                            <div className="col-md-2">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-upc-scan me-1"></i>HSN Code
-                                                                </label>
-                                                            </div>
-
-                                                            <div className="col-md-1">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-stack me-1"></i>Qty
-                                                                </label>
-                                                            </div>
-                                                            <div className="col-md-1">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-scissors me-1"></i>Cut
-                                                                </label>
-                                                            </div>
-                                                            <div className="col-md-1">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    <i className="bi bi-rulers me-1"></i>MTR
-                                                                </label>
-                                                            </div>
-
-                                                            <div className="col-md-1">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    {/* <i className="bi bi-currency-exchange me-1"></i> */}
-                                                                    <i className="bi bi-currency-rupee me-1"></i>Rate
-                                                                </label>
-                                                            </div>
-                                                            <div className="col-md-2">
-                                                                <label className="form-label fw-semibold text-muted">
-                                                                    {/* <i className="bi bi-tag me-1"></i> */}
-                                                                    <i className="bi bi-box-seam me-1"></i>QtyUnit
-                                                                </label>
-                                                            </div>
-
-                                                        </div>
-                                                        {subOrders.map((order, index) => (
-                                                            <div key={index} className="row g-3 mb-2">
-                                                                <div className="col-md-2">
-                                                                    {/* <label className="form-label fw-semibold text-muted">Design No.</label> */}
-                                                                    <input
-                                                                        className="form-control"
-                                                                        name="designNumber"
-                                                                        value={order.designNumber}
-                                                                        onChange={(e) => handleSubOrderChange(index, e)}
-                                                                        placeholder="Enter Design No."
-                                                                    />
-                                                                </div>
-                                                                <div className="col-md-2">
-                                                                    {/* <label className="form-label fw-semibold text-muted">Order Name</label> */}
-                                                                    <input
-                                                                        className="form-control"
-                                                                        name="orderName"
-                                                                        value={order.orderName}
-                                                                        onChange={(e) => handleSubOrderChange(index, e)}
-                                                                        placeholder="Enter Order Name"
-                                                                        list="orderName"
-                                                                    />
-                                                                    <datalist id="orderName">
-                                                                        {products.map((p) => (
-                                                                            <option key={p._id} value={p.productName}></option>
-                                                                        ))}
-                                                                    </datalist>
-                                                                </div>
-                                                                <div className="col-md-2">
-                                                                    <input
-                                                                        type="number"
-                                                                        className="form-control"
-                                                                        name="hsnCode"
-                                                                        value={order.hsnCode}
-                                                                        onChange={(e) => handleSubOrderChange(index, e)}
-                                                                        placeholder="Enter hsnCode"
-                                                                    />
-                                                                </div>
-
-
-                                                                <div className="col-md-1">
-                                                                    {/* <label className="form-label fw-semibold text-muted">Quantity</label> */}
-                                                                    <input
-                                                                        type="number"
-                                                                        className="form-control"
-                                                                        name="quantity"
-                                                                        value={order.quantity}
-                                                                        onChange={(e) => handleSubOrderChange(index, e)}
-                                                                        placeholder="Enter quantity"
-                                                                    />
-                                                                </div>
-                                                                <div className="col-md-1">
-                                                                    {/* <label className="form-label fw-semibold text-muted">Short Pcs</label> */}
-                                                                    <input
-                                                                        type="number"
-                                                                        className="form-control"
-                                                                        name="cut"
-                                                                        value={order.cut}
-                                                                        onChange={(e) => handleSubOrderChange(index, e)}
-                                                                        placeholder="Enter cut"
-                                                                    />
-                                                                </div>
-                                                                {/* <label className="form-label fw-semibold text-muted">Short Pcs</label> */}
-                                                                {/* <div className="col-md-1">
-                                                                    <input
-                                                                        type="number"
-                                                                        className="form-control"
-                                                                        name="shortPcs"
-                                                                        value={order.shortPcs}
-                                                                        onChange={(e) => handleSubOrderChange(index, e)}
-                                                                        placeholder="Enter Short Pcs"
-                                                                    />
-                                                                </div> */}
-                                                                <div className="col-md-1">
-                                                                    <input
-                                                                        type="number"
-                                                                        className="form-control"
-                                                                        name="MTR"
-                                                                        value={order.MTR}
-                                                                        onChange={(e) => handleSubOrderChange(index, e)}
-                                                                        placeholder="Enter MTR"
-                                                                    />
-                                                                </div>
-                                                                <div className="col-md-1">
-                                                                    {/* <label className="form-label fw-semibold text-muted">Unit Price</label> */}
-                                                                    <input
-                                                                        type="number"
-                                                                        className="form-control"
-                                                                        name="unitPrice"
-                                                                        value={order.unitPrice}
-                                                                        onChange={(e) => handleSubOrderChange(index, e)}
-                                                                        placeholder="Enter Unit Price"
-                                                                    />
-                                                                </div>
-                                                                <div className="col-md-1">
-                                                                    {/* <input
-                                                                        type="text"
-                                                                        className="form-control"
-                                                                        name="qtyUnit"
-                                                                        value={order.qtyUnit}
-                                                                        onChange={(e) => handleSubOrderChange(index, e)}
-                                                                        placeholder="Enter qtyUnit"
-                                                                    /> */}
-                                                                    <select
-                                                                        className={`form-select shadow-sm bg-white`}
-                                                                        name="qtyUnit"
-                                                                        value={order.qtyUnit}
-                                                                        onChange={(e) => handleSubOrderChange(index, e)}
-                                                                        required
-                                                                    >
-                                                                        <option value="">Select QtyUnit</option>
-                                                                        <option value="MTR">MTR</option>
-                                                                        <option value="PCS">PCS</option>
-                                                                        <option value="BOX">BOX</option>
-                                                                        <option value="UNT">UNT</option>
-                                                                    </select>
-                                                                </div>
-
-                                                                <div className="col-md-1 d-flex align-items-center">
-                                                                    {subOrders.length > 1 && (
-                                                                        <button className="btn btn-danger btn-sm" onClick={() => deleteSubOrder(index)}>
-                                                                            <i className="bi bi-trash"></i>
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        ))}
+                                        <div className="col-md-6">
+                                            <div className="card shadow-sm border-0 h-100">
+                                                <div className="card-header bg-white p-3"><h6 className="fw-semibold text-muted mb-0"><i className="bi bi-person me-2 text-primary"></i>Client Details</h6></div>
+                                                <div className="card-body bg-light">
+                                                    <div className="row g-3">
+                                                        {orderFormConfig.fields.filter(field=>field.section==="client"&&field.visible!==false).sort((a,b)=>a.order-b.order).map(field=>{
+                                                            const value=formData[field.key]??"";
+                                                            return <div key={field.key} className={`col-md-${field.width||6}`}>
+                                                                <ConfiguredField
+                                                                    field={field}
+                                                                    value={value}
+                                                                    onChange={next=>handleConfiguredOrderValue(field.key,next)}
+                                                                    options={field.options||[]}
+                                                                    listId={field.key==="companyName"?"orderCompanyName":undefined}
+                                                                    listOptions={field.key==="companyName"?clients.map(client=>client.companyName):[]}
+                                                                    icon={field.key==="companyName"?"bi bi-building":field.key==="gstNumber"?"bi bi-card-text":field.key==="paymentTerms"?"bi bi-calendar-check":field.key==="challanNumber"?"bi bi-receipt-cutoff":"bi bi-percent"}
+                                                                    required={field.required}
+                                                                />
+                                                            </div>;
+                                                        })}
                                                     </div>
                                                 </div>
                                             </div>
-
-
                                         </div>
 
-
+                                        <div className="col-12">
+                                            <div className="card shadow-sm border-0">
+                                                <div className="card-header bg-white p-3 d-flex justify-content-between align-items-center">
+                                                    <h6 className="fw-semibold text-muted mb-0"><i className="bi bi-box me-2 text-primary"></i>Bill Information</h6>
+                                                    <button type="button" className="btn btn-outline-primary btn-sm" onClick={addSubOrderRow}><i className="bi bi-plus-circle me-1"></i>Add Item</button>
+                                                </div>
+                                                <div className="card-body bg-light">
+                                                    {subOrders.map((order,index)=>{
+                                                        const itemFields=orderItemConfig.fields.filter(field=>field.visible!==false).sort((a,b)=>a.order-b.order);
+                                                        return <div key={index} className="border rounded-3 bg-white p-2 mb-2">
+                                                            <div className="row g-2 align-items-end">
+                                                                {itemFields.map(field=>{
+                                                                    const value=order[field.key]??"";
+                                                                    if(field.key==="MTR"&&field.formula){
+                                                                        // Formula-driven values remain editable through configuration but are calculated automatically.
+                                                                    }
+                                                                    return <div key={field.key} className={`col-md-${field.width||1}`}>
+                                                                        <ConfiguredField
+                                                                            field={field}
+                                                                            value={value}
+                                                                            onChange={next=>handleSubOrderValueChange(index,field.key,next)}
+                                                                            options={field.options||[]}
+                                                                            listId={field.key==="orderName"?"orderItemName":undefined}
+                                                                            listOptions={field.key==="orderName"?products.map(product=>product.productName):[]}
+                                                                            icon=""
+                                                                            required={field.required}
+                                                                            readOnly={Boolean(field.formula)}
+                                                                        />
+                                                                    </div>;
+                                                                })}
+                                                                {subOrders.length>1&&<div className="col-md-1"><button type="button" className="btn btn-outline-danger btn-sm w-100" onClick={()=>deleteSubOrder(index)} title="Remove item"><i className="bi bi-trash"></i></button></div>}
+                                                            </div>
+                                                        </div>;
+                                                    })}
+                                                    <div className="small text-secondary mt-2"><i className="bi bi-calculator me-1"></i>Number fields accept expressions such as <b>10*5</b>, <b>100/4</b>, or <b>(10+5)*2</b>.</div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div className="card border-0 shadow-sm mt-4" style={{ borderRadius: '14px' }}>
@@ -1806,6 +1535,27 @@ const styles = {
                     </div>
                 </div>
             )}
+
+            <FormConfigurator
+                open={formSettingsOpen}
+                onClose={()=>setFormSettingsOpen(false)}
+                title="Customize Bill Form"
+                subtitle="Arrange Order fields, show or hide them, change field type and width, and add automatic formulas."
+                fields={orderFormConfig.fields}
+                saving={orderFormConfig.saving}
+                onSave={orderFormConfig.save}
+                onReset={async()=>{const defaults=await orderFormConfig.reset();orderFormConfig.setFields(defaults);setFormSettingsOpen(false);}}
+            />
+            <FormConfigurator
+                open={itemSettingsOpen}
+                onClose={()=>setItemSettingsOpen(false)}
+                title="Customize Bill Information"
+                subtitle="Drag and drop item columns, change their width/type, or set formulas for numeric columns."
+                fields={orderItemConfig.fields}
+                saving={orderItemConfig.saving}
+                onSave={orderItemConfig.save}
+                onReset={async()=>{const defaults=await orderItemConfig.reset();orderItemConfig.setFields(defaults);setItemSettingsOpen(false);}}
+            />
 
             {showEwayBillModal && (
                 <div className="modal fade show d-block" tabIndex="-1">

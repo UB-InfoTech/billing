@@ -442,6 +442,7 @@ export default function DynamicTable({
       label,
       visible:true,
       locked:false,
+      custom:true,
       kind:"custom",
       fieldType:customForm.fieldType,
       options:customForm.fieldType==="select"?options:[],
@@ -473,7 +474,8 @@ export default function DynamicTable({
       defaultValue:"",
       sourceKeys:sources,
       separator:mergeForm.separator,
-      order:prev.length
+      order:prev.length,
+      width:6
     }].map((column,index)=>({...column,order:index})));
 
     setMergeForm({label:"",sources:[],separator:" - "});

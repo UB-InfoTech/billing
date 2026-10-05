@@ -757,8 +757,6 @@ function Clients() {
         onSave={clientFormConfig.save}
         onReset={async()=>{const defaults=await clientFormConfig.reset();clientFormConfig.setFields(defaults);setFormSettingsOpen(false);}}
       />
-
-    </>
         </div>
 );
 }

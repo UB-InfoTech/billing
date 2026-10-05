@@ -583,7 +583,6 @@ export default function DynamicTable({
   };
 
   const openSettings=()=>{
-    setActiveTab("columns");
     setSearchTerm("");
     setError("");
     setShowSettings(true);

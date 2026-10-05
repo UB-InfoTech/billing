@@ -514,7 +514,6 @@ export default function DynamicTable({
         authConfig()
       );
 
-      setSavedConfig(response.data);
       setDraft(mergeSavedColumns(columns,response.data?.columns));
       setShowSettings(false);
     }catch(saveError){

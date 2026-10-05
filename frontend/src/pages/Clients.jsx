@@ -48,7 +48,8 @@ function Clients() {
     paymentTerms: '30',
     discountRate: 0,
     accountStatus: 'Active',
-    notes: ''
+    notes: '',
+    customFields: {}
   });
 
   // -----
@@ -70,6 +71,27 @@ function Clients() {
   const [editingClient, setEditingClient] = useState(null);
   const [formSettingsOpen,setFormSettingsOpen]=useState(false);
   const clientFormConfig=useFormConfiguration("clients.form",CLIENT_FORM_FIELDS);
+  const clientSectionTitle=section=>String(section||"General").replace(/[_-]+/g," ").replace(/\b\w/g,letter=>letter.toUpperCase());
+  const clientSectionIcon=section=>{
+    const value=String(section||"").toLowerCase();
+    if(value.includes("address"))return "bi-geo-alt";
+    if(value.includes("business")||value.includes("company"))return "bi-briefcase";
+    if(value.includes("payment"))return "bi-wallet2";
+    return value.includes("basic")? "bi-person":"bi-folder2-open";
+  };
+  const clientValue=field=>field.custom
+    ? newClient.customFields?.[field.key]??newClient[field.key]??field.defaultValue??""
+    : newClient[field.key]??field.defaultValue??"";
+  const updateClientField=(field,value)=>{
+    setNewClient(prev=>{
+      const next=field.custom
+        ? {...prev,[field.key]:value,customFields:{...(prev.customFields||{}),[field.key]:value}}
+        : {...prev,[field.key]:value};
+      return applyFormulas(clientFormConfig.fields,next);
+    });
+  };
+  const visibleClientFields=clientFormConfig.fields.filter(field=>field.visible!==false);
+  const clientSections=[...new Set(visibleClientFields.map(field=>field.section||"General"))];
 
   useEffect(() => {
     // setLoading(true);
@@ -207,7 +229,8 @@ function Clients() {
         paymentTerms: '30',
         discountRate: 0,
         accountStatus: 'Active',
-        notes: ''
+        notes: '',
+        customFields: {}
       });
       fetchClients();
     } catch (error) {
@@ -219,8 +242,12 @@ function Clients() {
 
   const handleEditClient = (client) => {
     setEditingClient(client._id);
-    // setNewClient({ name: client.name, gstin: client.gstin, credit_limit: client.credit_limit, outstanding_balance: client.outstanding_balance });
-    setNewClient(client);
+    const hydrated={
+      ...client,
+      ...((client.customFields&&typeof client.customFields==="object")?client.customFields:{}),
+      customFields:{...(client.customFields||{})}
+    };
+    setNewClient(hydrated);
     setShowModal(true);
   };
 
@@ -243,7 +270,8 @@ function Clients() {
           paymentTerms: newClient.paymentTerms || '30',
           discountRate: Number(newClient.discountRate || 0),
           accountStatus: newClient.accountStatus || 'Active',
-          notes: newClient.notes || ''
+          notes: newClient.notes || '',
+          customFields: newClient.customFields || {}
         },
         {
           headers: {
@@ -268,11 +296,11 @@ function Clients() {
         gstNumber: '',
         companyName: '',
         businessType: '',
-        paymentTerms: '30 days',
+        paymentTerms: '30',
         discountRate: 0,
         accountStatus: 'Active',
-        notes: ''
-
+        notes: '',
+        customFields: {}
       });
 
       fetchClients();
@@ -610,7 +638,7 @@ function Clients() {
                         {editingClient ? "Edit Client" : "Add New Client"}
                       </h5>
                       <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>setFormSettingsOpen(true)}>
-                        <i className="bi bi-sliders2 me-1"></i>Customize Form
+                        <i className="bi bi-sliders2 me-1"></i>Customize form
                       </button>
                     </div>
                     <button
@@ -641,77 +669,73 @@ function Clients() {
                   {/* <div className="modal-body p-3" style={{ maxHeight: '60vh', overflowY: 'auto' }}> */}
                   <form onSubmit={handleAddClient}>
                     <div className="modal-body p-3">
-                      <div className="row g-0">
-                        {[
-                          ["basic","Basic Information","bi-person"],
-                          ["address","Address Details","bi-geo-alt"],
-                          ["business","Business Details","bi-briefcase"],
-                          ["additional","Additional Information","bi-info-circle"]
-                        ].map(([section,title,icon])=>{
-                          const sectionFields=clientFormConfig.fields.filter(field=>field.section===section&&field.visible!==false).sort((a,b)=>(a.order??0)-(b.order??0));
-                          return (
-                            <div key={section} className="col-md-6 p-2">
-                              <div className="card shadow-sm border-0 h-100" style={{borderRadius:'10px',backgroundColor:'#fff'}}>
-                                <div className="card-header bg-white p-2">
-                                  <h6 className="fw-semibold text-muted mb-0"><i className={`bi ${icon} me-2 text-primary`}></i>{title}</h6>
-                                </div>
-                                <div className="card-body p-3 bg-light">
-                                  <div className="row g-3">
-                                    {sectionFields.map(field=>{
-                                      const fieldValue=newClient[field.key]??"";
-                                      const common={field,value:fieldValue,onChange:value=>setNewClient(prev=>applyFormulas(clientFormConfig.fields,{...prev,[field.key]:value}))};
-                                      let extra=null;
-                                      let options=field.options||[];
-                                      if(field.key==="state")options=indianStates;
-                                      if(field.key==="city")options=newClient.state?(stateCityMapping[newClient.state]||[]):[];
-                                      if(field.key==="companyName"){
-                                        extra=<ConfiguredField {...common} field={{...field,fieldType:field.fieldType||"text"}} listId="clientCompanyName" listOptions={clients.map(client=>client.companyName)} icon="bi bi-building"/>;
-                                        return <div key={field.key} className={`col-md-${field.width||6}`}>{extra}</div>;
-                                      }
-                                      if(field.key==="gstNumber"){
-                                        const suffix=(
-                                          <button type="button" className="btn btn-sm btn-outline-secondary mt-2" onClick={()=>{
-                                            if(!newClient.gstNumber){alert("❌ Please enter a GST Number");return;}
-                                            const gstRegex=/^(0[1-9]|1[0-9]|2[0-9]|3[0-7])[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
-                                            if(gstRegex.test(newClient.gstNumber)){fetchGstDetails(newClient.gstNumber);alert("✅ GST Number fetched successfully");}
-                                            else alert("❌ Invalid GST Number format");
-                                          }}>Fetch GST Details</button>
-                                        );
-                                        return <div key={field.key} className={`col-md-${field.width||6}`}><ConfiguredField {...common} icon="bi bi-card-text" suffix={suffix}/></div>;
-                                      }
-                                      if(field.key==="state"){
-                                        return <div key={field.key} className={`col-md-${field.width||6}`}><ConfiguredField {...common} options={options} icon="bi bi-map" /></div>;
-                                      }
-                                      if(field.key==="city"){
-                                        return <div key={field.key} className={`col-md-${field.width||6}`}><ConfiguredField {...common} options={options} disabled={!newClient.state} icon="bi bi-building" /></div>;
-                                      }
-                                      return <div key={field.key} className={`col-md-${field.width||6}`}><ConfiguredField {...common} icon="" /></div>;
-                                    })}
-                                  </div>
+                      <div className="row g-3">
+                        {clientSections.map(section=>(
+                          <div className="col-12 col-lg-6" key={section}>
+                            <section className="card border-0 shadow-sm h-100">
+                              <div className="card-header bg-white d-flex align-items-center gap-2 py-3">
+                                <i className={`bi ${clientSectionIcon(section)} text-primary`}></i>
+                                <h6 className="mb-0 fw-semibold">{clientSectionTitle(section)}</h6>
+                              </div>
+                              <div className="card-body">
+                                <div className="row g-3">
+                                  {visibleClientFields.filter(field=>(field.section||"General")===section).sort((a,b)=>(a.order??0)-(b.order??0)).map(field=>{
+                                    const common={
+                                      field,
+                                      value:clientValue(field),
+                                      onChange:value=>updateClientField(field,value)
+                                    };
+                                    if(field.key==="state"){
+                                      return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
+                                        <ConfiguredField {...common} options={indianStates}/>
+                                      </div>;
+                                    }
+                                    if(field.key==="city"){
+                                      return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
+                                        <ConfiguredField {...common} options={newClient.state?(stateCityMapping[newClient.state]||[]):[]} disabled={!newClient.state}/>
+                                      </div>;
+                                    }
+                                    if(field.key==="companyName"&&!field.custom){
+                                      return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
+                                        <ConfiguredField {...common} listId="clientCompanyName" listOptions={clients.map(client=>client.companyName)}/>
+                                      </div>;
+                                    }
+                                    if(field.key==="gstNumber"&&!field.custom){
+                                      const suffix=(
+                                        <button type="button" className="btn btn-sm btn-outline-secondary mt-2" onClick={()=>{
+                                          const gst=String(newClient.gstNumber||"").trim().toUpperCase();
+                                          if(!gst){alert("Please enter a GST number first.");return;}
+                                          const gstRegex=/^(0[1-9]|1[0-9]|2[0-9]|3[0-7])[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+                                          if(!gstRegex.test(gst)){alert("Please enter a valid GST number.");return;}
+                                          fetchGstDetails(gst);
+                                        }}>Fetch GST details</button>
+                                      );
+                                      return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
+                                        <ConfiguredField {...common} suffix={suffix}/>
+                                      </div>;
+                                    }
+                                    return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
+                                      <ConfiguredField {...common}/>
+                                    </div>;
+                                  })}
                                 </div>
                               </div>
-                            </div>
-                          );
-                        })}
+                            </section>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
-                    <div className="modal-footer bg-light p-3 border-top-0 sticky-bottom">
-                      <button type="button" className="btn btn-outline-secondary me-2" onClick={()=>setShowModal(false)}>Cancel</button>
-                      {editingClient ? (
-                        <button
-                          type="button"
-                          className="btn btn-primary px-5"
-                          onClick={handleUpdateClient}
-                          disabled={!clientFormConfig.fields.filter(field=>field.visible!==false&&field.required).every(field=>String(newClient[field.key]??"").trim())}
-                        >Update Client</button>
-                      ) : (
-                        <button
-                          type="submit"
-                          className="btn btn-primary px-5"
-                          disabled={!clientFormConfig.fields.filter(field=>field.visible!==false&&field.required).every(field=>String(newClient[field.key]??"").trim())}
-                        >Add Client</button>
-                      )}
+                    <div className="modal-footer bg-white p-3 border-top sticky-bottom">
+                      <button type="button" className="btn btn-light border" onClick={()=>setShowModal(false)}>Cancel</button>
+                      <button
+                        type={editingClient?"button":"submit"}
+                        className="btn btn-primary px-4"
+                        onClick={editingClient?handleUpdateClient:undefined}
+                        disabled={!visibleClientFields.filter(field=>field.required).every(field=>String(clientValue(field)??"").trim())}
+                      >
+                        {editingClient?"Update client":"Add client"}
+                      </button>
                     </div>
                   </form>
 

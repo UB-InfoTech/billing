@@ -205,7 +205,7 @@ export default function DynamicTable({
     ()=>rows.map((row,index)=>String(getRowKey(row,index))).filter(Boolean),
     [rows,getRowKey]
   );
-  const rowKeySignature=useMemo(()=>rowKeyList.join("|"),[rowKeyList]);
+  const rowKeySignature=useMemo(()=>JSON.stringify(rowKeyList),[rowKeyList]);
   const customFieldSignature=useMemo(
     ()=>JSON.stringify(customColumns.map(column=>({key:column.key,fieldType:column.fieldType,options:column.options,defaultValue:column.defaultValue}))),
     [customColumns]
@@ -247,8 +247,9 @@ export default function DynamicTable({
 
   useEffect(()=>{
     if(loadingConfig)return;
-    const rowKeys=rowKeyList;
-    if(!customColumns.length||!rowKeys.length){
+    const rowKeys=JSON.parse(rowKeySignature||"[]");
+    const hasCustomFields=customFieldSignature!=="[]";
+    if(!hasCustomFields||!rowKeys.length){
       setCustomValues({});
       return;
     }

@@ -1,0 +1,61 @@
+import {useCallback,useEffect,useMemo,useState} from "react";
+import axios from "axios";
+
+const apiBase=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
+const authConfig=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
+
+export const mergeFormFields=(baseFields,savedFields)=>{
+  const base=baseFields.map((field,index)=>({
+    key:field.key,label:field.label||field.key,visible:field.visible!==false,required:Boolean(field.required),
+    locked:Boolean(field.locked),fieldType:field.fieldType||"text",width:Number(field.width)||6,
+    order:Number.isFinite(Number(field.order))?Number(field.order):index,section:field.section||"header",
+    options:Array.isArray(field.options)?field.options.slice():[],formula:field.formula||""
+  }));
+  const saved=Array.isArray(savedFields)?savedFields:[];
+  const byKey=new Map(saved.map(field=>[field.key,field]));
+  return base.map((field,index)=>{
+    const savedField=byKey.get(field.key);
+    if(!savedField)return {...field,order:index};
+    return {...field,label:savedField.label||field.label,visible:field.locked?true:savedField.visible!==false,
+      required:field.required? savedField.required!==false:false,fieldType:savedField.fieldType||field.fieldType,
+      width:Math.min(12,Math.max(1,Number(savedField.width)||field.width)),
+      order:Number.isFinite(Number(savedField.order))?Number(savedField.order):index,formula:savedField.formula||""};
+  }).sort((a,b)=>(a.order??0)-(b.order??0)).map((field,index)=>({...field,order:index}));
+};
+
+export function useFormConfiguration(formKey,baseFields){
+  const baseSignature=useMemo(()=>JSON.stringify(baseFields.map(field=>({key:field.key,label:field.label,fieldType:field.fieldType,section:field.section}))),[baseFields]);
+  const [fields,setFields]=useState(()=>mergeFormFields(baseFields,[]));
+  const [loading,setLoading]=useState(true);
+  const [saving,setSaving]=useState(false);
+  const [error,setError]=useState("");
+  const load=useCallback(async()=>{
+    try{
+      setLoading(true);setError("");
+      const response=await axios.get(`${apiBase}/api/form-config/${encodeURIComponent(formKey)}`,authConfig());
+      setFields(mergeFormFields(baseFields,response.data?.fields));
+    }catch(loadError){
+      setFields(mergeFormFields(baseFields,[]));
+      setError(loadError.response?.data?.message||"Unable to load form settings.");
+    }finally{setLoading(false);}
+  },[formKey,baseSignature]);
+  useEffect(()=>{load();},[load]);
+  const save=useCallback(async(nextFields)=>{
+    try{
+      setSaving(true);setError("");
+      const response=await axios.put(`${apiBase}/api/form-config/${encodeURIComponent(formKey)}`,{fields:nextFields.map((field,index)=>({...field,order:index}))},authConfig());
+      const merged=mergeFormFields(baseFields,response.data?.fields);
+      setFields(merged);return merged;
+    }catch(saveError){setError(saveError.response?.data?.message||"Unable to save form settings.");throw saveError;}
+    finally{setSaving(false);}
+  },[formKey,baseSignature]);
+  const reset=useCallback(async()=>{
+    try{
+      setSaving(true);setError("");
+      await axios.delete(`${apiBase}/api/form-config/${encodeURIComponent(formKey)}`,authConfig());
+      const defaults=mergeFormFields(baseFields,[]);setFields(defaults);return defaults;
+    }catch(resetError){setError(resetError.response?.data?.message||"Unable to reset form settings.");throw resetError;}
+    finally{setSaving(false);}
+  },[formKey,baseSignature]);
+  return {fields,setFields,loading,saving,error,setError,save,reset,reload:load};
+};

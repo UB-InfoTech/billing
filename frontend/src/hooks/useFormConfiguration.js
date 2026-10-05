@@ -1,8 +1,22 @@
+import {evaluateArithmeticExpression} from "../utils/arithmetic";
 import {useCallback,useEffect,useMemo,useState} from "react";
 import axios from "axios";
 
 const apiBase=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const authConfig=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
+
+export const applyFormulas=(fields,values)=>{
+  const next={...values};
+  const formulaFields=(fields||[]).filter(field=>field.formula&&field.visible!==false&&(field.fieldType==="number"||field.fieldType==="currency"));
+  formulaFields.forEach(field=>{
+    try{
+      next[field.key]=evaluateArithmeticExpression(field.formula,next);
+    }catch{
+      // Keep the current value when the expression is incomplete or invalid.
+    }
+  });
+  return next;
+};
 
 export const mergeFormFields=(baseFields,savedFields)=>{
   const base=baseFields.map((field,index)=>({

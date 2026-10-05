@@ -201,6 +201,15 @@ export default function DynamicTable({
 
   const customColumns=useMemo(()=>draft.filter(column=>column.kind==="custom"),[draft]);
   const mergeSources=useMemo(()=>draft.filter(column=>column.kind!=="merged"),[draft]);
+  const rowKeyList=useMemo(
+    ()=>rows.map((row,index)=>String(getRowKey(row,index))).filter(Boolean),
+    [rows,getRowKey]
+  );
+  const rowKeySignature=useMemo(()=>rowKeyList.join("|"),[rowKeyList]);
+  const customFieldSignature=useMemo(
+    ()=>JSON.stringify(customColumns.map(column=>({key:column.key,fieldType:column.fieldType,options:column.options,defaultValue:column.defaultValue}))),
+    [customColumns]
+  );
   const visibleColumns=useMemo(()=>draft.filter(column=>column.visible!==false),[draft]);
   const filteredDraft=useMemo(()=>{
     const query=searchTerm.trim().toLowerCase();
@@ -238,7 +247,7 @@ export default function DynamicTable({
 
   useEffect(()=>{
     if(loadingConfig)return;
-    const rowKeys=rows.map((row,index)=>String(getRowKey(row,index))).filter(Boolean);
+    const rowKeys=rowKeyList;
     if(!customColumns.length||!rowKeys.length){
       setCustomValues({});
       return;
@@ -267,7 +276,7 @@ export default function DynamicTable({
 
     loadValues();
     return()=>{cancelled=true;};
-  },[tableKey,loadingConfig,rows,getRowKey,customColumns.length]);
+  },[tableKey,loadingConfig,rowKeySignature,customFieldSignature]);
 
   const findColumn=key=>draft.find(column=>column.key===key);
   const findBaseColumn=key=>columns.find(column=>column.key===key);

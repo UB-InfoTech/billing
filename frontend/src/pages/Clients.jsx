@@ -765,7 +765,8 @@ function Clients() {
         onReset={async()=>{const defaults=await clientFormConfig.reset();clientFormConfig.setFields(defaults);setFormSettingsOpen(false);}}
       />
 
-  );
+    </>
+);
 }
 
 export default Clients;

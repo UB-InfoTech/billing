@@ -96,7 +96,7 @@ function Order2() {
     // const [editIndex, setEditIndex] = useState(null);
 
     const [subOrders, setSubOrders] = useState([
-        { designNumber: "", orderName: "", hsnCode: 0, qtyUnit: "", quantity: 0, cut: 0, MTR: 0, unitPrice: 0, shortPcs: 0 }
+        { designNumber: "", orderName: "", hsnCode: 0, qtyUnit: "", quantity: 0, cut: 0, MTR: 0, unitPrice: 0, shortPcs: 0, customFields: {} }
     ]);
 
 
@@ -153,6 +153,7 @@ function Order2() {
 
         taxPercentage: 5,
         discountRate: 0,
+        customFields: {},
     });
 
 
@@ -252,37 +253,75 @@ function Order2() {
 
     const handleSubOrderValueChange=(index,name,value)=>{
         const updatedOrders=[...subOrders];
-        updatedOrders[index]={...updatedOrders[index],[name]:value};
+        const current={...(updatedOrders[index]||{}),customFields:{...((updatedOrders[index]||{}).customFields||{})}};
+        current[name]=value;
+
+        const field=orderItemConfig.fields.find(item=>item.key===name);
+        if(field?.custom)current.customFields[name]=value;
 
         if(name==="orderName"){
             const selectedProduct=products.find(product=>product.productName===value);
             if(selectedProduct){
-                updatedOrders[index].unitPrice=selectedProduct.rate||"";
-                updatedOrders[index].designNumber=selectedProduct.designNo||"";
+                current.unitPrice=selectedProduct.rate||"";
+                current.designNumber=selectedProduct.designNo||"";
             }
         }
 
-        const formulaResult=applyFormulas(orderItemConfig.fields,updatedOrders[index]);
-        updatedOrders[index]={...updatedOrders[index],...formulaResult};
-
+        const formulaResult=applyFormulas(orderItemConfig.fields,current);
+        updatedOrders[index]={...current,...formulaResult,customFields:{...current.customFields}};
         setSubOrders(updatedOrders);
         setFormData(prev=>({...prev,subOrders:updatedOrders}));
     };
 
     const handleConfiguredOrderValue=(name,value)=>{
-        if(name==="companyName"){
+        const field=orderFormConfig.fields.find(item=>item.key===name);
+        if(name==="companyName"&&!field?.custom){
             const selectedClient=clients.find(client=>client.companyName===value);
             if(selectedClient){
-                const next={...formData,companyName:value,clientId:selectedClient._id||"",Address:selectedClient.address||"",State:selectedClient.state||"",City:selectedClient.city||"",pinCode:selectedClient.pinCode||"",stateCode:selectedClient.stateCode||"",gstNumber:selectedClient.gstNumber||"",paymentTerms:selectedClient.paymentTerms||"30",discountRate:selectedClient.discountRate||"0"};
+                const next={
+                    ...formData,
+                    companyName:value,
+                    clientId:selectedClient._id||"",
+                    Address:selectedClient.address||"",
+                    State:selectedClient.state||"",
+                    City:selectedClient.city||"",
+                    pinCode:selectedClient.pinCode||"",
+                    stateCode:selectedClient.stateCode||"",
+                    gstNumber:selectedClient.gstNumber||"",
+                    paymentTerms:selectedClient.paymentTerms||"30",
+                    discountRate:selectedClient.discountRate||"0"
+                };
                 setFormData(applyFormulas(orderFormConfig.fields,next));
                 return;
             }
         }
-        const next={...formData,[name]:value};
+
+        const next=field?.custom
+            ? {...formData,[name]:value,customFields:{...(formData.customFields||{}),[name]:value}}
+            : {...formData,[name]:value};
         setFormData(applyFormulas(orderFormConfig.fields,next));
     };
 
     const fieldFor=(fields,key)=>fields.find(field=>field.key===key)||{key,label:key,fieldType:"text",width:6,visible:true,order:0};
+    const sectionTitle=section=>String(section||"General").replace(/[_-]+/g," ").replace(/\b\w/g,letter=>letter.toUpperCase());
+    const sectionIcon=section=>{
+        const value=String(section||"").toLowerCase();
+        if(value.includes("shipping"))return "bi-truck";
+        if(value.includes("client")||value.includes("customer"))return "bi-person";
+        if(value.includes("payment"))return "bi-wallet2";
+        if(value.includes("tax"))return "bi-percent";
+        return "bi-folder2-open";
+    };
+    const configuredOrderValue=field=>{
+        if(field.custom)return formData.customFields?.[field.key]??formData[field.key]??field.defaultValue??"";
+        return formData[field.key]??field.defaultValue??"";
+    };
+    const configuredItemValue=(item,field)=>{
+        if(field.custom)return item.customFields?.[field.key]??item[field.key]??field.defaultValue??"";
+        return item[field.key]??field.defaultValue??"";
+    };
+    const visibleOrderFields=orderFormConfig.fields.filter(field=>field.visible!==false);
+    const orderSections=[...new Set(visibleOrderFields.map(field=>field.section||"General"))];
 
 
     // const addSubOrderRow = () => {
@@ -304,7 +343,8 @@ function Order2() {
                 cut: 0,
                 MTR: 0,
                 unitPrice: 0,
-                shortPcs: 0
+                shortPcs: 0,
+                customFields: {}
             }
         ]);
     }, []);
@@ -569,8 +609,35 @@ function Order2() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        const requiredOrderFields=orderFormConfig.fields.filter(field=>field.visible!==false&&field.required&&!field.formula);
+        const missingOrderField=requiredOrderFields.find(field=>String(configuredOrderValue(field)??"").trim()==="");
+        if(missingOrderField){
+            alert("Please fill the required field: "+missingOrderField.label);
+            return;
+        }
+
+        const requiredItemFields=orderItemConfig.fields.filter(field=>field.visible!==false&&field.required&&!field.formula);
+        const missingItem=requiredItemFields.length
+            ? subOrders.find(item=>requiredItemFields.some(field=>String(configuredItemValue(item,field)??"").trim()===""))
+            : null;
+        if(missingItem){
+            const missingField=requiredItemFields.find(field=>String(configuredItemValue(missingItem,field)??"").trim()==="");
+            alert("Please fill the required item field: "+(missingField?.label||"item field"));
+            return;
+        }
+
+        const customOrderFields=orderFormConfig.fields.filter(field=>field.custom);
+        const orderCustomFields=Object.fromEntries(customOrderFields.map(field=>[
+            field.key,
+            formData.customFields?.[field.key]??formData[field.key]??field.defaultValue??""
+        ]));
+
         const cleanItems = subOrders.map(item => ({
             ...item,
+            customFields:Object.fromEntries(orderItemConfig.fields.filter(field=>field.custom).map(field=>[
+                field.key,
+                item.customFields?.[field.key]??item[field.key]??field.defaultValue??""
+            ])),
             quantity: Math.max(0, Number(item.quantity || 0)),
             cut: Math.max(0, Number(item.cut || 0)),
             MTR: Math.max(0, Number(item.MTR || 0)),
@@ -601,6 +668,7 @@ function Order2() {
                 taxPercentage: Math.min(100, Math.max(0, Number(formData.taxPercentage ?? 0))),
                 discountRate: Math.min(100, Math.max(0, Number(formData.discountRate ?? 0))),
                 subOrders: cleanItems,
+                customFields:orderCustomFields,
             };
 
             if (editingOrder) {
@@ -633,8 +701,18 @@ function Order2() {
 
     const handleEdit = (order) => {
         setEditingOrder(order);
-        setSubOrders(order.subOrders || []);
-        setFormData(order);
+        const hydratedItems=(order.subOrders||[]).map(item=>({
+            ...item,
+            ...((item.customFields&&typeof item.customFields==="object")?item.customFields:{}),
+            customFields:{...(item.customFields||{})}
+        }));
+        setSubOrders(hydratedItems);
+        setFormData({
+            ...order,
+            ...((order.customFields&&typeof order.customFields==="object")?order.customFields:{}),
+            customFields:{...(order.customFields||{})},
+            subOrders:hydratedItems
+        });
         setShowModal(true);
     };
 
@@ -1384,106 +1462,96 @@ const styles = {
                             </div>
                             <div className="modal-body p-4" style={{ background: '#f1f5f9' }}>
                                 <form onSubmit={handleSubmit}>
-                                    <div className="row g-4">
-                                        <div className="col-md-6">
-                                            <div className="card shadow-sm border-0 h-100">
-                                                <div className="card-header bg-white p-3"><h6 className="fw-semibold text-muted mb-0"><i className="bi bi-truck me-2 text-primary"></i>Shipping Details</h6></div>
-                                                <div className="card-body bg-light">
-                                                    <div className="row g-3">
-                                                        {orderFormConfig.fields.filter(field=>field.section==="shipping"&&field.visible!==false).sort((a,b)=>a.order-b.order).map(field=>{
-                                                            const value=field.key==="orderDate"?(formData.orderDate?new Date(formData.orderDate).toISOString().slice(0,10):""):(formData[field.key]??"");
-                                                            const options=field.options||[];
-                                                            return <div key={field.key} className={`col-md-${field.width||6}`}>
-                                                                <ConfiguredField
-                                                                    field={field}
-                                                                    value={value}
-                                                                    onChange={next=>handleConfiguredOrderValue(field.key,next)}
-                                                                    options={options}
-                                                                    listId={field.key==="companyName"?"orderCompanyName":undefined}
-                                                                    listOptions={field.key==="companyName"?clients.map(client=>client.companyName):[]}
-                                                                    icon={field.key==="orderNumber"?"bi bi-hash":field.key==="orderDate"?"bi bi-calendar":field.key==="lrNo"?"bi bi-truck":field.key==="State"?"bi bi-map":field.key==="Address"?"bi bi-geo-alt":field.key==="City"?"bi bi-building":"bi bi-input-cursor"}
-                                                                    required={field.required}
-                                                                />
-                                                            </div>;
-                                                        })}
+                                    <div className="row g-3">
+                                        {orderSections.map(section=>(
+                                            <div className="col-12" key={section}>
+                                                <section className="card border-0 shadow-sm">
+                                                    <div className="card-header bg-white d-flex align-items-center gap-2 py-3">
+                                                        <i className={`bi ${sectionIcon(section)} text-primary`}></i>
+                                                        <h6 className="mb-0 fw-semibold">{sectionTitle(section)}</h6>
                                                     </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div className="col-md-6">
-                                            <div className="card shadow-sm border-0 h-100">
-                                                <div className="card-header bg-white p-3"><h6 className="fw-semibold text-muted mb-0"><i className="bi bi-person me-2 text-primary"></i>Client Details</h6></div>
-                                                <div className="card-body bg-light">
-                                                    <div className="row g-3">
-                                                        {orderFormConfig.fields.filter(field=>field.section==="client"&&field.visible!==false).sort((a,b)=>a.order-b.order).map(field=>{
-                                                            const value=formData[field.key]??"";
-                                                            return <div key={field.key} className={`col-md-${field.width||6}`}>
-                                                                <ConfiguredField
-                                                                    field={field}
-                                                                    value={value}
-                                                                    onChange={next=>handleConfiguredOrderValue(field.key,next)}
-                                                                    options={field.options||[]}
-                                                                    listId={field.key==="companyName"?"orderCompanyName":undefined}
-                                                                    listOptions={field.key==="companyName"?clients.map(client=>client.companyName):[]}
-                                                                    icon={field.key==="companyName"?"bi bi-building":field.key==="gstNumber"?"bi bi-card-text":field.key==="paymentTerms"?"bi bi-calendar-check":field.key==="challanNumber"?"bi bi-receipt-cutoff":"bi bi-percent"}
-                                                                    required={field.required}
-                                                                />
-                                                            </div>;
-                                                        })}
+                                                    <div className="card-body">
+                                                        <div className="row g-3">
+                                                            {visibleOrderFields.filter(field=>(field.section||"General")===section).sort((a,b)=>a.order-b.order).map(field=>(
+                                                                <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
+                                                                    <ConfiguredField
+                                                                        field={field}
+                                                                        value={field.key==="orderDate"
+                                                                            ? (configuredOrderValue(field)?new Date(configuredOrderValue(field)).toISOString().slice(0,10):"")
+                                                                            : configuredOrderValue(field)}
+                                                                        onChange={next=>handleConfiguredOrderValue(field.key,next)}
+                                                                        options={field.options||[]}
+                                                                        listId={field.key==="companyName"&&!field.custom?"orderCompanyName":undefined}
+                                                                        listOptions={field.key==="companyName"&&!field.custom?clients.map(client=>client.companyName):[]}
+                                                                        icon=""
+                                                                        required={field.required}
+                                                                    />
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     </div>
-                                                </div>
+                                                </section>
                                             </div>
-                                        </div>
+                                        ))}
 
                                         <div className="col-12">
-                                            <div className="card shadow-sm border-0">
-                                                <div className="card-header bg-white p-3 d-flex justify-content-between align-items-center">
-                                                    <h6 className="fw-semibold text-muted mb-0"><i className="bi bi-box me-2 text-primary"></i>Bill Information</h6>
-                                                    <button type="button" className="btn btn-outline-primary btn-sm" onClick={addSubOrderRow}><i className="bi bi-plus-circle me-1"></i>Add Item</button>
+                                            <section className="card border-0 shadow-sm">
+                                                <div className="card-header bg-white d-flex align-items-center justify-content-between py-3">
+                                                    <div className="d-flex align-items-center gap-2">
+                                                        <i className="bi bi-box-seam text-primary"></i>
+                                                        <h6 className="mb-0 fw-semibold">Bill items</h6>
+                                                    </div>
+                                                    <button type="button" className="btn btn-primary btn-sm" onClick={addSubOrderRow}>
+                                                        <i className="bi bi-plus-lg me-1"></i>Add item
+                                                    </button>
                                                 </div>
-                                                <div className="card-body bg-light">
+                                                <div className="card-body">
                                                     {subOrders.map((order,index)=>{
                                                         const itemFields=orderItemConfig.fields.filter(field=>field.visible!==false).sort((a,b)=>a.order-b.order);
-                                                        return <div key={index} className="border rounded-3 bg-white p-2 mb-2">
-                                                            <div className="row g-2 align-items-end">
-                                                                {itemFields.map(field=>{
-                                                                    const value=order[field.key]??"";
-                                                                    if(field.key==="MTR"&&field.formula){
-                                                                        // Formula-driven values remain editable through configuration but are calculated automatically.
-                                                                    }
-                                                                    return <div key={field.key} className={`col-md-${field.width||1}`}>
-                                                                        <ConfiguredField
-                                                                            field={field}
-                                                                            value={value}
-                                                                            onChange={next=>handleSubOrderValueChange(index,field.key,next)}
-                                                                            options={field.options||[]}
-                                                                            listId={field.key==="orderName"?"orderItemName":undefined}
-                                                                            listOptions={field.key==="orderName"?products.map(product=>product.productName):[]}
-                                                                            icon=""
-                                                                            required={field.required}
-                                                                            readOnly={Boolean(field.formula)}
-                                                                        />
-                                                                    </div>;
-                                                                })}
-                                                                {subOrders.length>1&&<div className="col-md-1"><button type="button" className="btn btn-outline-danger btn-sm w-100" onClick={()=>deleteSubOrder(index)} title="Remove item"><i className="bi bi-trash"></i></button></div>}
+                                                        return (
+                                                            <div key={index} className="order-config-item-row border rounded-3 bg-light p-3 mb-3">
+                                                                <div className="d-flex align-items-center justify-content-between mb-3">
+                                                                    <span className="fw-semibold">Item {index+1}</span>
+                                                                    {subOrders.length>1&&(
+                                                                        <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>deleteSubOrder(index)}>
+                                                                            <i className="bi bi-trash me-1"></i>Remove
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                                <div className="row g-3">
+                                                                    {itemFields.map(field=>(
+                                                                        <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
+                                                                            <ConfiguredField
+                                                                                field={field}
+                                                                                value={configuredItemValue(order,field)}
+                                                                                onChange={next=>handleSubOrderValueChange(index,field.key,next)}
+                                                                                options={field.options||[]}
+                                                                                listId={field.key==="orderName"&&!field.custom?"orderItemName":undefined}
+                                                                                listOptions={field.key==="orderName"&&!field.custom?products.map(product=>product.productName):[]}
+                                                                                required={field.required}
+                                                                                readOnly={Boolean(field.formula)}
+                                                                            />
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
                                                             </div>
-                                                        </div>;
+                                                        );
                                                     })}
-                                                    <div className="small text-secondary mt-2"><i className="bi bi-calculator me-1"></i>Number fields accept expressions such as <b>10*5</b>, <b>100/4</b>, or <b>(10+5)*2</b>.</div>
+                                                    <div className="small text-secondary">
+                                                        <i className="bi bi-calculator me-1"></i>
+                                                        Number fields can use simple calculations such as <b>10*5</b> or <b>(10+5)/2</b>.
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            </section>
                                         </div>
                                     </div>
 
-                                    <div className="card border-0 shadow-sm mt-4" style={{ borderRadius: '14px' }}>
+                                    <div className="card border-0 shadow-sm mt-3">
                                         <div className="card-body p-4">
                                             <div className="row g-3 align-items-center">
                                                 <div className="col-md-7">
-                                                    <div className="fw-bold text-dark mb-1">
-                                                        <i className="bi bi-calculator me-2 text-primary"></i>Live Invoice Summary
-                                                    </div>
-                                                    <div className="small text-muted">Values are recalculated as you change quantity, rate, discount or tax.</div>
+                                                    <div className="fw-bold text-dark mb-1">Invoice summary</div>
+                                                    <div className="small text-muted">Totals update automatically while you enter the bill.</div>
                                                 </div>
                                                 <div className="col-md-5">
                                                     <div className="d-flex justify-content-between small mb-1"><span className="text-muted">Items Subtotal</span><strong>₹{orderTotals.subtotal.toFixed(2)}</strong></div>
@@ -1491,45 +1559,23 @@ const styles = {
                                                     <div className="d-flex justify-content-between small mb-1"><span className="text-muted">Tax</span><strong>₹{orderTotals.tax.toFixed(2)}</strong></div>
                                                     <div className="d-flex justify-content-between small mb-2"><span className="text-muted">Round Off</span><strong>₹{orderTotals.roundOff.toFixed(2)}</strong></div>
                                                     <div className="d-flex justify-content-between align-items-center border-top pt-2">
-                                                        <span className="fw-bold">Invoice Total</span>
+                                                        <span className="fw-bold">Invoice total</span>
                                                         <span className="fs-4 fw-bold text-primary">₹{orderTotals.grandTotal.toFixed(2)}</span>
                                                     </div>
                                                     <div className="d-flex justify-content-between mt-2"><span className="text-muted">Paid</span><strong className="text-success">₹{orderTotals.paid.toFixed(2)}</strong></div>
-                                                    <div className="d-flex justify-content-between"><span className="text-muted">Current Due</span><strong className="text-danger">₹{orderTotals.due.toFixed(2)}</strong></div>
+                                                    <div className="d-flex justify-content-between"><span className="text-muted">Current due</span><strong className="text-danger">₹{orderTotals.due.toFixed(2)}</strong></div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Submit Button */}
-                                    <div className="text-center mt-4">
-                                        <button
-                                            type="submit"
-                                            className="btn btn-primary btn-lg px-5 shadow"
-                                            disabled={orderSubmitting}
-
-                                            style={{
-                                                backgroundColor: '#b8d4ff',
-                                                borderColor: '#b8d4ff',
-                                                color: '#1e40af',
-                                                borderRadius: '12px',
-                                                transition: 'all 0.3s ease',
-                                            }}
-                                            onMouseEnter={(e) => {
-                                                e.target.style.backgroundColor = '#93c5fd';
-                                                e.target.style.borderColor = '#93c5fd';
-                                                e.target.style.transform = 'scale(1.05)';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                                e.target.style.backgroundColor = '#b8d4ff';
-                                                e.target.style.borderColor = '#b8d4ff';
-                                                e.target.style.transform = 'scale(1)';
-                                            }}
-                                        >
-                                            {orderSubmitting ? "Saving..." : (editingOrder ? "Update Order" : "Save Order")}
+                                    <div className="d-flex justify-content-end gap-2 mt-4">
+                                        <button type="button" className="btn btn-light border" onClick={()=>setShowModal(false)}>Cancel</button>
+                                        <button type="submit" className="btn btn-primary px-4" disabled={orderSubmitting}>
+                                            {orderSubmitting?"Saving...":(editingOrder?"Update bill":"Save bill")}
                                         </button>
                                     </div>
-                                </form>
+                                </form>                         </form>
                             </div>
                         </div>
                     </div>

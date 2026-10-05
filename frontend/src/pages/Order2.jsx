@@ -1445,12 +1445,14 @@ const styles = {
                                             </h5>
                                             <div className="small opacity-75">Totals, tax, discount and due balance update automatically.</div>
                                         </div>
-                                        <button type="button" className="btn btn-sm btn-light" onClick={()=>setFormSettingsOpen(true)}>
-                                            <i className="bi bi-sliders2 me-1"></i>Form
-                                        </button>
-                                        <button type="button" className="btn btn-sm btn-light" onClick={()=>setItemSettingsOpen(true)}>
-                                            <i className="bi bi-layout-three-columns me-1"></i>Bill Items
-                                        </button>
+                                        <div className="d-flex gap-2 ms-2">
+                                            <button type="button" className="btn btn-sm btn-light" onClick={()=>setFormSettingsOpen(true)}>
+                                                <i className="bi bi-sliders2 me-1"></i>Customize form
+                                            </button>
+                                            <button type="button" className="btn btn-sm btn-light" onClick={()=>setItemSettingsOpen(true)}>
+                                                <i className="bi bi-list-columns me-1"></i>Customize bill items
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                                 <button
@@ -1575,7 +1577,7 @@ const styles = {
                                             {orderSubmitting?"Saving...":(editingOrder?"Update bill":"Save bill")}
                                         </button>
                                     </div>
-                                </form>                         </form>
+                                </form>
                             </div>
                         </div>
                     </div>

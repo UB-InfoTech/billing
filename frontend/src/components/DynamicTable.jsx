@@ -205,7 +205,7 @@ export default function DynamicTable({
     };
     load();
     return()=>{cancelled=true;};
-  },[tableKey,baseColumnSignature]);
+  },[tableKey,baseColumnSignature,columns]);
 
   useEffect(()=>{
     if(loadingConfig)return;

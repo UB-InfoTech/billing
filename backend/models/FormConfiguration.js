@@ -9,7 +9,7 @@ const formFieldSchema=new mongoose.Schema({
   fieldType:{type:String,enum:["text","textarea","number","currency","date","datetime","select","boolean"],default:"text"},
   width:{type:Number,default:6,min:1,max:12},
   order:{type:Number,default:0,min:0},
-  section:{type:String,enum:["header","client","items","other"],default:"header"},
+  section:{type:String,trim:true,default:"header",maxlength:50},
   options:{type:[String],default:[]},
   formula:{type:String,default:"",maxlength:300}
 },{_id:false});

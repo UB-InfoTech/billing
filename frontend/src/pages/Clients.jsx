@@ -475,8 +475,6 @@ function Clients() {
   }
 
   return (
-
-      {/* <div className="container mt-3"> */}
       <div className="w-100 mx-3 mt-3">
         <div className="d-flex align-items-center gap-4">
           <h2>Client Management</h2>

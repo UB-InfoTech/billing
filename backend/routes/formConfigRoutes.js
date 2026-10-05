@@ -33,12 +33,14 @@ const sanitizeFields=fields=>{
       visible:raw?.visible!==false,
       required:Boolean(raw?.required),
       locked:Boolean(raw?.locked),
+      custom:Boolean(raw?.custom),
       fieldType,
       width,
       order:Number.isFinite(Number(raw?.order))?Math.max(0,Number(raw.order)):index,
       section,
       options:fieldType==="select"?options:[],
-      formula:fieldType==="number"||fieldType==="currency"?cleanString(raw?.formula,300):""
+      formula:fieldType==="number"||fieldType==="currency"?cleanString(raw?.formula,300):"",
+      defaultValue:raw?.defaultValue??""
     };
   });
 };

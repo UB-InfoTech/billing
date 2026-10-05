@@ -174,6 +174,7 @@ export default function DynamicTable({
   const [loadingValues,setLoadingValues]=useState(false);
   const [saving,setSaving]=useState(false);
   const [showSettings,setShowSettings]=useState(false);
+  const [draggedColumnKey,setDraggedColumnKey]=useState(null);
   const [searchTerm,setSearchTerm]=useState("");
   const [editingCell,setEditingCell]=useState(null);
   const [editingValue,setEditingValue]=useState("");
@@ -732,7 +733,27 @@ export default function DynamicTable({
                   ):filteredDraft.map(column=>{
                     const index=draft.findIndex(item=>item.key===column.key);
                     return(
-                      <div key={column.key} className={`dynamic-simple-column ${column.visible!==false?"is-visible":"is-hidden"}`}>
+                      <div
+                        key={column.key}
+                        className={`dynamic-simple-column ${column.visible!==false?"is-visible":"is-hidden"} ${draggedColumnKey===column.key?"is-dragging":""}`}
+                        draggable={!column.locked}
+                        onDragStart={()=>setDraggedColumnKey(column.key)}
+                        onDragOver={event=>event.preventDefault()}
+                        onDrop={()=>{
+                          if(!draggedColumnKey||draggedColumnKey===column.key)return;
+                          setDraft(prev=>{
+                            const sourceIndex=prev.findIndex(item=>item.key===draggedColumnKey);
+                            const targetIndex=prev.findIndex(item=>item.key===column.key);
+                            if(sourceIndex<0||targetIndex<0)return prev;
+                            const next=prev.slice();
+                            const [moved]=next.splice(sourceIndex,1);
+                            next.splice(targetIndex,0,moved);
+                            return next.map((item,itemIndex)=>({...item,order:itemIndex}));
+                          });
+                          setDraggedColumnKey(null);
+                        }}
+                        onDragEnd={()=>setDraggedColumnKey(null)}
+                      >
                         <div className="d-flex align-items-center gap-2 min-w-0">
                           <div className={`dynamic-simple-column-icon ${column.kind==="custom"?"custom":column.kind==="merged"?"merged":""}`}>
                             <i className={`bi ${column.kind==="custom"?"bi-plus-circle":column.kind==="merged"?"bi-link-45deg":"bi-layout-three-columns"}`}></i>
@@ -745,12 +766,15 @@ export default function DynamicTable({
                           </div>
                         </div>
                         <div className="dynamic-column-actions">
-                          <button type="button" className="btn btn-sm btn-light border dynamic-mini-btn" disabled={index===0} onClick={()=>moveColumn(index,-1)} title="Move up">
-                            <i className="bi bi-chevron-up"></i>
-                          </button>
-                          <button type="button" className="btn btn-sm btn-light border dynamic-mini-btn" disabled={index===draft.length-1} onClick={()=>moveColumn(index,1)} title="Move down">
-                            <i className="bi bi-chevron-down"></i>
-                          </button>
+                          <span
+                            className="dynamic-column-drag-handle"
+                            draggable={!column.locked}
+                            onDragStart={event=>{event.stopPropagation();setDraggedColumnKey(column.key);}}
+                            onDragEnd={()=>setDraggedColumnKey(null)}
+                            title="Drag to reorder"
+                          >
+                            <i className="bi bi-grip-vertical"></i>
+                          </span>
                           <button
                             type="button"
                             className={`btn btn-sm dynamic-visibility-btn ${column.visible!==false?"is-visible":"is-hidden"}`}

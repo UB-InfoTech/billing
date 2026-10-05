@@ -112,42 +112,6 @@ const mergeSavedColumns=(baseColumns,savedColumns)=>{
 
 const fieldTypeLabel=type=>FIELD_TYPES.find(item=>item.value===type)?.label||"Text";
 
-function ColumnRow({column,index,total,onToggle,onUp,onDown,onRemove}){
-  return(
-    <div className={`dynamic-column-row ${column.visible!==false?"is-visible":"is-hidden"}`}>
-      <div className="dynamic-column-main">
-        <span className="dynamic-column-grip"><i className="bi bi-grip-vertical"></i></span>
-        <div className={`dynamic-column-icon ${column.kind==="custom"?"custom":column.kind==="merged"?"merged":"default"}`}>
-          <i className={`bi ${column.kind==="custom" ? (FIELD_TYPES.find(type=>type.value===column.fieldType)?.icon||"bi-input-cursor-text") : column.kind==="merged" ? "bi-link-45deg" : "bi-layout-three-columns"}`}></i>
-        </div>
-        <div className="min-w-0 flex-grow-1">
-          <div className="fw-semibold text-truncate">{column.label}</div>
-          <div className="small text-secondary text-truncate">
-            {column.kind==="custom" ? `Custom • ${fieldTypeLabel(column.fieldType)}` : column.kind==="merged" ? `Merged • ${column.sourceKeys.length} fields` : column.locked ? "Required system field" : column.key}
-          </div>
-        </div>
-      </div>
-
-      <div className="d-flex align-items-center gap-1">
-        <button type="button" className="btn btn-light btn-sm dynamic-icon-btn" disabled={index===0} onClick={onUp} title="Move up">
-          <i className="bi bi-chevron-up"></i>
-        </button>
-        <button type="button" className="btn btn-light btn-sm dynamic-icon-btn" disabled={index===total-1} onClick={onDown} title="Move down">
-          <i className="bi bi-chevron-down"></i>
-        </button>
-        <button type="button" className={`btn btn-sm dynamic-icon-btn ${column.visible!==false?"btn-primary":"btn-outline-secondary"}`} disabled={column.locked} onClick={onToggle} title={column.visible!==false?"Hide column":"Show column"}>
-          <i className={`bi ${column.visible!==false?"bi-eye":"bi-eye-slash"}`}></i>
-        </button>
-        {column.kind==="custom"&&(
-          <button type="button" className="btn btn-outline-danger btn-sm dynamic-icon-btn" onClick={onRemove} title="Remove custom field">
-            <i className="bi bi-trash"></i>
-          </button>
-        )}
-        {column.locked&&<span className="badge text-bg-light border ms-1"><i className="bi bi-lock-fill me-1"></i>Required</span>}
-      </div>
-    </div>
-  );
-}
 
 export default function DynamicTable({
   tableKey,
@@ -435,16 +399,6 @@ export default function DynamicTable({
 
     const raw=getValue(row,column.key);
     return baseColumn?.format?baseColumn.format(raw,row,rowIndex):displayValue(raw);
-  };
-
-  const moveColumn=(index,direction)=>{
-    setDraft(prev=>{
-      const next=prev.slice();
-      const target=index+direction;
-      if(target<0||target>=next.length)return prev;
-      [next[index],next[target]]=[next[target],next[index]];
-      return next.map((column,i)=>({...column,order:i}));
-    });
   };
 
   const toggleColumn=(index)=>{

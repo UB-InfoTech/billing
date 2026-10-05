@@ -29,6 +29,7 @@ const ClientSchema = new mongoose.Schema({
   orderFrequency:{type:String,enum:["Daily","Weekly","Monthly","Occasional"],default:"Occasional"},
   accountStatus:{type:String,enum:["Active","Inactive"],default:"Active"},
   notes:{type:String,trim:true,default:""},
+  customFields:{type:Map,of:mongoose.Schema.Types.Mixed,default:{}},
   createdBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true,index:true}
 },{timestamps:true});
 

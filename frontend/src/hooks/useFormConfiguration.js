@@ -7,7 +7,7 @@ const authConfig=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""
 
 export const applyFormulas=(fields,values)=>{
   const next={...values};
-  const formulaFields=(fields||[]).filter(field=>field.formula&&field.visible!==false&&(field.fieldType==="number"||field.fieldType==="currency"));
+  const formulaFields=(fields||[]).filter(field=>field.formula&&(field.fieldType==="number"||field.fieldType==="currency"));
   formulaFields.forEach(field=>{
     try{
       next[field.key]=evaluateArithmeticExpression(field.formula,next);

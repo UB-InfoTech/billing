@@ -722,44 +722,6 @@ function Clients() {
 
 
 
-          {/* Edit Modal */}
-          {showModal && editClient && (
-            <div className="modal d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-              <div className="modal-dialog modal-dialog-centered modal-lg">
-                <div className="modal-content">
-                  <div className="modal-header">
-                    <h5 className="modal-title">Edit Client</h5>
-                    <button type="button" className="btn-close" onClick={() => setShowModal(false)}></button>
-                  </div>
-                  <form onSubmit={(e) => { e.preventDefault(); handleUpdateClient(); }}>
-                    <div className="modal-body">
-                      <div className="row g-3">
-                        {Object.keys(editClient).filter(key => key !== '_id').map(key => (
-                          <div key={key} className="col-md-6">
-                            <input
-                              type={key.includes('Revenue') || key.includes('Count') ? 'number' : 'text'}
-                              className="form-control"
-                              placeholder={key.charAt(0).toUpperCase() + key.slice(1)}
-                              value={editClient[key]}
-                              onChange={(e) => setEditClient({ ...editClient, [key]: e.target.value })}
-                            />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="modal-footer">
-                      <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>
-                        Close
-                      </button>
-                      <button type="submit" className="btn btn-primary">
-                        Save changes
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
 

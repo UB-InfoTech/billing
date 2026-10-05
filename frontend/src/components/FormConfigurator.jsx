@@ -285,7 +285,7 @@ export default function FormConfigurator({
           </div>
 
           <div className="form-builder-list">
-            {filtered.map((field,index)=>(
+            {filtered.map(field=>(
               <article
                 key={field.key}
                 className={`form-builder-item ${field.visible===false?"is-hidden ":""}${expandedKey===field.key?"is-open ":""}${dragKey===field.key?"is-dragging":""}`}

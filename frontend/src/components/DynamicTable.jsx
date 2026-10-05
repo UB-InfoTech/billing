@@ -730,11 +730,11 @@ export default function DynamicTable({
                         <div className="dynamic-table-builder-width">
                           <select
                             className="form-select form-select-sm"
-                            value={Math.min(12,Math.max(1,Number(column.width)||6))}
+                            value={Math.min(12,Math.max(0,Number(column.width)||0))}
                             onChange={event=>setDraft(prev=>prev.map((item,itemIndex)=>itemIndex===index?{...item,width:Number(event.target.value)}:item))}
                             aria-label={`Width for ${column.label}`}
                           >
-                            <option value="3">25% width</option>
+                            <option value="0">Automatic width</option><option value="3">25% width</option>
                             <option value="4">33% width</option>
                             <option value="6">50% width</option>
                             <option value="8">67% width</option>

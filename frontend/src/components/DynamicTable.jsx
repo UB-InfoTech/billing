@@ -634,62 +634,53 @@ export default function DynamicTable({
         <div className="dynamic-settings-overlay" onMouseDown={event=>{
           if(event.target===event.currentTarget)setShowSettings(false);
         }}>
-          <section className="dynamic-settings-drawer" role="dialog" aria-modal="true" aria-label="Table settings">
-            <div className="dynamic-settings-drawer-header">
-              <div>
-                <div className="small text-uppercase text-secondary fw-semibold">Table settings</div>
-                <h5 className="mb-1">Customize Table</h5>
-                <div className="small text-secondary">Choose what your team sees in this table.</div>
+          <section className="dynamic-settings-drawer dynamic-table-builder" role="dialog" aria-modal="true" aria-label="Customize table">
+            <header className="dynamic-table-builder-header">
+              <div className="min-w-0">
+                <div className="dynamic-table-builder-kicker"><i className="bi bi-layout-three-columns me-1"></i>Customize</div>
+                <h5 className="mb-1">Customize this table</h5>
+                <p className="mb-0">Show the columns you need, rename them, and drag them into the order you want.</p>
               </div>
-              <button type="button" className="btn btn-light border rounded-circle" onClick={()=>setShowSettings(false)} aria-label="Close table settings">
+              <button type="button" className="btn btn-light border rounded-circle" onClick={()=>setShowSettings(false)} aria-label="Close table customization">
                 <i className="bi bi-x-lg"></i>
               </button>
-            </div>
+            </header>
 
             <div className="dynamic-settings-drawer-body">
               {error&&<div className="alert alert-danger py-2">{error}</div>}
 
-              <div className="dynamic-settings-help">
-                <i className="bi bi-lightbulb"></i>
-                <div>
-                  <div className="fw-semibold">Simple controls</div>
-                  <div className="small text-secondary">Use the eye button to show/hide a column. Use the arrows to change its position.</div>
+              <div className="dynamic-table-builder-summary">
+                <strong>{visibleColumns.length}</strong> of {draft.length} columns are visible
+                <div className="d-flex gap-2">
+                  <button type="button" className="btn btn-sm btn-light border" onClick={showAll}><i className="bi bi-eye me-1"></i>Show all</button>
+                  <button type="button" className="btn btn-sm btn-light border" onClick={hideOptional}>Hide optional</button>
                 </div>
-              </div>
-
-              <div className="d-flex gap-2 mb-3">
-                <div className="input-group input-group-sm flex-grow-1">
-                  <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
-                  <input
-                    className="form-control"
-                    value={searchTerm}
-                    onChange={event=>setSearchTerm(event.target.value)}
-                    placeholder="Search columns"
-                  />
-                </div>
-                <button type="button" className="btn btn-outline-primary btn-sm" onClick={showAll}>
-                  <i className="bi bi-eye me-1"></i>Show all
-                </button>
               </div>
 
               <div className="dynamic-settings-section">
                 <div className="dynamic-settings-section-title">
                   <div>
                     <div className="fw-semibold">Columns</div>
-                    <div className="small text-secondary">Drag-free controls that are easy to understand.</div>
+                    <div className="small text-secondary">Drag the handle to move a column. Edit the name or size directly.</div>
                   </div>
-                  <span className="badge rounded-pill bg-light text-dark border">{visibleColumns.length} shown</span>
+                </div>
+
+                <div className="d-flex gap-2 mb-3">
+                  <div className="input-group">
+                    <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
+                    <input className="form-control" value={searchTerm} onChange={event=>setSearchTerm(event.target.value)} placeholder="Find a column"/>
+                  </div>
                 </div>
 
                 <div className="dynamic-simple-column-list">
                   {filteredDraft.length===0?(
-                    <div className="text-center text-secondary py-4">No matching columns.</div>
+                    <div className="text-center text-secondary py-4">No columns match your search.</div>
                   ):filteredDraft.map(column=>{
                     const index=draft.findIndex(item=>item.key===column.key);
                     return(
                       <div
                         key={column.key}
-                        className={`dynamic-simple-column ${column.visible!==false?"is-visible":"is-hidden"} ${draggedColumnKey===column.key?"is-dragging":""}`}
+                        className={`dynamic-simple-column dynamic-table-builder-row ${column.visible!==false?"is-visible":"is-hidden"} ${draggedColumnKey===column.key?"is-dragging":""}`}
                         draggable={!column.locked}
                         onDragStart={()=>setDraggedColumnKey(column.key)}
                         onDragOver={event=>event.preventDefault()}
@@ -708,145 +699,149 @@ export default function DynamicTable({
                         }}
                         onDragEnd={()=>setDraggedColumnKey(null)}
                       >
-                        <div className="d-flex align-items-center gap-2 min-w-0">
-                          <div className={`dynamic-simple-column-icon ${column.kind==="custom"?"custom":column.kind==="merged"?"merged":""}`}>
-                            <i className={`bi ${column.kind==="custom"?"bi-plus-circle":column.kind==="merged"?"bi-link-45deg":"bi-layout-three-columns"}`}></i>
+                        <span
+                          className="dynamic-column-drag-handle"
+                          draggable={!column.locked}
+                          onDragStart={event=>{event.stopPropagation();setDraggedColumnKey(column.key);}}
+                          onDragEnd={()=>setDraggedColumnKey(null)}
+                          title="Drag to move"
+                        >
+                          <i className="bi bi-grip-vertical"></i>
+                        </span>
+
+                        <div className="flex-grow-1 min-w-0">
+                          <div className="d-flex align-items-center gap-2">
+                            {column.kind!=="field"&&<span className="badge bg-light text-dark border">{column.kind==="custom"?"Custom":"Combined"}</span>}
+                            <input
+                              className="form-control form-control-sm dynamic-column-name-input"
+                              value={column.label}
+                              disabled={column.locked}
+                              onChange={event=>setDraft(prev=>prev.map((item,itemIndex)=>itemIndex===index?{...item,label:event.target.value}:item))}
+                            />
                           </div>
-                          <div className="min-w-0">
-                            <div className="fw-semibold text-truncate">{column.label}</div>
-                            <div className="small text-secondary text-truncate">
-                              {column.kind==="custom"?`Custom • ${fieldTypeLabel(column.fieldType)}`:column.kind==="merged"?"Merged column":column.locked?"Required field":column.key}
-                            </div>
+                          <div className="small text-secondary mt-1">
+                            {column.kind==="merged"?"Combines other columns":column.kind==="custom"?fieldTypeLabel(column.fieldType):"Existing column"}
+                            {column.locked?" · Always shown":""}
                           </div>
                         </div>
-                        <div className="dynamic-column-actions">
-                          <span
-                            className="dynamic-column-drag-handle"
-                            draggable={!column.locked}
-                            onDragStart={event=>{event.stopPropagation();setDraggedColumnKey(column.key);}}
-                            onDragEnd={()=>setDraggedColumnKey(null)}
-                            title="Drag to reorder"
+
+                        <div className="dynamic-table-builder-width">
+                          <select
+                            className="form-select form-select-sm"
+                            value={Math.min(12,Math.max(1,Number(column.width)||6))}
+                            onChange={event=>setDraft(prev=>prev.map((item,itemIndex)=>itemIndex===index?{...item,width:Number(event.target.value)}:item))}
+                            aria-label={`Width for ${column.label}`}
                           >
-                            <i className="bi bi-grip-vertical"></i>
-                          </span>
-                          <button
-                            type="button"
-                            className={`btn btn-sm dynamic-visibility-btn ${column.visible!==false?"is-visible":"is-hidden"}`}
-                            disabled={column.locked}
-                            onClick={()=>toggleColumn(index)}
-                            title={column.visible!==false?"Hide column":"Show column"}
-                          >
-                            <i className={`bi ${column.visible!==false?"bi-eye":"bi-eye-slash"}`}></i>
-                            <span>{column.visible!==false?"Shown":"Hidden"}</span>
+                            <option value="3">25% width</option>
+                            <option value="4">33% width</option>
+                            <option value="6">50% width</option>
+                            <option value="8">67% width</option>
+                            <option value="9">75% width</option>
+                            <option value="12">100% width</option>
+                          </select>
+                        </div>
+
+                        <button
+                          type="button"
+                          className={`btn btn-sm dynamic-visibility-btn ${column.visible!==false?"is-visible":"is-hidden"}`}
+                          disabled={column.locked}
+                          onClick={()=>toggleColumn(index)}
+                          title={column.visible!==false?"Hide column":"Show column"}
+                        >
+                          <i className={`bi ${column.visible!==false?"bi-eye":"bi-eye-slash"}`}></i>
+                          <span>{column.visible!==false?"Shown":"Hidden"}</span>
+                        </button>
+
+                        {column.kind==="custom"&&(
+                          <button type="button" className="btn btn-sm btn-outline-danger dynamic-mini-btn" onClick={()=>removeColumn(index)} title="Remove custom column">
+                            <i className="bi bi-trash"></i>
                           </button>
-                          {column.kind==="custom"&&(
-                            <button type="button" className="btn btn-sm btn-outline-danger dynamic-mini-btn" onClick={()=>removeColumn(index)} title="Delete custom field">
-                              <i className="bi bi-trash"></i>
-                            </button>
-                          )}
-                          {column.locked&&<i className="bi bi-lock-fill text-secondary" title="Required field"></i>}
-                        </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              <div className="dynamic-settings-section">
-                <div className="dynamic-settings-section-title">
-                  <div>
-                    <div className="fw-semibold"><i className="bi bi-plus-circle text-primary me-2"></i>Add custom field</div>
-                    <div className="small text-secondary">Create a new column that your team can fill directly.</div>
-                  </div>
-                </div>
-
-                <div className="dynamic-simple-form">
-                  <div>
-                    <label className="form-label">Field name</label>
-                    <input className="form-control" value={customForm.label} onChange={event=>setCustomForm(prev=>({...prev,label:event.target.value}))} placeholder="e.g. Sales Person"/>
-                  </div>
-
-                  <div>
-                    <label className="form-label">Field type</label>
-                    <select className="form-select" value={customForm.fieldType} onChange={event=>setCustomForm(prev=>({...prev,fieldType:event.target.value,defaultValue:"",optionsText:""}))}>
-                      {FIELD_TYPES.map(type=><option key={type.value} value={type.value}>{type.label}</option>)}
-                    </select>
-                  </div>
-
-                  {customForm.fieldType==="select" ? (
-                    <div>
-                      <label className="form-label">Dropdown options</label>
-                      <input className="form-control" value={customForm.optionsText} onChange={event=>setCustomForm(prev=>({...prev,optionsText:event.target.value}))} placeholder="Pending, Approved, Rejected"/>
-                      <div className="form-text">Separate options with commas.</div>
+              <details className="dynamic-builder-details">
+                <summary><i className="bi bi-plus-lg me-2"></i>Add a new column</summary>
+                <div className="dynamic-builder-details-body">
+                  <div className="small text-secondary mb-3">Use this for information that is not already in the table.</div>
+                  <div className="row g-3">
+                    <div className="col-md-6">
+                      <label className="form-label">Column name</label>
+                      <input className="form-control" value={customForm.label} onChange={event=>setCustomForm(prev=>({...prev,label:event.target.value}))} placeholder="Example: Sales person"/>
                     </div>
-                  ) : customForm.fieldType==="boolean" ? (
-                    <div>
-                      <label className="form-label">Default value <span className="text-secondary">(optional)</span></label>
-                      <select className="form-select" value={customForm.defaultValue} onChange={event=>setCustomForm(prev=>({...prev,defaultValue:event.target.value}))}>
-                        <option value="">No default</option>
-                        <option value="true">Yes</option>
-                        <option value="false">No</option>
+                    <div className="col-md-6">
+                      <label className="form-label">What kind of information?</label>
+                      <select className="form-select" value={customForm.fieldType} onChange={event=>setCustomForm(prev=>({...prev,fieldType:event.target.value,defaultValue:"",optionsText:""}))}>
+                        {FIELD_TYPES.map(type=><option key={type.value} value={type.value}>{type.label}</option>)}
                       </select>
                     </div>
-                  ) : (
-                    <div>
-                      <label className="form-label">Default value <span className="text-secondary">(optional)</span></label>
-                      <input
-                        type={customForm.fieldType==="number"||customForm.fieldType==="currency"?"number":customForm.fieldType==="date"?"date":customForm.fieldType==="datetime"?"datetime-local":"text"}
-                        className="form-control"
-                        value={customForm.defaultValue}
-                        onChange={event=>setCustomForm(prev=>({...prev,defaultValue:event.target.value}))}
-                        step={customForm.fieldType==="currency"?"0.01":"any"}
-                      />
+                    {customForm.fieldType==="select" ? (
+                      <div className="col-12">
+                        <label className="form-label">Choices</label>
+                        <textarea className="form-control" rows={2} value={customForm.optionsText} onChange={event=>setCustomForm(prev=>({...prev,optionsText:event.target.value}))} placeholder="One choice per line"/>
+                      </div>
+                    ) : (
+                      <div className="col-md-6">
+                        <label className="form-label">Starting value <span className="text-secondary">(optional)</span></label>
+                        <input className="form-control" value={customForm.defaultValue} onChange={event=>setCustomForm(prev=>({...prev,defaultValue:event.target.value}))} placeholder="Leave blank for none"/>
+                      </div>
+                    )}
+                  </div>
+                  <button type="button" className="btn btn-primary mt-3" onClick={addCustomField} disabled={!customForm.label.trim()}>Add column</button>
+                </div>
+              </details>
+
+              <details className="dynamic-builder-details">
+                <summary><i className="bi bi-link-45deg me-2"></i>Combine existing columns</summary>
+                <div className="dynamic-builder-details-body">
+                  <div className="small text-secondary mb-3">Example: Company + City can become one “Customer location” column.</div>
+                  <div className="row g-3">
+                    <div className="col-md-5">
+                      <label className="form-label">New column name</label>
+                      <input className="form-control" value={mergeForm.label} onChange={event=>setMergeForm(prev=>({...prev,label:event.target.value}))} placeholder="Customer location"/>
                     </div>
-                  )}
-
-                  <button type="button" className="btn btn-outline-primary w-100" onClick={addCustomField} disabled={!customForm.label.trim()}>
-                    <i className="bi bi-plus-lg me-1"></i>Add field
-                  </button>
+                    <div className="col-md-7">
+                      <label className="form-label">Choose columns</label>
+                      <div className="dynamic-merge-checklist">
+                        {mergeSources.map(column=>(
+                          <label key={column.key} className="dynamic-merge-option">
+                            <input
+                              type="checkbox"
+                              checked={mergeForm.sources.includes(column.key)}
+                              onChange={event=>setMergeForm(prev=>({
+                                ...prev,
+                                sources:event.target.checked
+                                  ? [...prev.sources,column.key]
+                                  : prev.sources.filter(key=>key!==column.key)
+                              }))}
+                            />
+                            <span>{column.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="col-md-5">
+                      <label className="form-label">Separator</label>
+                      <input className="form-control" value={mergeForm.separator} onChange={event=>setMergeForm(prev=>({...prev,separator:event.target.value}))} placeholder="Example:  - "/>
+                    </div>
+                  </div>
+                  <button type="button" className="btn btn-light border mt-3" onClick={addMergedColumn} disabled={mergeForm.sources.length<2||!mergeForm.label.trim()}>Combine columns</button>
                 </div>
-              </div>
-
-              <div className="dynamic-settings-section">
-                <div className="dynamic-settings-section-title">
-                  <div>
-                    <div className="fw-semibold"><i className="bi bi-link-45deg text-secondary me-2"></i>Merge existing fields</div>
-                    <div className="small text-secondary">Example: Company + City → Customer Location.</div>
-                  </div>
-                </div>
-
-                <div className="dynamic-simple-form">
-                  <div>
-                    <label className="form-label">New column name</label>
-                    <input className="form-control" value={mergeForm.label} onChange={event=>setMergeForm(prev=>({...prev,label:event.target.value}))} placeholder="Customer Location"/>
-                  </div>
-                  <div>
-                    <label className="form-label">Fields to combine</label>
-                    <select multiple className="form-select" size={4} value={mergeForm.sources} onChange={event=>setMergeForm(prev=>({...prev,sources:Array.from(event.target.selectedOptions).map(option=>option.value)}))}>
-                      {mergeSources.map(column=><option key={column.key} value={column.key}>{column.label}</option>)}
-                    </select>
-                    <div className="form-text">Select two or more fields. Hold Ctrl/Cmd for multiple selection.</div>
-                  </div>
-                  <div>
-                    <label className="form-label">Separator</label>
-                    <input className="form-control" value={mergeForm.separator} onChange={event=>setMergeForm(prev=>({...prev,separator:event.target.value}))} placeholder=" - "/>
-                  </div>
-                  <button type="button" className="btn btn-light border w-100" onClick={addMergedColumn} disabled={mergeForm.sources.length<2||!mergeForm.label.trim()}>
-                    <i className="bi bi-plus-lg me-1"></i>Add merged column
-                  </button>
-                </div>
-              </div>
+              </details>
             </div>
 
-            <div className="dynamic-settings-drawer-footer">
-              <button type="button" className="btn btn-outline-danger" onClick={resetSettings} disabled={saving}>Reset table</button>
+            <footer className="dynamic-settings-drawer-footer">
+              <button type="button" className="btn btn-outline-danger" onClick={resetSettings} disabled={saving}>Reset to default</button>
               <div className="ms-auto d-flex gap-2">
                 <button type="button" className="btn btn-light border" onClick={()=>setShowSettings(false)} disabled={saving}>Cancel</button>
                 <button type="button" className="btn btn-primary px-4" onClick={saveSettings} disabled={saving||loadingConfig}>
-                  {saving?<><span className="spinner-border spinner-border-sm me-2"/>Saving...</>:"Save changes"}
+                  {saving?<><span className="spinner-border spinner-border-sm me-2"></span>Saving</>:"Save changes"}
                 </button>
               </div>
-            </div>
+            </footer>
           </section>
         </div>
       )}

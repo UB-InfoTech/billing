@@ -27,6 +27,10 @@ const isReplicaSetAvailable=()=>{
 
 const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
 const userId=req=>req.user.id;
+const cleanCustomFields=value=>{
+  if(!value||typeof value!=="object"||Array.isArray(value))return {};
+  return Object.fromEntries(Object.entries(value).slice(0,100).map(([key,val])=>[String(key).slice(0,100),val]));
+};
 const idOrNull=v=>v&&mongoose.isValidObjectId(v)?v:null;
 
 function dateRange(req){
@@ -80,6 +84,7 @@ router.get("/all-orders",auth,async(req,res)=>{
 router.post("/orders/create",auth,async(req,res)=>{
   try{
     const body={...(req.body||{})};
+    body.customFields=cleanCustomFields(body.customFields);
     if(body.clientId){
       const client=await Client.findOne({_id:body.clientId,createdBy:userId(req)}).lean();
       if(!client)return res.status(400).json({message:"Selected client was not found."});
@@ -131,8 +136,8 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid order ID."});
     const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)});if(!order)return res.status(404).json({message:"Order not found"});
     const oldClient=String(order.clientId||"");
-    const allowed=["orderNumber","challanNumber","lrNo","orderDate","subOrders","Address","State","City","pinCode","stateCode","clientId","gstNumber","companyName","status","paymentTerms","taxPercentage","discountRate","note","netProfit"];
-    for(const key of allowed)if(req.body?.[key]!==undefined)order[key]=req.body[key];
+    const allowed=["orderNumber","challanNumber","lrNo","orderDate","subOrders","Address","State","City","pinCode","stateCode","clientId","gstNumber","companyName","status","paymentTerms","taxPercentage","discountRate","note","netProfit","customFields"];
+    for(const key of allowed)if(req.body?.[key]!==undefined)order[key]=key==="customFields"?cleanCustomFields(req.body[key]):req.body[key];
     await order.save();
     const newClient=String(order.clientId||"");
     if(oldClient)await syncClientData(oldClient);if(newClient&&newClient!==oldClient)await syncClientData(newClient);

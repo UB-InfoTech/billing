@@ -11,6 +11,7 @@ import EWayBillForm from "../components/EWayBillForm";
 import DynamicTable from "../components/DynamicTable";
 import FormConfigurator from "../components/FormConfigurator";
 import ConfiguredField from "../components/ConfiguredField";
+import ArithmeticInput from "../components/ArithmeticInput";
 import {useFormConfiguration,applyFormulas} from "../hooks/useFormConfiguration";
 import * as XLSX from 'xlsx';
 import Report from '../components/Report';
@@ -1718,7 +1719,16 @@ const styles = {
                                     <div className="d-flex gap-2 mb-2">
 
                                         <div className="col-3">
-                                            <input type="number" className="form-control" placeholder="Amount" min="0.01" max={Number(editingOrder?.dueAmount || 0)} step="0.01" value={newPayment.amount} onChange={(e) => setNewPayment({ ...newPayment, amount: e.target.value })} required />
+                                            <ArithmeticInput
+                                                value={newPayment.amount}
+                                                onValueChange={value=>setNewPayment(prev=>({...prev,amount:value}))}
+                                                className="form-control"
+                                                placeholder="Amount"
+                                                min="0.01"
+                                                max={Number(editingOrder?.dueAmount || 0)}
+                                                step="0.01"
+                                                required
+                                            />
                                             <div className="small text-muted mt-1">Due: ₹{Number(editingOrder?.dueAmount || 0).toFixed(2)}</div>
                                         </div>
                                         <div className="col-3">
@@ -1778,7 +1788,14 @@ const styles = {
                                         <div>
                                             <h6>Edit Payment</h6>
 
-                                            <input type="number" className="form-control mb-2" min="0.01" step="0.01" value={editPayment.amount} onChange={(e) => setEditPayment({ ...editPayment, amount: e.target.value })} />
+                                            <ArithmeticInput
+                                                value={editPayment.amount}
+                                                onValueChange={value=>setEditPayment(prev=>({...prev,amount:value}))}
+                                                className="form-control mb-2"
+                                                min="0.01"
+                                                step="0.01"
+                                                placeholder="Payment amount"
+                                            />
                                             <input type="date" className="form-control mb-2" value={editPayment.paymentDate ? new Date(editPayment.paymentDate).toISOString().slice(0, 10) : ""} onChange={(e) => setEditPayment({ ...editPayment, paymentDate: e.target.value })} />
                                             <select className="form-select mb-2" value={editPayment.method} onChange={(e) => setEditPayment({ ...editPayment, method: e.target.value })}>
                                                 <option>Cash</option>

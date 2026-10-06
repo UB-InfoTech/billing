@@ -5,7 +5,8 @@ import deleteSVG from '../assets/delete.svg';
 import DynamicTable from '../components/DynamicTable';
 import FormConfigurator from '../components/FormConfigurator';
 import ConfiguredField from '../components/ConfiguredField';
-import {useFormConfiguration,applyFormulas} from '../hooks/useFormConfiguration';
+import {useFormConfiguration,applyFormulas,hydrateConfiguredValues,applyAutoFill,getFieldState,syncConfiguredCustomFields} from "../hooks/useFormConfiguration";
+import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
 
 const CLIENT_FORM_FIELDS=[
@@ -82,11 +83,13 @@ function Clients() {
   const clientValue=field=>field.custom
     ? newClient.customFields?.[field.key]??newClient[field.key]??field.defaultValue??""
     : newClient[field.key]??field.defaultValue??"";
-  const updateClientField=(field,value)=>{
+  const updateClientField=(field,value,record=null)=>{
     setNewClient(prev=>{
-      const next=field.custom
+      let next=field.custom
         ? {...prev,[field.key]:value,customFields:{...(prev.customFields||{}),[field.key]:value}}
         : {...prev,[field.key]:value};
+      if(record)next=applyAutoFill(field,record,next);
+      next=syncConfiguredCustomFields(next,clientFormConfig.fields);
       return applyFormulas(clientFormConfig.fields,next);
     });
   };
@@ -686,7 +689,7 @@ function Clients() {
                                     const common={
                                       field:{...field,required:state.required,readOnly:state.readOnly},
                                       value:clientValue(field),
-                                      onChange:value=>updateClientField(field,value),
+                                      onChange:value=>updateClientField(field,value,null),
                                       onRecordChange:record=>updateClientField(field,record?.[field.dataSource?.valueField||"_id"]??"",record),
                                       lookupRecords:source
                                     };

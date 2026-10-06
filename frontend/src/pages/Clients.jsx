@@ -680,27 +680,32 @@ function Clients() {
                               <div className="card-body">
                                 <div className="row g-3">
                                   {visibleClientFields.filter(field=>(field.section||"General")===section).sort((a,b)=>(a.order??0)-(b.order??0)).map(field=>{
+                                    const state=getFieldState(field,{...newClient,...(newClient.customFields||{})});
+                                    if(!state.visible)return null;
+                                    const source=field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[];
                                     const common={
-                                      field,
+                                      field:{...field,required:state.required,readOnly:state.readOnly},
                                       value:clientValue(field),
-                                      onChange:value=>updateClientField(field,value)
+                                      onChange:value=>updateClientField(field,value),
+                                      onRecordChange:record=>updateClientField(field,record?.[field.dataSource?.valueField||"_id"]??"",record),
+                                      lookupRecords:source
                                     };
-                                    if(field.key==="state"){
+                                    if(field.key==="state"&&!field.dataSource?.resource){
                                       return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
                                         <ConfiguredField {...common} options={indianStates}/>
                                       </div>;
                                     }
-                                    if(field.key==="city"){
+                                    if(field.key==="city"&&!field.dataSource?.resource){
                                       return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
                                         <ConfiguredField {...common} options={newClient.state?(stateCityMapping[newClient.state]||[]):[]} disabled={!newClient.state}/>
                                       </div>;
                                     }
-                                    if(field.key==="companyName"&&!field.custom){
+                                    if(field.key==="companyName"&&!field.custom&&!field.dataSource?.resource){
                                       return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
                                         <ConfiguredField {...common} listId="clientCompanyName" listOptions={clients.map(client=>client.companyName)}/>
                                       </div>;
                                     }
-                                    if(field.key==="gstNumber"&&!field.custom){
+                                    if(field.key==="gstNumber"&&!field.custom&&!field.dataSource?.resource){
                                       const suffix=(
                                         <button type="button" className="btn btn-sm btn-outline-secondary mt-2" onClick={()=>{
                                           const gst=String(newClient.gstNumber||"").trim().toUpperCase();
@@ -723,7 +728,7 @@ function Clients() {
                             </section>
                           </div>
                         ))}
-                      </div>
+                        
                     </div>
 
                     <div className="modal-footer bg-white p-3 border-top sticky-bottom">
@@ -732,12 +737,11 @@ function Clients() {
                         type={editingClient?"button":"submit"}
                         className="btn btn-primary px-4"
                         onClick={editingClient?handleUpdateClient:undefined}
-                        disabled={!visibleClientFields.filter(field=>field.required).every(field=>String(clientValue(field)??"").trim())}
+                        disabled={!visibleClientFields.filter(field=>getFieldState(field,{...newClient,...(newClient.customFields||{})}).visible&&getFieldState(field,{...newClient,...(newClient.customFields||{})}).required).every(field=>String(clientValue(field)??"").trim())}
                       >
                         {editingClient?"Update client":"Add client"}
                       </button>
-                    </div>
-                  </form>
+                    </div>                  </form>
 
                 </div>
               </div>

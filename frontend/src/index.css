@@ -1445,3 +1445,34 @@ body {
   .dynamic-merge-checklist{grid-template-columns:1fr}
   .dynamic-column-name-input{max-width:none}
 }
+
+
+/* ---------- No-code field builder additions ---------- */
+.form-builder-panel{
+  padding:12px 13px;
+  border:1px solid #e0e7ef;
+  border-radius:11px;
+  background:#fff;
+}
+.form-builder-choice-row{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+}
+.form-builder-choice{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  gap:4px;
+  padding:11px;
+  border:1px solid #dfe6ee;
+  border-radius:10px;
+  background:#fff;
+  text-align:left;
+}
+.form-builder-choice span{font-size:12px;color:#6b7b8c}
+.form-builder-choice.active{border-color:#0d6efd;background:#f2f7ff;color:#0d6efd}
+.form-builder-choice.active span{color:#52739a}
+@media(max-width:767.98px){
+  .form-builder-choice-row{grid-template-columns:1fr}
+}

@@ -117,53 +117,21 @@ export const getFieldState=(field,values)=>{
   let visible=field?.visible!==false;
   let required=Boolean(field?.required);
   let readOnly=Boolean(field?.readOnly||field?.editable===false);
+
+  const showRules=conditions.filter(condition=>condition.action==="show");
+  const hideRules=conditions.filter(condition=>condition.action==="hide");
+
+  if(showRules.length)visible=showRules.every(condition=>fieldConditionMatches(condition,values));
+  if(hideRules.some(condition=>fieldConditionMatches(condition,values)))visible=false;
+
   conditions.forEach(condition=>{
-    if(!fieldConditionMatches(condition,values))return;
-    if(condition.action==="show")visible=true;
-    if(condition.action==="hide")visible=false;
+    const matches=fieldConditionMatches(condition,values);
+    if(!matches)return;
     if(condition.action==="require")required=true;
     if(condition.action==="readonly")readOnly=true;
   });
+
   return {visible,required,readOnly};
-};
-
-
-export const hydrateConfiguredValues=(record,fields=[])=>{
-  const custom=record?.customFields&&typeof record.customFields==="object"
-    ? Object.fromEntries(record.customFields instanceof Map?record.customFields.entries():Object.entries(record.customFields))
-    : {};
-  const next={...(record||{})};
-  delete next.customFields;
-  (fields||[]).filter(field=>field.custom).forEach(field=>{
-    if(Object.prototype.hasOwnProperty.call(custom,field.key))next[field.key]=custom[field.key];
-    else if(!Object.prototype.hasOwnProperty.call(next,field.key)&&field.defaultValue!=="")next[field.key]=field.defaultValue;
-  });
-  return next;
-};
-
-export const splitConfiguredValues=(values,fields=[])=>{
-  const customKeys=new Set((fields||[]).filter(field=>field.custom).map(field=>field.key));
-  const customFields={};
-  const data={...(values||{})};
-  customKeys.forEach(key=>{
-    if(Object.prototype.hasOwnProperty.call(data,key)){
-      customFields[key]=data[key];
-      delete data[key];
-    }
-  });
-  return {data,customFields};
-};
-
-export const applyAutoFill=(field,record,values)=>{
-  if(!field?.dataSource?.resource||!record)return {...values};
-  const next={...(values||{})};
-  const valueField=field.dataSource.valueField||"_id";
-  next[field.key]=record?.[valueField]??"";
-  (field.dataSource.autoFill||[]).forEach(mapping=>{
-    const value=getFieldPath(record,mapping.sourceKey);
-    if(mapping.targetKey&&value!==undefined)next[mapping.targetKey]=value;
-  });
-  return next;
 };
 
 export function useFormConfiguration(formKey,baseFields){

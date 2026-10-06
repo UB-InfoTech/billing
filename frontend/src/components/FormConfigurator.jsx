@@ -12,6 +12,39 @@ const FIELD_TYPES=[
   {value:"boolean",label:"Yes / No",icon:"bi-toggle-on"},
 ];
 
+const DATA_SOURCES=[
+  {value:"none",label:"Enter it manually",fields:[]},
+  {value:"clients",label:"Client records",fields:[
+    ["_id","Client ID"],["name","Client Name"],["companyName","Company Name"],["phone","Phone"],["email","Email"],["gstNumber","GST Number"],["state","State"],["city","City"],["paymentTerms","Payment Terms"],["discountRate","Discount Rate"]
+  ]},
+  {value:"products",label:"Product records",fields:[
+    ["_id","Product ID"],["productName","Product Name"],["productCode","Product Code"],["designNo","Design No."],["rate","Rate"],["quantity","Stock"],["purchasePrice","Purchase Price"],["barcode","Barcode"]
+  ]},
+  {value:"orders",label:"Invoice records",fields:[
+    ["_id","Invoice ID"],["orderNumber","Invoice No."],["companyName","Client"],["orderDate","Bill Date"],["totalAmount","Total"],["paidAmount","Paid"],["dueAmount","Due"],["status","Status"]
+  ]},
+  {value:"expenses",label:"Expense records",fields:[
+    ["_id","Expense ID"],["title","Title"],["category","Category"],["amount","Amount"],["vendor","Vendor"],["date","Date"]
+  ]},
+  {value:"suppliers",label:"Supplier records",fields:[
+    ["_id","Supplier ID"],["name","Supplier Name"],["gstin","GSTIN"],["reliability_score","Reliability Score"]
+  ]},
+  {value:"machines",label:"Machine records",fields:[
+    ["_id","Machine ID"],["name","Machine Name"],["totalOrdersProcessed","Orders Processed"],["totalRevenueGenerated","Revenue Generated"],["downtimeHours","Downtime Hours"]
+  ]}
+];
+
+const CONDITION_OPERATORS=[
+  {value:"equals",label:"is"},
+  {value:"not_equals",label:"is not"},
+  {value:"contains",label:"contains"},
+  {value:"not_contains",label:"does not contain"},
+  {value:"greater_than",label:"is greater than"},
+  {value:"less_than",label:"is less than"},
+  {value:"empty",label:"is empty"},
+  {value:"not_empty",label:"is not empty"}
+];
+
 const WIDTHS=[
   {value:3,label:"25%"},
   {value:4,label:"33%"},
@@ -20,6 +53,9 @@ const WIDTHS=[
   {value:9,label:"75%"},
   {value:12,label:"100%"},
 ];
+
+const sourceFor=resource=>DATA_SOURCES.find(source=>source.value===resource)||DATA_SOURCES[0];
+const sourceFields=resource=>sourceFor(resource).fields;
 
 const humanize=value=>String(value||"").replace(/[_-]+/g," ").replace(/\b\w/g,char=>char.toUpperCase()).trim()||"General";
 
@@ -336,15 +372,9 @@ export default function FormConfigurator({
                         <label className="form-label">Field type</label>
                         <div className="form-builder-type-grid">
                           {FIELD_TYPES.map(type=>(
-                            <button
-                              type="button"
-                              key={type.value}
-                              className={`form-builder-type-card ${field.fieldType===type.value?"active":""}`}
-                              disabled={field.locked}
-                              onClick={()=>update(field.key,{fieldType:type.value,options:type.value==="select"?(field.options||[]):[],formula:["number","currency"].includes(type.value)?field.formula:""})}
-                            >
-                              <i className={`bi ${type.icon}`}></i>
-                              <span>{type.label}</span>
+                            <button type="button" key={type.value} className={`form-builder-type-card ${field.fieldType===type.value?"active":""}`} disabled={field.locked}
+                              onClick={()=>update(field.key,{fieldType:type.value,options:type.value==="select"?(field.options||[]):[],formula:["number","currency"].includes(type.value)?field.formula:""})}>
+                              <i className={`bi ${type.icon}`}></i><span>{type.label}</span>
                             </button>
                           ))}
                         </div>
@@ -356,15 +386,32 @@ export default function FormConfigurator({
                           {WIDTHS.map(width=><button type="button" key={width.value} className={`btn btn-sm ${Number(field.width)===width.value?"btn-primary":"btn-light border"}`} onClick={()=>update(field.key,{width:width.value})}>{width.label}</button>)}
                         </div>
                       </div>
+
                       <div className="col-md-5">
-                        <label className="form-label">Starting value <span className="text-secondary">(optional)</span></label>
-                        <input
-                          className="form-control"
-                          value={field.defaultValue??""}
-                          onChange={event=>update(field.key,{defaultValue:event.target.value})}
-                          disabled={field.locked}
-                          placeholder="Leave blank for none"
-                        />
+                        <label className="form-label">Starting value</label>
+                        <input className="form-control" value={field.defaultValue??""} onChange={event=>update(field.key,{defaultValue:event.target.value})} disabled={field.locked} placeholder="Leave blank for none"/>
+                      </div>
+
+                      <div className="col-12">
+                        <div className="form-builder-panel">
+                          <div className="fw-semibold mb-2">How people can use this field</div>
+                          <div className="form-builder-choice-row">
+                            {[
+                              ["edit","Editable",field.editable!==false&&!field.readOnly],
+                              ["readonly","Read only",field.readOnly||field.editable===false],
+                              ["hidden","Hidden",field.visible===false]
+                            ].map(([mode,label,active])=>(
+                              <button type="button" key={mode} className={`form-builder-choice ${active?"active":""}`} onClick={()=>{
+                                if(mode==="edit")update(field.key,{editable:true,readOnly:false,visible:true});
+                                if(mode==="readonly")update(field.key,{editable:false,readOnly:true,visible:true});
+                                if(mode==="hidden")update(field.key,{visible:false});
+                              }}>
+                                <strong>{label}</strong>
+                                <span>{mode==="edit"?"Users can change the value":mode==="readonly"?"Value is visible but cannot be changed":"Field will not appear"}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
 
                       {field.fieldType==="select"&&(
@@ -374,40 +421,163 @@ export default function FormConfigurator({
                         </div>
                       )}
 
+                      <div className="col-12">
+                        <div className="form-builder-panel">
+                          <div className="d-flex justify-content-between gap-3 mb-2">
+                            <div>
+                              <div className="fw-semibold">Get the value from another table</div>
+                              <div className="small text-secondary">Example: choose a product and automatically use its rate or design number.</div>
+                            </div>
+                          </div>
+                          <div className="row g-2">
+                            <div className="col-md-4">
+                              <label className="form-label">Data source</label>
+                              <select className="form-select" value={field.dataSource?.resource||"none"} onChange={event=>{
+                                const resource=event.target.value;
+                                const fields=sourceFields(resource);
+                                const first=fields[0]?.[0]||"_id";
+                                update(field.key,{dataSource:{type:resource==="none"?"none":"lookup",resource,valueField:first,labelField:first,searchField:first,autoFill:[]},fieldType:"select"});
+                              }}>
+                                {DATA_SOURCES.map(source=><option key={source.value} value={source.value}>{source.label}</option>)}
+                              </select>
+                            </div>
+                            {field.dataSource?.resource&&field.dataSource.resource!=="none"&&(
+                              <>
+                                <div className="col-md-4">
+                                  <label className="form-label">Save this value</label>
+                                  <select className="form-select" value={field.dataSource?.valueField||"_id"} onChange={event=>update(field.key,{dataSource:{...(field.dataSource||{}),type:"lookup",valueField:event.target.value}})}>
+                                    {sourceFields(field.dataSource.resource).map(([value,label])=><option key={value} value={value}>{label}</option>)}
+                                  </select>
+                                </div>
+                                <div className="col-md-4">
+                                  <label className="form-label">Show this to the user</label>
+                                  <select className="form-select" value={field.dataSource?.labelField||""} onChange={event=>update(field.key,{dataSource:{...(field.dataSource||{}),type:"lookup",labelField:event.target.value}})}>
+                                    {sourceFields(field.dataSource.resource).map(([value,label])=><option key={value} value={value}>{label}</option>)}
+                                  </select>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {field.dataSource?.resource&&field.dataSource.resource!=="none"&&(
+                        <div className="col-12">
+                          <div className="form-builder-panel">
+                            <div className="fw-semibold mb-2">When someone chooses a record, fill these fields too</div>
+                            {(field.dataSource?.autoFill||[]).map((mapping,mappingIndex)=>(
+                              <div className="row g-2 align-items-end mb-2" key={mappingIndex}>
+                                <div className="col-md-6">
+                                  <label className="form-label">Fill this field</label>
+                                  <select className="form-select" value={mapping.targetKey} onChange={event=>{
+                                    const autoFill=[...(field.dataSource?.autoFill||[])];autoFill[mappingIndex]={...mapping,targetKey:event.target.value};
+                                    update(field.key,{dataSource:{...(field.dataSource||{}),autoFill}});
+                                  }}>
+                                    <option value="">Choose field</option>
+                                    {draft.filter(item=>item.key!==field.key).map(item=><option key={item.key} value={item.key}>{item.label}</option>)}
+                                  </select>
+                                </div>
+                                <div className="col-md-5">
+                                  <label className="form-label">Use value from selected record</label>
+                                  <select className="form-select" value={mapping.sourceKey} onChange={event=>{
+                                    const autoFill=[...(field.dataSource?.autoFill||[])];autoFill[mappingIndex]={...mapping,sourceKey:event.target.value};
+                                    update(field.key,{dataSource:{...(field.dataSource||{}),autoFill}});
+                                  }}>
+                                    <option value="">Choose value</option>
+                                    {sourceFields(field.dataSource.resource).map(([value,label])=><option key={value} value={value}>{label}</option>)}
+                                  </select>
+                                </div>
+                                <div className="col-md-1">
+                                  <button type="button" className="btn btn-outline-danger w-100" title="Remove mapping" onClick={()=>{
+                                    const autoFill=(field.dataSource?.autoFill||[]).filter((_,index)=>index!==mappingIndex);
+                                    update(field.key,{dataSource:{...(field.dataSource||{}),autoFill}});
+                                  }}><i className="bi bi-trash"></i></button>
+                                </div>
+                              </div>
+                            ))}
+                            <button type="button" className="btn btn-sm btn-light border" onClick={()=>{
+                              const autoFill=[...(field.dataSource?.autoFill||[]),{targetKey:"",sourceKey:""}];
+                              update(field.key,{dataSource:{...(field.dataSource||{}),autoFill}});
+                            }}><i className="bi bi-plus-lg me-1"></i>Add auto-fill</button>
+                          </div>
+                        </div>
+                      )}
+
                       {(field.fieldType==="number"||field.fieldType==="currency")&&(
                         <div className="col-12">
                           <div className="form-builder-calculation">
                             <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
-                              <div>
-                                <label className="form-label mb-1">Automatic calculation</label>
-                                <div className="small text-secondary">Use the buttons below instead of remembering field names.</div>
-                              </div>
+                              <div><label className="form-label mb-1">Automatic calculation</label><div className="small text-secondary">Build a calculation using the buttons. No coding is needed.</div></div>
                               {field.formula&&validateFormula(field)&&<span className="badge bg-warning text-dark">{validateFormula(field)}</span>}
                             </div>
-                            <input className="form-control mb-2" value={field.formula||""} onChange={event=>update(field.key,{formula:event.target.value})} placeholder="Example: Quantity × Rate"/>
+                            <input className="form-control mb-2" value={field.formula||""} onChange={event=>update(field.key,{formula:event.target.value,readOnly:Boolean(event.target.value)})} placeholder="Example: Quantity × Rate"/>
                             <div className="form-builder-calculator-row">
-                              {numericFields.filter(item=>item.key!==field.key).slice(0,12).map(item=>(
-                                <button type="button" key={item.key} className="btn btn-sm btn-light border" onClick={()=>addFormulaToken(field.key,item.key)}>{item.label}</button>
-                              ))}
+                              {numericFields.filter(item=>item.key!==field.key).slice(0,12).map(item=><button type="button" key={item.key} className="btn btn-sm btn-light border" onClick={()=>addFormulaToken(field.key,item.key)}>{item.label}</button>)}
                             </div>
                             <div className="form-builder-calculator-row mt-2">
                               {["+","-","*","/","%","(",")"].map(operator=><button type="button" key={operator} className="btn btn-sm btn-outline-secondary" onClick={()=>addFormulaToken(field.key,operator)}>{operator==="*"?"×":operator==="/"?"÷":operator}</button>)}
                             </div>
-                            <div className="form-text">You can type numbers too. Example: Quantity × Rate + Tax.</div>
+                            <div className="form-text">The calculated field becomes read only automatically.</div>
                           </div>
                         </div>
                       )}
+
+                      <div className="col-12">
+                        <div className="form-builder-panel">
+                          <div className="fw-semibold mb-2">Rules</div>
+                          <div className="small text-secondary mb-2">Make a field appear, become required, or become read only based on another answer.</div>
+                          {(field.conditions||[]).map((condition,conditionIndex)=>(
+                            <div className="row g-2 align-items-end mb-2" key={conditionIndex}>
+                              <div className="col-md-3">
+                                <label className="form-label">Action</label>
+                                <select className="form-select" value={condition.action} onChange={event=>{
+                                  const conditions=[...(field.conditions||[])];conditions[conditionIndex]={...condition,action:event.target.value};update(field.key,{conditions});
+                                }}>
+                                  <option value="show">Show</option><option value="hide">Hide</option><option value="require">Require</option><option value="readonly">Read only</option>
+                                </select>
+                              </div>
+                              <div className="col-md-3">
+                                <label className="form-label">When field</label>
+                                <select className="form-select" value={condition.fieldKey} onChange={event=>{
+                                  const conditions=[...(field.conditions||[])];conditions[conditionIndex]={...condition,fieldKey:event.target.value};update(field.key,{conditions});
+                                }}>
+                                  <option value="">Choose field</option>
+                                  {draft.filter(item=>item.key!==field.key).map(item=><option key={item.key} value={item.key}>{item.label}</option>)}
+                                </select>
+                              </div>
+                              <div className="col-md-3">
+                                <label className="form-label">Condition</label>
+                                <select className="form-select" value={condition.operator} onChange={event=>{
+                                  const conditions=[...(field.conditions||[])];conditions[conditionIndex]={...condition,operator:event.target.value};update(field.key,{conditions});
+                                }}>
+                                  {CONDITION_OPERATORS.map(operator=><option key={operator.value} value={operator.value}>{operator.label}</option>)}
+                                </select>
+                              </div>
+                              <div className="col-md-2">
+                                <label className="form-label">Value</label>
+                                <input className="form-control" value={condition.value||""} onChange={event=>{
+                                  const conditions=[...(field.conditions||[])];conditions[conditionIndex]={...condition,value:event.target.value};update(field.key,{conditions});
+                                }} disabled={["empty","not_empty"].includes(condition.operator)}/>
+                              </div>
+                              <div className="col-md-1">
+                                <button type="button" className="btn btn-outline-danger w-100" title="Remove rule" onClick={()=>{
+                                  const conditions=(field.conditions||[]).filter((_,index)=>index!==conditionIndex);update(field.key,{conditions});
+                                }}><i className="bi bi-trash"></i></button>
+                              </div>
+                            </div>
+                          ))}
+                          <button type="button" className="btn btn-sm btn-light border" onClick={()=>{
+                            const conditions=[...(field.conditions||[]),{action:"show",fieldKey:"",operator:"equals",value:""}];update(field.key,{conditions});
+                          }}><i className="bi bi-plus-lg me-1"></i>Add rule</button>
+                        </div>
+                      </div>
 
                       <div className="col-12 d-flex flex-wrap gap-3 align-items-center">
                         <div className="form-check form-switch">
                           <input className="form-check-input" type="checkbox" checked={Boolean(field.required)} disabled={field.locked} onChange={event=>update(field.key,{required:event.target.checked})}/>
                           <label className="form-check-label">Required</label>
                         </div>
-                        {field.custom&&(
-                          <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>removeCustomField(field.key)}>
-                            <i className="bi bi-trash me-1"></i>Remove field
-                          </button>
-                        )}
+                        {field.custom&&<button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>removeCustomField(field.key)}><i className="bi bi-trash me-1"></i>Remove field</button>}
                         {field.locked&&<span className="small text-secondary"><i className="bi bi-lock me-1"></i>Built-in field</span>}
                       </div>
                     </div>

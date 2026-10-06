@@ -605,16 +605,23 @@ function Order2() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        const requiredOrderFields=orderFormConfig.fields.filter(field=>field.visible!==false&&field.required&&!field.formula);
+        const orderValues={...formData,...(formData.customFields||{})};
+        const requiredOrderFields=orderFormConfig.fields.filter(field=>{
+            const state=getFieldState(field,orderValues);
+            return state.visible&&state.required&&!field.formula;
+        });
         const missingOrderField=requiredOrderFields.find(field=>String(configuredOrderValue(field)??"").trim()==="");
         if(missingOrderField){
             alert("Please fill the required field: "+missingOrderField.label);
             return;
         }
 
-        const requiredItemFields=orderItemConfig.fields.filter(field=>field.visible!==false&&field.required&&!field.formula);
+        const requiredItemFields=orderItemConfig.fields.filter(field=>field.required&&!field.formula);
         const missingItem=requiredItemFields.length
-            ? subOrders.find(item=>requiredItemFields.some(field=>String(configuredItemValue(item,field)??"").trim()===""))
+            ? subOrders.find(item=>requiredItemFields.some(field=>{
+                const state=getFieldState(field,{...item,...(item.customFields||{})});
+                return state.visible&&state.required&&String(configuredItemValue(item,field)??"").trim()==="";
+            }))
             : null;
         if(missingItem){
             const missingField=requiredItemFields.find(field=>String(configuredItemValue(missingItem,field)??"").trim()==="");

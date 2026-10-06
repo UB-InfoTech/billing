@@ -731,7 +731,7 @@ function Clients() {
                             </section>
                           </div>
                         ))}
-                        
+                      </div>
                     </div>
 
                     <div className="modal-footer bg-white p-3 border-top sticky-bottom">

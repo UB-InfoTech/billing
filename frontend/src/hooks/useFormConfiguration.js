@@ -39,7 +39,7 @@ export const mergeFormFields=(baseFields,savedFields)=>{
     formula:["number","currency"].includes(field.fieldType)?String(field.formula||""):"",
     defaultValue:field.defaultValue??"",
     editable:field.editable!==false,
-    readOnly:Boolean(field.readOnly),
+    readOnly:Boolean(field.readOnly||field.formula),
     dataSource:field.dataSource&&typeof field.dataSource==="object"?{
       type:field.dataSource.type==="lookup"?"lookup":"none",
       resource:field.dataSource.resource||"",
@@ -73,7 +73,7 @@ export const mergeFormFields=(baseFields,savedFields)=>{
       formula:["number","currency"].includes(savedField.fieldType||field.fieldType)?String(savedField.formula||""):"",
       defaultValue:savedField.defaultValue??field.defaultValue,
       editable:savedField.editable!==false,
-      readOnly:Boolean(savedField.readOnly),
+      readOnly:Boolean(savedField.readOnly||savedField.formula),
       dataSource:savedField.dataSource||field.dataSource,
       conditions:Array.isArray(savedField.conditions)?savedField.conditions:field.conditions,
       validation:savedField.validation||field.validation,

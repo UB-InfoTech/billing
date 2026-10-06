@@ -12,7 +12,8 @@ import DynamicTable from "../components/DynamicTable";
 import FormConfigurator from "../components/FormConfigurator";
 import ConfiguredField from "../components/ConfiguredField";
 import ArithmeticInput from "../components/ArithmeticInput";
-import {useFormConfiguration,applyFormulas} from "../hooks/useFormConfiguration";
+import {useFormConfiguration,applyFormulas,hydrateConfiguredValues,applyAutoFill,getFieldState} from "../hooks/useFormConfiguration";
+import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
 import Report from '../components/Report';
 import { useReactToPrint } from "react-to-print";
@@ -85,6 +86,11 @@ function Order2() {
     const [itemSettingsOpen,setItemSettingsOpen]=useState(false);
     const orderFormConfig=useFormConfiguration("orders.form",ORDER_FORM_FIELDS);
     const orderItemConfig=useFormConfiguration("orders.items",ORDER_ITEM_FIELDS);
+    const linkedOrderSources=useMemo(()=>Array.from(new Set([
+        ...orderFormConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean),
+        ...orderItemConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean)
+    ])),[orderFormConfig.fields,orderItemConfig.fields]);
+    const {records:linkedRecords}=useNoCodeDataSources(linkedOrderSources);
     const [editingOrder, setEditingOrder] = useState(null);
 
 
@@ -252,54 +258,41 @@ function Order2() {
         handleSubOrderValueChange(index,e.target.name,e.target.value);
     };
 
-    const handleSubOrderValueChange=(index,name,value)=>{
+    const handleSubOrderValueChange=(index,name,value,record=null,field=null)=>{
         const updatedOrders=[...subOrders];
         const current={...(updatedOrders[index]||{}),customFields:{...((updatedOrders[index]||{}).customFields||{})}};
-        current[name]=value;
+        let next={...current,[name]:value};
 
-        const field=orderItemConfig.fields.find(item=>item.key===name);
-        if(field?.custom)current.customFields[name]=value;
+        if(field?.custom)next.customFields={...next.customFields,[name]:value};
+        if(record&&field)next=applyAutoFill(field,record,next);
 
-        if(name==="orderName"){
+        if(name==="orderName"&&!record&&!field?.custom){
             const selectedProduct=products.find(product=>product.productName===value);
             if(selectedProduct){
-                current.unitPrice=selectedProduct.rate||"";
-                current.designNumber=selectedProduct.designNo||"";
+                next.unitPrice=selectedProduct.rate||"";
+                next.designNumber=selectedProduct.designNo||"";
             }
         }
 
-        const formulaResult=applyFormulas(orderItemConfig.fields,current);
-        updatedOrders[index]={...current,...formulaResult,customFields:{...current.customFields}};
+        next=applyFormulas(orderItemConfig.fields,next);
+        updatedOrders[index]={...next,customFields:next.customFields||{}};
         setSubOrders(updatedOrders);
         setFormData(prev=>({...prev,subOrders:updatedOrders}));
     };
 
-    const handleConfiguredOrderValue=(name,value)=>{
-        const field=orderFormConfig.fields.find(item=>item.key===name);
-        if(name==="companyName"&&!field?.custom){
+    const handleConfiguredOrderValue=(name,value,record=null,field=null)=>{
+        const currentCustomFields={...(formData.customFields||{})};
+        let next={...formData,[name]:value,customFields:currentCustomFields};
+
+        if(field?.custom)next.customFields={...currentCustomFields,[name]:value};
+        if(record&&field)next=applyAutoFill(field,record,next);
+
+        if(name==="companyName"&&!record&&!field?.custom){
             const selectedClient=clients.find(client=>client.companyName===value);
             if(selectedClient){
-                const next={
-                    ...formData,
-                    companyName:value,
-                    clientId:selectedClient._id||"",
-                    Address:selectedClient.address||"",
-                    State:selectedClient.state||"",
-                    City:selectedClient.city||"",
-                    pinCode:selectedClient.pinCode||"",
-                    stateCode:selectedClient.stateCode||"",
-                    gstNumber:selectedClient.gstNumber||"",
-                    paymentTerms:selectedClient.paymentTerms||"30",
-                    discountRate:selectedClient.discountRate||"0"
-                };
-                setFormData(applyFormulas(orderFormConfig.fields,next));
-                return;
+                next={...next,companyName:value,clientId:selectedClient._id||"",Address:selectedClient.address||"",State:selectedClient.state||"",City:selectedClient.city||"",pinCode:selectedClient.pinCode||"",stateCode:selectedClient.stateCode||"",gstNumber:selectedClient.gstNumber||"",paymentTerms:selectedClient.paymentTerms||"30",discountRate:selectedClient.discountRate||"0"};
             }
         }
-
-        const next=field?.custom
-            ? {...formData,[name]:value,customFields:{...(formData.customFields||{}),[name]:value}}
-            : {...formData,[name]:value};
         setFormData(applyFormulas(orderFormConfig.fields,next));
     };
 
@@ -702,18 +695,10 @@ function Order2() {
 
     const handleEdit = (order) => {
         setEditingOrder(order);
-        const hydratedItems=(order.subOrders||[]).map(item=>({
-            ...item,
-            ...((item.customFields&&typeof item.customFields==="object")?item.customFields:{}),
-            customFields:{...(item.customFields||{})}
-        }));
-        setSubOrders(hydratedItems);
-        setFormData({
-            ...order,
-            ...((order.customFields&&typeof order.customFields==="object")?order.customFields:{}),
-            customFields:{...(order.customFields||{})},
-            subOrders:hydratedItems
-        });
+        const configuredOrder=hydrateConfiguredValues(order,orderFormConfig.fields);
+        const configuredItems=(order.subOrders||[]).map(item=>hydrateConfiguredValues(item,orderItemConfig.fields));
+        setSubOrders(configuredItems.map(item=>({...item,customFields:{...(item.customFields||{})}})));
+        setFormData({...configuredOrder,customFields:{...(order.customFields||{})}});
         setShowModal(true);
     };
 
@@ -1475,22 +1460,28 @@ const styles = {
                                                     </div>
                                                     <div className="card-body">
                                                         <div className="row g-3">
-                                                            {visibleOrderFields.filter(field=>(field.section||"General")===section).sort((a,b)=>a.order-b.order).map(field=>(
-                                                                <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
+                                                            {visibleOrderFields.filter(field=>(field.section||"General")===section).sort((a,b)=>a.order-b.order).map(field=>{
+                                                                const state=getFieldState(field,{...formData,...(formData.customFields||{})});
+                                                                if(!state.visible)return null;
+                                                                const source=field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[];
+                                                                const value=field.key==="orderDate"
+                                                                    ? (configuredOrderValue(field)?new Date(configuredOrderValue(field)).toISOString().slice(0,10):"")
+                                                                    : configuredOrderValue(field);
+                                                                return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
                                                                     <ConfiguredField
-                                                                        field={field}
-                                                                        value={field.key==="orderDate"
-                                                                            ? (configuredOrderValue(field)?new Date(configuredOrderValue(field)).toISOString().slice(0,10):"")
-                                                                            : configuredOrderValue(field)}
-                                                                        onChange={next=>handleConfiguredOrderValue(field.key,next)}
+                                                                        field={{...field,required:state.required,readOnly:state.readOnly}}
+                                                                        value={value}
+                                                                        onChange={next=>handleConfiguredOrderValue(field.key,next,null,field)}
+                                                                        onRecordChange={record=>handleConfiguredOrderValue(field.key,record?.[field.dataSource?.valueField||"_id"]??"",record,field)}
+                                                                        lookupRecords={source}
                                                                         options={field.options||[]}
-                                                                        listId={field.key==="companyName"&&!field.custom?"orderCompanyName":undefined}
-                                                                        listOptions={field.key==="companyName"&&!field.custom?clients.map(client=>client.companyName):[]}
+                                                                        listId={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?"orderCompanyName":undefined}
+                                                                        listOptions={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?clients.map(client=>client.companyName):[]}
                                                                         icon=""
-                                                                        required={field.required}
+                                                                        required={state.required}
                                                                     />
-                                                                </div>
-                                                            ))}
+                                                                </div>;
+                                                            })}
                                                         </div>
                                                     </div>
                                                 </section>
@@ -1510,7 +1501,7 @@ const styles = {
                                                 </div>
                                                 <div className="card-body">
                                                     {subOrders.map((order,index)=>{
-                                                        const itemFields=orderItemConfig.fields.filter(field=>field.visible!==false).sort((a,b)=>a.order-b.order);
+                                                        const itemFields=orderItemConfig.fields.filter(field=>getFieldState(field,{...order,...(order.customFields||{})}).visible).sort((a,b)=>a.order-b.order);
                                                         return (
                                                             <div key={index} className="order-config-item-row border rounded-3 bg-light p-3 mb-3">
                                                                 <div className="d-flex align-items-center justify-content-between mb-3">
@@ -1527,7 +1518,9 @@ const styles = {
                                                                             <ConfiguredField
                                                                                 field={field}
                                                                                 value={configuredItemValue(order,field)}
-                                                                                onChange={next=>handleSubOrderValueChange(index,field.key,next)}
+                                                                                onChange={next=>handleSubOrderValueChange(index,field.key,next,null,field)}
+                                                                                onRecordChange={record=>handleSubOrderValueChange(index,field.key,record?.[field.dataSource?.valueField||"_id"]??"",record,field)}
+                                                                                lookupRecords={field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[]}
                                                                                 options={field.options||[]}
                                                                                 listId={field.key==="orderName"&&!field.custom?"orderItemName":undefined}
                                                                                 listOptions={field.key==="orderName"&&!field.custom?products.map(product=>product.productName):[]}

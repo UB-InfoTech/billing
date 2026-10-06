@@ -12,7 +12,7 @@ import DynamicTable from "../components/DynamicTable";
 import FormConfigurator from "../components/FormConfigurator";
 import ConfiguredField from "../components/ConfiguredField";
 import ArithmeticInput from "../components/ArithmeticInput";
-import {useFormConfiguration,applyFormulas,hydrateConfiguredValues,applyAutoFill,getFieldState} from "../hooks/useFormConfiguration";
+import {useFormConfiguration,applyFormulas,hydrateConfiguredValues,applyAutoFill,getFieldState,syncConfiguredCustomFields} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
 import Report from '../components/Report';
@@ -265,6 +265,7 @@ function Order2() {
 
         if(field?.custom)next.customFields={...next.customFields,[name]:value};
         if(record&&field)next=applyAutoFill(field,record,next);
+        next=syncConfiguredCustomFields(next,orderItemConfig.fields);
 
         if(name==="orderName"&&!record&&!field?.custom){
             const selectedProduct=products.find(product=>product.productName===value);
@@ -286,6 +287,7 @@ function Order2() {
 
         if(field?.custom)next.customFields={...currentCustomFields,[name]:value};
         if(record&&field)next=applyAutoFill(field,record,next);
+        next=syncConfiguredCustomFields(next,orderFormConfig.fields);
 
         if(name==="companyName"&&!record&&!field?.custom){
             const selectedClient=clients.find(client=>client.companyName===value);

@@ -37,7 +37,19 @@ export const mergeFormFields=(baseFields,savedFields)=>{
     section:field.section||"General",
     options:Array.isArray(field.options)?field.options.slice():[],
     formula:["number","currency"].includes(field.fieldType)?String(field.formula||""):"",
-    defaultValue:field.defaultValue??""
+    defaultValue:field.defaultValue??"",
+    editable:field.editable!==false,
+    readOnly:Boolean(field.readOnly),
+    dataSource:field.dataSource&&typeof field.dataSource==="object"?{
+      type:field.dataSource.type==="lookup"?"lookup":"none",
+      resource:field.dataSource.resource||"",
+      valueField:field.dataSource.valueField||"_id",
+      labelField:field.dataSource.labelField||"",
+      searchField:field.dataSource.searchField||"",
+      autoFill:Array.isArray(field.dataSource.autoFill)?field.dataSource.autoFill.slice():[]
+    }:{type:"none",resource:"",valueField:"_id",labelField:"",searchField:"",autoFill:[]},
+    conditions:Array.isArray(field.conditions)?field.conditions.slice():[],
+    validation:field.validation&&typeof field.validation==="object"?{min:field.validation.min??null,max:field.validation.max??null,pattern:field.validation.pattern||""}:{min:null,max:null,pattern:""}
   });
 
   const base=(baseFields||[]).map(normalize);
@@ -60,6 +72,11 @@ export const mergeFormFields=(baseFields,savedFields)=>{
       options:Array.isArray(savedField.options)?savedField.options.slice():field.options,
       formula:["number","currency"].includes(savedField.fieldType||field.fieldType)?String(savedField.formula||""):"",
       defaultValue:savedField.defaultValue??field.defaultValue,
+      editable:savedField.editable!==false,
+      readOnly:Boolean(savedField.readOnly),
+      dataSource:savedField.dataSource||field.dataSource,
+      conditions:Array.isArray(savedField.conditions)?savedField.conditions:field.conditions,
+      validation:savedField.validation||field.validation,
       custom:false
     };
   });
@@ -70,6 +87,44 @@ export const mergeFormFields=(baseFields,savedFields)=>{
   });
 
   return merged.sort((a,b)=>(a.order??0)-(b.order??0)).map((field,index)=>({...field,order:index}));
+};
+
+
+export const getFieldPath=(record,path)=>{
+  if(record==null||!path)return "";
+  return String(path).split(".").reduce((value,key)=>value==null?undefined:value[key],record);
+};
+
+export const fieldConditionMatches=(condition,values)=>{
+  const current=values?.[condition?.fieldKey];
+  const expected=condition?.value??"";
+  const text=String(current??"").toLowerCase();
+  const target=String(expected).toLowerCase();
+  switch(condition?.operator){
+    case "not_equals":return text!==target;
+    case "contains":return text.includes(target);
+    case "not_contains":return !text.includes(target);
+    case "greater_than":return Number(current)>Number(expected);
+    case "less_than":return Number(current)<Number(expected);
+    case "empty":return text.trim()==="";
+    case "not_empty":return text.trim()!=="";
+    default:return text===target;
+  }
+};
+
+export const getFieldState=(field,values)=>{
+  const conditions=Array.isArray(field?.conditions)?field.conditions:[];
+  let visible=field?.visible!==false;
+  let required=Boolean(field?.required);
+  let readOnly=Boolean(field?.readOnly||field?.editable===false);
+  conditions.forEach(condition=>{
+    if(!fieldConditionMatches(condition,values))return;
+    if(condition.action==="show")visible=true;
+    if(condition.action==="hide")visible=false;
+    if(condition.action==="require")required=true;
+    if(condition.action==="readonly")readOnly=true;
+  });
+  return {visible,required,readOnly};
 };
 
 export function useFormConfiguration(formKey,baseFields){

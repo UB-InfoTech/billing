@@ -6,6 +6,9 @@ const auth=require("../middleware/auth");
 const router=express.Router();
 
 const FIELD_TYPES=["text","textarea","number","currency","date","datetime","select","boolean"];
+const SOURCES=["none","clients","products","orders","expenses","suppliers","machines"];
+const OPERATORS=["equals","not_equals","contains","not_contains","greater_than","less_than","empty","not_empty"];
+const ACTIONS=["show","hide","require","readonly"];
 const owner=req=>String(req.user.id);
 const cleanString=(value,max)=>String(value??"").trim().slice(0,max);
 
@@ -40,7 +43,31 @@ const sanitizeFields=fields=>{
       section,
       options:fieldType==="select"?options:[],
       formula:fieldType==="number"||fieldType==="currency"?cleanString(raw?.formula,300):"",
-      defaultValue:raw?.defaultValue??""
+      defaultValue:raw?.defaultValue??"",
+      editable:raw?.editable!==false,
+      readOnly:Boolean(raw?.readOnly),
+      dataSource:{
+        type:raw?.dataSource?.type==="lookup"&&SOURCES.includes(raw?.dataSource?.resource)?"lookup":"none",
+        resource:SOURCES.includes(raw?.dataSource?.resource)?raw.dataSource.resource:"",
+        valueField:cleanString(raw?.dataSource?.valueField||"_id",100),
+        labelField:cleanString(raw?.dataSource?.labelField,100),
+        searchField:cleanString(raw?.dataSource?.searchField,100),
+        autoFill:Array.isArray(raw?.dataSource?.autoFill)?raw.dataSource.autoFill.slice(0,30).map(item=>({
+          targetKey:cleanString(item?.targetKey,100),
+          sourceKey:cleanString(item?.sourceKey,100)
+        })).filter(item=>item.targetKey&&item.sourceKey):[]
+      },
+      conditions:Array.isArray(raw?.conditions)?raw.conditions.slice(0,20).map(item=>({
+        action:ACTIONS.includes(item?.action)?item.action:"show",
+        fieldKey:cleanString(item?.fieldKey,100),
+        operator:OPERATORS.includes(item?.operator)?item.operator:"equals",
+        value:cleanString(item?.value,300)
+      })).filter(item=>item.fieldKey):[],
+      validation:{
+        min:Number.isFinite(Number(raw?.validation?.min))?Number(raw.validation.min):null,
+        max:Number.isFinite(Number(raw?.validation?.max))?Number(raw.validation.max):null,
+        pattern:cleanString(raw?.validation?.pattern,500)
+      }
     };
   });
 };

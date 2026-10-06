@@ -169,4 +169,14 @@ export function useFormConfiguration(formKey,baseFields){
     finally{setSaving(false);}
   },[formKey,baseSignature,baseFields]);
   return {fields,setFields,loading,saving,error,setError,save,reset,reload:load};
+}export const syncConfiguredCustomFields=(values,fields=[])=>{
+  const next={...(values||{}),customFields:{...((values||{}).customFields||{})}};
+  (fields||[]).filter(field=>field.custom).forEach(field=>{
+    if(Object.prototype.hasOwnProperty.call(next,field.key)){
+      next.customFields[field.key]=next[field.key];
+    }
+  });
+  return next;
 };
+
+;

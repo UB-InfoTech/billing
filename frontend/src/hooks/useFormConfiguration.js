@@ -127,6 +127,45 @@ export const getFieldState=(field,values)=>{
   return {visible,required,readOnly};
 };
 
+
+export const hydrateConfiguredValues=(record,fields=[])=>{
+  const custom=record?.customFields&&typeof record.customFields==="object"
+    ? Object.fromEntries(record.customFields instanceof Map?record.customFields.entries():Object.entries(record.customFields))
+    : {};
+  const next={...(record||{})};
+  delete next.customFields;
+  (fields||[]).filter(field=>field.custom).forEach(field=>{
+    if(Object.prototype.hasOwnProperty.call(custom,field.key))next[field.key]=custom[field.key];
+    else if(!Object.prototype.hasOwnProperty.call(next,field.key)&&field.defaultValue!=="")next[field.key]=field.defaultValue;
+  });
+  return next;
+};
+
+export const splitConfiguredValues=(values,fields=[])=>{
+  const customKeys=new Set((fields||[]).filter(field=>field.custom).map(field=>field.key));
+  const customFields={};
+  const data={...(values||{})};
+  customKeys.forEach(key=>{
+    if(Object.prototype.hasOwnProperty.call(data,key)){
+      customFields[key]=data[key];
+      delete data[key];
+    }
+  });
+  return {data,customFields};
+};
+
+export const applyAutoFill=(field,record,values)=>{
+  if(!field?.dataSource?.resource||!record)return {...values};
+  const next={...(values||{})};
+  const valueField=field.dataSource.valueField||"_id";
+  next[field.key]=record?.[valueField]??"";
+  (field.dataSource.autoFill||[]).forEach(mapping=>{
+    const value=getFieldPath(record,mapping.sourceKey);
+    if(mapping.targetKey&&value!==undefined)next[mapping.targetKey]=value;
+  });
+  return next;
+};
+
 export function useFormConfiguration(formKey,baseFields){
   const baseSignature=useMemo(()=>JSON.stringify(baseFields.map(field=>({key:field.key,label:field.label,fieldType:field.fieldType,section:field.section}))),[baseFields]);
   const [fields,setFields]=useState(()=>mergeFormFields(baseFields,[]));

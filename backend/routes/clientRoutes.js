@@ -1,4 +1,5 @@
 const express=require("express");
+const {applyWorkflows}=require("../utils/workflowEngine");
 const mongoose=require("mongoose");
 const Client=require("../models/Client");
 const Order=require("../models/Order2");
@@ -68,6 +69,7 @@ router.post("/",auth,async(req,res)=>{
     body.customFields=cleanCustomFields(body.customFields);
     if(body.gstNumber)body.gstNumber=String(body.gstNumber).trim().toUpperCase();
     const client=new Client(body);
+    await applyWorkflows({resource:"clients",event:"record_created",doc:client,createdBy:owner(req)});
     await client.save();
     res.status(201).json(client);
   }catch(error){res.status(400).json({message:error.message});}
@@ -81,6 +83,7 @@ router.patch("/:id",auth,async(req,res)=>{
     const allowed=["name","email","phone","address","state","city","pinCode","stateCode","gstNumber","companyName","businessType","paymentTerms","loyaltyPoints","discountRate","accountStatus","notes","customFields"];
     for(const key of allowed)if(req.body?.[key]!==undefined)client[key]=key==="customFields"?cleanCustomFields(req.body[key]):req.body[key];
     if(client.gstNumber)client.gstNumber=String(client.gstNumber).trim().toUpperCase();
+    await applyWorkflows({resource:"clients",event:"record_updated",doc:client,createdBy:owner(req)});
     await client.save();
     res.json(client);
   }catch(error){res.status(400).json({message:error.message});}

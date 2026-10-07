@@ -196,7 +196,8 @@ export function useFormConfiguration(formKey,baseFields){
 };
 
 export const applyAutoFill=(field,record,values)=>{
-  if(!field?.dataSource?.autoFill?.length||!record)return values||{};
+  const mappings=Array.isArray(field?.dataSource?.autoFill)?field.dataSource.autoFill:[];
+  if(!mappings.length)return values||{};
   const next={...(values||{}),customFields:{...((values||{}).customFields||{})}};
 
   const readPath=(source,path)=>String(path||"").split(".").reduce((value,key)=>value==null?undefined:value[key],source);
@@ -204,7 +205,7 @@ export const applyAutoFill=(field,record,values)=>{
   field.dataSource.autoFill.forEach(mapping=>{
     const targetKey=String(mapping?.targetKey||"").trim();
     if(!targetKey)return;
-    const value=readPath(record,mapping?.sourceKey);
+    const value=record?readPath(record,mapping?.sourceKey):"";
     next[targetKey]=value??"";
     if(targetKey.startsWith("custom_")||Object.prototype.hasOwnProperty.call(next.customFields,targetKey)){
       next.customFields[targetKey]=value??"";

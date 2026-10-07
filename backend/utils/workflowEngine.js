@@ -2,6 +2,7 @@ const WorkflowDefinition=require("../models/WorkflowDefinition");
 
 const readValue=(doc,key)=>{
   if(!doc||!key)return "";
+  if(doc.customFields instanceof Map&&doc.customFields.has(key))return doc.customFields.get(key);
   if(doc.customFields&&Object.prototype.hasOwnProperty.call(doc.customFields,key))return doc.customFields[key];
   const direct=typeof doc.get==="function"?doc.get(key):doc[key];
   return direct;
@@ -27,10 +28,16 @@ const matches=(condition,doc)=>{
 
 const setValue=(doc,key,value)=>{
   if(!key)return false;
-  const custom=doc.customFields&&Object.prototype.hasOwnProperty.call(doc.customFields,key);
+  const custom=doc.customFields instanceof Map
+    ?doc.customFields.has(key)
+    :Boolean(doc.customFields&&Object.prototype.hasOwnProperty.call(doc.customFields,key));
   if(custom||key.startsWith("custom_")){
-    doc.customFields=doc.customFields&&typeof doc.customFields==="object"?doc.customFields:{};
-    doc.customFields[key]=value;
+    if(doc.customFields instanceof Map){
+      doc.customFields.set(key,value);
+    }else{
+      doc.customFields=doc.customFields&&typeof doc.customFields==="object"?doc.customFields:{};
+      doc.customFields[key]=value;
+    }
     doc.markModified?.("customFields");
     return true;
   }

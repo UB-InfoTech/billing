@@ -20,21 +20,21 @@ import { useReactToPrint } from "react-to-print";
 import { Link } from 'react-router-dom';
 
 const ORDER_FORM_FIELDS=[
- {key:"orderNumber",label:"Invoice No.",fieldType:"text",width:3,section:"shipping",required:true,order:0},
- {key:"orderDate",label:"Bill Date",fieldType:"date",width:4,section:"shipping",required:true,order:1},
+ {key:"orderNumber",label:"Invoice No.",fieldType:"text",width:3,section:"shipping",required:true,order:0,system:true},
+ {key:"orderDate",label:"Bill Date",fieldType:"date",width:4,section:"shipping",required:true,order:1,system:true},
  {key:"lrNo",label:"LR No.",fieldType:"text",width:5,section:"shipping",order:2},
  {key:"State",label:"State",fieldType:"text",width:4,section:"shipping",required:true,order:3},
  {key:"Address",label:"Address",fieldType:"text",width:8,section:"shipping",required:true,order:4},
  {key:"City",label:"City",fieldType:"text",width:4,section:"shipping",required:true,order:5},
  {key:"pinCode",label:"Pin Code",fieldType:"text",width:4,section:"shipping",order:6},
  {key:"stateCode",label:"State Code",fieldType:"text",width:4,section:"shipping",order:7},
- {key:"status",label:"Status",fieldType:"select",width:4,section:"shipping",order:8,options:["Pending","In Process","Completed","Cancelled","Dispatched"]},
- {key:"companyName",label:"Company Name",fieldType:"text",width:4,section:"client",required:true,order:9},
+ {key:"status",label:"Status",fieldType:"select",width:4,section:"shipping",order:8,options:["Pending","In Process","Completed","Cancelled","Dispatched"],system:true},
+ {key:"companyName",label:"Company Name",fieldType:"text",width:4,section:"client",required:true,order:9,system:true},
  {key:"gstNumber",label:"GST No.",fieldType:"text",width:4,section:"client",order:10},
- {key:"paymentTerms",label:"Payment Terms",fieldType:"select",width:4,section:"client",required:true,order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Advance"}]},
+ {key:"paymentTerms",label:"Payment Terms",fieldType:"select",width:4,section:"client",required:true,order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Advance"}],system:true},
  {key:"challanNumber",label:"Challan No.",fieldType:"text",width:4,section:"client",required:true,order:12},
- {key:"taxPercentage",label:"Tax %",fieldType:"number",width:4,section:"client",order:13},
- {key:"discountRate",label:"Discount %",fieldType:"number",width:4,section:"client",order:14}
+ {key:"taxPercentage",label:"Tax %",fieldType:"number",width:4,section:"client",order:13,system:true},
+ {key:"discountRate",label:"Discount %",fieldType:"number",width:4,section:"client",order:14,system:true}
 ];
 
 const ORDER_ITEM_FIELDS=[
@@ -1478,7 +1478,7 @@ const styles = {
                                                                     : configuredOrderValue(field);
                                                                 return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
                                                                     <ConfiguredField
-                                                                        field={{...field,required:state.required,readOnly:state.readOnly}}
+                                                                        field={{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled}}
                                                                         value={value}
                                                                         onChange={next=>handleConfiguredOrderValue(field.key,next,null,field)}
                                                                         onRecordChange={record=>handleConfiguredOrderValue(field.key,record?.[field.dataSource?.valueField||"_id"]??"",record,field)}
@@ -1510,7 +1510,8 @@ const styles = {
                                                 </div>
                                                 <div className="card-body">
                                                     {subOrders.map((order,index)=>{
-                                                        const itemFields=orderItemConfig.fields.filter(field=>getFieldState(field,{...order,...(order.customFields||{})}).visible).sort((a,b)=>a.order-b.order);
+                                                        const itemValues={...order,...(order.customFields||{})};
+                                                        const itemFields=orderItemConfig.fields.filter(field=>getFieldState(field,itemValues).visible).sort((a,b)=>a.order-b.order);
                                                         return (
                                                             <div key={index} className="order-config-item-row border rounded-3 bg-light p-3 mb-3">
                                                                 <div className="d-flex align-items-center justify-content-between mb-3">
@@ -1525,7 +1526,7 @@ const styles = {
                                                                     {itemFields.map(field=>(
                                                                         <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
                                                                             <ConfiguredField
-                                                                                field={field}
+                                                                                field={{...field,...getFieldState(field,itemValues)}}
                                                                                 value={configuredItemValue(order,field)}
                                                                                 onChange={next=>handleSubOrderValueChange(index,field.key,next,null,field)}
                                                                                 onRecordChange={record=>handleSubOrderValueChange(index,field.key,record?.[field.dataSource?.valueField||"_id"]??"",record,field)}
@@ -1533,8 +1534,9 @@ const styles = {
                                                                                 options={field.options||[]}
                                                                                 listId={field.key==="orderName"&&!field.custom?"orderItemName":undefined}
                                                                                 listOptions={field.key==="orderName"&&!field.custom?products.map(product=>product.productName):[]}
-                                                                                required={field.required}
-                                                                                readOnly={Boolean(field.formula)}
+                                                                                required={getFieldState(field,itemValues).required}
+                                                                                readOnly={getFieldState(field,itemValues).readOnly}
+                                                                                disabled={getFieldState(field,itemValues).disabled}
                                                                             />
                                                                         </div>
                                                                     ))}

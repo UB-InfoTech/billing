@@ -7,7 +7,7 @@ import deleteSVG from '../assets/delete.svg';
 import DynamicTable from '../components/DynamicTable';
 import FormConfigurator from '../components/FormConfigurator';
 import ConfiguredField from '../components/ConfiguredField';
-import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,syncConfiguredCustomFields} from "../hooks/useFormConfiguration";
+import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,syncConfiguredCustomFields,buildConfiguredDefaults} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
 
@@ -95,6 +95,7 @@ function Clients() {
     });
   };
   const visibleClientFields=clientFormConfig.fields.filter(field=>field.visible!==false);
+  const emptyClient=()=>buildConfiguredDefaults({name:"",email:"",phone:"",address:"",state:"",city:"",pinCode:"",stateCode:"",gstNumber:"",companyName:"",businessType:"",paymentTerms:"30",discountRate:0,accountStatus:"Active",notes:"",customFields:{}},clientFormConfig.fields);
   const clientSections=[...new Set(visibleClientFields.map(field=>field.section||"General"))];
 
   useEffect(() => {
@@ -218,24 +219,7 @@ function Clients() {
       alert("✅ Client Added Successfully");
       setShowModal(false);
 
-      setNewClient({
-        name: '',
-        email: '',
-        phone: '',
-        address: '',
-        state: '',
-        city: '',
-        pinCode: '',
-        stateCode: '',
-        gstNumber: '',
-        companyName: '',
-        businessType: '',
-        paymentTerms: '30',
-        discountRate: 0,
-        accountStatus: 'Active',
-        notes: '',
-        customFields: {}
-      });
+      setNewClient(emptyClient());
       fetchClients();
     } catch (error) {
       // alert(response.data.message);
@@ -251,7 +235,7 @@ function Clients() {
       ...((client.customFields&&typeof client.customFields==="object")?client.customFields:{}),
       customFields:{...(client.customFields||{})}
     };
-    setNewClient(hydrated);
+    setNewClient(buildConfiguredDefaults(hydrated,clientFormConfig.fields));
     setShowModal(true);
   };
 
@@ -288,24 +272,7 @@ function Clients() {
       setShowModal(false);
       setEditingClient(null);
       // setNewClient({ name: "", gstin: "", credit_limit: 0, outstanding_balance: 0 });
-      setNewClient({
-        name: '',
-        email: '',
-        phone: '',
-        address: '',
-        state: '',
-        city: '',
-        pinCode: '',
-        stateCode: '',
-        gstNumber: '',
-        companyName: '',
-        businessType: '',
-        paymentTerms: '30',
-        discountRate: 0,
-        accountStatus: 'Active',
-        notes: '',
-        customFields: {}
-      });
+      setNewClient(emptyClient());
 
       fetchClients();
     } catch (error) {
@@ -482,7 +449,7 @@ function Clients() {
       <div className="w-100 mx-3 mt-3">
         <div className="d-flex align-items-center gap-4">
           <h2>Client Management</h2>
-          <button className="btn btn-primary" onClick={() => { setShowModal(true); }}>Add New Client</button>
+          <button className="btn btn-primary" onClick={() => { setEditingClient(null); setNewClient(emptyClient()); setShowModal(true); }}>Add New Client</button>
         </div>
 
         <div className="py-2">

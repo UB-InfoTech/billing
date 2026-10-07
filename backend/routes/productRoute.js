@@ -121,6 +121,12 @@ router.put("/:id",auth,upload.array("images",5),async(req,res)=>{
     if(req.body.serialNumber!==undefined)product.serialNumber=String(req.body.serialNumber).trim()||undefined;
     if(req.body.purchaseDate!==undefined)product.purchaseDate=req.body.purchaseDate||null;
     if((req.files||[]).length)product.images=[...(product.images||[]),...(req.files||[]).map(file=>publicUrl(req,"/uploads/products/"+file.filename))];
+    if(req.body.customFields!==undefined){
+      try{
+        const incoming=typeof req.body.customFields==="string"?JSON.parse(req.body.customFields||"{}"):req.body.customFields;
+        product.customFields=new Map(Object.entries(incoming&&typeof incoming==="object"?incoming:{}));
+      }catch{ return res.status(400).json({message:"Custom product fields are not valid."}); }
+    }
     if(product.rate<0||product.quantity<0||product.minStock<0)return res.status(400).json({message:"Stock and pricing values cannot be negative."});
     await applyWorkflows({resource:"products",event:"record_updated",doc:product,createdBy:owner(req)});
     await product.save();

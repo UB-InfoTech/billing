@@ -55,12 +55,14 @@ function Order2() {
     const [orderId, setOrderId] = useState(null);
     const [formSettingsOpen,setFormSettingsOpen]=useState(false);
     const [itemSettingsOpen,setItemSettingsOpen]=useState(false);
+    const [tableCustomizeRequested,setTableCustomizeRequested]=useState(false);
     const [searchParams,setSearchParams]=useSearchParams();
 
     useEffect(()=>{
         const customize=searchParams.get("customize");
         if(customize==="form")setFormSettingsOpen(true);
         if(customize==="items")setItemSettingsOpen(true);
+        if(customize==="table")setTableCustomizeRequested(true);
         if(customize){
             searchParams.delete("customize");
             setSearchParams(searchParams,{replace:true});
@@ -1306,6 +1308,7 @@ const styles = {
                     {/* Table */}
                     <DynamicTable
                         tableKey="orders.list"
+                        autoOpenSettings={tableCustomizeRequested}
                         rows={sortedData}
                         getRowKey={order=>order._id}
                         columns={[

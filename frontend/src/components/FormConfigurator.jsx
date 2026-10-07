@@ -1,4 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
+import axios from "axios";
 import {evaluateArithmeticExpression} from "../utils/arithmetic";
 
 const FIELD_TYPES=[
@@ -9,7 +10,12 @@ const FIELD_TYPES=[
   {value:"date",label:"Date",icon:"bi-calendar3"},
   {value:"datetime",label:"Date & time",icon:"bi-calendar2-week"},
   {value:"select",label:"Dropdown",icon:"bi-list-ul"},
+  {value:"multiselect",label:"Multiple choices",icon:"bi-check2-square"},
   {value:"boolean",label:"Yes / No",icon:"bi-toggle-on"},
+  {value:"email",label:"Email",icon:"bi-envelope"},
+  {value:"phone",label:"Phone",icon:"bi-telephone"},
+  {value:"url",label:"Website",icon:"bi-link-45deg"},
+  {value:"reference",label:"Existing record",icon:"bi-database"},
 ];
 
 const DATA_SOURCES=[
@@ -31,7 +37,10 @@ const DATA_SOURCES=[
   ]},
   {value:"machines",label:"Machine records",fields:[
     ["_id","Machine ID"],["name","Machine Name"],["totalOrdersProcessed","Orders Processed"],["totalRevenueGenerated","Revenue Generated"],["downtimeHours","Downtime Hours"]
-  ]}
+  ]},
+  {value:"users",label:"Team members",fields:[
+    ["_id","Team member"],["username","Name"],["email","Email"]
+  ]},
 ];
 
 const CONDITION_OPERATORS=[
@@ -54,22 +63,37 @@ const WIDTHS=[
   {value:12,label:"100%"},
 ];
 
-const sourceFor=resource=>DATA_SOURCES.find(source=>source.value===resource)||DATA_SOURCES[0];
-const sourceFields=resource=>sourceFor(resource).fields;
+const sourceFor=(resource,sources=DATA_SOURCES)=>sources.find(source=>source.value===resource)||sources[0];
+const sourceFields=(sources,resource)=>sourceFor(resource,sources).fields;
 
 const humanize=value=>String(value||"").replace(/[_-]+/g," ").replace(/\b\w/g,char=>char.toUpperCase()).trim()||"General";
 
 const clone=field=>({
   ...field,
-  options:Array.isArray(field.options)?field.options.slice():[],
+  options:Array.isArray(field.options)?field.options.map(option=>(
+    option&&typeof option==="object"
+      ?{value:String(option.value??option.label??""),label:String(option.label??option.value??"")}
+      :{value:String(option??""),label:String(option??"")}
+  )).filter(option=>option.value):[],
   visible:field.visible!==false,
   required:Boolean(field.required),
   locked:Boolean(field.locked),
+  system:Boolean(field.system),
   custom:Boolean(field.custom),
   width:Number(field.width)||6,
   section:field.section||"General",
   formula:field.formula||"",
   defaultValue:field.defaultValue??"",
+  editable:field.editable!==false,
+  readOnly:Boolean(field.readOnly||field.formula),
+  disabled:Boolean(field.disabled),
+  dataSource:field.dataSource&&typeof field.dataSource==="object"?{
+    ...field.dataSource,
+    type:field.dataSource.type==="lookup"?"lookup":"none",
+    multiple:Boolean(field.dataSource.multiple),
+    autoFill:Array.isArray(field.dataSource.autoFill)?field.dataSource.autoFill.map(item=>({...item})):[],
+  }:{type:"none",resource:"",valueField:"_id",labelField:"",searchField:"",multiple:false,autoFill:[]},
+  conditions:Array.isArray(field.conditions)?field.conditions.map(item=>({...item})):[],
 });
 
 export default function FormConfigurator({
@@ -96,6 +120,7 @@ export default function FormConfigurator({
     required:false,
     optionsText:"",
   });
+  const [sourceCatalog,setSourceCatalog]=useState(DATA_SOURCES);
 
   useEffect(()=>{
     if(!open)return;
@@ -105,6 +130,31 @@ export default function FormConfigurator({
     setShowAddField(false);
     setError("");
   },[open,fields]);
+
+  useEffect(()=>{
+    if(!open)return;
+    let cancelled=false;
+    const loadSources=async()=>{
+      try{
+        const apiBase=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
+        const response=await axios.get(apiBase+"/api/no-code-data/sources",{
+          headers:{"x-auth-token":localStorage.getItem("token")||""}
+        });
+        const remoteSources=(response.data?.sources||[]).map(source=>({
+          value:source.key,
+          label:source.label,
+          fields:(source.fields||[]).map(field=>[field.value,field.label])
+        }));
+        if(!cancelled&&remoteSources.length){
+          setSourceCatalog([{value:"none",label:"Enter it manually",fields:[]},...remoteSources]);
+        }
+      }catch{
+        // Keep the built-in friendly source list when the metadata endpoint is unavailable.
+      }
+    };
+    loadSources();
+    return()=>{cancelled=true;};
+  },[open]);
 
   const shownCount=draft.filter(field=>field.visible!==false).length;
   const sections=useMemo(
@@ -438,7 +488,7 @@ export default function FormConfigurator({
                                 const first=fields[0]?.[0]||"_id";
                                 update(field.key,{dataSource:{type:resource==="none"?"none":"lookup",resource,valueField:first,labelField:first,searchField:first,autoFill:[]},fieldType:"select"});
                               }}>
-                                {DATA_SOURCES.map(source=><option key={source.value} value={source.value}>{source.label}</option>)}
+                                {sourceCatalog.map(source=><option key={source.value} value={source.value}>{source.label}</option>)}
                               </select>
                             </div>
                             {field.dataSource?.resource&&field.dataSource.resource!=="none"&&(

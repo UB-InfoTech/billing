@@ -85,17 +85,43 @@ export const PRODUCT_FORM_FIELDS=[
  {key:"description",label:"Description",fieldType:"textarea",width:12,section:"details",order:10}
 ];
 
+
+export const EXPENSE_FORM_FIELDS=[
+ {key:"date",label:"Date",fieldType:"date",width:4,section:"basic",required:true,order:0,system:true},
+ {key:"title",label:"Title",fieldType:"text",width:4,section:"basic",order:1},
+ {key:"description",label:"Description",fieldType:"textarea",width:4,section:"basic",required:true,order:2,system:true},
+ {key:"amount",label:"Amount",fieldType:"currency",width:4,section:"amount",required:true,order:3,system:true},
+ {key:"category",label:"Category",fieldType:"select",width:4,section:"classification",required:true,order:4,options:["Production","Operational","Marketing","Financial","Miscellaneous","Raw Materials","Labor","Maintenance","Shipping","Utilities","Rent","Other"]},
+ {key:"subCategory",label:"Sub Category",fieldType:"text",width:4,section:"classification",order:5},
+ {key:"tags",label:"Tags",fieldType:"text",width:4,section:"classification",order:6},
+ {key:"paymentMethod",label:"Payment Method",fieldType:"select",width:4,section:"payment",order:7,options:["Cash","Bank Transfer","UPI","Cheque","Credit"]},
+ {key:"currency",label:"Currency",fieldType:"text",width:4,section:"payment",order:8,defaultValue:"INR"},
+ {key:"vendor",label:"Vendor",fieldType:"text",width:4,section:"payment",order:9},
+ {key:"gstNo",label:"GST Number",fieldType:"text",width:4,section:"tax",order:10},
+ {key:"taxDeductible",label:"Tax Deductible",fieldType:"boolean",width:4,section:"tax",order:11},
+ {key:"taxRate",label:"Tax Rate %",fieldType:"number",width:4,section:"tax",order:12},
+ {key:"taxAmount",label:"Tax Amount",fieldType:"currency",width:4,section:"tax",order:13,formula:"amount * taxRate / 100"},
+ {key:"clientId",label:"Client",fieldType:"reference",width:6,section:"links",order:14,dataSource:{type:"lookup",resource:"clients",valueField:"_id",labelField:"companyName",searchField:"companyName",multiple:false}},
+ {key:"orderId",label:"Invoice / Order",fieldType:"reference",width:6,section:"links",order:15,dataSource:{type:"lookup",resource:"orders",valueField:"_id",labelField:"orderNumber",searchField:"orderNumber",multiple:false}},
+ {key:"isRecurring",label:"Recurring Expense",fieldType:"boolean",width:4,section:"recurring",order:16},
+ {key:"recurringInterval",label:"Recurring Interval",fieldType:"select",width:4,section:"recurring",order:17,options:["Daily","Weekly","Monthly","Yearly"],conditions:[{action:"show",fieldKey:"isRecurring",operator:"equals",value:"true"}]},
+ {key:"recurringEndDate",label:"Recurrence End Date",fieldType:"date",width:4,section:"recurring",order:18,conditions:[{action:"show",fieldKey:"isRecurring",operator:"equals",value:"true"}]},
+ {key:"notes",label:"Notes",fieldType:"textarea",width:12,section:"details",order:19}
+];
+
 export const FORM_CATALOG=[
   {key:"orders.form",label:"Bill information",page:"/orders",query:"form",description:"Arrange bill fields, add your own fields, links, rules and calculations.",fields:ORDER_FORM_FIELDS},
   {key:"orders.items",label:"Bill items",page:"/orders",query:"items",description:"Arrange item columns and create calculations such as quantity × rate.",fields:ORDER_ITEM_FIELDS},
   {key:"clients.form",label:"Client form",page:"/clients",query:"form",description:"Customize customer details, linked records and conditional fields.",fields:CLIENT_FORM_FIELDS},
   {key:"products.form",label:"Product form",page:"/products",query:"form",description:"Customize product details, pricing, stock and your own business fields.",fields:PRODUCT_FORM_FIELDS},
+  {key:"expenses.form",label:"Expense form",page:"/add-expense",query:"form",description:"Customize expense details, tax, links, recurring rules and your own business fields.",fields:EXPENSE_FORM_FIELDS},
 ];
 
 export const TABLE_CATALOG=[
   {key:"orders.list",label:"Bills list",page:"/orders",description:"Choose columns, reorder them and add custom business columns."},
   {key:"clients.list",label:"Clients list",page:"/clients",description:"Simplify the customer list and show the information your team needs."},
   {key:"products.list",label:"Products list",page:"/products",description:"Choose the product columns your team needs and add custom columns."},
+  {key:"expenses.list",label:"Expenses list",page:"/expense",description:"Choose the expense columns your team needs and add custom columns."},
 ];
 
 export const WORKFLOW_RESOURCES=[

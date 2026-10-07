@@ -70,15 +70,32 @@ export const CLIENT_FORM_FIELDS=[
   {key:"notes",label:"Notes",fieldType:"textarea",width:12,section:"additional",order:14}
 ];
 
+
+export const PRODUCT_FORM_FIELDS=[
+ {key:"productName",label:"Product Name",fieldType:"text",width:6,section:"basic",required:true,order:0,system:true},
+ {key:"productCode",label:"Product Code",fieldType:"text",width:3,section:"basic",order:1,system:true},
+ {key:"designNo",label:"Design No.",fieldType:"text",width:3,section:"basic",order:2},
+ {key:"rate",label:"Selling Rate",fieldType:"currency",width:4,section:"pricing",required:true,order:3,system:true},
+ {key:"purchasePrice",label:"Purchase Price",fieldType:"currency",width:4,section:"pricing",order:4},
+ {key:"minStock",label:"Minimum Stock",fieldType:"number",width:4,section:"stock",order:5},
+ {key:"quantity",label:"Current Stock",fieldType:"number",width:4,section:"stock",order:6},
+ {key:"serialNumber",label:"Serial Number",fieldType:"text",width:4,section:"stock",order:7},
+ {key:"barcode",label:"Barcode",fieldType:"text",width:4,section:"stock",order:8},
+ {key:"purchaseDate",label:"Purchase Date",fieldType:"date",width:4,section:"stock",order:9},
+ {key:"description",label:"Description",fieldType:"textarea",width:12,section:"details",order:10}
+];
+
 export const FORM_CATALOG=[
   {key:"orders.form",label:"Bill information",page:"/orders",query:"form",description:"Arrange bill fields, add your own fields, links, rules and calculations.",fields:ORDER_FORM_FIELDS},
   {key:"orders.items",label:"Bill items",page:"/orders",query:"items",description:"Arrange item columns and create calculations such as quantity × rate.",fields:ORDER_ITEM_FIELDS},
   {key:"clients.form",label:"Client form",page:"/clients",query:"form",description:"Customize customer details, linked records and conditional fields.",fields:CLIENT_FORM_FIELDS},
+  {key:"products.form",label:"Product form",page:"/products",query:"form",description:"Customize product details, pricing, stock and your own business fields.",fields:PRODUCT_FORM_FIELDS},
 ];
 
 export const TABLE_CATALOG=[
   {key:"orders.list",label:"Bills list",page:"/orders",description:"Choose columns, reorder them and add custom business columns."},
   {key:"clients.list",label:"Clients list",page:"/clients",description:"Simplify the customer list and show the information your team needs."},
+  {key:"products.list",label:"Products list",page:"/products",description:"Choose the product columns your team needs and add custom columns."},
 ];
 
 export const WORKFLOW_RESOURCES=[

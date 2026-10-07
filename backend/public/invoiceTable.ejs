@@ -154,36 +154,35 @@
       <td class="right"><b><%= orderSubTotal %></b></td>
     </tr>
 
-    <% if(invoiceConfig.summary.showDiscount){ %>
-    <tr><td colspan="9" rowspan="2"></td><td colspan="2">Discount (<%= orderDisRate %>%)</td><td class="right"><%= orderDiscountAmount %></td></tr>
-    <% } %>
+    <tr>
+      <td colspan="9" rowspan="2"></td>
+      <td colspan="2"><% if(invoiceConfig.summary.showDiscount){ %>Discount (<%= orderDisRate %>%)<% } %></td>
+      <td class="right"><% if(invoiceConfig.summary.showDiscount){ %><%= orderDiscountAmount %><% } %></td>
+    </tr>
     <tr><td colspan="2" class="total">Taxable Value</td><td class="right total"><%= orderTotalCost %></td></tr>
 
     <tr>
-      <% if(invoiceConfig.summary.showBankDetails){ %>
       <td colspan="9" rowspan="6" class="bank">
-        <b>Supplier &amp; Bank Details</b><br>
-        GSTIN: <%= profileGstNumber %><br>
-        PAN: <%= profilePanNumber %><br>
-        Bank Name: <%= profileBankName %><br>
-        Account No.: <%= profileAccountNo %><br>
-        Branch Name: <%= profileBranchName %><br>
-        IFSC: <%= profileIfsc %>
+        <% if(invoiceConfig.summary.showBankDetails){ %>
+          <b>Supplier &amp; Bank Details</b><br>
+          GSTIN: <%= profileGstNumber %><br>
+          PAN: <%= profilePanNumber %><br>
+          Bank Name: <%= profileBankName %><br>
+          Account No.: <%= profileAccountNo %><br>
+          Branch Name: <%= profileBranchName %><br>
+          IFSC: <%= profileIfsc %>
+        <% } %>
       </td>
-      <% } %>
-      <% if(invoiceConfig.summary.showTax){ %><td colspan="2">CGST (<%= orderTax %>%)</td><td class="right"><%= orderTaxAmount %></td><% } %>
+      <td colspan="2"><% if(invoiceConfig.summary.showTax){ %>CGST (<%= orderTax %>%)<% } %></td>
+      <td class="right"><% if(invoiceConfig.summary.showTax){ %><%= orderTaxAmount %><% } %></td>
     </tr>
 
-    <% if(invoiceConfig.summary.showTax){ %>
-    <tr><% if(invoiceConfig.summary.showBankDetails){ %><% } %><td colspan="2">SGST (<%= orderTax %>%)</td><td class="right"><%= orderTaxAmount %></td></tr>
-    <tr><td colspan="2">IGST (<%= orderIgstTax %>%)</td><td class="right"><%= orderIgstTaxAmount %></td></tr>
-    <% } %>
+    <tr><td colspan="2"><% if(invoiceConfig.summary.showTax){ %>SGST (<%= orderTax %>%)<% } %></td><td class="right"><% if(invoiceConfig.summary.showTax){ %><%= orderTaxAmount %><% } %></td></tr>
+    <tr><td colspan="2"><% if(invoiceConfig.summary.showTax){ %>IGST (<%= orderIgstTax %>%)<% } %></td><td class="right"><% if(invoiceConfig.summary.showTax){ %><%= orderIgstTaxAmount %><% } %></td></tr>
 
     <tr><td colspan="2">Net Amount</td><td class="right"><%= orderFinalRevenue %></td></tr>
 
-    <% if(invoiceConfig.summary.showRoundOff){ %>
-    <tr><td colspan="2">Round Off (+/-)</td><td class="right"><%= orderFinalRevenueRoundOff %></td></tr>
-    <% } %>
+    <tr><td colspan="2"><% if(invoiceConfig.summary.showRoundOff){ %>Round Off (+/-)<% } %></td><td class="right"><% if(invoiceConfig.summary.showRoundOff){ %><%= orderFinalRevenueRoundOff %><% } %></td></tr>
 
     <tr><td colspan="2" class="grand">Invoice Total</td><td class="right grand"><%= orderFinalRevenueAfterRoundOff %></td></tr>
   </table>

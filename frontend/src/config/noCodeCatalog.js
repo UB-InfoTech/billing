@@ -35,7 +35,7 @@ export const ORDER_FORM_FIELDS=[
  ]}},
  {key:"gstNumber",label:"GST No.",fieldType:"text",width:4,section:"client",order:10},
  {key:"paymentTerms",label:"Payment Terms",fieldType:"select",width:4,section:"client",required:true,order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Advance"}],system:true},
- {key:"challanNumber",label:"Challan No.",fieldType:"text",width:4,section:"client",required:true,order:12},
+ {key:"challanNumber",label:"Challan No.",fieldType:"text",width:4,section:"client",required:true,order:12,defaultValue:""},
  {key:"taxPercentage",label:"Tax %",fieldType:"number",width:4,section:"client",order:13,system:true},
  {key:"discountRate",label:"Discount %",fieldType:"number",width:4,section:"client",order:14,system:true}
 ];

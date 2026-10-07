@@ -154,6 +154,18 @@ const sanitizeFields=fields=>{
     field.dataSource.autoFill=field.dataSource.autoFill.filter(mapping=>byKey.has(mapping.targetKey));
   });
 
+  result.forEach(field=>{
+    const min=field.validation?.min;
+    const max=field.validation?.max;
+    if(min!==null&&max!==null&&min!==undefined&&max!==undefined&&Number(min)>Number(max)){
+      throw new Error(`The minimum for "${field.label}" cannot be greater than its maximum.`);
+    }
+    if(field.validation?.pattern){
+      try{new RegExp(field.validation.pattern);}
+      catch{throw new Error(`The validation pattern for "${field.label}" is not valid.`);}
+    }
+  });
+
   validateFormulaGraph(result);
   return result;
 };

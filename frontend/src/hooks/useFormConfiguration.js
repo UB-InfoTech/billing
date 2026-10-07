@@ -27,6 +27,7 @@ export const mergeFormFields=(baseFields,savedFields)=>{
   const normalize=(field,index)=>({
     key:field.key,
     label:field.label||field.key,
+    helpText:String(field.helpText||""),
     visible:field.visible!==false,
     required:Boolean(field.required),
     locked:Boolean(field.locked),
@@ -41,9 +42,11 @@ export const mergeFormFields=(baseFields,savedFields)=>{
     defaultValue:field.defaultValue??"",
     editable:field.editable!==false,
     readOnly:Boolean(field.readOnly||field.formula),
+    disabled:Boolean(field.disabled),
     dataSource:field.dataSource&&typeof field.dataSource==="object"?{
       type:field.dataSource.type==="lookup"?"lookup":"none",
       resource:field.dataSource.resource||"",
+      multiple:Boolean(field.dataSource.multiple),
       valueField:field.dataSource.valueField||"_id",
       labelField:field.dataSource.labelField||"",
       searchField:field.dataSource.searchField||"",
@@ -64,6 +67,7 @@ export const mergeFormFields=(baseFields,savedFields)=>{
     return {
       ...field,
       label:savedField.label||field.label,
+      helpText:String(savedField.helpText??field.helpText??""),
       visible:field.locked?true:savedField.visible!==false,
       required:Object.prototype.hasOwnProperty.call(savedField,"required")?Boolean(savedField.required):field.required,
       fieldType:savedField.fieldType||field.fieldType,
@@ -75,7 +79,8 @@ export const mergeFormFields=(baseFields,savedFields)=>{
       defaultValue:savedField.defaultValue??field.defaultValue,
       editable:savedField.editable!==false,
       readOnly:Boolean(savedField.readOnly||savedField.formula),
-      dataSource:savedField.dataSource||field.dataSource,
+      disabled:Boolean(savedField.disabled),
+      dataSource:savedField.dataSource&&typeof savedField.dataSource==="object"?{...field.dataSource,...savedField.dataSource,multiple:Boolean(savedField.dataSource.multiple)}:field.dataSource,
       conditions:Array.isArray(savedField.conditions)?savedField.conditions:field.conditions,
       validation:savedField.validation||field.validation,
       custom:false,
@@ -206,6 +211,23 @@ export const applyAutoFill=(field,record,values)=>{
     }
   });
 
+  return next;
+};
+
+export const buildConfiguredDefaults=(baseValues={},fields=[])=>{
+  const next={...(baseValues||{}),customFields:{...((baseValues||{}).customFields||{})}};
+  (fields||[]).forEach(field=>{
+    const hasExisting=Object.prototype.hasOwnProperty.call(next,field.key)
+      && next[field.key]!==null
+      && next[field.key]!==undefined
+      && next[field.key]!=="";
+    if(hasExisting)return;
+    const defaultValue=field.defaultValue;
+    if(defaultValue!==undefined&&defaultValue!==null&&defaultValue!==""){
+      next[field.key]=Array.isArray(defaultValue)?defaultValue.slice():defaultValue;
+      if(field.custom)next.customFields[field.key]=next[field.key];
+    }
+  });
   return next;
 };
 

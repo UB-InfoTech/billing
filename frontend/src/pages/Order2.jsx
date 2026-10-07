@@ -250,7 +250,7 @@ function Order2() {
         let next={...current,[name]:value};
 
         if(field?.custom)next.customFields={...next.customFields,[name]:value};
-        if(record&&field)next=applyAutoFill(field,record,next);
+        if(field?.dataSource?.autoFill?.length)next=applyAutoFill(field,record,next);
         next=syncConfiguredCustomFields(next,orderItemConfig.fields);
 
         if(name==="orderName"&&!record&&!field?.custom){

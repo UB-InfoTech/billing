@@ -13,7 +13,7 @@ export const MODULE_CATALOG=[
 
 export const ORDER_FORM_FIELDS=[
  {key:"orderNumber",label:"Invoice No.",fieldType:"text",width:3,section:"shipping",required:true,order:0,system:true},
- {key:"clientId",label:"Client link",fieldType:"text",width:3,section:"client",order:999,visible:false,locked:true,system:true,editable:false,readOnly:true},
+ {key:"clientId",label:"Client link",fieldType:"text",width:3,section:"client",order:999,visible:false,locked:false,system:true,editable:false,readOnly:true},
  {key:"orderDate",label:"Bill Date",fieldType:"date",width:4,section:"shipping",required:true,order:1,system:true},
  {key:"lrNo",label:"LR No.",fieldType:"text",width:5,section:"shipping",order:2},
  {key:"State",label:"State",fieldType:"text",width:4,section:"shipping",required:true,order:3},

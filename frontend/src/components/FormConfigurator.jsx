@@ -85,6 +85,7 @@ const clone=field=>({
   formula:field.formula||"",
   helpText:String(field.helpText||""),
   defaultValue:field.defaultValue??"",
+  validation:field.validation&&typeof field.validation==="object"?{min:field.validation.min??null,max:field.validation.max??null,pattern:field.validation.pattern||""}:{min:null,max:null,pattern:""},
   editable:field.editable!==false,
   readOnly:Boolean(field.readOnly||field.formula),
   disabled:Boolean(field.disabled),
@@ -376,12 +377,16 @@ export default function FormConfigurator({
                     {WIDTHS.map(width=><option key={width.value} value={width.value}>{width.label}</option>)}
                   </select>
                 </div>
-                {newField.fieldType==="select"&&(
+                {["select","multiselect"].includes(newField.fieldType)&&(
                   <div className="col-12">
                     <label className="form-label">Choices</label>
                     <textarea className="form-control" rows={2} value={newField.optionsText} onChange={event=>setNewField(prev=>({...prev,optionsText:event.target.value}))} placeholder="One choice per line, for example: Retail, Wholesale, Other"/>
                   </div>
                 )}
+                <div className="col-12">
+                  <label className="form-label">Helpful note <span className="text-secondary">(optional)</span></label>
+                  <input className="form-control" value={newField.helpText||""} onChange={event=>setNewField(prev=>({...prev,helpText:event.target.value}))} placeholder="Example: This appears below the field"/>
+                </div>
                 <div className="col-12">
                   <div className="form-check form-switch">
                     <input className="form-check-input" type="checkbox" checked={newField.required} onChange={event=>setNewField(prev=>({...prev,required:event.target.checked}))}/>

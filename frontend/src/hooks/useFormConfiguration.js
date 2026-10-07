@@ -117,6 +117,7 @@ export const getFieldState=(field,values)=>{
   let visible=field?.visible!==false;
   let required=Boolean(field?.required);
   let readOnly=Boolean(field?.readOnly||field?.editable===false);
+  let disabled=Boolean(field?.disabled);
 
   const showRules=conditions.filter(condition=>condition.action==="show");
   const hideRules=conditions.filter(condition=>condition.action==="hide");
@@ -129,9 +130,11 @@ export const getFieldState=(field,values)=>{
     if(!matches)return;
     if(condition.action==="require")required=true;
     if(condition.action==="readonly")readOnly=true;
+    if(condition.action==="enable")disabled=false;
+    if(condition.action==="disable")disabled=true;
   });
 
-  return {visible,required,readOnly};
+  return {visible,required,readOnly,disabled};
 };
 
 export function useFormConfiguration(formKey,baseFields){
@@ -169,7 +172,42 @@ export function useFormConfiguration(formKey,baseFields){
     finally{setSaving(false);}
   },[formKey,baseSignature,baseFields]);
   return {fields,setFields,loading,saving,error,setError,save,reset,reload:load};
-}export const syncConfiguredCustomFields=(values,fields=[])=>{
+}export const hydrateConfiguredValues=(record,fields=[])=>{
+  const source=record||{};
+  const customFields=source.customFields&&typeof source.customFields==="object"
+    ?{...source.customFields}
+    :{};
+  const next={...source,customFields};
+
+  (fields||[]).filter(field=>field.custom).forEach(field=>{
+    if(!Object.prototype.hasOwnProperty.call(next,field.key)){
+      next[field.key]=customFields[field.key]??field.defaultValue??"";
+    }
+  });
+
+  return next;
+};
+
+export const applyAutoFill=(field,record,values)=>{
+  if(!field?.dataSource?.autoFill?.length||!record)return values||{};
+  const next={...(values||{}),customFields:{...((values||{}).customFields||{})}};
+
+  const readPath=(source,path)=>String(path||"").split(".").reduce((value,key)=>value==null?undefined:value[key],source);
+
+  field.dataSource.autoFill.forEach(mapping=>{
+    const targetKey=String(mapping?.targetKey||"").trim();
+    if(!targetKey)return;
+    const value=readPath(record,mapping?.sourceKey);
+    next[targetKey]=value??"";
+    if(targetKey.startsWith("custom_")||Object.prototype.hasOwnProperty.call(next.customFields,targetKey)){
+      next.customFields[targetKey]=value??"";
+    }
+  });
+
+  return next;
+};
+
+export const syncConfiguredCustomFields=(values,fields=[])=>{
   const next={...(values||{}),customFields:{...((values||{}).customFields||{})}};
   (fields||[]).filter(field=>field.custom).forEach(field=>{
     if(Object.prototype.hasOwnProperty.call(next,field.key)){

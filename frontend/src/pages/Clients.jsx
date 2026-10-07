@@ -58,9 +58,13 @@ function Clients() {
   const [tableCustomizeRequested,setTableCustomizeRequested]=useState(false);
 
   useEffect(()=>{
-    if(searchParams.get("customize")==="table")setTableCustomizeRequested(true);
-    if(searchParams.get("customize")==="form"){
+    const customize=searchParams.get("customize");
+    if(customize==="table")setTableCustomizeRequested(true);
+    if(customize==="form"){
       setFormSettingsOpen(true);
+      searchParams.delete("customize");
+    }
+    if(customize){
       searchParams.delete("customize");
       setSearchParams(searchParams,{replace:true});
     }
@@ -543,6 +547,7 @@ function Clients() {
 
             {/* Table */}
             <DynamicTable
+              autoOpenSettings={tableCustomizeRequested}
               tableKey="clients.list"
               rows={sortedData}
               getRowKey={client => client._id}

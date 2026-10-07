@@ -97,10 +97,11 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
         <div className="sidebar-scroll">
           <div className="sidebar-section-label">Workspace</div>
           <nav className="nav flex-column gap-1" aria-label="Main navigation">
-            {menuItems.map(item=>((
+            {menuItems.map(item=>(
+
               <NavLink
-                key={item.to}
-                to={item.to}
+                key={item.key}
+                to={item.route}
                 onClick={closeMobile}
                 className={({isActive})=>`sidebar-nav-link ${isActive?"active":""}`}
               >

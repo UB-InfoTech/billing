@@ -154,6 +154,7 @@ export default function DynamicTable({
     fieldType:"text",
     defaultValue:"",
     optionsText:"",
+    editable:true,
   });
 
   const [mergeForm,setMergeForm]=useState({
@@ -185,7 +186,7 @@ export default function DynamicTable({
     return draft.filter(column=>column.label.toLowerCase().includes(query));
   },[draft,searchTerm]);
 
-  const resetCustomForm=()=>setCustomForm({label:"",fieldType:"text",defaultValue:"",optionsText:""});
+  const resetCustomForm=()=>setCustomForm({label:"",fieldType:"text",defaultValue:"",optionsText:"",editable:true});
 
   useEffect(()=>{
     let cancelled=false;
@@ -477,7 +478,7 @@ export default function DynamicTable({
       fieldType:customForm.fieldType,
       options:["select","multiselect"].includes(customForm.fieldType)?options.map(value=>({value,label:value})):[],
       defaultValue,
-      editable:true,
+      editable:Boolean(customForm.editable),
       sourceKeys:[],
       separator:" ",
       order:prev.length
@@ -785,9 +786,19 @@ export default function DynamicTable({
                         </button>
 
                         {column.kind==="custom"&&(
-                          <button type="button" className="btn btn-sm btn-outline-danger dynamic-mini-btn" onClick={()=>removeColumn(index)} title="Remove custom column">
-                            <i className="bi bi-trash"></i>
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className={`btn btn-sm ${column.editable!==false?"btn-outline-primary":"btn-outline-secondary"} dynamic-mini-btn`}
+                              onClick={()=>setDraft(prev=>prev.map((item,itemIndex)=>itemIndex===index?{...item,editable:item.editable===false}:item))}
+                              title={column.editable!==false?"Make this column read only":"Allow editing this column"}
+                            >
+                              {column.editable!==false?"Editable":"Read only"}
+                            </button>
+                            <button type="button" className="btn btn-sm btn-outline-danger dynamic-mini-btn" onClick={()=>removeColumn(index)} title="Remove custom column">
+                              <i className="bi bi-trash"></i>
+                            </button>
+                          </>
                         )}
                       </div>
                     );
@@ -810,7 +821,7 @@ export default function DynamicTable({
                         {FIELD_TYPES.map(type=><option key={type.value} value={type.value}>{type.label}</option>)}
                       </select>
                     </div>
-                    {customForm.fieldType==="select" ? (
+                    {["select","multiselect"].includes(customForm.fieldType) ? (
                       <div className="col-12">
                         <label className="form-label">Choices</label>
                         <textarea className="form-control" rows={2} value={customForm.optionsText} onChange={event=>setCustomForm(prev=>({...prev,optionsText:event.target.value}))} placeholder="One choice per line"/>
@@ -820,7 +831,15 @@ export default function DynamicTable({
                         <label className="form-label">Starting value <span className="text-secondary">(optional)</span></label>
                         <input className="form-control" value={customForm.defaultValue} onChange={event=>setCustomForm(prev=>({...prev,defaultValue:event.target.value}))} placeholder="Leave blank for none"/>
                       </div>
-                    )}
+
+                    {customForm.fieldType!=="reference"&&(
+                      <div className="col-12">
+                        <div className="form-check form-switch">
+                          <input className="form-check-input" type="checkbox" checked={customForm.editable} onChange={event=>setCustomForm(prev=>({...prev,editable:event.target.checked}))}/>
+                          <label className="form-check-label">People can edit this column directly</label>
+                        </div>
+                      </div>
+                    )}                    )}
                   </div>
                   <button type="button" className="btn btn-primary mt-3" onClick={addCustomField} disabled={!customForm.label.trim()}>Add column</button>
                 </div>

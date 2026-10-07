@@ -1,19 +1,9 @@
 import React,{useEffect,useState} from "react";
+import axios from "axios";
+import {MODULE_CATALOG} from "../config/noCodeCatalog";
 import {NavLink,useNavigate} from "react-router-dom";
 
-const MENU_ITEMS=[
-  {to:"/dashboard",label:"Dashboard",icon:"bi-speedometer2"},
-  {to:"/analytics",label:"Analytics",icon:"bi-graph-up-arrow"},
-  {to:"/orders",label:"Bills",icon:"bi-receipt"},
-  {to:"/clients",label:"Clients",icon:"bi-people"},
-  {to:"/products",label:"Products",icon:"bi-box-seam"},
-  {to:"/expense",label:"Expenses",icon:"bi-wallet2"},
-  {to:"/add-expense",label:"Add Expense",icon:"bi-plus-circle"},
-  {to:"/calendar",label:"Calendar",icon:"bi-calendar3"},
-  {to:"/bulk-payment",label:"Bulk Payment",icon:"bi-cash-stack"},
-  {to:"/credit-notes",label:"Credit Notes",icon:"bi-file-earmark-minus"},
-  {to:"/profile",label:"Profile",icon:"bi-person-circle"},
-];
+const MENU_ITEMS=MODULE_CATALOG;
 
 export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}){
   const navigate=useNavigate();
@@ -26,6 +16,33 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
     }catch{
       setUserName("");
     }
+  },[]);
+
+  const [menuItems,setMenuItems]=useState(MENU_ITEMS);
+
+  useEffect(()=>{
+    let cancelled=false;
+    const loadMenu=async()=>{
+      try{
+        const apiBase=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
+        const response=await axios.get(apiBase+"/api/software-config",{
+          headers:{"x-auth-token":localStorage.getItem("token")||""}
+        });
+        if(cancelled)return;
+        const saved=Array.isArray(response.data?.navigation)?response.data.navigation:[];
+        const byKey=new Map(MENU_ITEMS.map(item=>[item.key,item]));
+        const next=saved
+          .slice()
+          .sort((a,b)=>(a.order??0)-(b.order??0))
+          .filter(item=>item.visible!==false&&byKey.has(item.key))
+          .map(item=>({...byKey.get(item.key),label:item.label||byKey.get(item.key).label}));
+        if(next.length)setMenuItems(next);
+      }catch{
+        if(!cancelled)setMenuItems(MENU_ITEMS);
+      }
+    };
+    if(localStorage.getItem("token"))loadMenu();
+    return()=>{cancelled=true;};
   },[]);
 
   const closeMobile=()=>setMobileOpen(false);
@@ -80,7 +97,7 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
         <div className="sidebar-scroll">
           <div className="sidebar-section-label">Workspace</div>
           <nav className="nav flex-column gap-1" aria-label="Main navigation">
-            {MENU_ITEMS.map(item=>(
+            {menuItems.map(item=>((
               <NavLink
                 key={item.to}
                 to={item.to}

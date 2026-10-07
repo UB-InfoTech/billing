@@ -4,6 +4,8 @@ const fs=require("fs");
 const path=require("path");
 const mongoose=require("mongoose");
 const Expense=require("../models/Expense");
+const {applyWorkflows}=require("../utils/workflowEngine");
+const {applyWorkflows}=require("../utils/workflowEngine");
 const Client=require("../models/Client");
 const Order=require("../models/Order2");
 const auth=require("../middleware/auth");
@@ -66,7 +68,7 @@ router.post("/",auth,async(req,res)=>{
 });
 
 router.put("/:id",auth,async(req,res)=>{
-  try{if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid expense ID."});const expense=await Expense.findOne({_id:req.params.id,createdBy:owner(req)});if(!expense)return res.status(404).json({message:"Expense not found."});const allowed=["title","description","amount","category","subCategory","tags","paymentMethod","currency","vendor","gstNo","taxDeductible","taxRate","clientId","orderId","date","isRecurring","recurringInterval","recurringEndDate","notes","attachments","receipt"];for(const key of allowed)if(req.body[key]!==undefined)expense[key]=req.body[key];expense.amount=Number(expense.amount||0);expense.taxRate=Math.min(100,Math.max(0,Number(expense.taxRate||0)));expense.taxAmount=round2(expense.amount*expense.taxRate/100);expense.updatedBy=owner(req);await expense.save();res.json(expense);}catch(error){res.status(400).json({message:error.message});}
+  try{if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid expense ID."});const expense=await Expense.findOne({_id:req.params.id,createdBy:owner(req)});if(!expense)return res.status(404).json({message:"Expense not found."});const allowed=["title","description","amount","category","subCategory","tags","paymentMethod","currency","vendor","gstNo","taxDeductible","taxRate","clientId","orderId","date","isRecurring","recurringInterval","recurringEndDate","notes","attachments","receipt"];for(const key of allowed)if(req.body[key]!==undefined)expense[key]=req.body[key];expense.amount=Number(expense.amount||0);expense.taxRate=Math.min(100,Math.max(0,Number(expense.taxRate||0)));expense.taxAmount=round2(expense.amount*expense.taxRate/100);expense.updatedBy=owner(req);await applyWorkflows({resource:"expenses",event:"record_updated",doc:expense,createdBy:owner(req)});await expense.save();res.json(expense);}catch(error){res.status(400).json({message:error.message});}
 });
 
 router.post("/upload-receipt",auth,upload.single("receipt"),async(req,res)=>{try{if(!req.file)return res.status(400).json({message:"Receipt file is required."});res.status(201).json({receiptUrl:"/uploads/expenses/"+req.file.filename,filename:req.file.filename});}catch(error){res.status(400).json({message:error.message});}});

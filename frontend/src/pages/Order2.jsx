@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import {ORDER_FORM_FIELDS,ORDER_ITEM_FIELDS} from "../config/noCodeCatalog";
 import axios from "axios";
 import editSVG from '../assets/edit.svg';
 import deleteSVG from '../assets/delete.svg';
@@ -16,37 +17,7 @@ import {useFormConfiguration,applyFormulas,hydrateConfiguredValues,applyAutoFill
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
 import Report from '../components/Report';
-import { useReactToPrint } from "react-to-print";
-import { Link } from 'react-router-dom';
-
-const ORDER_FORM_FIELDS=[
- {key:"orderNumber",label:"Invoice No.",fieldType:"text",width:3,section:"shipping",required:true,order:0,system:true},
- {key:"orderDate",label:"Bill Date",fieldType:"date",width:4,section:"shipping",required:true,order:1,system:true},
- {key:"lrNo",label:"LR No.",fieldType:"text",width:5,section:"shipping",order:2},
- {key:"State",label:"State",fieldType:"text",width:4,section:"shipping",required:true,order:3},
- {key:"Address",label:"Address",fieldType:"text",width:8,section:"shipping",required:true,order:4},
- {key:"City",label:"City",fieldType:"text",width:4,section:"shipping",required:true,order:5},
- {key:"pinCode",label:"Pin Code",fieldType:"text",width:4,section:"shipping",order:6},
- {key:"stateCode",label:"State Code",fieldType:"text",width:4,section:"shipping",order:7},
- {key:"status",label:"Status",fieldType:"select",width:4,section:"shipping",order:8,options:["Pending","In Process","Completed","Cancelled","Dispatched"],system:true},
- {key:"companyName",label:"Company Name",fieldType:"text",width:4,section:"client",required:true,order:9,system:true},
- {key:"gstNumber",label:"GST No.",fieldType:"text",width:4,section:"client",order:10},
- {key:"paymentTerms",label:"Payment Terms",fieldType:"select",width:4,section:"client",required:true,order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Advance"}],system:true},
- {key:"challanNumber",label:"Challan No.",fieldType:"text",width:4,section:"client",required:true,order:12},
- {key:"taxPercentage",label:"Tax %",fieldType:"number",width:4,section:"client",order:13,system:true},
- {key:"discountRate",label:"Discount %",fieldType:"number",width:4,section:"client",order:14,system:true}
-];
-
-const ORDER_ITEM_FIELDS=[
- {key:"designNumber",label:"Design No.",fieldType:"text",width:2,section:"items",order:0},
- {key:"orderName",label:"Product Name",fieldType:"text",width:2,section:"items",order:1},
- {key:"hsnCode",label:"HSN Code",fieldType:"number",width:2,section:"items",order:2},
- {key:"quantity",label:"Qty",fieldType:"number",width:1,section:"items",order:3},
- {key:"cut",label:"Cut",fieldType:"number",width:1,section:"items",order:4},
- {key:"MTR",label:"MTR",fieldType:"number",width:1,section:"items",order:5,formula:"quantity * cut"},
- {key:"unitPrice",label:"Rate",fieldType:"currency",width:1,section:"items",order:6},
- {key:"qtyUnit",label:"Qty Unit",fieldType:"select",width:1,section:"items",order:7,options:["MTR","PCS","BOX","UNT"]},
- {key:"shortPcs",label:"Short Pcs",fieldType:"number",width:1,section:"items",order:8,visible:false}
+import { useReat Pcs",fieldType:"number",width:1,section:"items",order:8,visible:false}
 ];
 
 function Order2() {

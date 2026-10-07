@@ -6,6 +6,7 @@ const dataSourceSchema=new mongoose.Schema({
   valueField:{type:String,trim:true,default:"_id",maxlength:100},
   labelField:{type:String,trim:true,default:"",maxlength:100},
   searchField:{type:String,trim:true,default:"",maxlength:100},
+  multiple:{type:Boolean,default:false},
   autoFill:[{
     targetKey:{type:String,trim:true,maxlength:100},
     sourceKey:{type:String,trim:true,maxlength:100}
@@ -13,7 +14,7 @@ const dataSourceSchema=new mongoose.Schema({
 },{_id:false});
 
 const conditionSchema=new mongoose.Schema({
-  action:{type:String,enum:["show","hide","require","readonly"],default:"show"},
+  action:{type:String,enum:["show","hide","require","readonly","enable","disable"],default:"show"},
   fieldKey:{type:String,trim:true,maxlength:100},
   operator:{type:String,enum:["equals","not_equals","contains","not_contains","greater_than","less_than","empty","not_empty"],default:"equals"},
   value:{type:String,default:"",maxlength:300}
@@ -25,14 +26,16 @@ const formFieldSchema=new mongoose.Schema({
   visible:{type:Boolean,default:true},
   required:{type:Boolean,default:false},
   locked:{type:Boolean,default:false},
+  system:{type:Boolean,default:false},
   custom:{type:Boolean,default:false},
   editable:{type:Boolean,default:true},
   readOnly:{type:Boolean,default:false},
-  fieldType:{type:String,enum:["text","textarea","number","currency","date","datetime","select","boolean"],default:"text"},
+  disabled:{type:Boolean,default:false},
+  fieldType:{type:String,enum:["text","textarea","number","currency","date","datetime","select","multiselect","boolean","email","phone","url","reference"],default:"text"},
   width:{type:Number,default:6,min:1,max:12},
   order:{type:Number,default:0,min:0},
   section:{type:String,trim:true,default:"header",maxlength:50},
-  options:{type:[String],default:[]},
+  options:{type:[mongoose.Schema.Types.Mixed],default:[]},
   formula:{type:String,default:"",maxlength:300},
   defaultValue:{type:mongoose.Schema.Types.Mixed,default:""},
   dataSource:{type:dataSourceSchema,default:()=>({type:"none"})},

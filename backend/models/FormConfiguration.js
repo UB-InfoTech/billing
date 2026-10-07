@@ -23,6 +23,7 @@ const conditionSchema=new mongoose.Schema({
 const formFieldSchema=new mongoose.Schema({
   key:{type:String,required:true,trim:true,maxlength:100},
   label:{type:String,required:true,trim:true,maxlength:120},
+  helpText:{type:String,trim:true,default:"",maxlength:300},
   visible:{type:Boolean,default:true},
   required:{type:Boolean,default:false},
   locked:{type:Boolean,default:false},

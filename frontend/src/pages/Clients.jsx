@@ -8,8 +8,7 @@ import DynamicTable from '../components/DynamicTable';
 import FormConfigurator from '../components/FormConfigurator';
 import ConfiguredField from '../components/ConfiguredField';
 import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,syncConfiguredCustomFields} from "../hooks/useFormConfiguration";
-import {useNoCodeDataSources} from "../Type:"textarea",width:12,section:"additional",order:14}
-];
+import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 
 function Clients() {
   const [searchParams,setSearchParams]=useSearchParams();

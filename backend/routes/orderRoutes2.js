@@ -153,6 +153,7 @@ router.patch("/orders/:id/upd",auth,async(req,res)=>{
     if(!STATUSES.includes(req.body?.status))return res.status(400).json({message:"Invalid order status."});
     const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)});if(!order)return res.status(404).json({message:"Order not found"});
     order.status=req.body.status;order.statusHistory=Array.isArray(order.statusHistory)?order.statusHistory:[];order.statusHistory.push({status:req.body.status,timestamp:new Date()});
+    await applyWorkflows({resource:"orders",event:"record_updated",doc:order,createdBy:userId(req)});
     await order.save();await syncClientData(order.clientId);res.json({message:"Order status updated",order});
   }catch(error){res.status(400).json({message:error.message});}
 });

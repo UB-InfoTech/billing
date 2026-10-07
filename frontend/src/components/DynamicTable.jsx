@@ -136,6 +136,7 @@ export default function DynamicTable({
   renderCell,
   actionColumn,
   footer,
+  autoOpenSettings=false,
 }){
   const [draft,setDraft]=useState(()=>cloneColumns(columns));
   const [customValues,setCustomValues]=useState({});
@@ -187,6 +188,10 @@ export default function DynamicTable({
   },[draft,searchTerm]);
 
   const resetCustomForm=()=>setCustomForm({label:"",fieldType:"text",defaultValue:"",optionsText:"",editable:true});
+
+  useEffect(()=>{
+    if(autoOpenSettings)setShowSettings(true);
+  },[autoOpenSettings]);
 
   useEffect(()=>{
     let cancelled=false;

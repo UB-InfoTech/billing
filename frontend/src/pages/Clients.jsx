@@ -9,6 +9,7 @@ import FormConfigurator from '../components/FormConfigurator';
 import ConfiguredField from '../components/ConfiguredField';
 import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,syncConfiguredCustomFields} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
+import * as XLSX from 'xlsx';
 
 function Clients() {
   const [searchParams,setSearchParams]=useSearchParams();

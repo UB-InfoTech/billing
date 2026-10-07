@@ -1476,3 +1476,296 @@ body {
 @media(max-width:767.98px){
   .form-builder-choice-row{grid-template-columns:1fr}
 }
+
+
+/* ---------- Central no-code Settings Studio ---------- */
+.settings-page{
+  min-height:100vh;
+  padding:28px;
+  background:#f5f7fa;
+}
+.settings-shell{
+  max-width:1320px;
+  margin:0 auto;
+}
+.settings-hero{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:20px;
+  padding:28px;
+  border-radius:18px;
+  background:linear-gradient(135deg,#0f2942,#1f4b72);
+  color:#fff;
+  box-shadow:0 16px 42px rgba(17,48,78,.16);
+  margin-bottom:18px;
+}
+.settings-kicker{
+  text-transform:uppercase;
+  letter-spacing:.09em;
+  font-size:11px;
+  font-weight:700;
+  opacity:.72;
+  margin-bottom:8px;
+}
+.settings-hero h1{
+  font-size:clamp(26px,3vw,38px);
+  margin:0 0 8px;
+  font-weight:700;
+}
+.settings-hero p{
+  margin:0;
+  max-width:720px;
+  color:rgba(255,255,255,.78);
+}
+.settings-layout{
+  display:grid;
+  grid-template-columns:220px minmax(0,1fr);
+  gap:18px;
+  align-items:start;
+}
+.settings-menu{
+  position:sticky;
+  top:18px;
+  padding:10px;
+  background:#fff;
+  border:1px solid #e4eaf0;
+  border-radius:14px;
+  box-shadow:0 8px 24px rgba(29,54,79,.06);
+}
+.settings-menu button{
+  width:100%;
+  border:0;
+  background:transparent;
+  text-align:left;
+  padding:11px 12px;
+  border-radius:9px;
+  color:#55687b;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-weight:600;
+}
+.settings-menu button:hover{background:#f4f7fa;color:#244a6e}
+.settings-menu button.active{
+  background:#eaf3fc;
+  color:#0b5cab;
+}
+.settings-menu button i{width:18px}
+.settings-content{min-width:0}
+.settings-section{
+  background:#fff;
+  border:1px solid #e4eaf0;
+  border-radius:16px;
+  padding:22px;
+  box-shadow:0 8px 24px rgba(29,54,79,.05);
+  margin-bottom:18px;
+}
+.settings-section-heading{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:16px;
+  margin-bottom:18px;
+}
+.settings-section-heading h2{
+  font-size:22px;
+  margin:0 0 4px;
+  color:#23394f;
+}
+.settings-section-heading p{
+  margin:0;
+  color:#718094;
+}
+.settings-start-card{
+  width:100%;
+  min-height:118px;
+  display:flex;
+  align-items:center;
+  gap:14px;
+  padding:17px;
+  border:1px solid #dfe7ef;
+  border-radius:13px;
+  background:#fff;
+  text-align:left;
+  transition:.16s ease;
+}
+.settings-start-card:hover{
+  border-color:#b9cce0;
+  box-shadow:0 7px 18px rgba(31,76,112,.08);
+  transform:translateY(-1px);
+}
+.settings-start-card strong{
+  display:block;
+  color:#29445e;
+  margin-bottom:3px;
+}
+.settings-start-card small{
+  display:block;
+  color:#718094;
+  line-height:1.45;
+}
+.settings-start-card>i:last-child{margin-left:auto;color:#7a8ea2}
+.settings-start-icon,
+.settings-feature-icon{
+  width:46px;
+  height:46px;
+  flex:0 0 46px;
+  display:grid;
+  place-items:center;
+  border-radius:12px;
+  background:#eef5fb;
+  color:#145f9c;
+}
+.settings-simple-box{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:18px;
+  padding:16px;
+  border:1px solid #e1e8ef;
+  border-radius:12px;
+  background:#fafcfd;
+}
+.settings-simple-box strong{display:block;color:#334d66}
+.settings-simple-box span{display:block;color:#728297;margin-top:3px;font-size:13px}
+.settings-builder-tip{
+  padding:12px 14px;
+  margin-bottom:14px;
+  background:#f4f8fc;
+  border:1px solid #dce8f3;
+  border-radius:10px;
+  color:#5d7184;
+  font-size:13px;
+}
+.settings-drag-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.settings-drag-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px;
+  border:1px solid #e1e8ef;
+  border-radius:11px;
+  background:#fff;
+}
+.settings-drag-row:hover{border-color:#c8d7e5}
+.settings-drag-row.is-hidden{background:#fafbfc}
+.settings-drag-row.is-dragging{opacity:.55}
+.settings-drag-handle{
+  width:34px;
+  height:34px;
+  display:grid;
+  place-items:center;
+  border:1px dashed #cbd6e0;
+  border-radius:8px;
+  color:#8090a1;
+  cursor:grab;
+}
+.settings-row-icon{
+  width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  border-radius:9px;
+  background:#f2f5f8;
+  color:#49657d;
+}
+.settings-drag-row small{
+  display:block;
+  color:#8492a3;
+  margin-top:3px;
+}
+.settings-feature-card{
+  border:1px solid #e1e8ef;
+  border-radius:13px;
+  padding:17px;
+  background:#fff;
+  height:100%;
+}
+.settings-feature-card h3{
+  font-size:17px;
+  margin:0 0 5px;
+  color:#2b455d;
+}
+.settings-feature-card p{
+  font-size:13px;
+  line-height:1.5;
+  color:#738296;
+  margin:0 0 13px;
+}
+.settings-workflow-builder{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  padding:16px;
+  border:1px solid #e1e8ef;
+  border-radius:13px;
+  background:#fafcfd;
+}
+.settings-workflow-step{
+  display:flex;
+  gap:13px;
+  padding:15px;
+  border:1px solid #e0e8ef;
+  border-radius:11px;
+  background:#fff;
+}
+.settings-step-number{
+  width:30px;
+  height:30px;
+  flex:0 0 30px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:#eaf3fc;
+  color:#0b5cab;
+  font-weight:700;
+}
+.settings-workflow-step h4{
+  font-size:15px;
+  color:#2f4a63;
+  margin:0 0 10px;
+}
+.settings-empty-inline{
+  padding:11px 13px;
+  border:1px dashed #d5dfe8;
+  border-radius:9px;
+  color:#7b8998;
+  background:#fafbfc;
+  font-size:13px;
+}
+.settings-workflow-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.settings-workflow-row{
+  display:flex;
+  justify-content:space-between;
+  gap:14px;
+  align-items:center;
+  padding:13px 14px;
+  border:1px solid #e1e8ef;
+  border-radius:10px;
+  background:#fff;
+}
+.settings-workflow-row strong{display:block;color:#304a62}
+.settings-workflow-row small{display:block;color:#7b8998;margin-top:3px}
+@media(max-width:900px){
+  .settings-layout{grid-template-columns:1fr}
+  .settings-menu{position:static;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+}
+@media(max-width:767.98px){
+  .settings-page{padding:12px}
+  .settings-hero{padding:20px;flex-direction:column}
+  .settings-section{padding:15px}
+  .settings-section-heading{flex-direction:column}
+  .settings-drag-row{align-items:flex-start;flex-wrap:wrap}
+  .settings-drag-row>.flex-grow-1{flex:1 1 calc(100% - 110px)}
+  .settings-workflow-step{flex-direction:column}
+  .settings-simple-box{flex-direction:column;align-items:flex-start}
+}

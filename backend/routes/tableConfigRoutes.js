@@ -8,7 +8,7 @@ const router=express.Router();
 
 const owner=req=>String(req.user.id);
 const cleanString=(value,max)=>String(value??"").trim().slice(0,max);
-const FIELD_TYPES=["text","textarea","number","currency","date","datetime","boolean","select"];
+const FIELD_TYPES=["text","textarea","number","currency","date","datetime","boolean","select","multiselect","reference"];
 
 const normalizeCustomValue=(field,value)=>{
   if(value===null||value===undefined||value==="")return null;
@@ -42,11 +42,19 @@ const sanitizeColumns=(columns)=>{
       ? [...new Set(raw.sourceKeys.map(x=>cleanString(x,100)).filter(Boolean))].slice(0,30)
       : [];
     const options=Array.isArray(raw?.options)
-      ? [...new Set(raw.options.map(x=>cleanString(x,200)).filter(Boolean))].slice(0,100)
+      ? raw.options.slice(0,100).map(option=>{
+          if(option&&typeof option==="object"){
+            const value=cleanString(option.value??option.label,200);
+            const label=cleanString(option.label??option.value,200);
+            return {value,label};
+          }
+          const value=cleanString(option,200);
+          return {value,label:value};
+        }).filter(option=>option.value)
       : [];
 
     if(kind==="merged"&&sourceKeys.length<2)throw new Error("Merged columns must contain at least two source fields.");
-    if(kind==="custom"&&fieldType==="select"&&options.length===0)throw new Error("Select custom fields require at least one option.");
+    if(kind==="custom"&&["select","multiselect"].includes(fieldType)&&options.length===0)throw new Error("Add at least one choice for this custom column.");
 
     return{
       key,
@@ -55,8 +63,16 @@ const sanitizeColumns=(columns)=>{
       locked:Boolean(raw?.locked),
       kind,
       fieldType:kind==="custom"?fieldType:"text",
-      options:kind==="custom"&&fieldType==="select"?options:[],
+      options:kind==="custom"&&["select","multiselect"].includes(fieldType)?options:[],
       defaultValue:kind==="custom"?raw?.defaultValue??"": "",
+      editable:raw?.editable!==false,
+      dataSource:kind==="custom"&&raw?.dataSource&&typeof raw.dataSource==="object"?{
+        type:raw.dataSource.type==="lookup"?"lookup":"none",
+        resource:cleanString(raw.dataSource.resource,80),
+        valueField:cleanString(raw.dataSource.valueField||"_id",100),
+        labelField:cleanString(raw.dataSource.labelField,100),
+        multiple:Boolean(raw.dataSource.multiple)
+      }:null,
       sourceKeys:kind==="merged"?sourceKeys:[],
       separator:kind==="merged"?cleanString(raw?.separator??" ",40):" ",
       order:Number.isFinite(Number(raw?.order))?Math.max(0,Number(raw.order)):index,
@@ -130,8 +146,11 @@ router.put("/:tableKey/values",auth,async(req,res)=>{
     const field=config?.columns?.find(column=>column.key===fieldKey&&column.kind==="custom");
     if(!field)return res.status(404).json({message:"Custom field was not found."});
 
-    if(field.fieldType==="select"&&req.body?.value!==null&&req.body?.value!==""&&!field.options.includes(cleanString(req.body?.value,200))){
-      return res.status(400).json({message:"Please select a valid option."});
+    if(field.editable===false)return res.status(400).json({message:"This column is read only."});
+    if(["select","multiselect"].includes(field.fieldType)){
+      const incoming=Array.isArray(req.body?.value)?req.body.value:[req.body?.value];
+      const valid=incoming.filter(value=>value!==null&&value!=="").every(value=>field.options.some(option=>String(option?.value??option)===cleanString(value,200)));
+      if(!valid)return res.status(400).json({message:"Please choose a valid option."});
     }
 
     const value=normalizeCustomValue(field,req.body?.value);

@@ -9,6 +9,7 @@ const Order=require("../models/Order2");
 const Profile=require("../models/Profile");
 const Client=require("../models/Client");
 const CreditNote=require("../models/CreditNote");
+const InvoiceConfiguration=require("../models/InvoiceConfiguration");
 const PaymentLog=require("../models/PaymentLog2");
 const auth=require("../middleware/auth");
 const {syncClientData}=require("../utils/syncClientData");
@@ -558,8 +559,27 @@ function renderSimpleInvoiceHtml({order,profile,client}){
   </div></body></html>`;
 }
 
+const defaultInvoiceConfiguration=()=>({
+  pageSize:"A4",
+  accentColor:"#111827",
+  invoiceTitle:"TAX INVOICE",
+  header:{showHeaderTitle:true,showCompanyName:true,showGST:true,showPhones:true,showAddress:true},
+  receiver:{showName:true,showAddress:true,showMobile:true,showState:true,showGSTIN:true},
+  invoiceDetails:{showChallan:true,showInvoiceNo:true,showInvoiceDate:true,showDueDate:true,showPaymentTerms:true,showEwayBill:true},
+  itemColumns:[
+    {key:"sr",label:"Sr",visible:true,order:0,width:5},{key:"description",label:"Desc.",visible:true,order:1,width:17},
+    {key:"designNumber",label:"Design No.",visible:true,order:2,width:13},{key:"hsnCode",label:"HSN",visible:true,order:3,width:9},
+    {key:"quantity",label:"Qty",visible:true,order:4,width:8},{key:"qtyUnit",label:"Unit",visible:true,order:5,width:5},
+    {key:"cut",label:"Cut",visible:true,order:6,width:7},{key:"MTR",label:"MTR",visible:true,order:7,width:7},
+    {key:"unitPrice",label:"Rate",visible:true,order:8,width:8},{key:"amount",label:"Amount",visible:true,order:9,width:8},
+    {key:"discount",label:"Disc.",visible:true,order:10,width:7},{key:"taxable",label:"Taxable",visible:true,order:11,width:12}
+  ],
+  summary:{showDiscount:true,showTax:true,showRoundOff:true,showBankDetails:true,showTerms:true,showWebCredit:true}
+});
+
 async function renderInvoice(order,res){
   const profile=await Profile.findOne({createdBy:String(order.createdBy)}).lean()||{};
+  const invoiceConfig=await InvoiceConfiguration.findOne({createdBy:String(order.createdBy)}).lean()||defaultInvoiceConfiguration();
   const client=order.clientId?await Client.findById(order.clientId).lean():null;
   const dueDate=new Date(order.orderDate||new Date());
   const terms=Number(order.paymentTerms);
@@ -567,6 +587,7 @@ async function renderInvoice(order,res){
 
   try{
     const html=await ejs.renderFile(path.join(__dirname,"../public/invoiceTable.ejs"),{
+      invoiceConfig,
       profileHeaderTitle:profile.headerTitle||"Invoice",profileCompanyName:profile.companyName||"Company",profileCompanyAddress:profile.companyAddress||"",profilePhoneNumber1:profile.phoneNumber1||"",profilePhoneNumber2:profile.phoneNumber2||"",profileGstNumber:profile.gstin||"",profilePanNumber:profile.pan||"",profileBankName:profile.bankName||"",profileAccountNo:profile.accountNo||"",profileBranchName:profile.branchName||"",profileIfsc:profile.ifsc||"",
       clientChallanNumber:order.challanNumber||"",clientCompanyName:order.companyName||"",clientAddress:order.Address||"",clientPhoneNumber:client?.phone||"",clientGstNumber:order.gstNumber||"",clientState:client?.state||order.State||"",
       orderNumber:order.orderNumber||"",createdAt:new Date(order.orderDate).toLocaleDateString("en-IN"),dueDate:dueDate.toLocaleDateString("en-IN"),paymentTerm:order.paymentTerms||"",ewayBillNo:order.ewbDetails?.ewbNo||"N/A",subOrders:order.subOrders||[],orderTotalCost:order.totalCost||0,orderSubTotal:round2(Number(order.totalCost||0)+Number(order.discountAmount||0)),orderDisRate:order.discountRate||0,orderDiscountAmount:order.discountAmount||0,orderTax:round2(Number(order.taxPercentage||0)/2),orderTaxAmount:round2(Number(order.taxAmount||0)/2),orderIgstTax:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxPercentage||0):0,orderIgstTaxAmount:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxAmount||0):0,orderFinalRevenue:order.finalRevenue||0,orderFinalRevenueRoundOff:round2(Number(order.roundOffFinalRevenue||0)-Number(order.finalRevenue||0)),orderFinalRevenueAfterRoundOff:order.roundOffFinalRevenue||0,orderFinalRevenueInWords:numberToWords(order.roundOffFinalRevenue||0),paymentStatus:order.paymentStatus,dueAmount:order.dueAmount||0,creditAppliedAmount:order.creditAppliedAmount||0,payments:order.payments||[]

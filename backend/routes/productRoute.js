@@ -95,9 +95,15 @@ router.post("/",auth,upload.array("images",5),async(req,res)=>{
       purchasePrice:Number(req.body.purchasePrice||0),barcode:String(req.body.barcode||code).trim(),
       minStock:Number(req.body.minStock||0),createdBy:owner(req),
       images:(req.files||[]).map(file=>publicUrl(req,"/uploads/products/"+file.filename)),
-      customFields:req.body.customFields&&typeof req.body.customFields==="object"?req.body.customFields:{}
+      customFields:{}
     });
     if(!product.productName)return res.status(400).json({message:"Product name is required."});
+    if(req.body.customFields!==undefined){
+      try{
+        const incoming=typeof req.body.customFields==="string"?JSON.parse(req.body.customFields||"{}"):req.body.customFields;
+        product.customFields=new Map(Object.entries(incoming&&typeof incoming==="object"?incoming:{}));
+      }catch{ return res.status(400).json({message:"Custom product fields are not valid."}); }
+    }
     product.customFields=product.customFields||{};
     if(product.rate<0||product.quantity<0)return res.status(400).json({message:"Rate and quantity cannot be negative."});
     await applyWorkflows({resource:"products",event:"record_created",doc:product,createdBy:owner(req)});

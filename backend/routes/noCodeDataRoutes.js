@@ -6,6 +6,7 @@ const Order=require("../models/Order2");
 const Expense=require("../models/Expense");
 const Supplier=require("../models/Supplier");
 const Machine=require("../models/Machine");
+const User=require("../models/User");
 
 const router=express.Router();
 const owner=req=>req.user.id;
@@ -56,6 +57,12 @@ const SOURCES={
     model:Supplier,
     searchFields:["name","gstin"],
     fields:[["name","Supplier Name"],["gstin","GSTIN"],["reliability_score","Reliability Score"]]
+  },
+  users:{
+    label:"Team members",
+    model:User,
+    searchFields:["username","email"],
+    fields:[["username","Name"],["email","Email"]]
   },
   machines:{
     label:"Machines",

@@ -83,6 +83,7 @@ const clone=field=>({
   width:Number(field.width)||6,
   section:field.section||"General",
   formula:field.formula||"",
+  helpText:String(field.helpText||""),
   defaultValue:field.defaultValue??"",
   editable:field.editable!==false,
   readOnly:Boolean(field.readOnly||field.formula),
@@ -118,6 +119,7 @@ export default function FormConfigurator({
     section:"",
     width:6,
     required:false,
+    helpText:"",
     optionsText:"",
   });
   const [sourceCatalog,setSourceCatalog]=useState(DATA_SOURCES);
@@ -227,11 +229,13 @@ export default function FormConfigurator({
       width:Number(newField.width)||6,
       order:prev.length,
       section,
+      helpText:newField.helpText.trim(),
       options:["select","multiselect"].includes(newField.fieldType)
         ?options.map(option=>({value:option,label:option}))
         :[],
       formula:"",
       defaultValue:"",
+      validation:{min:null,max:null,pattern:""},
       editable:true,
       readOnly:false,
       disabled:false,
@@ -244,6 +248,7 @@ export default function FormConfigurator({
       section,
       width:6,
       required:false,
+      helpText:"",
       optionsText:"",
     });
     setShowAddField(false);
@@ -415,6 +420,7 @@ export default function FormConfigurator({
                       ) : (
                         <input className="form-control" type={field.fieldType==="date"?"date":field.fieldType==="datetime"?"datetime-local":field.fieldType==="email"?"email":field.fieldType==="url"?"url":field.fieldType==="number"||field.fieldType==="currency"?"number":"text"} placeholder={field.formula?"Automatic calculation":""} readOnly={Boolean(field.formula)} />
                       )}
+                      {field.helpText&&<div className="form-text">{field.helpText}</div>}
                       {field.formula&&<div className="form-text">Calculated automatically</div>}
                       {field.readOnly&&!field.formula&&<div className="form-text">Read only</div>}
                     </div>
@@ -516,6 +522,10 @@ export default function FormConfigurator({
                       <div className="col-md-5">
                         <label className="form-label">Starting value</label>
                         <input className="form-control" value={field.defaultValue??""} onChange={event=>update(field.key,{defaultValue:event.target.value})} disabled={field.locked} placeholder="Leave blank for none"/>
+                      </div>
+                      <div className="col-12">
+                        <label className="form-label">Helpful note for users <span className="text-secondary">(optional)</span></label>
+                        <input className="form-control" value={field.helpText||""} onChange={event=>update(field.key,{helpText:event.target.value})} disabled={field.locked} placeholder="Example: Enter the customer WhatsApp number"/>
                       </div>
 
                       <div className="col-12">
@@ -705,6 +715,24 @@ export default function FormConfigurator({
                           </div>
                         </div>
                       )}
+
+                      <div className="col-12">
+                        <details className="form-builder-panel">
+                          <summary className="fw-semibold">Validation</summary>
+                          <div className="row g-3 mt-1">
+                            {(field.fieldType==="number"||field.fieldType==="currency")&&(
+                              <>
+                                <div className="col-md-3"><label className="form-label">Minimum</label><input className="form-control" type="number" value={field.validation?.min??""} onChange={event=>update(field.key,{validation:{...(field.validation||{}),min:event.target.value===""?null:Number(event.target.value)}})} placeholder="No minimum"/></div>
+                                <div className="col-md-3"><label className="form-label">Maximum</label><input className="form-control" type="number" value={field.validation?.max??""} onChange={event=>update(field.key,{validation:{...(field.validation||{}),max:event.target.value===""?null:Number(event.target.value)}})} placeholder="No maximum"/></div>
+                              </>
+                            )}
+                            {["text","textarea","email","phone","url"].includes(field.fieldType)&&(
+                              <div className="col-12"><label className="form-label">Pattern <span className="text-secondary">(advanced)</span></label><input className="form-control" value={field.validation?.pattern||""} onChange={event=>update(field.key,{validation:{...(field.validation||{}),pattern:event.target.value}})} placeholder="Optional regular-expression pattern"/></div>
+                            )}
+                            {!["number","currency","text","textarea","email","phone","url"].includes(field.fieldType)&&<div className="small text-secondary">No extra validation is needed for this field type.</div>}
+                          </div>
+                        </details>
+                      </div>
 
                       <div className="col-12">
                         <div className="form-builder-panel">

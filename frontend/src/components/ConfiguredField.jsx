@@ -26,6 +26,7 @@ export default function ConfiguredField({
   const label=field.label||field.key;
   const effectiveReadOnly=readOnly||field.readOnly||field.editable===false;
   const effectiveRequired=field.required===true||required;
+  const effectiveDisabled=disabled||Boolean(field.disabled);
 
   const handleValue=next=>{
     onChange?.(next);
@@ -41,7 +42,7 @@ export default function ConfiguredField({
     value:value??"",
     onChange:event=>handleValue(event.target.value),
     placeholder:placeholder||label,
-    disabled,
+    disabled:effectiveDisabled,
     required:effectiveRequired,
     readOnly:effectiveReadOnly
   };
@@ -51,18 +52,28 @@ export default function ConfiguredField({
   if(field.dataSource?.type==="lookup"&&Array.isArray(lookupRecords)){
     const valueField=field.dataSource.valueField||"_id";
     const labelField=field.dataSource.labelField||valueField;
+    const multiple=field.fieldType==="multiselect"||Boolean(field.dataSource.multiple);
     control=(
       <select
         className="form-select shadow-sm bg-white"
-        value={value??""}
-        onChange={event=>handleValue(event.target.value)}
-        disabled={disabled||effectiveReadOnly}
+        multiple={multiple}
+        value={multiple?(Array.isArray(value)?value:[]):(value??"")}
+        onChange={event=>{
+          if(multiple){
+            handleValue(Array.from(event.target.selectedOptions).map(option=>option.value));
+            return;
+          }
+          handleValue(event.target.value);
+        }}
+        disabled={effectiveDisabled||effectiveReadOnly}
         required={effectiveRequired}
+        style={multiple?{minHeight:100}:undefined}
       >
-        <option value="">Select {label}</option>
+        {!multiple&&<option value="">Select {label}</option>}
         {lookupRecords.map(record=>{
           const optionValue=record?.[valueField];
           const optionLabel=record?.[labelField]??optionValue;
+          if(optionValue===undefined||optionValue===null)return null;
           return <option key={String(optionValue)} value={optionValue}>{String(optionLabel??"")}</option>;
         })}
       </select>
@@ -70,7 +81,7 @@ export default function ConfiguredField({
   }else if(field.fieldType==="textarea"){
     control=<textarea {...common} rows={2}/>;
   }else if(field.fieldType==="select"){
-    control=<select className="form-select shadow-sm bg-white" value={value??""} onChange={event=>handleValue(event.target.value)} disabled={disabled||effectiveReadOnly} required={effectiveRequired}>
+    control=<select className="form-select shadow-sm bg-white" value={value??""} onChange={event=>handleValue(event.target.value)} disabled={effectiveDisabled||effectiveReadOnly} required={effectiveRequired}>
       <option value="">Select {label}</option>
       {(options||[]).map(option=>typeof option==="string"
         ?<option key={option} value={option}>{option}</option>
@@ -79,7 +90,7 @@ export default function ConfiguredField({
     </select>;
   }else if(field.fieldType==="boolean"){
     control=<div className="form-check form-switch pt-2">
-      <input className="form-check-input" type="checkbox" checked={Boolean(value)} onChange={event=>handleValue(event.target.checked)} disabled={disabled||effectiveReadOnly}/>
+      <input className="form-check-input" type="checkbox" checked={Boolean(value)} onChange={event=>handleValue(event.target.checked)} disabled={effectiveDisabled||effectiveReadOnly}/>
     </div>;
   }else if(field.fieldType==="number"||field.fieldType==="currency"){
     control=<ArithmeticInput
@@ -89,13 +100,18 @@ export default function ConfiguredField({
       min={field.validation?.min??min}
       max={field.validation?.max??max}
       step={step||"0.01"}
-      disabled={disabled}
+      disabled={effectiveDisabled}
       required={effectiveRequired}
       readOnly={effectiveReadOnly}
       placeholder={placeholder||label}
     />;
   }else{
-    const htmlType=field.fieldType==="date"?"date":field.fieldType==="datetime"?"datetime-local":"text";
+    const htmlType=field.fieldType==="date"?"date"
+      :field.fieldType==="datetime"?"datetime-local"
+      :field.fieldType==="email"?"email"
+      :field.fieldType==="phone"?"tel"
+      :field.fieldType==="url"?"url"
+      :"text";
     control=<div className="position-relative">
       <input {...common} type={htmlType} list={listId}/>
       {listId&&<datalist id={listId}>{listOptions.map(option=><option key={option} value={option}/>)}</datalist>}
@@ -112,7 +128,7 @@ export default function ConfiguredField({
       </label>
       {control}
       {help&&<div className="form-text">{help}</div>}
-      {field.dataSource?.type==="lookup"&&<div className="form-text">Linked to {field.dataSource.resource}.</div>}
+      {field.dataSource?.type==="lookup"&&<div className="form-text">Choices come from existing records.</div>}
       {suffix}
     </div>
   );

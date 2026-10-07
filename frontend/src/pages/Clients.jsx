@@ -56,8 +56,10 @@ function Clients() {
 
   const [editingClient, setEditingClient] = useState(null);
   const [formSettingsOpen,setFormSettingsOpen]=useState(false);
+  const [tableCustomizeRequested,setTableCustomizeRequested]=useState(false);
 
   useEffect(()=>{
+    if(searchParams.get("customize")==="table")setTableCustomizeRequested(true);
     if(searchParams.get("customize")==="form"){
       setFormSettingsOpen(true);
       searchParams.delete("customize");

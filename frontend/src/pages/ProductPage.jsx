@@ -1,256 +1,341 @@
-// using
-import React, { useEffect, useState } from 'react';
-import { createProduct, fetchProducts, updateProduct, searchProductByBarcode } from '../services/productService';
-import axios from 'axios';
+import React,{useEffect,useMemo,useState} from "react";
+import {useSearchParams} from "react-router-dom";
+import { createProduct, fetchProducts, updateProduct, deleteProduct, searchProductByBarcode } from "../services/productService";
 import { Html5QrcodeScanner } from "html5-qrcode";
+import FormConfigurator from "../components/FormConfigurator";
+import ConfiguredField from "../components/ConfiguredField";
+import DynamicTable from "../components/DynamicTable";
+import { PRODUCT_FORM_FIELDS } from "../config/noCodeCatalog";
+import { useFormConfiguration, applyFormulas, getFieldState, hydrateConfiguredValues, syncConfiguredCustomFields, buildConfiguredDefaults } from "../hooks/useFormConfiguration";
 
+const emptyBase={
+  productName:"",
+  productCode:"",
+  designNo:"",
+  rate:"",
+  purchasePrice:"",
+  minStock:0,
+  quantity:0,
+  serialNumber:"",
+  barcode:"",
+  purchaseDate:"",
+  description:"",
+  customFields:{}
+};
 
-export default function ProductPage() {
-  const [products, setProducts] = useState([]);
-  const [form, setForm] = useState({});
-  const [images, setImages] = useState([]);
-  const [editingProduct, setEditingProduct] = useState(null);
-  const [error, setError] = useState('');
-  const barcodeString = "E:/POS/Demo/backend"; // Adjust this to your backend URL
+export default function ProductPage(){
+  const [searchParams,setSearchParams]=useSearchParams();
+  const productFormConfig=useFormConfiguration("products.form",PRODUCT_FORM_FIELDS);
+  const [products,setProducts]=useState([]);
+  const [form,setForm]=useState(emptyBase);
+  const [images,setImages]=useState([]);
+  const [editingProduct,setEditingProduct]=useState(null);
+  const [showForm,setShowForm]=useState(true);
+  const [formSettingsOpen,setFormSettingsOpen]=useState(false);
+  const [tableCustomizeRequested,setTableCustomizeRequested]=useState(false);
+  const [loading,setLoading]=useState(true);
+  const [saving,setSaving]=useState(false);
+  const [error,setError]=useState("");
+  const [search,setSearch]=useState("");
+  const [lowStock,setLowStock]=useState(false);
 
-  // Fetch products initially
-  useEffect(() => {
-    loadProducts();
-  }, []);
+  const configuredFields=productFormConfig.fields||[];
+  const visibleFields=configuredFields.filter(field=>field.visible!==false);
 
-  const loadProducts = async () => {
-    const res = await fetchProducts();
-    setProducts(res.data.products);
+  const resetProduct=()=>{
+    setEditingProduct(null);
+    setImages([]);
+    setForm(buildConfiguredDefaults({...emptyBase},configuredFields));
+    setError("");
+    setShowForm(true);
   };
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
-  };
-
-  const handleImageChange = (e) => {
-    setImages([...e.target.files]);
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-
-    const formData = new FormData();
-    ['productName','productCode','description','rate','quantity','serialNumber','designNo','purchaseDate','purchasePrice','barcode','minStock']
-      .forEach((key) => {
-        if (form[key] !== undefined && form[key] !== null) {
-          formData.append(key, form[key]);
-        }
-      });
-    images.forEach((img) => formData.append('images', img));
-
-    try {
-      if (editingProduct?._id) {
-        await updateProduct(editingProduct._id, formData);
-      } else {
-        await createProduct(formData);
-      }
-
-      setForm({});
-      setImages([]);
-      setEditingProduct(null);
-      await loadProducts();
-    } catch (err) {
-      console.error('Product save error:', err);
-      setError(err.response?.data?.message || err.message || 'Unable to save product.');
+  useEffect(()=>{
+    const customize=searchParams.get("customize");
+    if(customize==="form"){setFormSettingsOpen(true);}
+    if(customize==="table"){setTableCustomizeRequested(true);}
+    if(customize){
+      searchParams.delete("customize");
+      setSearchParams(searchParams,{replace:true});
     }
+  },[searchParams,setSearchParams]);
+
+  const loadProducts=async()=>{
+    try{
+      setLoading(true);
+      setError("");
+      const response=await fetchProducts({search:search.trim(),lowStock:lowStock?"true":"false",limit:100,sort:"productName",order:"asc"});
+      setProducts(response.data?.products||[]);
+    }catch(loadError){
+      setError(loadError.response?.data?.message||"Unable to load products.");
+    }finally{setLoading(false);}
   };
 
-  const handleEdit = (product) => {
-    setForm(product);
-    setEditingProduct(product);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-  const BASE_URL = 'http://localhost:5000/api/products';
- 
+  useEffect(()=>{loadProducts();},[search,lowStock]);
 
-  const handleBarcodeSearch = async (code) => {
-    try {
-      const res = await searchProductByBarcode(code);
-      const product = res.data.product;
-      if (product) {
-        alert(`✅ Product: ${product.productName}`);
-        // or set into form/edit modal
-      } else {
-        alert('❌ No product found for this barcode');
-      }
-    } catch (err) {
-      console.error(err);
+  useEffect(()=>{
+    const scanner=new Html5QrcodeScanner("product-barcode-reader",{fps:10,qrbox:220});
+    scanner.render(text=>{searchProductByBarcode(text).then(response=>{
+      const product=response.data?.product;
+      if(product){handleEdit(product);}
+      else setError("No product found for that barcode.");
+    }).catch(err=>setError(err.response?.data?.message||"Unable to find that barcode."));});
+    return()=>{scanner.clear().catch(()=>{});};
+  },[]);
+
+  const productValue=(field)=>{
+    const raw=field.custom
+      ? form.customFields?.[field.key]??form[field.key]??field.defaultValue??""
+      : form[field.key]??field.defaultValue??"";
+    if(field.fieldType==="date"&&raw){
+      const date=new Date(raw);
+      return Number.isNaN(date.getTime())?String(raw):date.toISOString().slice(0,10);
     }
+    return raw;
   };
 
-  useEffect(() => {
-    const scanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: 250 });
-    scanner.render((text) => {
-      handleBarcodeSearch(text);
+  const updateField=(field,value)=>{
+    setForm(prev=>{
+      let next=field.custom
+        ? {...prev,[field.key]:value,customFields:{...(prev.customFields||{}),[field.key]:value}}
+        : {...prev,[field.key]:value};
+      next=syncConfiguredCustomFields(next,configuredFields);
+      return applyFormulas(configuredFields,next);
     });
-    return () => scanner.clear();
-  }, []);
+  };
 
-  return (
-    // <div className="container py-4">
-    <div className="w-100 mx-3 mt-3">
-      <h2 className="mb-4 text-primary">🧵 Product Management</h2>
-      {error && <div className="alert alert-danger">{error}</div>}
+  const handleEdit=product=>{
+    const hydrated=buildConfiguredDefaults(hydrateConfiguredValues(product,configuredFields),configuredFields);
+    setEditingProduct(product);
+    setForm({...hydrated,customFields:{...(product.customFields||{})}});
+    setImages([]);
+    setError("");
+    setShowForm(true);
+    window.scrollTo({top:0,behavior:"smooth"});
+  };
 
-      <form onSubmit={handleSubmit} className="mb-2 p-4 border rounded bg-light shadow-sm ">
-        <div className="row row-gap-1 mb-3">
-          <div className="col-md-3">
-            <input
-              name="productName"
-              value={form.productName || ''}
-              placeholder="Product Name"
-              className="form-control"
-              onChange={handleChange}
-              required
-            />
-          </div>
-          <div className="col-md-3">
-            <input
-              name="rate"
-              type="number"
-              value={form.rate || ''}
-              placeholder="Rate"
-              className="form-control"
-              onChange={handleChange}
-            />
-          </div>
-          {/* <div className="col-md-3">
-            <input
-              name="quantity"
-              type="number"
-              value={form.quantity || ''}
-              placeholder="Quantity"
-              className="form-control"
-              onChange={handleChange}
-            />
-          </div> */}
-          <div className="col-md-3">
-            <input
-              name="designNo"
-              value={form.designNo || ''}
-              placeholder="Design No."
-              className="form-control"
-              onChange={handleChange}
-            />
-          </div>
+  const handleSubmit=async event=>{
+    event.preventDefault();
+    setError("");
 
-          <div className="mb-3 col-md-3">  
-            <textarea
-              name="description"
-              value={form.description || ''}
-              placeholder="Description"
-              className="form-control"
-              onChange={handleChange}
-              style={{ height: '37.6px' }}
-            />
-          </div>
+    const values={...syncConfiguredCustomFields(form,configuredFields)};
+    const requiredFields=configuredFields.filter(field=>field.required&&!field.formula);
+    const missing=requiredFields.find(field=>{
+      const state=getFieldState(field,{...values,...(values.customFields||{})});
+      if(!state.visible||!state.required)return false;
+      const value=field.custom?values.customFields?.[field.key]??values[field.key]:values[field.key];
+      return String(value??"").trim()==="";
+    });
+    if(missing){
+      setError("Please fill the required field: "+missing.label);
+      return;
+    }
 
+    try{
+      setSaving(true);
+      const data=new FormData();
+      configuredFields.filter(field=>!field.custom).forEach(field=>{
+        const value=values[field.key];
+        if(value===undefined||value===null)return;
+        if(value instanceof Date)data.append(field.key,value.toISOString());
+        else if(typeof value==="object")data.append(field.key,JSON.stringify(value));
+        else data.append(field.key,String(value));
+      });
+      data.append("customFields",JSON.stringify(values.customFields||{}));
+      images.forEach(image=>data.append("images",image));
+
+      if(editingProduct?._id)await updateProduct(editingProduct._id,data);
+      else await createProduct(data);
+
+      resetProduct();
+      await loadProducts();
+    }catch(saveError){
+      setError(saveError.response?.data?.message||saveError.message||"Unable to save product.");
+    }finally{setSaving(false);}
+  };
+
+  const handleDelete=async product=>{
+    if(!window.confirm("Delete this product?"))return;
+    try{
+      await deleteProduct(product._id);
+      if(editingProduct?._id===product._id)resetProduct();
+      await loadProducts();
+    }catch(deleteError){
+      setError(deleteError.response?.data?.message||"Unable to delete product.");
+    }
+  };
+
+  const productSections=useMemo(
+    ()=>[...new Set(visibleFields.map(field=>field.section||"General"))],
+    [visibleFields]
+  );
+
+  const tableColumns=useMemo(()=>{
+    const base=[
+      {key:"productName",label:"Product",sortKey:"productName"},
+      {key:"productCode",label:"Code",sortKey:"productCode"},
+      {key:"designNo",label:"Design No.",sortKey:"designNo"},
+      {key:"rate",label:"Selling Rate",sortKey:"rate",render:product=>`₹${Number(product.rate||0).toFixed(2)}`},
+      {key:"quantity",label:"Stock",sortKey:"quantity",render:product=>{
+        const low=Number(product.quantity||0)<=Number(product.minStock||0);
+        return <span className={low?"text-danger fw-bold":""}>{Number(product.quantity||0).toLocaleString("en-IN")}</span>;
+      }},
+      {key:"minStock",label:"Min Stock",sortKey:"minStock"},
+      {key:"purchasePrice",label:"Purchase Price",sortKey:"purchasePrice",render:product=>`₹${Number(product.purchasePrice||0).toFixed(2)}`},
+      {key:"barcode",label:"Barcode",sortKey:"barcode"},
+    ];
+    const custom=configuredFields.filter(field=>field.custom).map(field=>({
+      key:field.key,
+      label:field.label,
+      render:product=>product.customFields?.[field.key]??""
+    }));
+    return [...base,...custom];
+  },[configuredFields]);
+
+  return(
+    <div className="container-fluid py-3">
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+        <div>
+          <div className="text-primary small fw-semibold">Products</div>
+          <h2 className="mb-1">Products & pricing</h2>
+          <div className="text-muted">Add products, keep stock information current, and customize this screen without code.</div>
         </div>
-
-        {/* <div className="row mb-3">
-          <div className="col-md-6">
-            <input
-              name="purchasePrice"
-              type="number"
-              value={form.purchasePrice || ''}
-              placeholder="Purchase Price"
-              className="form-control"
-              onChange={handleChange}
-            />
-          </div>
-          <div className="col-md-6">
-            <input
-              name="purchaseDate"
-              type="date"
-              value={form.purchaseDate || ''}
-              className="form-control"
-              onChange={handleChange}
-            />
-          </div>
-        </div> */}
-
-
-        {/* <div className="mb-3">
-          <input type="file" className="form-control" multiple onChange={handleImageChange} />
-        </div> */}
-
-        <button className="btn btn-success w-100">
-          {editingProduct ? 'Update Product' : 'Add Product'}
-        </button>
-      </form>
-      <input
-        id="barcodeInput"
-        type="text"
-        className='mb-3 form-control w-auto'
-        // style={{ top: -9999 }}
-        placeholder="Enter barcode"
-        onChange={(e) => handleBarcodeSearch(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            handleBarcodeSearch(e.target.value);
-            e.target.value = '';
-          }
-        }}
-        />
-      <div id="reader" className='d-none'></div>
-      {/* FORM */}
-
-      {/* PRODUCT GRID */}
-      <div className="row">
-        {products.map((product) => (
-          <div className="col-md-4 mb-4" key={product._id}>
-            <div className="card h-100 shadow-sm">
-              {product.images?.[0] && (
-                <img
-                  src={product.images[0]}
-                  className="card-img-top"
-                  alt="product"
-                  style={{ height: 200, objectFit: 'cover' }}
-                />
-              )}
-              <div className="card-body">
-                <div className="d-flex justify-content-between">
-                  <h5 className="card-title">{product.productName}</h5>
-                  <button
-                    className="btn btn-sm btn-primary"
-                    onClick={() => handleEdit(product)}
-                  >
-                    Edit
-                  </button>
-                  {/* You can add delete or view actions here */}
-                </div>
-                <p className="card-text">{product.description?.slice(0, 80)}</p>
-                <ul className="list-unstyled small">
-                  <li><strong>Rate:</strong> ₹{product.rate}</li>
-                  <li><strong>Code:</strong> ₹{product.productCode}</li>
-                  {/* <li><strong>Qty:</strong> {product.quantity}</li> */}
-                  {/* <li><strong>Price:</strong> ₹{product.purchasePrice}</li> */}
-                  {/* <li><strong>Date:</strong> {product.purchaseDate?.slice(0, 10)}</li> */}
-                </ul>
-                {/* {product.barcode && ( */}
-                <div className="mt-2">
-                  {/* <img src={"E:/POS/Demo/backend" + product.barcode} alt="barcode" style={{ width: 140 }} /> */}
-
-
-                  {/* <img src={barcodeString +product.barcode} alt="barcode" style={{ width: 140 }} /> */}
-                  {/* <img src={`${BASE_URL}/` + product.barcode} alt="barcode" style={{ width: 140 }} /> */}
-                  {/* <img src={`http://localhost:5000/barcodes/barcode-P818825.png` } alt="barcode"  /> */}
-                  {/* <img src={`E:/POS/Demo/backend/barcodes/barcode-P818825.png`} alt="barcode" />
-                  <p className="small text-muted">Barcode: {`E:/POS/Demo/backend` + product.barcode}</p> */}
-                </div>
-                {/* )} */}
-                
-              </div>
-            </div>
-          </div>
-        ))}
+        <div className="d-flex flex-wrap gap-2">
+          <button type="button" className="btn btn-outline-primary" onClick={()=>setFormSettingsOpen(true)}><i className="bi bi-sliders2 me-1"></i>Customize form</button>
+          <button type="button" className="btn btn-primary" onClick={resetProduct}><i className="bi bi-plus-lg me-1"></i>New product</button>
+        </div>
       </div>
+
+      {error&&<div className="alert alert-danger">{error}</div>}
+
+      {showForm&&(
+        <form onSubmit={handleSubmit} className="card border-0 shadow-sm mb-4">
+          <div className="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div>
+              <h5 className="mb-1">{editingProduct?"Edit product":"Add product"}</h5>
+              <div className="small text-muted">The fields below follow your saved Product form settings.</div>
+            </div>
+            {editingProduct&&<button type="button" className="btn btn-sm btn-light border" onClick={resetProduct}>Cancel edit</button>}
+          </div>
+
+          <div className="card-body">
+            {productFormConfig.loading?(
+              <div className="text-center py-4"><span className="spinner-border spinner-border-sm me-2"></span>Loading form settings...</div>
+            ):(
+              <div className="row g-3">
+                {productSections.map(section=>(
+                  <div className="col-12" key={section}>
+                    <div className="border rounded-3 p-3">
+                      <div className="fw-semibold mb-3">{String(section).replace(/[_-]+/g," ").replace(/\b\w/g,char=>char.toUpperCase())}</div>
+                      <div className="row g-3">
+                        {visibleFields.filter(field=>(field.section||"General")===section).map(field=>{
+                          const state=getFieldState(field,{...form,...(form.customFields||{})});
+                          if(!state.visible)return null;
+                          const common={
+                            field:{...field,...state},
+                            value:productValue(field),
+                            onChange:value=>updateField(field,value),
+                            required:state.required,
+                            disabled:state.disabled,
+                            readOnly:state.readOnly
+                          };
+                          return <div className={`col-12 col-md-${field.width||6}`} key={field.key}><ConfiguredField {...common}/></div>;
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                <div className="col-12">
+                  <div className="border rounded-3 p-3">
+                    <div className="fw-semibold mb-2">Product images</div>
+                    <div className="small text-muted mb-2">Images stay with the product. Up to 5 image files can be added.</div>
+                    <input type="file" className="form-control" accept="image/jpeg,image/png,image/webp,image/gif" multiple onChange={event=>setImages(Array.from(event.target.files||[]).slice(0,5))}/>
+                    {editingProduct?.images?.length>0&&(
+                      <div className="d-flex flex-wrap gap-2 mt-2">
+                        {editingProduct.images.map((src,index)=><img key={index} src={src} alt="" style={{width:72,height:72,objectFit:"cover"}} className="rounded border"/> )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="card-footer bg-white d-flex justify-content-end gap-2">
+            <button type="submit" className="btn btn-primary px-4" disabled={saving||productFormConfig.loading}>{saving?<><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>:(editingProduct?"Update product":"Add product")}</button>
+          </div>
+        </form>
+      )}
+
+      <div className="card border-0 shadow-sm">
+        <div className="card-body">
+          <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+            <div className="d-flex flex-wrap gap-2">
+              <div className="input-group" style={{maxWidth:360}}>
+                <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
+                <input className="form-control" placeholder="Search products, codes or designs" value={search} onChange={event=>setSearch(event.target.value)}/>
+              </div>
+              <label className="form-check form-switch d-flex align-items-center gap-2 px-3 mb-0 border rounded">
+                <input className="form-check-input" type="checkbox" checked={lowStock} onChange={event=>setLowStock(event.target.checked)}/>
+                <span className="small">Low stock only</span>
+              </label>
+            </div>
+            <span className="small text-muted">{products.length} products shown</span>
+          </div>
+
+          <DynamicTable
+            tableKey="products.list"
+            autoOpenSettings={tableCustomizeRequested}
+            rows={products}
+            getRowKey={product=>product._id}
+            loading={loading}
+            columns={tableColumns}
+            actionColumn={{
+              label:"Actions",
+              locked:true,
+              render:product=>(
+                <div className="d-flex justify-content-end gap-1">
+                  <button type="button" className="btn btn-warning btn-sm" onClick={()=>handleEdit(product)} title="Edit"><i className="bi bi-pencil"></i></button>
+                  <button type="button" className="btn btn-danger btn-sm" onClick={()=>handleDelete(product)} title="Delete"><i className="bi bi-trash"></i></button>
+                </div>
+              )
+            }}
+          />
+        </div>
+      </div>
+
+      <div className="mt-3 border rounded-3 p-3 bg-light">
+        <div className="fw-semibold mb-2">Barcode lookup</div>
+        <div className="small text-muted mb-2">Scan or type a product barcode to open that product.</div>
+        <input className="form-control mb-2" placeholder="Enter or scan barcode" onKeyDown={event=>{
+          if(event.key!=="Enter")return;
+          const code=event.currentTarget.value.trim();
+          if(!code)return;
+          searchProductByBarcode(code).then(response=>{
+            const product=response.data?.product;
+            if(product)handleEdit(product); else setError("No product found for that barcode.");
+          }).catch(err=>setError(err.response?.data?.message||"Unable to find that barcode."));
+          event.currentTarget.value="";
+        }}/>
+        <div id="product-barcode-reader" className="d-none"></div>
+      </div>
+
+      <FormConfigurator
+        open={formSettingsOpen}
+        onClose={()=>setFormSettingsOpen(false)}
+        title="Customize Product Form"
+        subtitle="Arrange product fields, add your own fields, set rules, defaults and calculations."
+        fields={productFormConfig.fields}
+        saving={productFormConfig.saving}
+        onSave={productFormConfig.save}
+        onReset={async()=>{
+          const defaults=await productFormConfig.reset();
+          productFormConfig.setFields(defaults);
+          setFormSettingsOpen(false);
+          resetProduct();
+        }}
+      />
     </div>
   );
 }

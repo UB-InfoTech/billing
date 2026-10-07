@@ -13,6 +13,7 @@ const ProductSchema=new mongoose.Schema({
   purchasePrice:{type:Number,default:0,min:0},
   images:[{type:String}],
   barcode:{type:String,trim:true,index:true},
+  customFields:{type:Map,of:mongoose.Schema.Types.Mixed,default:{}},
   createdBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true,index:true}
 },{timestamps:true});
 

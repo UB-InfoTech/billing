@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import {useSearchParams} from "react-router-dom";
 import {ORDER_FORM_FIELDS,ORDER_ITEM_FIELDS} from "../config/noCodeCatalog";
 import axios from "axios";
 import editSVG from '../assets/edit.svg';
@@ -17,8 +18,7 @@ import {useFormConfiguration,applyFormulas,hydrateConfiguredValues,applyAutoFill
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
 import Report from '../components/Report';
-import { useReat Pcs",fieldType:"number",width:1,section:"items",order:8,visible:false}
-];
+import { useReactToPrint } from "react-to-print";
 
 function Order2() {
     const linkone = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
@@ -55,6 +55,17 @@ function Order2() {
     const [orderId, setOrderId] = useState(null);
     const [formSettingsOpen,setFormSettingsOpen]=useState(false);
     const [itemSettingsOpen,setItemSettingsOpen]=useState(false);
+    const [searchParams,setSearchParams]=useSearchParams();
+
+    useEffect(()=>{
+        const customize=searchParams.get("customize");
+        if(customize==="form")setFormSettingsOpen(true);
+        if(customize==="items")setItemSettingsOpen(true);
+        if(customize){
+            searchParams.delete("customize");
+            setSearchParams(searchParams,{replace:true});
+        }
+    },[searchParams,setSearchParams]);
     const orderFormConfig=useFormConfiguration("orders.form",ORDER_FORM_FIELDS);
     const orderItemConfig=useFormConfiguration("orders.items",ORDER_ITEM_FIELDS);
     const linkedOrderSources=useMemo(()=>Array.from(new Set([

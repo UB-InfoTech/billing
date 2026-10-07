@@ -1,4 +1,5 @@
 const express=require("express");
+const {applyWorkflows}=require("../utils/workflowEngine");
 const mongoose=require("mongoose");
 const fs=require("fs");
 const path=require("path");
@@ -99,6 +100,7 @@ router.post("/orders/create",auth,async(req,res)=>{
     if(!body.orderNumber)body.orderNumber=await nextOrderNumber(userId(req));
     body.createdBy=userId(req);
     const order=new Order(body);
+    await applyWorkflows({resource:"orders",event:"record_created",doc:order,createdBy:userId(req)});
     await order.save();
     await syncClientData(order.clientId);
     res.status(201).json({success:true,order});
@@ -138,6 +140,7 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
     const oldClient=String(order.clientId||"");
     const allowed=["orderNumber","challanNumber","lrNo","orderDate","subOrders","Address","State","City","pinCode","stateCode","clientId","gstNumber","companyName","status","paymentTerms","taxPercentage","discountRate","note","netProfit","customFields"];
     for(const key of allowed)if(req.body?.[key]!==undefined)order[key]=key==="customFields"?cleanCustomFields(req.body[key]):req.body[key];
+    await applyWorkflows({resource:"orders",event:"record_updated",doc:order,createdBy:userId(req)});
     await order.save();
     const newClient=String(order.clientId||"");
     if(oldClient)await syncClientData(oldClient);if(newClient&&newClient!==oldClient)await syncClientData(newClient);

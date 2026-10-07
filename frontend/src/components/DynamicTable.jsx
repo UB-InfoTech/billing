@@ -12,6 +12,8 @@ const FIELD_TYPES=[
   {value:"datetime",label:"Date & Time",icon:"bi-calendar2-week",help:"Date with time"},
   {value:"boolean",label:"Yes / No",icon:"bi-toggle-on",help:"Simple true/false value"},
   {value:"select",label:"Dropdown",icon:"bi-menu-button-wide",help:"Choose one option"},
+  {value:"multiselect",label:"Multiple choices",icon:"bi-check2-square",help:"Choose more than one option"},
+  {value:"reference",label:"Existing record",icon:"bi-database",help:"Choose an existing record"},
 ];
 
 const getValue=(row,path)=>{
@@ -39,6 +41,9 @@ const cloneColumns=columns=>columns.map((column,index)=>({
   defaultValue:column.defaultValue??"",
   sourceKeys:Array.isArray(column.sourceKeys)?column.sourceKeys.slice():[],
   separator:column.separator??" ",
+  editable:column.editable!==false,
+  dataSource:column.dataSource&&typeof column.dataSource==="object"?{...column.dataSource}:null,
+  width:Math.min(12,Math.max(0,Number(column.width)||0)),
   order:Number.isFinite(Number(column.order))?Number(column.order):index,
 }));
 
@@ -177,7 +182,7 @@ export default function DynamicTable({
   const filteredDraft=useMemo(()=>{
     const query=searchTerm.trim().toLowerCase();
     if(!query)return draft;
-    return draft.filter(column=>column.label.toLowerCase().includes(query)||column.key.toLowerCase().includes(query));
+    return draft.filter(column=>column.label.toLowerCase().includes(query));
   },[draft,searchTerm]);
 
   const resetCustomForm=()=>setCustomForm({label:"",fieldType:"text",defaultValue:"",optionsText:""});
@@ -249,9 +254,9 @@ export default function DynamicTable({
     const column=findColumn(sourceKey);
     if(column?.kind==="custom"){
       const key=customValueKey(getRowKey(row,rowIndex),sourceKey);
-      return Object.prototype.hasOwnProperty.call(customValues,key)
-        ? customValues[key]
-        : column.defaultValue??"";
+      if(Object.prototype.hasOwnProperty.call(customValues,key))return customValues[key];
+      if(row?.customFields&&Object.prototype.hasOwnProperty.call(row.customFields,sourceKey))return row.customFields[sourceKey];
+      return column.defaultValue??"";
     }
     return getValue(row,sourceKey);
   };
@@ -269,6 +274,10 @@ export default function DynamicTable({
       const date=new Date(value);
       return Number.isNaN(date.getTime())?String(value):date.toLocaleString("en-IN");
     }
+    if(column.fieldType==="multiselect"&&Array.isArray(value))return value.map(item=>{
+      const option=column.options.find(candidate=>String(candidate?.value??candidate)===String(item));
+      return option?.label??option??item;
+    }).join(", ");
     return String(value);
   };
 
@@ -324,11 +333,28 @@ export default function DynamicTable({
     };
 
     if(column.fieldType==="textarea")return <textarea {...common} rows={2}/>;
-    if(column.fieldType==="select"){
+    if(column.fieldType==="select"||column.fieldType==="multiselect"){
+      const multiple=column.fieldType==="multiselect";
       return(
-        <select {...common} onChange={event=>saveCustomValue(rowKey,column.key,event.target.value)}>
-          <option value="">Select...</option>
-          {column.options.map(option=><option key={option} value={option}>{option}</option>)}
+        <select
+          {...common}
+          multiple={multiple}
+          value={multiple?(Array.isArray(editingValue)?editingValue:[]):editingValue??""}
+          onChange={event=>{
+            if(multiple){
+              saveCustomValue(rowKey,column.key,Array.from(event.target.selectedOptions).map(option=>option.value));
+              return;
+            }
+            saveCustomValue(rowKey,column.key,event.target.value);
+          }}
+          style={multiple?{minHeight:90}:undefined}
+        >
+          {!multiple&&<option value="">Select...</option>}
+          {column.options.map(option=>{
+            const value=typeof option==="object"?option.value:option;
+            const label=typeof option==="object"?option.label:option;
+            return <option key={String(value)} value={value}>{label}</option>;
+          })}
         </select>
       );
     }
@@ -355,9 +381,11 @@ export default function DynamicTable({
   const renderCustomCell=(column,row,rowIndex)=>{
     const rowKey=String(getRowKey(row,rowIndex));
     const stateKey=customValueKey(rowKey,column.key);
-    const value=Object.prototype.hasOwnProperty.call(customValues,stateKey)
-      ? customValues[stateKey]
-      : column.defaultValue??"";
+    const value=resolvedValue(column.key,row,rowIndex);
+
+    if(column.editable===false){
+      return <span className={value===null||value===undefined||value===""?"text-muted":""}>{formatCustomValue(column,value)}</span>;
+    }
 
     if(editingCell===stateKey){
       return <div className="dynamic-custom-editor">{renderCustomEditor(rowKey,column)}</div>;
@@ -426,8 +454,8 @@ export default function DynamicTable({
       setError("Enter a field name.");
       return;
     }
-    if(customForm.fieldType==="select"&&options.length===0){
-      setError("Add at least one dropdown option.");
+    if(["select","multiselect"].includes(customForm.fieldType)&&options.length===0){
+      setError("Add at least one choice.");
       return;
     }
 
@@ -435,7 +463,9 @@ export default function DynamicTable({
     const key=`custom_${slug}_${Date.now()}`;
     const defaultValue=customForm.fieldType==="boolean"
       ? customForm.defaultValue==="true"
-      : customForm.defaultValue;
+      : customForm.fieldType==="multiselect"
+        ? customForm.defaultValue.split(/\r?\n|,/).map(value=>value.trim()).filter(Boolean)
+        : customForm.defaultValue;
 
     setDraft(prev=>[...prev,{
       key,
@@ -445,8 +475,9 @@ export default function DynamicTable({
       custom:true,
       kind:"custom",
       fieldType:customForm.fieldType,
-      options:customForm.fieldType==="select"?options:[],
+      options:["select","multiselect"].includes(customForm.fieldType)?options.map(value=>({value,label:value})):[],
       defaultValue,
+      editable:true,
       sourceKeys:[],
       separator:" ",
       order:prev.length

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import {useSearchParams} from "react-router-dom";
 import {CLIENT_FORM_FIELDS} from "../config/noCodeCatalog";
 import axios from 'axios';
 import editSVG from '../assets/edit.svg';
@@ -11,6 +12,7 @@ import {useNoCodeDataSources} from "../Type:"textarea",width:12,section:"additio
 ];
 
 function Clients() {
+  const [searchParams,setSearchParams]=useSearchParams();
 
   const linkone = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
   
@@ -54,6 +56,14 @@ function Clients() {
 
   const [editingClient, setEditingClient] = useState(null);
   const [formSettingsOpen,setFormSettingsOpen]=useState(false);
+
+  useEffect(()=>{
+    if(searchParams.get("customize")==="form"){
+      setFormSettingsOpen(true);
+      searchParams.delete("customize");
+      setSearchParams(searchParams,{replace:true});
+    }
+  },[searchParams,setSearchParams]);
   const clientFormConfig=useFormConfiguration("clients.form",CLIENT_FORM_FIELDS);
   const linkedClientSources=useMemo(()=>Array.from(new Set(clientFormConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean))),[clientFormConfig.fields]);
   const {records:linkedRecords}=useNoCodeDataSources(linkedClientSources);

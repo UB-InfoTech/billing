@@ -25,7 +25,8 @@ const ExpenseSchema=new mongoose.Schema({
   receipt:{type:String,default:""},
   createdBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true,index:true},
   updatedBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",default:null},
-  user:{type:mongoose.Schema.Types.ObjectId,ref:"User",default:null}
+  user:{type:mongoose.Schema.Types.ObjectId,ref:"User",default:null},
+  customFields:{type:Map,of:mongoose.Schema.Types.Mixed,default:{}}
 },{timestamps:true});
 ExpenseSchema.index({createdBy:1,date:-1});
 ExpenseSchema.index({createdBy:1,category:1,date:-1});

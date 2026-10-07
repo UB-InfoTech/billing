@@ -109,6 +109,7 @@ const sanitizeFields=fields=>{
     return {
       key,
       label,
+      helpText:cleanString(raw?.helpText,300),
       visible,
       required,
       locked:Boolean(raw?.locked),

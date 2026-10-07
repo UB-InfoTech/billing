@@ -1,4 +1,5 @@
 const express=require("express");
+const {applyWorkflows}=require("../utils/workflowEngine");
 const multer=require("multer");
 const fs=require("fs");
 const path=require("path");
@@ -93,10 +94,13 @@ router.post("/",auth,upload.array("images",5),async(req,res)=>{
       designNo:String(req.body.designNo||"").trim(),purchaseDate:req.body.purchaseDate||null,
       purchasePrice:Number(req.body.purchasePrice||0),barcode:String(req.body.barcode||code).trim(),
       minStock:Number(req.body.minStock||0),createdBy:owner(req),
-      images:(req.files||[]).map(file=>publicUrl(req,"/uploads/products/"+file.filename))
+      images:(req.files||[]).map(file=>publicUrl(req,"/uploads/products/"+file.filename)),
+      customFields:req.body.customFields&&typeof req.body.customFields==="object"?req.body.customFields:{}
     });
     if(!product.productName)return res.status(400).json({message:"Product name is required."});
+    product.customFields=product.customFields||{};
     if(product.rate<0||product.quantity<0)return res.status(400).json({message:"Rate and quantity cannot be negative."});
+    await applyWorkflows({resource:"products",event:"record_created",doc:product,createdBy:owner(req)});
     await product.save();
     res.status(201).json({message:"Product created successfully.",product});
   }catch(error){res.status(400).json({message:error.message});}
@@ -118,6 +122,7 @@ router.put("/:id",auth,upload.array("images",5),async(req,res)=>{
     if(req.body.purchaseDate!==undefined)product.purchaseDate=req.body.purchaseDate||null;
     if((req.files||[]).length)product.images=[...(product.images||[]),...(req.files||[]).map(file=>publicUrl(req,"/uploads/products/"+file.filename))];
     if(product.rate<0||product.quantity<0||product.minStock<0)return res.status(400).json({message:"Stock and pricing values cannot be negative."});
+    await applyWorkflows({resource:"products",event:"record_updated",doc:product,createdBy:owner(req)});
     await product.save();
     res.json({message:"Product updated successfully.",product});
   }catch(error){res.status(400).json({message:error.message});}

@@ -831,7 +831,7 @@ export default function DynamicTable({
                         <label className="form-label">Starting value <span className="text-secondary">(optional)</span></label>
                         <input className="form-control" value={customForm.defaultValue} onChange={event=>setCustomForm(prev=>({...prev,defaultValue:event.target.value}))} placeholder="Leave blank for none"/>
                       </div>
-
+                    )}
                     {customForm.fieldType!=="reference"&&(
                       <div className="col-12">
                         <div className="form-check form-switch">
@@ -839,7 +839,7 @@ export default function DynamicTable({
                           <label className="form-check-label">People can edit this column directly</label>
                         </div>
                       </div>
-                    )}                    )}
+                    )}
                   </div>
                   <button type="button" className="btn btn-primary mt-3" onClick={addCustomField} disabled={!customForm.label.trim()}>Add column</button>
                 </div>

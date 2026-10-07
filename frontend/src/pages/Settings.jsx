@@ -91,13 +91,17 @@ export default function Settings(){
         navigation:navigationDraft.map((item,index)=>({...item,order:index})),
         appearance:configuration?.appearance||{compactMode:false,showPageHelp:true}
       });
-    }catch{}
+    }catch(saveError){
+      setConfigurationError(saveError?.response?.data?.message||"Unable to save the menu.");
+    }
   };
 
   const resetNavigation=async()=>{
     try{
       await resetConfiguration();
-    }catch{}
+    }catch(resetError){
+      setConfigurationError(resetError?.response?.data?.message||"Unable to reset the menu.");
+    }
   };
 
   const newWorkflow=()=>{

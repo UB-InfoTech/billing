@@ -170,7 +170,7 @@ export default function FormConfigurator({
     const q=search.trim().toLowerCase();
     if(!q)return draft;
     return draft.filter(field=>[
-      field.label,field.key,field.section,FIELD_TYPES.find(type=>type.value===field.fieldType)?.label
+      field.label,field.section,FIELD_TYPES.find(type=>type.value===field.fieldType)?.label
     ].some(value=>String(value||"").toLowerCase().includes(q)));
   },[draft,search]);
 
@@ -205,8 +205,8 @@ export default function FormConfigurator({
     const slug=label.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,42)||"field";
     const key=`custom_${slug}_${Date.now()}`;
     const options=newField.optionsText.split(/\r?\n|,/).map(value=>value.trim()).filter(Boolean);
-    if(newField.fieldType==="select"&&!options.length){
-      setError("Add at least one dropdown option.");
+    if(["select","multiselect"].includes(newField.fieldType)&&!options.length){
+      setError("Add at least one choice.");
       return;
     }
     const section=newField.section.trim()||"General";
@@ -221,9 +221,16 @@ export default function FormConfigurator({
       width:Number(newField.width)||6,
       order:prev.length,
       section,
-      options:newField.fieldType==="select"?options:[],
+      options:["select","multiselect"].includes(newField.fieldType)
+        ?options.map(option=>({value:option,label:option}))
+        :[],
       formula:"",
       defaultValue:"",
+      editable:true,
+      readOnly:false,
+      disabled:false,
+      dataSource:{type:"none",resource:"",valueField:"_id",labelField:"",searchField:"",multiple:newField.fieldType==="multiselect",autoFill:[]},
+      conditions:[],
     }]);
     setNewField({
       label:"",
@@ -271,6 +278,19 @@ export default function FormConfigurator({
     const current=field.formula||"";
     const joiner=current&&/[A-Za-z0-9_]$/.test(current)?" ":"";
     update(key,{formula:`${current}${joiner}${token}`});
+  };
+
+  const formulaDisplayTokens=field=>{
+    const formula=String(field?.formula||"").trim();
+    if(!formula)return [];
+    const tokens=formula.match(/[A-Za-z_][A-Za-z0-9_]*|\d+(?:\.\d+)?|[()+\-*/]/g)||[];
+    return tokens.map(token=>{
+      if(/^[A-Za-z_]/.test(token)){
+        const found=draft.find(item=>item.key===token);
+        return found?.label||"Field";
+      }
+      return {"*":"×","/":"÷","-":"−","+":"+"}[token]||token;
+    });
   };
 
   const validateFormula=(field)=>{
@@ -464,10 +484,18 @@ export default function FormConfigurator({
                         </div>
                       </div>
 
-                      {field.fieldType==="select"&&(
+                      {["select","multiselect"].includes(field.fieldType)&&(
                         <div className="col-12">
-                          <label className="form-label">Choices shown in the dropdown</label>
-                          <textarea className="form-control" rows={3} value={(field.options||[]).join("\n")} onChange={event=>update(field.key,{options:event.target.value.split(/\r?\n|,/).map(value=>value.trim()).filter(Boolean)})} placeholder="One choice per line"/>
+                          <label className="form-label">{field.fieldType==="multiselect"?"Choices people can select":"Choices shown in the dropdown"}</label>
+                          <textarea
+                            className="form-control"
+                            rows={3}
+                            value={(field.options||[]).map(option=>typeof option==="object"?option.label:option).join("\n")}
+                            onChange={event=>update(field.key,{
+                              options:event.target.value.split(/\r?\n|,/).map(value=>value.trim()).filter(Boolean).map(value=>({value,label:value}))
+                            })}
+                            placeholder="One choice per line"
+                          />
                         </div>
                       )}
 
@@ -475,18 +503,32 @@ export default function FormConfigurator({
                         <div className="form-builder-panel">
                           <div className="d-flex justify-content-between gap-3 mb-2">
                             <div>
-                              <div className="fw-semibold">Get the value from another table</div>
-                              <div className="small text-secondary">Example: choose a product and automatically use its rate or design number.</div>
+                              <div className="fw-semibold">Where should the choices come from?</div>
+                              <div className="small text-secondary">Choose an existing record so you do not have to maintain a second list.</div>
                             </div>
                           </div>
                           <div className="row g-2">
                             <div className="col-md-4">
-                              <label className="form-label">Data source</label>
-                              <select className="form-select" value={field.dataSource?.resource||"none"} onChange={event=>{
+                              <label className="form-label">Choose from</label>
+                              <select className="form-select" value={field.dataSource?.resource||"none"} disabled={field.system} onChange={event=>{
                                 const resource=event.target.value;
-                                const fields=sourceFields(resource);
-                                const first=fields[0]?.[0]||"_id";
-                                update(field.key,{dataSource:{type:resource==="none"?"none":"lookup",resource,valueField:first,labelField:first,searchField:first,autoFill:[]},fieldType:"select"});
+                                const fields=sourceFields(sourceCatalog,resource);
+                                const idField=fields.find(item=>item[0]==="_id")||fields[0]||["_id","Record"];
+                                const displayField=fields.find(item=>item[0]!=="_id")||idField;
+                                update(field.key,{
+                                  fieldType:resource==="none"
+                                    ?field.fieldType
+                                    :(["reference","select","multiselect"].includes(field.fieldType)?field.fieldType:"reference"),
+                                  dataSource:{
+                                    type:resource==="none"?"none":"lookup",
+                                    resource,
+                                    valueField:idField[0]||"_id",
+                                    labelField:displayField[0]||idField[0],
+                                    searchField:displayField[0]||idField[0],
+                                    multiple:resource!=="none"&&field.fieldType==="multiselect",
+                                    autoFill:[]
+                                  }
+                                });
                               }}>
                                 {sourceCatalog.map(source=><option key={source.value} value={source.value}>{source.label}</option>)}
                               </select>
@@ -494,18 +536,26 @@ export default function FormConfigurator({
                             {field.dataSource?.resource&&field.dataSource.resource!=="none"&&(
                               <>
                                 <div className="col-md-4">
-                                  <label className="form-label">Save this value</label>
-                                  <select className="form-select" value={field.dataSource?.valueField||"_id"} onChange={event=>update(field.key,{dataSource:{...(field.dataSource||{}),type:"lookup",valueField:event.target.value}})}>
-                                    {sourceFields(field.dataSource.resource).map(([value,label])=><option key={value} value={value}>{label}</option>)}
+                                  <label className="form-label">What should be shown?</label>
+                                  <select className="form-select" value={field.dataSource?.labelField||""} onChange={event=>update(field.key,{dataSource:{...(field.dataSource||{}),type:"lookup",labelField:event.target.value}})}>
+                                    {sourceFields(sourceCatalog,field.dataSource.resource).map(([value,label])=><option key={value} value={value}>{label}</option>)}
                                   </select>
                                 </div>
                                 <div className="col-md-4">
-                                  <label className="form-label">Show this to the user</label>
-                                  <select className="form-select" value={field.dataSource?.labelField||""} onChange={event=>update(field.key,{dataSource:{...(field.dataSource||{}),type:"lookup",labelField:event.target.value}})}>
-                                    {sourceFields(field.dataSource.resource).map(([value,label])=><option key={value} value={value}>{label}</option>)}
+                                  <label className="form-label">What should be saved?</label>
+                                  <select className="form-select" value={field.dataSource?.valueField||"_id"} onChange={event=>update(field.key,{dataSource:{...(field.dataSource||{}),type:"lookup",valueField:event.target.value}})}>
+                                    {sourceFields(sourceCatalog,field.dataSource.resource).map(([value,label])=><option key={value} value={value}>{label}</option>)}
                                   </select>
                                 </div>
                               </>
+                            )}
+                            {field.dataSource?.resource&&field.dataSource.resource!=="none"&&field.fieldType==="multiselect"&&(
+                              <div className="col-12">
+                                <div className="form-check form-switch">
+                                  <input className="form-check-input" type="checkbox" checked={Boolean(field.dataSource?.multiple)} onChange={event=>update(field.key,{dataSource:{...(field.dataSource||{}),multiple:event.target.checked}})}/>
+                                  <label className="form-check-label">Allow selecting more than one record</label>
+                                </div>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -534,7 +584,7 @@ export default function FormConfigurator({
                                     update(field.key,{dataSource:{...(field.dataSource||{}),autoFill}});
                                   }}>
                                     <option value="">Choose value</option>
-                                    {sourceFields(field.dataSource.resource).map(([value,label])=><option key={value} value={value}>{label}</option>)}
+                                    {sourceFields(sourceCatalog,field.dataSource.resource).map(([value,label])=><option key={value} value={value}>{label}</option>)}
                                   </select>
                                 </div>
                                 <div className="col-md-1">
@@ -557,17 +607,45 @@ export default function FormConfigurator({
                         <div className="col-12">
                           <div className="form-builder-calculation">
                             <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
-                              <div><label className="form-label mb-1">Automatic calculation</label><div className="small text-secondary">Build a calculation using the buttons. No coding is needed.</div></div>
-                              {field.formula&&validateFormula(field)&&<span className="badge bg-warning text-dark">{validateFormula(field)}</span>}
+                              <div>
+                                <label className="form-label mb-1">Calculate automatically</label>
+                                <div className="small text-secondary">Build the calculation by clicking fields and operators. You never need to type a formula.</div>
+                              </div>
+                              <button type="button" className="btn btn-sm btn-light border" onClick={()=>update(field.key,{formula:"",readOnly:false,editable:true})} disabled={!field.formula}>Clear</button>
                             </div>
-                            <input className="form-control mb-2" value={field.formula||""} onChange={event=>update(field.key,{formula:event.target.value,readOnly:Boolean(event.target.value)})} placeholder="Example: Quantity × Rate"/>
+
+                            <div className="border rounded bg-light p-2 mb-3 min-vh-5">
+                              {field.formula
+                                ?<div className="d-flex flex-wrap gap-2 align-items-center">{formulaDisplayTokens(field).map((token,index)=><span className="badge bg-white text-dark border" key={index}>{token}</span>)}</div>
+                                :<span className="text-secondary small">Nothing added yet. Start with a field.</span>}
+                            </div>
+
+                            <div className="small fw-semibold mb-2">Use a number from the form</div>
                             <div className="form-builder-calculator-row">
-                              {numericFields.filter(item=>item.key!==field.key).slice(0,12).map(item=><button type="button" key={item.key} className="btn btn-sm btn-light border" onClick={()=>addFormulaToken(field.key,item.key)}>{item.label}</button>)}
+                              {numericFields.filter(item=>item.key!==field.key).map(item=>(
+                                <button type="button" key={item.key} className="btn btn-sm btn-light border" onClick={()=>addFormulaToken(field.key,item.key)}>{item.label}</button>
+                              ))}
                             </div>
-                            <div className="form-builder-calculator-row mt-2">
-                              {["+","-","*","/","%","(",")"].map(operator=><button type="button" key={operator} className="btn btn-sm btn-outline-secondary" onClick={()=>addFormulaToken(field.key,operator)}>{operator==="*"?"×":operator==="/"?"÷":operator}</button>)}
+
+                            <div className="small fw-semibold mt-3 mb-2">Operators</div>
+                            <div className="form-builder-calculator-row">
+                              {[["","+"]],["-","−"],["*","×"],["/","÷"],["(","("],[")",")"]].map(([value,label])=>(
+                                <button type="button" key={value+label} className="btn btn-sm btn-outline-secondary" onClick={()=>addFormulaToken(field.key,value)}>{label}</button>
+                              ))}
                             </div>
-                            <div className="form-text">The calculated field becomes read only automatically.</div>
+
+                            <div className="small fw-semibold mt-3 mb-2">Add a fixed number</div>
+                            <div className="input-group input-group-sm" style={{maxWidth:260}}>
+                              <input className="form-control" type="number" placeholder="Example: 100" id={`calc-constant-${field.key}`}/>
+                              <button type="button" className="btn btn-outline-secondary" onClick={()=>{
+                                const input=document.getElementById(`calc-constant-${field.key}`);
+                                if(input?.value&&Number.isFinite(Number(input.value)))addFormulaToken(field.key,input.value);
+                                if(input)input.value="";
+                              }}>Add</button>
+                            </div>
+
+                            {field.formula&&validateFormula(field)&&<div className="alert alert-warning py-2 mt-3 mb-0">{validateFormula(field)}</div>}
+                            <div className="form-text">Automatic calculations are always read only.</div>
                           </div>
                         </div>
                       )}
@@ -583,7 +661,7 @@ export default function FormConfigurator({
                                 <select className="form-select" value={condition.action} onChange={event=>{
                                   const conditions=[...(field.conditions||[])];conditions[conditionIndex]={...condition,action:event.target.value};update(field.key,{conditions});
                                 }}>
-                                  <option value="show">Show</option><option value="hide">Hide</option><option value="require">Require</option><option value="readonly">Read only</option>
+                                  <option value="show">Show</option><option value="hide">Hide</option><option value="require">Require</option><option value="readonly">Read only</option><option value="enable">Enable</option><option value="disable">Disable</option>
                                 </select>
                               </div>
                               <div className="col-md-3">

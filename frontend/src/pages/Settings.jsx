@@ -460,16 +460,9 @@ export default function Settings(){
                             <select className="form-select" value={action.type} onChange={event=>updateAction(index,{type:event.target.value})}>
                               <option value="set_value">Set a field</option>
                               <option value="change_status">Change status</option>
-                              <option value="show_message">Show a message</option>
                             </select>
                           </div>
-                          {action.type==="show_message" ? (
-                            <div className="col-md-8">
-                              <label className="form-label">Message</label>
-                              <input className="form-control" value={action.message||""} onChange={event=>updateAction(index,{message:event.target.value})} placeholder="Example: Please collect the pending payment."/>
-                            </div>
-                          ) : (
-                            <>
+                          <>
                               <div className="col-md-4">
                                 <label className="form-label">Field</label>
                                 <select className="form-select" value={action.fieldKey||""} onChange={event=>updateAction(index,{fieldKey:event.target.value})}>
@@ -492,8 +485,7 @@ export default function Settings(){
                                   <input className="form-control" value={action.value??""} onChange={event=>updateAction(index,{value:event.target.value})} placeholder="Enter the value"/>
                                 )}
                               </div>
-                            </>
-                          )}
+                          </>
                           <div className="col-md-1">
                             <button type="button" className="btn btn-outline-danger w-100" onClick={()=>removeAction(index)} aria-label="Remove action"><i className="bi bi-trash"></i></button>
                           </div>

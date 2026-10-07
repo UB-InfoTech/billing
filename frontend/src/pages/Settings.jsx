@@ -462,8 +462,7 @@ export default function Settings(){
                               <option value="change_status">Change status</option>
                             </select>
                           </div>
-                          <>
-                              <div className="col-md-4">
+                          <div className="col-md-4">
                                 <label className="form-label">Field</label>
                                 <select className="form-select" value={action.fieldKey||""} onChange={event=>updateAction(index,{fieldKey:event.target.value})}>
                                   <option value="">Choose a field</option>
@@ -485,7 +484,6 @@ export default function Settings(){
                                   <input className="form-control" value={action.value??""} onChange={event=>updateAction(index,{value:event.target.value})} placeholder="Enter the value"/>
                                 )}
                               </div>
-                          </>
                           <div className="col-md-1">
                             <button type="button" className="btn btn-outline-danger w-100" onClick={()=>removeAction(index)} aria-label="Remove action"><i className="bi bi-trash"></i></button>
                           </div>

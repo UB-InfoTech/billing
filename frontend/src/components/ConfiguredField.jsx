@@ -26,6 +26,7 @@ export default function ConfiguredField({
   const label=field.label||field.key;
   const effectiveReadOnly=readOnly||field.readOnly||field.editable===false;
   const effectiveRequired=field.required===true||required;
+  const effectiveHelp=help??field.helpText;
   const effectiveDisabled=disabled||Boolean(field.disabled);
 
   const handleValue=next=>{
@@ -44,7 +45,10 @@ export default function ConfiguredField({
     placeholder:placeholder||label,
     disabled:effectiveDisabled,
     required:effectiveRequired,
-    readOnly:effectiveReadOnly
+    readOnly:effectiveReadOnly,
+    min:field.validation?.min??undefined,
+    max:field.validation?.max??undefined,
+    pattern:field.validation?.pattern||undefined
   };
 
   let control=null;
@@ -127,7 +131,7 @@ export default function ConfiguredField({
         {effectiveReadOnly&&<span className="badge bg-light text-secondary border ms-2">Read only</span>}
       </label>
       {control}
-      {help&&<div className="form-text">{help}</div>}
+      {effectiveHelp&&<div className="form-text">{effectiveHelp}</div>}
       {field.dataSource?.type==="lookup"&&<div className="form-text">Choices come from existing records.</div>}
       {suffix}
     </div>

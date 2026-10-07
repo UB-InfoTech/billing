@@ -1,231 +1,214 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Tax Invoice - <%= orderNumber %></title>
-    <style>
-        @page { size: A4; margin: 8mm; }
-        * { box-sizing: border-box; }
-        html, body { margin: 0; padding: 0; }
-        body {
-            width: 100%;
-            font-family: Arial, Helvetica, sans-serif;
-            color: #111827;
-            background: #fff;
-            font-size: 11px;
-            line-height: 1.35;
-        }
-        .invoice {
-            width: 100%;
-            max-width: 194mm;
-            margin: 0 auto;
-            border: 1.5px solid #111827;
-        }
-        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        th, td { border: 1px solid #111827; padding: 5px 6px; vertical-align: top; }
-        th { font-weight: 800; }
-        .no-border { border: 0 !important; }
-        .header { text-align: center; padding: 8px 10px; }
-        .header-title { font-size: 12px; font-weight: 800; }
-        .company-name { font-size: 22px; font-weight: 900; margin: 2px 0; letter-spacing: .15px; }
-        .gst { font-size: 12px; font-weight: 800; }
-        .contact-row { display: flex; justify-content: space-between; gap: 12px; margin-top: 7px; font-size: 10px; }
-        .address { flex: 1; text-align: center; }
-        .doc-title { background: #f3f4f6; text-align: center; font-size: 13px; font-weight: 900; padding: 6px; letter-spacing: .6px; }
-        .section-label { background: #f3f4f6; font-weight: 800; text-transform: uppercase; }
-        .label { color: #374151; font-weight: 700; }
-        .value { font-weight: 800; }
-        .small { font-size: 10px; }
-        .center { text-align: center; }
-        .right { text-align: right; }
-        .items th { background: #f3f4f6; text-align: center; font-size: 9px; vertical-align: middle; }
-        .items td { height: 27px; font-size: 10px; }
-        .items .desc { text-align: left; }
-        .summary td { font-size: 10px; }
-        .words { text-align: center; font-weight: 700; min-height: 40px; }
-        .bank { line-height: 1.55; }
-        .terms { line-height: 1.5; }
-        .total { font-size: 12px; font-weight: 900; }
-        .grand { font-size: 14px; font-weight: 900; }
-        .watermark { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; opacity: .035; font-size: 58px; font-weight: 900; transform: rotate(-25deg); }
-        .web-credit { padding: 4px 6px; font-size: 8px; color: #6b7280; }
-        .nowrap { white-space: nowrap; }
-        @media print {
-            body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-            .invoice { max-width: none; }
-        }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= invoiceConfig.invoiceTitle %> - <%= orderNumber %></title>
+  <style>
+    @page { size: <%= invoiceConfig.pageSize %>; margin: 8mm; }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0}
+    body{width:100%;font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff;font-size:11px;line-height:1.35}
+    .invoice{width:100%;max-width:194mm;margin:0 auto;border:1.5px solid <%= invoiceConfig.accentColor %>}
+    table{width:100%;border-collapse:collapse;table-layout:fixed}
+    th,td{border:1px solid <%= invoiceConfig.accentColor %>;padding:5px 6px;vertical-align:top}
+    th{font-weight:800}
+    .header{text-align:center;padding:8px 10px}
+    .header-title{font-size:12px;font-weight:800}
+    .company-name{font-size:22px;font-weight:900;margin:2px 0;letter-spacing:.15px}
+    .gst{font-size:12px;font-weight:800}
+    .contact-row{display:flex;justify-content:space-between;gap:12px;margin-top:7px;font-size:10px}
+    .address{flex:1;text-align:center}
+    .doc-title{background:#f3f4f6;text-align:center;font-size:13px;font-weight:900;padding:6px;letter-spacing:.6px}
+    .section-label{background:#f3f4f6;font-weight:800;text-transform:uppercase}
+    .label{color:#374151;font-weight:700}
+    .value{font-weight:800}
+    .small{font-size:10px}
+    .center{text-align:center}
+    .right{text-align:right}
+    .items th{background:#f3f4f6;text-align:center;font-size:9px;vertical-align:middle}
+    .items td{height:27px;font-size:10px}
+    .items .desc{text-align:left}
+    .summary td{font-size:10px}
+    .words{text-align:center;font-weight:700;min-height:40px}
+    .bank{line-height:1.55}
+    .terms{line-height:1.5}
+    .total{font-size:12px;font-weight:900}
+    .grand{font-size:14px;font-weight:900}
+    .web-credit{padding:4px 6px;font-size:8px;color:#6b7280}
+    .nowrap{white-space:nowrap}
+    @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.invoice{max-width:none}}
+  </style>
 </head>
 <body>
+<%
+  const defaults=[
+    {key:"sr",label:"Sr",visible:true,order:0,width:5},
+    {key:"description",label:"Desc.",visible:true,order:1,width:17},
+    {key:"designNumber",label:"Design No.",visible:true,order:2,width:13},
+    {key:"hsnCode",label:"HSN",visible:true,order:3,width:9},
+    {key:"quantity",label:"Qty",visible:true,order:4,width:8},
+    {key:"qtyUnit",label:"Unit",visible:true,order:5,width:5},
+    {key:"cut",label:"Cut",visible:true,order:6,width:7},
+    {key:"MTR",label:"MTR",visible:true,order:7,width:7},
+    {key:"unitPrice",label:"Rate",visible:true,order:8,width:8},
+    {key:"amount",label:"Amount",visible:true,order:9,width:8},
+    {key:"discount",label:"Disc.",visible:true,order:10,width:7},
+    {key:"taxable",label:"Taxable",visible:true,order:11,width:12}
+  ];
+  const itemColumns=(invoiceConfig.itemColumns||defaults).slice().sort((a,b)=>(a.order||0)-(b.order||0)).filter(column=>column.visible!==false);
+  const itemCellClass=key=>["sr","designNumber","hsnCode","quantity","qtyUnit","cut","MTR"].includes(key)?"center":["unitPrice","amount","discount","taxable"].includes(key)?"right":"desc";
+%>
 <div class="invoice">
-    <div class="header">
-        <div class="header-title"><%= profileHeaderTitle %></div>
-        <div class="company-name"><%= profileCompanyName %></div>
-        <div class="gst">GSTIN: <%= profileGstNumber %></div>
-        <div class="contact-row">
-            <span class="nowrap">+91-<%= profilePhoneNumber1 %></span>
-            <span class="address"><%= profileCompanyAddress %></span>
-            <span class="nowrap">+91-<%= profilePhoneNumber2 %></span>
-        </div>
-    </div>
 
-    <div class="doc-title"># TAX INVOICE #</div>
+  <div class="header">
+    <% if(invoiceConfig.header.showHeaderTitle){ %><div class="header-title"><%= profileHeaderTitle %></div><% } %>
+    <% if(invoiceConfig.header.showCompanyName){ %><div class="company-name"><%= profileCompanyName %></div><% } %>
+    <% if(invoiceConfig.header.showGST){ %><div class="gst">GSTIN: <%= profileGstNumber %></div><% } %>
+    <% if(invoiceConfig.header.showPhones || invoiceConfig.header.showAddress){ %>
+      <div class="contact-row">
+        <% if(invoiceConfig.header.showPhones){ %><span class="nowrap">+91-<%= profilePhoneNumber1 %></span><% } else { %><span></span><% } %>
+        <% if(invoiceConfig.header.showAddress){ %><span class="address"><%= profileCompanyAddress %></span><% } %>
+        <% if(invoiceConfig.header.showPhones){ %><span class="nowrap">+91-<%= profilePhoneNumber2 %></span><% } else { %><span></span><% } %>
+      </div>
+    <% } %>
+  </div>
 
-    <table>
-        <tr>
-            <td colspan="5" class="section-label">Receiver's Details</td>
-            <td colspan="7" class="section-label">Invoice Details</td>
-        </tr>
-        <tr>
-            <td colspan="5">
-                <span class="label">Name:</span> <span class="value"><%= clientCompanyName %></span><br>
-                <span class="label">Address:</span> <%= clientAddress %><br>
-                <span class="label">Mobile:</span> +91 <%= clientPhoneNumber %><br>
-                <span class="label">State:</span> <%= clientState %><br>
-                <span class="label">GSTIN:</span> <%= clientGstNumber %>
-            </td>
-            <td colspan="7">
-                <span class="label">Challan No.:</span> <%= clientChallanNumber %><br>
-                <span class="label">Invoice No.:</span> <%= orderNumber %><br>
-                <span class="label">Invoice Date:</span> <%= createdAt %><br>
-                <span class="label">Due Date:</span> <%= dueDate %><br>
-                <span class="label">Payment Terms:</span> Net <%= paymentTerm %> Days<br>
-                <span class="label">E-Way Bill:</span> <%= ewayBillNo %>
-            </td>
-        </tr>
-    </table>
+  <div class="doc-title"># <%= invoiceConfig.invoiceTitle %> #</div>
 
-    <table class="items">
-        <colgroup>
-            <col style="width:5%">
-            <col style="width:17%">
-            <col style="width:13%">
-            <col style="width:9%">
-            <col style="width:8%">
-            <col style="width:5%">
-            <col style="width:7%">
-            <col style="width:7%">
-            <col style="width:8%">
-            <col style="width:8%">
-            <col style="width:7%">
-            <col style="width:12%">
-        </colgroup>
-        <thead>
-            <tr>
-                <th>Sr</th>
-                <th>Desc.</th>
-                <th>Design No.</th>
-                <th>HSN</th>
-                <th>Qty</th>
-                <th>Unit</th>
-                <th>Cut</th>
-                <th>MTR</th>
-                <th>Rate</th>
-                <th>Amount</th>
-                <th>Disc.</th>
-                <th>Taxable</th>
-            </tr>
-        </thead>
-        <tbody>
-        <% for (let i=0; i < subOrders.length; i++) { 
-            const unit = subOrders[i].qtyUnit || "PCS";
-            const qty = unit === "MTR" ? (subOrders[i].MTR || 0) : (subOrders[i].quantity || 0);
-            const amount = Number(qty || 0) * Number(subOrders[i].unitPrice || 0);
-        %>
-            <tr>
-                <td class="center"><%= i + 1 %></td>
-                <td class="desc"><%= subOrders[i].orderName || "" %></td>
-                <td class="center"><%= subOrders[i].designNumber || "" %></td>
-                <td class="center"><%= subOrders[i].hsnCode || "" %></td>
-                <td class="center"><%= subOrders[i].quantity || 0 %></td>
-                <td class="center"><%= unit %></td>
-                <td class="center"><%= subOrders[i].cut || 0 %></td>
-                <td class="center"><%= subOrders[i].MTR || 0 %></td>
-                <td class="right"><%= Number(subOrders[i].unitPrice || 0).toFixed(2) %></td>
-                <td class="right"><%= amount.toFixed(2) %></td>
-                <td class="right"><%= Number(orderDisRate || 0).toFixed(2) %>%</td>
-                <td class="right"><%= Number((amount * (1 - Number(orderDisRate || 0) / 100)) || 0).toFixed(2) %></td>
-            </tr>
-        <% } %>
-        <% for (let i=subOrders.length; i<10; i++) { %>
-            <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-        <% } %>
-        </tbody>
-    </table>
+  <table>
+    <tr>
+      <td colspan="5" class="section-label">Receiver's Details</td>
+      <td colspan="7" class="section-label">Invoice Details</td>
+    </tr>
+    <tr>
+      <td colspan="5">
+        <% if(invoiceConfig.receiver.showName){ %><span class="label">Name:</span> <span class="value"><%= clientCompanyName %></span><br><% } %>
+        <% if(invoiceConfig.receiver.showAddress){ %><span class="label">Address:</span> <%= clientAddress %><br><% } %>
+        <% if(invoiceConfig.receiver.showMobile){ %><span class="label">Mobile:</span> +91 <%= clientPhoneNumber %><br><% } %>
+        <% if(invoiceConfig.receiver.showState){ %><span class="label">State:</span> <%= clientState %><br><% } %>
+        <% if(invoiceConfig.receiver.showGSTIN){ %><span class="label">GSTIN:</span> <%= clientGstNumber %><% } %>
+      </td>
+      <td colspan="7">
+        <% if(invoiceConfig.invoiceDetails.showChallan){ %><span class="label">Challan No.:</span> <%= clientChallanNumber %><br><% } %>
+        <% if(invoiceConfig.invoiceDetails.showInvoiceNo){ %><span class="label">Invoice No.:</span> <%= orderNumber %><br><% } %>
+        <% if(invoiceConfig.invoiceDetails.showInvoiceDate){ %><span class="label">Invoice Date:</span> <%= createdAt %><br><% } %>
+        <% if(invoiceConfig.invoiceDetails.showDueDate){ %><span class="label">Due Date:</span> <%= dueDate %><br><% } %>
+        <% if(invoiceConfig.invoiceDetails.showPaymentTerms){ %><span class="label">Payment Terms:</span> Net <%= paymentTerm %> Days<br><% } %>
+        <% if(invoiceConfig.invoiceDetails.showEwayBill){ %><span class="label">E-Way Bill:</span> <%= ewayBillNo %><% } %>
+      </td>
+    </tr>
+  </table>
 
-    <table class="summary">
+  <table class="items">
+    <colgroup>
+      <% itemColumns.forEach(column=>{ %><col style="width:<%= Number(column.width||8) %>%"><% }) %>
+    </colgroup>
+    <thead>
+      <tr>
+        <% itemColumns.forEach(column=>{ %><th><%= column.label %></th><% }) %>
+      </tr>
+    </thead>
+    <tbody>
+      <% for(let i=0;i<subOrders.length;i++){
+        const item=subOrders[i];
+        const unit=item.qtyUnit||"PCS";
+        const qty=unit==="MTR"?Number(item.MTR||0):Number(item.quantity||0);
+        const amount=Number(qty||0)*Number(item.unitPrice||0);
+        const taxable=amount*(1-Number(orderDisRate||0)/100);
+      %>
         <tr>
-            <td colspan="9" class="words">
-                <div>Amount (in words)</div>
-                <div><%= orderFinalRevenueInWords %></div>
-            </td>
-            <td colspan="2"><b>Total</b></td>
-            <td class="right"><b><%= orderSubTotal %></b></td>
+          <% itemColumns.forEach(column=>{
+            let value="";
+            switch(column.key){
+              case "sr": value=i+1; break;
+              case "description": value=item.orderName||""; break;
+              case "designNumber": value=item.designNumber||""; break;
+              case "hsnCode": value=item.hsnCode||""; break;
+              case "quantity": value=item.quantity||0; break;
+              case "qtyUnit": value=unit; break;
+              case "cut": value=item.cut||0; break;
+              case "MTR": value=item.MTR||0; break;
+              case "unitPrice": value=Number(item.unitPrice||0).toFixed(2); break;
+              case "amount": value=Number(amount||0).toFixed(2); break;
+              case "discount": value=Number(orderDisRate||0).toFixed(2)+"%"; break;
+              case "taxable": value=Number(taxable||0).toFixed(2); break;
+            }
+          %><td class="<%= itemCellClass(column.key) %>"><%= value %></td><% }) %>
         </tr>
-        <tr>
-            <td colspan="9" rowspan="2"></td>
-            <td colspan="2">Discount (<%= orderDisRate %>%)</td>
-            <td class="right"><%= orderDiscountAmount %></td>
-        </tr>
-        <tr>
-            <td colspan="2" class="total">Taxable Value</td>
-            <td class="right total"><%= orderTotalCost %></td>
-        </tr>
-        <tr>
-            <td colspan="9" rowspan="6" class="bank">
-                <b>Supplier & Bank Details</b><br>
-                GSTIN: <%= profileGstNumber %><br>
-                PAN: <%= profilePanNumber %><br>
-                Bank Name: <%= profileBankName %><br>
-                Account No.: <%= profileAccountNo %><br>
-                Branch Name: <%= profileBranchName %><br>
-                IFSC: <%= profileIfsc %>
-            </td>
-            <td colspan="2">CGST (<%= orderTax %>%)</td>
-            <td class="right"><%= orderTaxAmount %></td>
-        </tr>
-        <tr>
-            <td colspan="2">SGST (<%= orderTax %>%)</td>
-            <td class="right"><%= orderTaxAmount %></td>
-        </tr>
-        <tr>
-            <td colspan="2">IGST (<%= orderIgstTax %>%)</td>
-            <td class="right"><%= orderIgstTaxAmount %></td>
-        </tr>
-        <tr>
-            <td colspan="2">Net Amount</td>
-            <td class="right"><%= orderFinalRevenue %></td>
-        </tr>
-        <tr>
-            <td colspan="2">Round Off (+/-)</td>
-            <td class="right"><%= orderFinalRevenueRoundOff %></td>
-        </tr>
-        <tr>
-            <td colspan="2" class="grand">Invoice Total</td>
-            <td class="right grand"><%= orderFinalRevenueAfterRoundOff %></td>
-        </tr>
-    </table>
+      <% } %>
+      <% for(let i=subOrders.length;i<10;i++){ %>
+        <tr><% itemColumns.forEach(()=>{ %><td>&nbsp;</td><% }) %></tr>
+      <% } %>
+      <% if(!itemColumns.length){ %><tr><td>No printable item columns are selected.</td></tr><% } %>
+    </tbody>
+  </table>
 
-    <table>
-        <tr>
-            <td colspan="9" class="terms">
-                <b>TERMS &amp; CONDITIONS</b><br>
-                SUBJECT TO SURAT JURISDICTION E.&amp;O.E.<br>
-                Goods once sold will not be taken back or replaced.<br>
-                Any complaint of goods should be made within 7 days.<br>
-                Interest @ 4% per month will be charged on the bill.<br>
-                Receiver's Sign. ______________________________
-            </td>
-            <td colspan="3" class="center">
-                For, <%= profileCompanyName %><br><br><br>
-                Authorised Signatory<br>
-                ______________________________
-            </td>
-        </tr>
-    </table>
+  <table class="summary">
+    <tr>
+      <td colspan="9" class="words">
+        <div>Amount (in words)</div>
+        <div><%= orderFinalRevenueInWords %></div>
+      </td>
+      <td colspan="2"><b>Total</b></td>
+      <td class="right"><b><%= orderSubTotal %></b></td>
+    </tr>
 
-    <div class="web-credit">Web-Application by Bhanderi Info Tech (+91-91091-95695)</div>
+    <% if(invoiceConfig.summary.showDiscount){ %>
+    <tr><td colspan="9" rowspan="2"></td><td colspan="2">Discount (<%= orderDisRate %>%)</td><td class="right"><%= orderDiscountAmount %></td></tr>
+    <% } %>
+    <tr><td colspan="2" class="total">Taxable Value</td><td class="right total"><%= orderTotalCost %></td></tr>
+
+    <tr>
+      <% if(invoiceConfig.summary.showBankDetails){ %>
+      <td colspan="9" rowspan="6" class="bank">
+        <b>Supplier &amp; Bank Details</b><br>
+        GSTIN: <%= profileGstNumber %><br>
+        PAN: <%= profilePanNumber %><br>
+        Bank Name: <%= profileBankName %><br>
+        Account No.: <%= profileAccountNo %><br>
+        Branch Name: <%= profileBranchName %><br>
+        IFSC: <%= profileIfsc %>
+      </td>
+      <% } %>
+      <% if(invoiceConfig.summary.showTax){ %><td colspan="2">CGST (<%= orderTax %>%)</td><td class="right"><%= orderTaxAmount %></td><% } %>
+    </tr>
+
+    <% if(invoiceConfig.summary.showTax){ %>
+    <tr><% if(invoiceConfig.summary.showBankDetails){ %><% } %><td colspan="2">SGST (<%= orderTax %>%)</td><td class="right"><%= orderTaxAmount %></td></tr>
+    <tr><td colspan="2">IGST (<%= orderIgstTax %>%)</td><td class="right"><%= orderIgstTaxAmount %></td></tr>
+    <% } %>
+
+    <tr><td colspan="2">Net Amount</td><td class="right"><%= orderFinalRevenue %></td></tr>
+
+    <% if(invoiceConfig.summary.showRoundOff){ %>
+    <tr><td colspan="2">Round Off (+/-)</td><td class="right"><%= orderFinalRevenueRoundOff %></td></tr>
+    <% } %>
+
+    <tr><td colspan="2" class="grand">Invoice Total</td><td class="right grand"><%= orderFinalRevenueAfterRoundOff %></td></tr>
+  </table>
+
+  <% if(invoiceConfig.summary.showTerms){ %>
+  <table>
+    <tr>
+      <td colspan="9" class="terms">
+        <b>TERMS &amp; CONDITIONS</b><br>
+        SUBJECT TO SURAT JURISDICTION E.&amp;O.E.<br>
+        Goods once sold will not be taken back or replaced.<br>
+        Any complaint of goods should be made within 7 days.<br>
+        Interest @ 4% per month will be charged on the bill.<br>
+        Receiver's Sign. ______________________________
+      </td>
+      <td colspan="3" class="center">
+        For, <%= profileCompanyName %><br><br><br>
+        Authorised Signatory<br>
+        ______________________________
+      </td>
+    </tr>
+  </table>
+  <% } %>
+
+  <% if(invoiceConfig.summary.showWebCredit){ %><div class="web-credit">Web-Application by Bhanderi Info Tech (+91-91091-95695)</div><% } %>
 </div>
 </body>
 </html>

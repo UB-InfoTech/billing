@@ -30,6 +30,7 @@ export const mergeFormFields=(baseFields,savedFields)=>{
     visible:field.visible!==false,
     required:Boolean(field.required),
     locked:Boolean(field.locked),
+    system:Boolean(field.system),
     custom:Boolean(field.custom),
     fieldType:field.fieldType||"text",
     width:Math.min(12,Math.max(1,Number(field.width)||6)),
@@ -77,7 +78,8 @@ export const mergeFormFields=(baseFields,savedFields)=>{
       dataSource:savedField.dataSource||field.dataSource,
       conditions:Array.isArray(savedField.conditions)?savedField.conditions:field.conditions,
       validation:savedField.validation||field.validation,
-      custom:false
+      custom:false,
+      system:Boolean(field.system)
     };
   });
 

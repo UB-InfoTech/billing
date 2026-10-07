@@ -92,6 +92,8 @@ app.use("/api/reports",require("./routes/reportRoutes"));
 app.use("/api/table-config",require("./routes/tableConfigRoutes"));
 app.use("/api/form-config",require("./routes/formConfigRoutes"));
 app.use("/api/no-code-data",require("./routes/noCodeDataRoutes"));
+app.use("/api/software-config",require("./routes/softwareConfigRoutes"));
+app.use("/api/workflows",require("./routes/workflowRoutes"));
 
 const errorHandler=(err,req,res,next)=>{
   console.error("API error:",err);

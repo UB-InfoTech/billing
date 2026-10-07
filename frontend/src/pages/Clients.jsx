@@ -10,7 +10,7 @@ import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
 
 const CLIENT_FORM_FIELDS=[
-  {key:"name",label:"Client Name",fieldType:"text",width:12,section:"basic",order:0},
+  {key:"name",label:"Client Name",fieldType:"text",width:12,section:"basic",order:0,system:true},
   {key:"email",label:"Email",fieldType:"text",width:6,section:"basic",order:1},
   {key:"phone",label:"Phone",fieldType:"text",width:6,section:"basic",order:2},
   {key:"address",label:"Address",fieldType:"textarea",width:6,section:"address",required:true,order:3},
@@ -18,12 +18,12 @@ const CLIENT_FORM_FIELDS=[
   {key:"stateCode",label:"State Code",fieldType:"text",width:3,section:"address",required:true,order:5},
   {key:"state",label:"State",fieldType:"select",width:6,section:"address",required:true,order:6},
   {key:"city",label:"City",fieldType:"select",width:6,section:"address",order:7},
-  {key:"gstNumber",label:"GST Number",fieldType:"text",width:6,section:"business",required:true,order:8},
-  {key:"companyName",label:"Company Name",fieldType:"text",width:6,section:"business",required:true,order:9},
+  {key:"gstNumber",label:"GST Number",fieldType:"text",width:6,section:"business",required:true,order:8,system:true},
+  {key:"companyName",label:"Company Name",fieldType:"text",width:6,section:"business",required:true,order:9,system:true},
   {key:"businessType",label:"Business Type",fieldType:"select",width:6,section:"business",order:10,options:["Retail","Wholesale","Manufacturer","Trader","Supplier"]},
-  {key:"paymentTerms",label:"Payment Terms",fieldType:"select",width:6,section:"business",required:true,order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Advance Payment"}]},
-  {key:"discountRate",label:"Discount Rate",fieldType:"number",width:4,section:"additional",order:12},
-  {key:"accountStatus",label:"Account Status",fieldType:"select",width:8,section:"additional",order:13,options:["Active","Inactive"]},
+  {key:"paymentTerms",label:"Payment Terms",fieldType:"select",width:6,section:"business",required:true,order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Advance Payment"}],system:true},
+  {key:"discountRate",label:"Discount Rate",fieldType:"number",width:4,section:"additional",order:12,system:true},
+  {key:"accountStatus",label:"Account Status",fieldType:"select",width:8,section:"additional",order:13,options:["Active","Inactive"],system:true},
   {key:"notes",label:"Notes",fieldType:"textarea",width:12,section:"additional",order:14}
 ];
 
@@ -689,7 +689,7 @@ function Clients() {
                                     if(!state.visible)return null;
                                     const source=field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[];
                                     const common={
-                                      field:{...field,required:state.required,readOnly:state.readOnly},
+                                      field:{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled},
                                       value:clientValue(field),
                                       onChange:value=>updateClientField(field,value,null),
                                       onRecordChange:record=>updateClientField(field,record?.[field.dataSource?.valueField||"_id"]??"",record),

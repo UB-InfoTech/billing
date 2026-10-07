@@ -14,7 +14,7 @@ import DynamicTable from "../components/DynamicTable";
 import FormConfigurator from "../components/FormConfigurator";
 import ConfiguredField from "../components/ConfiguredField";
 import ArithmeticInput from "../components/ArithmeticInput";
-import {useFormConfiguration,applyFormulas,hydrateConfiguredValues,applyAutoFill,getFieldState,syncConfiguredCustomFields} from "../hooks/useFormConfiguration";
+import {useFormConfiguration,applyFormulas,hydrateConfiguredValues,applyAutoFill,getFieldState,syncConfiguredCustomFields,buildConfiguredDefaults} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
 import Report from '../components/Report';
@@ -70,6 +70,8 @@ function Order2() {
     },[searchParams,setSearchParams]);
     const orderFormConfig=useFormConfiguration("orders.form",ORDER_FORM_FIELDS);
     const orderItemConfig=useFormConfiguration("orders.items",ORDER_ITEM_FIELDS);
+    const emptyOrderItem=()=>buildConfiguredDefaults({designNumber:"",orderName:"",productId:null,hsnCode:0,qtyUnit:"PCS",quantity:0,cut:0,MTR:0,unitPrice:0,shortPcs:0,customFields:{}},orderItemConfig.fields);
+    const emptyOrder=()=>buildConfiguredDefaults({orderDate:new Date(),orderNumber:OrderBillNo,lrNo:"",challanNumber:"",Address:"",State:"",City:"",pinCode:"",stateCode:"",clientId:"",gstNumber:"",companyName:"",subOrders:[],status:"Pending",paymentTerms:"30",taxPercentage:5,discountRate:0,note:"",customFields:{}},orderFormConfig.fields);
     const linkedOrderSources=useMemo(()=>Array.from(new Set([
         ...orderFormConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean),
         ...orderItemConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean)
@@ -688,8 +690,8 @@ function Order2() {
 
     const handleEdit = (order) => {
         setEditingOrder(order);
-        const configuredOrder=hydrateConfiguredValues(order,orderFormConfig.fields);
-        const configuredItems=(order.subOrders||[]).map(item=>hydrateConfiguredValues(item,orderItemConfig.fields));
+        const configuredOrder=buildConfiguredDefaults(hydrateConfiguredValues(order,orderFormConfig.fields),orderFormConfig.fields);
+        const configuredItems=(order.subOrders||[]).map(item=>buildConfiguredDefaults(hydrateConfiguredValues(item,orderItemConfig.fields),orderItemConfig.fields));
         setSubOrders(configuredItems.map(item=>({...item,customFields:{...(item.customFields||{})}})));
         setFormData({...configuredOrder,customFields:{...(order.customFields||{})}});
         setShowModal(true);
@@ -1178,32 +1180,12 @@ const styles = {
                 </div>
 
                 <button className="btn btn-primary d-inline-flex align-items-center gap-2 shadow-sm" onClick={() => {
-                    const newSubOrders = [
-                        { designNumber: "", orderName: "", productId: null, hsnCode: 0, qtyUnit: "PCS", quantity: 0, cut: 0, MTR: 0, unitPrice: 0, shortPcs: 0 }
-                    ];
+                    const newSubOrders=[emptyOrderItem()];
+                    const nextOrder={...emptyOrder(),subOrders:newSubOrders};
                     setShowModal(true);
                     setEditingOrder(null);
                     setSubOrders(newSubOrders);
-                    setFormData({
-                        orderDate: new Date(),
-                        orderNumber: OrderBillNo,
-                        lrNo: "",
-                        challanNumber: "",
-                        Address: "",
-                        State: "",
-                        City: "",
-                        pinCode: "",
-                        stateCode: "",
-                        clientId: "",
-                        gstNumber: "",
-                        companyName: "",
-                        subOrders: newSubOrders,
-                        status: "Pending",
-                        paymentTerms: "30",
-                        taxPercentage: 5,
-                        discountRate: 0,
-                        note: "",
-                    });
+                    setFormData(nextOrder);
                 }}>
                     <i className="bi bi-plus-lg"></i> Add New Bill
                 </button>

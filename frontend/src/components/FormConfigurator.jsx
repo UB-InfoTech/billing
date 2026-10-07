@@ -156,6 +156,12 @@ export default function FormConfigurator({
     return()=>{cancelled=true;};
   },[open]);
 
+  const normalizePreviewOptions=options=>(options||[]).map(option=>(
+    option&&typeof option==="object"
+      ?{value:String(option.value??option.label??""),label:String(option.label??option.value??"")}
+      :{value:String(option??""),label:String(option??"")}
+  )).filter(option=>option.value);
+
   const shownCount=draft.filter(field=>field.visible!==false).length;
   const sections=useMemo(
     ()=>Array.from(new Set(draft.map(field=>field.section||"General").filter(Boolean))),
@@ -382,6 +388,42 @@ export default function FormConfigurator({
             </section>
           )}
 
+          <div className="card border-0 shadow-sm bg-white mb-3">
+            <div className="card-header bg-white d-flex align-items-center justify-content-between">
+              <div>
+                <div className="fw-semibold">Live preview</div>
+                <div className="small text-secondary">This is how the form will look when people use it.</div>
+              </div>
+              <span className="badge bg-light text-dark border">{shownCount} visible</span>
+            </div>
+            <div className="card-body">
+              <div className="row g-3">
+                {draft.filter(field=>field.visible!==false).map(field=>{
+                  const type=FIELD_TYPES.find(item=>item.value===field.fieldType);
+                  return (
+                    <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
+                      <label className="form-label fw-semibold">{field.label}{field.required&&<span className="text-danger ms-1">*</span>}</label>
+                      {["select","reference"].includes(field.fieldType)||field.dataSource?.resource ? (
+                        <select className="form-select" disabled>
+                          <option>{field.dataSource?.resource?"Select "+field.label:"Choose an option"}</option>
+                          {normalizePreviewOptions(field.options).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
+                        </select>
+                      ) : field.fieldType==="textarea" ? (
+                        <textarea className="form-control" rows={2} placeholder={field.formula?"Automatic calculation":""} readOnly />
+                      ) : field.fieldType==="boolean" ? (
+                        <div className="form-check form-switch pt-2"><input className="form-check-input" type="checkbox" disabled /></div>
+                      ) : (
+                        <input className="form-control" type={field.fieldType==="date"?"date":field.fieldType==="datetime"?"datetime-local":field.fieldType==="email"?"email":field.fieldType==="url"?"url":field.fieldType==="number"||field.fieldType==="currency"?"number":"text"} placeholder={field.formula?"Automatic calculation":""} readOnly={Boolean(field.formula)} />
+                      )}
+                      {field.formula&&<div className="form-text">Calculated automatically</div>}
+                      {field.readOnly&&!field.formula&&<div className="form-text">Read only</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
           <div className="form-builder-toolbar">
             <div className="input-group">
               <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
@@ -409,6 +451,7 @@ export default function FormConfigurator({
                       <strong className="text-truncate">{field.label||field.key}</strong>
                       {field.required&&<span className="badge bg-light text-dark border">Required</span>}
                       {field.custom&&<span className="badge bg-primary-subtle text-primary-emphasis">Custom</span>}
+                      {field.system&&<span className="badge bg-light text-dark border">Built-in</span>}
                     </div>
                     <div className="small text-secondary">{humanize(field.section)} · {FIELD_TYPES.find(type=>type.value===field.fieldType)?.label||"Text"}</div>
                   </div>
@@ -442,8 +485,21 @@ export default function FormConfigurator({
                         <label className="form-label">Field type</label>
                         <div className="form-builder-type-grid">
                           {FIELD_TYPES.map(type=>(
-                            <button type="button" key={type.value} className={`form-builder-type-card ${field.fieldType===type.value?"active":""}`} disabled={field.locked}
-                              onClick={()=>update(field.key,{fieldType:type.value,options:type.value==="select"?(field.options||[]):[],formula:["number","currency"].includes(type.value)?field.formula:""})}>
+                            <button
+                              type="button"
+                              key={type.value}
+                              className={`form-builder-type-card ${field.fieldType===type.value?"active":""}`}
+                              disabled={field.locked||field.system}
+                              onClick={()=>update(field.key,{
+                                fieldType:type.value,
+                                options:["select","multiselect"].includes(type.value)?(field.options||[]):[],
+                                formula:["number","currency"].includes(type.value)?field.formula:"",
+                                readOnly:["number","currency"].includes(type.value)&&field.formula?true:field.readOnly,
+                                dataSource:["reference","select","multiselect"].includes(type.value)
+                                  ?field.dataSource
+                                  :{type:"none",resource:"",valueField:"_id",labelField:"",searchField:"",multiple:false,autoFill:[]}
+                              })}
+                            >
                               <i className={`bi ${type.icon}`}></i><span>{type.label}</span>
                             </button>
                           ))}
@@ -629,7 +685,7 @@ export default function FormConfigurator({
 
                             <div className="small fw-semibold mt-3 mb-2">Operators</div>
                             <div className="form-builder-calculator-row">
-                              {[["","+"]],["-","−"],["*","×"],["/","÷"],["(","("],[")",")"]].map(([value,label])=>(
+                              {[["","+"] ,["-","−"],["*","×"],["/","÷"],["(","("],[")",")"]].map(([value,label])=>(
                                 <button type="button" key={value+label} className="btn btn-sm btn-outline-secondary" onClick={()=>addFormulaToken(field.key,value)}>{label}</button>
                               ))}
                             </div>

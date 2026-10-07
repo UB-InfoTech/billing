@@ -43,6 +43,11 @@ export default function Settings(){
   const [workflowSaving,setWorkflowSaving]=useState(false);
   const [workflowError,setWorkflowError]=useState("");
   const [workflowLoading,setWorkflowLoading]=useState(true);
+  const [invoiceConfig,setInvoiceConfig]=useState(null);
+  const [invoiceLoading,setInvoiceLoading]=useState(true);
+  const [invoiceSaving,setInvoiceSaving]=useState(false);
+  const [invoiceError,setInvoiceError]=useState("");
+  const [invoiceDragKey,setInvoiceDragKey]=useState(null);
 
   useEffect(()=>{
     if(configuration?.navigation){
@@ -66,6 +71,63 @@ export default function Settings(){
   };
 
   useEffect(()=>{loadWorkflows();},[]);
+
+  const loadInvoiceConfig=async()=>{
+    try{
+      setInvoiceLoading(true);
+      setInvoiceError("");
+      const response=await axios.get(apiBase+"/api/invoice-config",auth());
+      setInvoiceConfig(response.data||null);
+    }catch(loadError){
+      setInvoiceError(loadError.response?.data?.message||"Unable to load invoice settings.");
+    }finally{setInvoiceLoading(false);}
+  };
+
+  useEffect(()=>{loadInvoiceConfig();},[]);
+
+  const updateInvoiceSection=(section,patch)=>{
+    setInvoiceConfig(prev=>({...prev,[section]:{...(prev?.[section]||{}),...patch}}));
+  };
+
+  const saveInvoiceConfig=async()=>{
+    try{
+      setInvoiceSaving(true);
+      setInvoiceError("");
+      const response=await axios.put(apiBase+"/api/invoice-config",invoiceConfig,auth());
+      setInvoiceConfig(response.data||invoiceConfig);
+    }catch(saveError){
+      setInvoiceError(saveError.response?.data?.message||"Unable to save invoice settings.");
+    }finally{setInvoiceSaving(false);}
+  };
+
+  const resetInvoiceConfig=async()=>{
+    try{
+      setInvoiceSaving(true);
+      setInvoiceError("");
+      const response=await axios.post(apiBase+"/api/invoice-config/reset",{},auth());
+      setInvoiceConfig(response.data||null);
+    }catch(resetError){
+      setInvoiceError(resetError.response?.data?.message||"Unable to reset invoice settings.");
+    }finally{setInvoiceSaving(false);}
+  };
+
+  const moveInvoiceColumn=(source,target)=>{
+    if(!source||!target||source===target)return;
+    setInvoiceConfig(prev=>{
+      const columns=(prev?.itemColumns||[]).slice().sort((a,b)=>a.order-b.order);
+      const sourceIndex=columns.findIndex(item=>item.key===source);
+      const targetIndex=columns.findIndex(item=>item.key===target);
+      if(sourceIndex<0||targetIndex<0)return prev;
+      const next=columns.slice();
+      const [moved]=next.splice(sourceIndex,1);
+      next.splice(targetIndex,0,moved);
+      return {...prev,itemColumns:next.map((item,index)=>({...item,order:index}))};
+    });
+  };
+
+  const updateInvoiceColumn=(key,patch)=>{
+    setInvoiceConfig(prev=>({...prev,itemColumns:(prev?.itemColumns||[]).map(column=>column.key===key?{...column,...patch}:column)}));
+  };
 
   const moveNavigation=(source,target)=>{
     if(!source||!target||source===target)return;
@@ -224,6 +286,7 @@ export default function Settings(){
               ["navigation","Menu & pages","bi-layout-sidebar"],
               ["forms","Forms","bi-ui-checks-grid"],
               ["tables","Lists & tables","bi-table"],
+              ["invoice","Invoice & print","bi-file-earmark-text"],
               ["workflows","Workflows","bi-diagram-3"]
             ].map(([key,label,icon])=>(
               <button type="button" key={key} className={section===key?"active":""} onClick={()=>setSection(key)}>
@@ -366,6 +429,103 @@ export default function Settings(){
                     </div>
                   ))}
                 </div>
+              </section>
+            )}
+            {section==="invoice"&&(
+              <section className="settings-section">
+                <div className="settings-section-heading">
+                  <div><h2>Invoice & print</h2><p>Change what appears on printed invoices without editing templates or code.</p></div>
+                  <div className="d-flex gap-2">
+                    <button type="button" className="btn btn-light border" onClick={resetInvoiceConfig} disabled={invoiceSaving}>Reset</button>
+                    <button type="button" className="btn btn-primary" onClick={saveInvoiceConfig} disabled={invoiceSaving||invoiceLoading}>{invoiceSaving?"Saving...":"Save invoice design"}</button>
+                  </div>
+                </div>
+                {invoiceError&&<div className="alert alert-danger">{invoiceError}</div>}
+                {invoiceLoading||!invoiceConfig?(
+                  <div className="text-center py-5 text-secondary"><span className="spinner-border spinner-border-sm me-2"></span>Loading invoice settings...</div>
+                ):(
+                  <>
+                    <div className="row g-3">
+                      <div className="col-lg-6">
+                        <div className="settings-feature-card h-100">
+                          <h3>Page & title</h3>
+                          <p>Set the paper size and the main heading.</p>
+                          <div className="row g-3">
+                            <div className="col-md-6"><label className="form-label">Paper size</label><select className="form-select" value={invoiceConfig.pageSize} onChange={event=>setInvoiceConfig(prev=>({...prev,pageSize:event.target.value}))}><option>A4</option><option>A5</option><option>Letter</option></select></div>
+                            <div className="col-md-6"><label className="form-label">Invoice title</label><input className="form-control" value={invoiceConfig.invoiceTitle||""} onChange={event=>setInvoiceConfig(prev=>({...prev,invoiceTitle:event.target.value}))}/></div>
+                            <div className="col-md-6"><label className="form-label">Accent color</label><div className="input-group"><input type="color" className="form-control form-control-color" value={invoiceConfig.accentColor||"#111827"} onChange={event=>setInvoiceConfig(prev=>({...prev,accentColor:event.target.value}))}/><input className="form-control" value={invoiceConfig.accentColor||""} onChange={event=>setInvoiceConfig(prev=>({...prev,accentColor:event.target.value}))}/></div></div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-lg-6">
+                        <div className="settings-feature-card h-100">
+                          <h3>Company header</h3>
+                          <p>Choose what customers see at the top.</p>
+                          <div className="row g-2">
+                            {[["showHeaderTitle","Header title"],["showCompanyName","Company name"],["showGST","GSTIN"],["showPhones","Phone numbers"],["showAddress","Company address"]].map(([key,label])=>(
+                              <div className="col-md-6" key={key}><div className="form-check form-switch"><input className="form-check-input" type="checkbox" checked={invoiceConfig.header?.[key]!==false} onChange={event=>updateInvoiceSection("header",{[key]:event.target.checked})}/><label className="form-check-label">{label}</label></div></div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-lg-6">
+                        <div className="settings-feature-card h-100">
+                          <h3>Customer details</h3>
+                          <p>Choose the customer information printed on the bill.</p>
+                          <div className="row g-2">
+                            {[["showName","Name"],["showAddress","Address"],["showMobile","Mobile"],["showState","State"],["showGSTIN","GSTIN"]].map(([key,label])=>(
+                              <div className="col-md-6" key={key}><div className="form-check form-switch"><input className="form-check-input" type="checkbox" checked={invoiceConfig.receiver?.[key]!==false} onChange={event=>updateInvoiceSection("receiver",{[key]:event.target.checked})}/><label className="form-check-label">{label}</label></div></div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-lg-6">
+                        <div className="settings-feature-card h-100">
+                          <h3>Invoice details</h3>
+                          <p>Choose the reference information printed beside the customer details.</p>
+                          <div className="row g-2">
+                            {[["showChallan","Challan number"],["showInvoiceNo","Invoice number"],["showInvoiceDate","Invoice date"],["showDueDate","Due date"],["showPaymentTerms","Payment terms"],["showEwayBill","E-Way Bill"]].map(([key,label])=>(
+                              <div className="col-md-6" key={key}><div className="form-check form-switch"><input className="form-check-input" type="checkbox" checked={invoiceConfig.invoiceDetails?.[key]!==false} onChange={event=>updateInvoiceSection("invoiceDetails",{[key]:event.target.checked})}/><label className="form-check-label">{label}</label></div></div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-12">
+                        <div className="settings-feature-card">
+                          <div className="d-flex justify-content-between align-items-start gap-3 mb-3">
+                            <div><h3>Item columns</h3><p>Drag to reorder columns, rename them, or hide anything you do not need.</p></div>
+                          </div>
+                          <div className="settings-drag-list">
+                            {(invoiceConfig.itemColumns||[]).slice().sort((a,b)=>a.order-b.order).map(column=>(
+                              <div key={column.key} className={`settings-drag-row ${column.visible===false?"is-hidden ":""}${invoiceDragKey===column.key?"is-dragging":""}`} draggable onDragStart={()=>setInvoiceDragKey(column.key)} onDragOver={event=>event.preventDefault()} onDrop={()=>{moveInvoiceColumn(invoiceDragKey,column.key);setInvoiceDragKey(null);}} onDragEnd={()=>setInvoiceDragKey(null)}>
+                                <span className="settings-drag-handle"><i className="bi bi-grip-vertical"></i></span>
+                                <span className="settings-row-icon"><i className="bi bi-layout-three-columns"></i></span>
+                                <div className="flex-grow-1"><input className="form-control" value={column.label} onChange={event=>updateInvoiceColumn(column.key,{label:event.target.value})}/><small>{column.key}</small></div>
+                                <button type="button" className={`btn btn-sm ${column.visible===false?"btn-outline-secondary":"btn-outline-primary"}`} onClick={()=>updateInvoiceColumn(column.key,{visible:column.visible===false})}>{column.visible===false?"Hidden":"Shown"}</button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="col-12">
+                        <div className="settings-feature-card">
+                          <h3>Totals, bank details & footer</h3>
+                          <p>Control the supporting sections of the printed invoice.</p>
+                          <div className="row g-2">
+                            {[["showDiscount","Discount row"],["showTax","Tax rows"],["showRoundOff","Round off"],["showBankDetails","Bank details"],["showTerms","Terms & conditions"],["showWebCredit","Footer credit"]].map(([key,label])=>(
+                              <div className="col-md-4" key={key}><div className="form-check form-switch"><input className="form-check-input" type="checkbox" checked={invoiceConfig.summary?.[key]!==false} onChange={event=>updateInvoiceSection("summary",{[key]:event.target.checked})}/><label className="form-check-label">{label}</label></div></div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </section>
             )}
 

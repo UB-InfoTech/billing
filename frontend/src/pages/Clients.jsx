@@ -89,7 +89,7 @@ function Clients() {
       let next=field.custom
         ? {...prev,[field.key]:value,customFields:{...(prev.customFields||{}),[field.key]:value}}
         : {...prev,[field.key]:value};
-      if(record)next=applyAutoFill(field,record,next);
+      if(field?.dataSource?.autoFill?.length)next=applyAutoFill(field,record,next);
       next=syncConfiguredCustomFields(next,clientFormConfig.fields);
       return applyFormulas(clientFormConfig.fields,next);
     });

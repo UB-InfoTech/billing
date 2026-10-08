@@ -122,6 +122,8 @@ export const TABLE_CATALOG=[
   {key:"clients.list",label:"Clients list",page:"/clients",description:"Simplify the customer list and show the information your team needs."},
   {key:"products.list",label:"Products list",page:"/products",description:"Choose the product columns your team needs and add custom columns."},
   {key:"expenses.list",label:"Expenses list",page:"/expense",description:"Choose the expense columns your team needs and add custom columns."},
+  {key:"sales-analytics.orders",label:"Report order list",page:"/analytics",description:"Choose the columns shown in the report order list and add custom columns."},
+  {key:"sales-analytics.state-cities",label:"State city list",page:"/analytics",description:"Choose the columns shown when you open a state on the sales map."},
 ];
 
 export const WORKFLOW_RESOURCES=[

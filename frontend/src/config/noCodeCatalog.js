@@ -116,6 +116,28 @@ export const CALENDAR_EVENT_FIELDS=[
  {key:"color",label:"Color",fieldType:"text",width:4,section:"appearance",order:3,defaultValue:"#3788d8"},
 ];
 
+export const EWAY_BILL_FIELDS=[
+ {key:"supplyType",label:"Supply Type",fieldType:"select",width:4,section:"compliance",required:true,order:0,system:true,options:[{value:"O",label:"Outward"},{value:"I",label:"Inward"}]},
+ {key:"subSupplyType",label:"Sub Supply Type",fieldType:"select",width:4,section:"compliance",required:true,order:1,system:true,options:[
+   {value:"1",label:"Supply"},{value:"2",label:"Import"},{value:"3",label:"Export"},{value:"4",label:"Job Work"},{value:"5",label:"For Own Use"},{value:"6",label:"Job Work Returns"},{value:"7",label:"Sales Return"},{value:"8",label:"Others"}
+ ]},
+ {key:"transactionType",label:"Transaction Type",fieldType:"select",width:4,section:"compliance",required:true,order:2,system:true,options:[
+   {value:"1",label:"Regular"},{value:"2",label:"Bill To - Ship To"},{value:"3",label:"Bill From - Dispatch From"},{value:"4",label:"Combination"}
+ ]},
+ {key:"transporterName",label:"Transporter Name",fieldType:"text",width:3,section:"transport",order:3},
+ {key:"transporterId",label:"Transporter GST / ID",fieldType:"text",width:3,section:"transport",order:4},
+ {key:"transDocNo",label:"Transport Document No.",fieldType:"text",width:3,section:"transport",order:5},
+ {key:"transDocDate",label:"Transport Document Date",fieldType:"date",width:3,section:"transport",order:6},
+ {key:"transMode",label:"Transport Mode",fieldType:"select",width:3,section:"transport",order:7,defaultValue:"1",options:[
+   {value:"1",label:"Road"},{value:"2",label:"Rail"},{value:"3",label:"Air"},{value:"4",label:"Ship"}
+ ]},
+ {key:"vehicleNo",label:"Vehicle Number",fieldType:"text",width:3,section:"transport",order:8},
+ {key:"vehicleType",label:"Vehicle Type",fieldType:"select",width:3,section:"transport",order:9,defaultValue:"R",options:[
+   {value:"R",label:"Regular"},{value:"O",label:"ODC"}
+ ]},
+ {key:"transDistance",label:"Distance (KM)",fieldType:"number",width:3,section:"transport",order:10,defaultValue:"0",validation:{min:0}}
+];
+
 export const FORM_CATALOG=[
   {key:"orders.form",label:"Bill information",page:"/orders",query:"form",description:"Arrange bill fields, add your own fields, links, rules and calculations.",fields:ORDER_FORM_FIELDS},
   {key:"orders.items",label:"Bill items",page:"/orders",query:"items",description:"Arrange item columns and create calculations such as quantity × rate.",fields:ORDER_ITEM_FIELDS},
@@ -123,6 +145,7 @@ export const FORM_CATALOG=[
   {key:"products.form",label:"Product form",page:"/products",query:"form",description:"Customize product details, pricing, stock and your own business fields.",fields:PRODUCT_FORM_FIELDS},
   {key:"expenses.form",label:"Expense form",page:"/add-expense",query:"form",description:"Customize expense details, tax, links, recurring rules and your own business fields.",fields:EXPENSE_FORM_FIELDS},
   {key:"calendar.event",label:"Calendar event form",page:"/calendar",query:"form",description:"Customize event details and add your own event information.",fields:CALENDAR_EVENT_FIELDS},
+  {key:"ewaybill.form",label:"E-Way Bill form",page:"/orders",query:"ewaybill",description:"Customize transport and compliance details used when generating an E-Way Bill.",fields:EWAY_BILL_FIELDS},
 ];
 
 export const TABLE_CATALOG=[

@@ -38,13 +38,23 @@ router.get('/', auth, async (req, res) => {
 // Update profile
 router.put('/', auth, async (req, res) => {
   try {
-    const profile = await Profile.findOneAndUpdate({ createdBy: req.user.id }, req.body, {
-      new: true,
-      upsert: true, // Creates a document if none exists
-    });
+    const nextBody={...(req.body||{})};
+    if(nextBody.customFields&&typeof nextBody.customFields==="object"&&!Array.isArray(nextBody.customFields)){
+      nextBody.customFields=Object.fromEntries(
+        Object.entries(nextBody.customFields).slice(0,100).map(([key,value])=>[String(key).slice(0,100),value])
+      );
+    }else{
+      delete nextBody.customFields;
+    }
+
+    const profile = await Profile.findOneAndUpdate(
+      { createdBy: req.user.id },
+      {$set:nextBody},
+      {new:true,upsert:true,setDefaultsOnInsert:true,runValidators:true}
+    ).lean();
     res.json(profile);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(400).json({ message: err.message });
   }
 });
 

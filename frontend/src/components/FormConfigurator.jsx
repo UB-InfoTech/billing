@@ -117,6 +117,7 @@ export default function FormConfigurator({
   const [expandedKey,setExpandedKey]=useState(null);
   const [showAddField,setShowAddField]=useState(false);
   const [showAdvanced,setShowAdvanced]=useState(false);
+  const [showPreview,setShowPreview]=useState(false);
   const [error,setError]=useState("");
   const [newField,setNewField]=useState({
     label:"",
@@ -136,6 +137,7 @@ export default function FormConfigurator({
     setExpandedKey(null);
     setShowAddField(false);
     setShowAdvanced(false);
+    setShowPreview(false);
     setError("");
   },[open,fields]);
 
@@ -388,41 +390,53 @@ export default function FormConfigurator({
             </section>
           )}
 
-          <div className="card border-0 shadow-sm bg-white mb-3">
-            <div className="card-header bg-white d-flex align-items-center justify-content-between">
-              <div>
-                <div className="fw-semibold">Live preview</div>
-                <div className="small text-secondary">This is how the form will look when people use it.</div>
+          {showPreview&&(
+            <div className="card border-0 shadow-sm bg-white mb-3">
+              <div className="card-header bg-white d-flex align-items-center justify-content-between">
+                <div>
+                  <div className="fw-semibold">Live preview</div>
+                  <div className="small text-secondary">This is how the form will look when people use it.</div>
+                </div>
+                <span className="badge bg-light text-dark border">{shownCount} visible</span>
               </div>
-              <span className="badge bg-light text-dark border">{shownCount} visible</span>
-            </div>
-            <div className="card-body">
-              <div className="row g-3">
-                {draft.filter(field=>field.visible!==false).map(field=>{
-                  const type=FIELD_TYPES.find(item=>item.value===field.fieldType);
-                  return (
-                    <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
-                      <label className="form-label fw-semibold">{field.label}{field.required&&<span className="text-danger ms-1">*</span>}</label>
-                      {["select","reference"].includes(field.fieldType)||field.dataSource?.resource ? (
-                        <select className="form-select" disabled>
-                          <option>{field.dataSource?.resource?"Select "+field.label:"Choose an option"}</option>
-                          {normalizePreviewOptions(field.options).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
-                        </select>
-                      ) : field.fieldType==="textarea" ? (
-                        <textarea className="form-control" rows={2} placeholder={field.formula?"Automatic calculation":""} readOnly />
-                      ) : field.fieldType==="boolean" ? (
-                        <div className="form-check form-switch pt-2"><input className="form-check-input" type="checkbox" disabled /></div>
-                      ) : (
-                        <input className="form-control" type={field.fieldType==="date"?"date":field.fieldType==="datetime"?"datetime-local":field.fieldType==="email"?"email":field.fieldType==="url"?"url":field.fieldType==="number"||field.fieldType==="currency"?"number":"text"} placeholder={field.formula?"Automatic calculation":""} readOnly={Boolean(field.formula)} />
-                      )}
-                      {field.helpText&&<div className="form-text">{field.helpText}</div>}
-                      {field.formula&&<div className="form-text">Calculated automatically</div>}
-                      {field.readOnly&&!field.formula&&<div className="form-text">Read only</div>}
-                    </div>
-                  );
-                })}
+              <div className="card-body">
+                <div className="row g-3">
+                  {draft.filter(field=>field.visible!==false).map(field=>{
+                    const type=FIELD_TYPES.find(item=>item.value===field.fieldType);
+                    return (
+                      <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
+                        <label className="form-label fw-semibold">{field.label}{field.required&&<span className="text-danger ms-1">*</span>}</label>
+                        {["select","reference"].includes(field.fieldType)||field.dataSource?.resource ? (
+                          <select className="form-select" disabled>
+                            <option>{field.dataSource?.resource?"Select "+field.label:"Choose an option"}</option>
+                            {normalizePreviewOptions(field.options).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
+                          </select>
+                        ) : field.fieldType==="textarea" ? (
+                          <textarea className="form-control" rows={2} placeholder={field.formula?"Automatic calculation":""} readOnly />
+                        ) : field.fieldType==="boolean" ? (
+                          <div className="form-check form-switch pt-2"><input className="form-check-input" type="checkbox" disabled /></div>
+                        ) : (
+                          <input className="form-control" type={field.fieldType==="date"?"date":field.fieldType==="datetime"?"datetime-local":field.fieldType==="email"?"email":field.fieldType==="url"?"url":field.fieldType==="number"||field.fieldType==="currency"?"number":"text"} placeholder={field.formula?"Automatic calculation":""} readOnly={Boolean(field.formula)} />
+                        )}
+                        {field.helpText&&<div className="form-text">{field.helpText}</div>}
+                        {field.formula&&<div className="form-text">Calculated automatically</div>}
+                        {field.readOnly&&!field.formula&&<div className="form-text">Read only</div>}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
+  
+            )}
+
+          <div className="form-builder-guide">
+            <div className="form-builder-guide-step is-active"><span>1</span><div><strong>Choose fields</strong><small>Keep only what your team needs.</small></div></div>
+            <div className="form-builder-guide-line"></div>
+            <div className="form-builder-guide-step"><span>2</span><div><strong>Adjust when needed</strong><small>Advanced connections and rules stay hidden until you ask for them.</small></div></div>
+            <button type="button" className="form-builder-preview-toggle" onClick={()=>setShowPreview(value=>!value)}>
+              <i className="bi bi-eye me-2"></i>{showPreview?"Hide preview":"Preview form"}
+            </button>
           </div>
 
           <div className="form-builder-toolbar">

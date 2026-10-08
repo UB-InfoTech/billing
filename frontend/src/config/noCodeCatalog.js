@@ -139,7 +139,8 @@ export const WORKFLOW_RESOURCES=[
   {key:"orders",label:"Bills"},
   {key:"clients",label:"Clients"},
   {key:"products",label:"Products"},
-  {key:"expenses",label:"Expenses"}
+  {key:"expenses",label:"Expenses"},
+  {key:"calendar",label:"Calendar"}
 ];
 
 export const WORKFLOW_EVENTS=[
@@ -162,7 +163,8 @@ export const workflowSourceLabels={
   orders:{orderNumber:"Invoice No.",companyName:"Client",status:"Status",paymentStatus:"Payment Status",discountRate:"Discount %",taxPercentage:"Tax %",dueAmount:"Due Amount",roundOffFinalRevenue:"Invoice Total"},
   clients:{name:"Client Name",companyName:"Company Name",businessType:"Business Type",accountStatus:"Account Status",paymentTerms:"Payment Terms",discountRate:"Discount Rate"},
   products:{productName:"Product Name",productCode:"Product Code",rate:"Rate",quantity:"Stock"},
-  expenses:{title:"Title",category:"Category",amount:"Amount",paymentMethod:"Payment Method"}
+  expenses:{title:"Title",category:"Category",amount:"Amount",paymentMethod:"Payment Method"},
+  calendar:{title:"Event title",start:"Start",end:"End",color:"Color"}
 };
 
 export const workflowFieldsFor=resource=>{

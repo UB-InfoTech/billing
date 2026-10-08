@@ -493,6 +493,9 @@ export default function FormConfigurator({
                         <label className="form-label">Field name shown to users</label>
                         <input className="form-control" value={field.label} onChange={event=>update(field.key,{label:event.target.value})}/>
                       </div>
+                      <details className="form-builder-secondary-details">
+                        <summary><i className="bi bi-layout-text-sidebar-reverse me-2"></i>Display, layout & starting value</summary>
+                        <div className="form-builder-secondary-details-body">
                       <div className="col-md-5">
                         <label className="form-label">Where should it appear?</label>
                         <input className="form-control" list="formSectionOptions" value={field.section||"General"} onChange={event=>update(field.key,{section:event.target.value})}/>
@@ -562,6 +565,9 @@ export default function FormConfigurator({
                         <label className="form-label">Helpful note for users <span className="text-secondary">(optional)</span></label>
                         <input className="form-control" value={field.helpText||""} onChange={event=>update(field.key,{helpText:event.target.value})} disabled={field.locked} placeholder="Example: Enter the customer WhatsApp number"/>
                       </div>
+
+                        </div>
+                      </details>
 
                       <div className="col-12">
                         <div className="form-builder-panel">

@@ -56,6 +56,7 @@ function Order2() {
     const [formSettingsOpen,setFormSettingsOpen]=useState(false);
     const [itemSettingsOpen,setItemSettingsOpen]=useState(false);
     const [tableCustomizeRequested,setTableCustomizeRequested]=useState(false);
+    const [ewayCustomizeRequested,setEwayCustomizeRequested]=useState(false);
     const [searchParams,setSearchParams]=useSearchParams();
 
     useEffect(()=>{
@@ -63,6 +64,7 @@ function Order2() {
         if(customize==="form")setFormSettingsOpen(true);
         if(customize==="items")setItemSettingsOpen(true);
         if(customize==="table")setTableCustomizeRequested(true);
+        if(customize==="ewaybill")setEwayCustomizeRequested(true);
         if(customize){
             searchParams.delete("customize");
             setSearchParams(searchParams,{replace:true});
@@ -1566,6 +1568,13 @@ const styles = {
                 onSave={orderFormConfig.save}
                 onReset={async()=>{const defaults=await orderFormConfig.reset();orderFormConfig.setFields(defaults);setFormSettingsOpen(false);}}
             />
+            {ewayCustomizeRequested&&(
+                <EWayBillForm
+                    customizeOnly
+                    onClose={()=>{setEwayCustomizeRequested(false);setSearchParams({}, {replace:true});}}
+                />
+            )}
+
             <FormConfigurator
                 open={itemSettingsOpen}
                 onClose={()=>setItemSettingsOpen(false)}

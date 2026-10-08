@@ -442,8 +442,8 @@ export default function Settings(){
         <header className="settings-hero">
           <div>
             <div className="settings-kicker">Settings</div>
-            <h1>Make your billing software your own</h1>
-            <p>Change the way your software looks and works without code. Drag things, choose options and save.</p>
+            <h1>Make the software fit your business</h1>
+            <p>Change names, fields, lists and automations without code. Start with a simple task below.</p>
           </div>
           <button type="button" className="btn btn-light border" onClick={()=>navigate("/dashboard")}>Back to software</button>
         </header>
@@ -453,12 +453,12 @@ export default function Settings(){
             {[
               ["home","Overview","bi-house"],
               ["dashboard","Dashboard","bi-speedometer2"],
-              ["navigation","Menu & pages","bi-layout-sidebar"],
-              ["forms","Forms","bi-ui-checks-grid"],
-              ["tables","Lists & tables","bi-table"],
+              ["navigation","Menu","bi-layout-sidebar"],
+              ["forms","Forms & fields","bi-ui-checks-grid"],
+              ["tables","Lists","bi-table"],
               ["reports","Reports","bi-bar-chart"],
               ["invoice","Invoice & print","bi-file-earmark-text"],
-              ["workflows","Workflows","bi-diagram-3"]
+              ["workflows","Automations","bi-diagram-3"]
             ].map(([key,label,icon])=>(
               <button type="button" key={key} className={section===key?"active":""} onClick={()=>setSection(key)}>
                 <i className={`bi ${icon}`}></i><span>{label}</span>
@@ -516,23 +516,24 @@ export default function Settings(){
 
             {section==="home"&&(
               <>
-                <section className="settings-section">
+                <section className="settings-section settings-welcome-section">
                   <div className="settings-section-heading">
                     <div>
-                      <h2>Start here</h2>
-                      <p>Most businesses only need these four things.</p>
+                      <span className="settings-eyebrow">START HERE</span>
+                      <h2>What would you like to change?</h2>
+                      <p>Choose one simple task. Advanced options are still available when you need them.</p>
                     </div>
                   </div>
                   <div className="row g-3">
                     {[
-                      ["navigation","Menu & pages","Put the screens you use most in the order you want.","bi-layout-sidebar"],
-                      ["forms","Forms","Add fields, connect records, set rules and calculations.","bi-ui-checks-grid"],
-                      ["tables","Lists & tables","Choose the columns your team actually needs.","bi-table"],
-                      ["workflows","Workflows","Tell the software what should happen automatically.","bi-diagram-3"]
+                      ["forms","Add or change fields","Add information such as Sales Person, Area or Credit Limit.","bi-plus-circle"],
+                      ["tables","Change a list","Show, hide, rename or reorder the columns your team sees.","bi-table"],
+                      ["navigation","Organize the menu","Put your most-used screens first and hide screens you do not use.","bi-layout-sidebar"],
+                      ["workflows","Automate a task","Make the software fill, update or react automatically.","bi-lightning-charge"]
                     ].map(([key,title,description,icon])=>(
-                      <div className="col-md-6" key={key}>
-                        <button type="button" className="settings-start-card" onClick={()=>setSection(key)}>
-                          <span className="settings-start-icon"><i className={`bi ${icon}`}></i></span>
+                      <div className="col-lg-6" key={key}>
+                        <button type="button" className="settings-start-card settings-start-card-large" onClick={()=>setSection(key)}>
+                          <span className="settings-start-icon"><i className={"bi "+icon}></i></span>
                           <span>
                             <strong>{title}</strong>
                             <small>{description}</small>
@@ -546,13 +547,20 @@ export default function Settings(){
 
                 <section className="settings-section">
                   <div className="settings-section-heading">
-                    <div><h2>Simple mode</h2><p>Keep technical choices out of the day-to-day screens.</p></div>
+                    <div>
+                      <span className="settings-eyebrow">KEEP IT SIMPLE</span>
+                      <h2>Everyday screens stay clean</h2>
+                      <p>Your team does not need to see builder controls while doing normal work.</p>
+                    </div>
                   </div>
-                  <div className="settings-simple-box">
-                    <div><strong>Keep customization in Settings</strong><span>Users can work normally without seeing builder controls on every screen.</span></div>
+                  <div className="settings-simple-box settings-simple-box-enhanced">
+                    <div className="settings-simple-copy">
+                      <strong>Show helpful hints</strong>
+                      <span>Keep small explanations and guidance visible where they are useful.</span>
+                    </div>
                     <div className="form-check form-switch">
                       <input className="form-check-input" type="checkbox" checked={configuration?.appearance?.showPageHelp!==false} onChange={event=>saveConfiguration({navigation:navigationDraft,appearance:{...(configuration?.appearance||{}),showPageHelp:event.target.checked}})}/>
-                      <label className="form-check-label">Show helpful hints</label>
+                      <label className="form-check-label">On</label>
                     </div>
                   </div>
                 </section>

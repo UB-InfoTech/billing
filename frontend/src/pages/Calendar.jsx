@@ -176,7 +176,6 @@ export default function Calendar(){
     }
   };
 
-  const configuredFields=eventFields.filter(field=>field.visible!==false&&field.key!=="title"&&field.key!=="start"&&field.key!=="end");
   const baseColumns=[
     {key:"start",label:"Start",render:event=>event.start?new Date(event.start).toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"}):""},
     {key:"end",label:"End",render:event=>event.end?new Date(event.end).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}):""},
@@ -305,7 +304,6 @@ export default function Calendar(){
         saving={formSaving}
       />
 
-      {configuredFields.length>0&&false ? <div/>:null}
     </div>
   );
 }

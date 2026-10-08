@@ -744,7 +744,10 @@ export default function Settings(){
                     </details>
                   </div>
                 )}
+              </section>
+            )}
 
+            {section==="invoice"&&(
               <section className="settings-section">
                 <div className="settings-section-heading">
                   <div><h2>Invoice & print</h2><p>Change what appears on printed invoices without editing templates or code.</p></div>

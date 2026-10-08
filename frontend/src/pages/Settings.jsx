@@ -611,7 +611,7 @@ export default function Settings(){
             {section==="forms"&&(
               <section className="settings-section">
                 <div className="settings-section-heading">
-                  <div><h2>Forms</h2><p>Open a visual builder. You can drag fields, add new fields and connect existing records.</p></div>
+                  <div><h2>Forms</h2><p>Add, rename or hide fields using a simple visual editor.</p></div>
                 </div>
                 <div className="row g-3">
                   {FORM_CATALOG.map(form=>(
@@ -622,7 +622,7 @@ export default function Settings(){
                           <div className="flex-grow-1">
                             <h3>{form.label}</h3>
                             <p>{form.description}</p>
-                            <button type="button" className="btn btn-primary btn-sm" onClick={()=>navigate(form.page+"?customize="+form.query)}>Open visual builder</button>
+                            <button type="button" className="btn btn-primary btn-sm" onClick={()=>navigate(form.page+"?customize="+form.query)}>Customize form</button>
                           </div>
                         </div>
                       </div>
@@ -635,7 +635,7 @@ export default function Settings(){
             {section==="tables"&&(
               <section className="settings-section">
                 <div className="settings-section-heading">
-                  <div><h2>Lists & tables</h2><p>Keep only the columns your business actually needs. Drag to reorder.</p></div>
+                  <div><h2>Lists & tables</h2><p>Choose the columns people see, then rename or reorder them.</p></div>
                 </div>
                 <div className="row g-3">
                   {TABLE_CATALOG.map(table=>(
@@ -646,7 +646,7 @@ export default function Settings(){
                           <div className="flex-grow-1">
                             <h3>{table.label}</h3>
                             <p>{table.description}</p>
-                            <button type="button" className="btn btn-primary btn-sm" onClick={()=>navigate(table.page+"?customize="+(table.query||"table"))}>Open table builder</button>
+                            <button type="button" className="btn btn-primary btn-sm" onClick={()=>navigate(table.page+"?customize="+(table.query||"table"))}>Customize list</button>
                           </div>
                         </div>
                       </div>

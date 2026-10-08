@@ -95,6 +95,7 @@ app.use("/api/no-code-data",require("./routes/noCodeDataRoutes"));
 app.use("/api/software-config",require("./routes/softwareConfigRoutes"));
 app.use("/api/invoice-config",require("./routes/invoiceConfigRoutes"));
 app.use("/api/report-config",require("./routes/reportConfigRoutes"));
+app.use("/api/dashboard-config",require("./routes/dashboardConfigRoutes"));
 app.use("/api/workflows",require("./routes/workflowRoutes"));
 
 const errorHandler=(err,req,res,next)=>{

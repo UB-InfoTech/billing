@@ -23,6 +23,55 @@ const defaultWorkflow={
   actions:[]
 };
 
+const FINANCIAL_INPUT_GROUPS=[
+  {title:"Profit & loss",fields:[
+    ["depreciation","Depreciation"],
+    ["amortization","Amortization"],
+    ["interestExpense","Interest / finance cost"],
+    ["incomeTax","Income tax"],
+    ["otherIncome","Other income"],
+    ["otherExpenses","Other expenses"],
+    ["rAndD","R&D expense"],
+    ["sellingExpenses","Selling expenses"],
+    ["administrativeExpenses","Administrative expenses"]
+  ]},
+  {title:"Balance sheet",fields:[
+    ["equity","Equity / net worth"],
+    ["averageEquity","Average equity"],
+    ["totalAssets","Total assets"],
+    ["averageAssets","Average assets"],
+    ["currentAssets","Current assets"],
+    ["currentLiabilities","Current liabilities"],
+    ["cash","Cash & cash equivalents"],
+    ["accountsReceivable","Accounts receivable"],
+    ["averageReceivables","Average receivables"],
+    ["inventory","Inventory"],
+    ["averageInventory","Average inventory"],
+    ["accountsPayable","Accounts payable"],
+    ["averagePayables","Average payables"],
+    ["debt","Total debt"],
+    ["principalRepayments","Principal repayments"]
+  ]},
+  {title:"Shares & market",fields:[
+    ["weightedAverageShares","Weighted average shares"],
+    ["sharesOutstanding","Shares outstanding"],
+    ["marketPricePerShare","Market price per share"],
+    ["dividends","Dividends"]
+  ]},
+  {title:"Cash flow & unit economics",fields:[
+    ["capitalExpenditure","CAPEX"],
+    ["operatingCashFlow","Operating cash flow"],
+    ["investingCashFlow","Investing cash flow"],
+    ["financingCashFlow","Financing cash flow"],
+    ["variableCosts","Variable costs"],
+    ["fixedOperatingCosts","Fixed operating costs"]
+  ]},
+  {title:"Tax & return assumptions",fields:[
+    ["wacc","WACC"],
+    ["taxRate","Tax rate"]
+  ]}
+];
+
 export default function Settings(){
   const navigate=useNavigate();
   const {
@@ -161,6 +210,10 @@ export default function Settings(){
     }finally{setDashboardSaving(false);}
   };
 
+  const updateFinancialInput=(key,value)=>{
+    setReportConfig(prev=>({...prev,financialInputs:{...(prev?.financialInputs||{}),[key]:value}}));
+  };
+
   const updateReportWidget=(key,patch)=>{
     setReportConfig(prev=>({...prev,widgets:(prev?.widgets||[]).map(widget=>widget.key===key?{...widget,...patch}:widget)}));
   };
@@ -183,7 +236,7 @@ export default function Settings(){
     try{
       setReportSaving(true);
       setReportError("");
-      const response=await axios.put(apiBase+"/api/report-config",{widgets:(reportConfig?.widgets||[]).map((item,index)=>({...item,order:index}))},auth());
+      const response=await axios.put(apiBase+"/api/report-config",{widgets:(reportConfig?.widgets||[]).map((item,index)=>({...item,order:index})),financialInputs:reportConfig?.financialInputs||{}},auth());
       setReportConfig(response.data||reportConfig);
     }catch(saveError){
       setReportError(saveError.response?.data?.message||"Unable to save report settings.");
@@ -643,6 +696,42 @@ export default function Settings(){
                         </button>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {!reportLoading&&reportConfig&&(
+                  <div className="mt-4">
+                    <div className="settings-section-heading mb-3">
+                      <div>
+                        <h3 className="mb-1">Financial data</h3>
+                        <p>Enter accounting figures that this billing data cannot know automatically. Leave a value blank when it is not applicable.</p>
+                      </div>
+                    </div>
+                    <div className="row g-3">
+                      {FINANCIAL_INPUT_GROUPS.map(group=>(
+                        <div className="col-lg-6" key={group.title}>
+                          <div className="settings-feature-card h-100">
+                            <h4>{group.title}</h4>
+                            <div className="row g-2">
+                              {group.fields.map(([key,label])=>(
+                                <div className="col-md-6" key={key}>
+                                  <label className="form-label">{label}</label>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    className="form-control"
+                                    value={reportConfig.financialInputs?.[key]??""}
+                                    onChange={event=>updateFinancialInput(key,event.target.value)}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="small text-secondary mt-2">These inputs are used only for metrics that require accounting data such as equity, debt, depreciation, shares or cash flow.</div>
                   </div>
                 )}
               </section>

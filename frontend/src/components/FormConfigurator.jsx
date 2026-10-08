@@ -104,7 +104,7 @@ const clone=field=>({
 export default function FormConfigurator({
   open,
   onClose,
-  title="Customize Form",
+  title="Customize form",
   subtitle="",
   fields=[],
   onSave,
@@ -402,7 +402,6 @@ export default function FormConfigurator({
               <div className="card-body">
                 <div className="row g-3">
                   {draft.filter(field=>field.visible!==false).map(field=>{
-                    const type=FIELD_TYPES.find(item=>item.value===field.fieldType);
                     return (
                       <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
                         <label className="form-label fw-semibold">{field.label}{field.required&&<span className="text-danger ms-1">*</span>}</label>

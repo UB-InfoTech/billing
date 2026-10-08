@@ -15,6 +15,20 @@ const METRIC_HELP={
   grossProfit:["What remains after paying the direct product cost. A higher amount usually means the business is keeping more from each sale before operating expenses.","Gross Profit = Revenue − COGS"],
   grossMargin:["Gross profit shown as a percentage of revenue. It tells you how much of every ₹100 of sales remains after direct product cost.","Gross Margin = Gross Profit ÷ Revenue × 100"],
   opex:["Regular business running costs such as rent, utilities, salaries and other recorded expenses.","OPEX = Recorded business expenses"],
+  sga:["Selling, general and administrative costs. These are the everyday costs of selling products and running the office or business.","SG&A = Selling Expenses + Administrative Expenses"],
+  rAndD:["Money spent on research and development to improve products, processes or the business.","R&D = Research and development expense"],
+  depreciation:["The expense that spreads the cost of long-term physical assets such as machinery over their useful life.","Depreciation = Accounting expense for use of physical assets"],
+  amortization:["The expense that spreads the cost of certain long-term non-physical assets over their useful life.","Amortization = Accounting expense for use of qualifying intangible assets"],
+  da:["The combined depreciation and amortization expense.","D&A = Depreciation + Amortization"],
+  outputTax:["GST charged on your sales invoices. It is tax collected from customers rather than business profit.","Output Tax = GST charged on sales"],
+  workingCapital:["The short-term money available after covering short-term liabilities. It helps show day-to-day financial comfort.","Working Capital = Current Assets − Current Liabilities"],
+  quickRatio:["A stricter short-term health check that removes inventory from current assets.","Quick Ratio = (Current Assets − Inventory) ÷ Current Liabilities"],
+  cashRatio:["Shows how much of current liabilities could be covered using cash and cash equivalents alone.","Cash Ratio = Cash ÷ Current Liabilities"],
+  interestCoverage:["Shows how comfortably operating profit can cover interest costs.","Interest Coverage = EBIT ÷ Interest"],
+  dscr:["Shows whether operating earnings are sufficient to cover interest and scheduled principal repayments.","DSCR = EBITDA ÷ (Interest + Principal Repayments)"],
+  contributionMargin:["Money left after variable costs. It contributes toward fixed costs and profit.","Contribution Margin = Revenue − Variable Costs"],
+  breakEvenSales:["The sales amount needed to cover fixed operating costs at the current contribution margin.","Break-even Sales = Fixed Costs ÷ Contribution Margin Ratio"],
+  dso:["Average number of days customers take to pay. Lower is generally faster cash collection.","DSO = Average Receivables ÷ Revenue × Days"],
   ebitda:["Operating profit before interest, tax, depreciation and amortization. It is often used to compare operating performance.","EBITDA = EBIT + Depreciation + Amortization"],
   ebit:["Operating profit before interest and tax. It focuses on the business operation itself.","EBIT = Gross Profit − OPEX"],
   pbt:["Profit before income tax. It includes finance cost and other income or expenses.","PBT = EBIT − Interest + Other Income − Other Expenses"],
@@ -104,6 +118,11 @@ export default function FinancialMetrics({startDate,endDate,title="Financial met
     return Array.from(map.entries());
   },[data,view,search]);
 
+  const getMetricHelp=metric=>METRIC_HELP[metric.key]||[
+    metric.label+" is a "+String(metric.group||"business")+" measure that helps you understand this part of your business.",
+    metric.formula||"Calculated from the available business information for this period."
+  ];
+
   const readyBasic=(data?.metrics||[]).filter(metric=>BASIC_KEYS.includes(metric.key)&&metric.status==="ready").length;
   const basicCount=BASIC_KEYS.length;
 
@@ -163,7 +182,6 @@ export default function FinancialMetrics({startDate,endDate,title="Financial met
                   </div>
                   <div className="row g-3">
                     {metrics.map(metric=>{
-                      const help=METRIC_HELP[metric.key];
                       const infoOpen=openInfo===metric.key;
                       return (
                         <div className="col-12 col-md-6 col-xl-3" key={metric.key}>
@@ -191,9 +209,9 @@ export default function FinancialMetrics({startDate,endDate,title="Financial met
                             {infoOpen&&(
                               <div className="financial-metric-info-panel">
                                 <div className="fw-semibold mb-1">What it means</div>
-                                <div className="small text-secondary mb-2">{help?.[0]||"This metric helps you understand one part of business performance."}</div>
+                                <div className="small text-secondary mb-2">{getMetricHelp(metric)[0]}</div>
                                 <div className="fw-semibold mb-1">How it is calculated</div>
-                                <div className="small">{help?.[1]||metric.formula||"Calculated from the business figures available for this period."}</div>
+                                <div className="small">{getMetricHelp(metric)[1]}</div>
                               </div>
                             )}
 

@@ -481,7 +481,7 @@ export default function Settings(){
                           <div className="flex-grow-1">
                             <h3>{table.label}</h3>
                             <p>{table.description}</p>
-                            <button type="button" className="btn btn-primary btn-sm" onClick={()=>navigate(table.page+"?customize=table")}>Open table builder</button>
+                            <button type="button" className="btn btn-primary btn-sm" onClick={()=>navigate(table.page+"?customize="+(table.query||"table"))}>Open table builder</button>
                           </div>
                         </div>
                       </div>

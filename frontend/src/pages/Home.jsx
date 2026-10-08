@@ -69,11 +69,17 @@ export default function Home(){
   ];
 
   return <div className="container-fluid py-4">
-    <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
-      <div><h2 className="mb-1">Dashboard</h2><div className="text-muted">Welcome back{user?.username?", "+user.username:""}.</div></div>
-      <div className="d-flex gap-2">
-        <button className="btn btn-primary" onClick={()=>navigate("/orders")}>+ New Invoice</button>
-        <button className="btn btn-outline-secondary" onClick={()=>navigate("/settings")}>Customize</button>
+    <div className="dashboard-welcome mb-4">
+      <div>
+        <span className="dashboard-eyebrow">YOUR BUSINESS TODAY</span>
+        <h2 className="mb-1">Welcome back{user?.username?", "+user.username:""}.</h2>
+        <div className="text-muted">Start with a task or check your most important numbers.</div>
+      </div>
+      <div className="dashboard-primary-actions">
+        <button className="btn btn-primary" onClick={()=>navigate("/orders")}><i className="bi bi-plus-lg me-2"></i>New invoice</button>
+        <button className="btn btn-light border" onClick={()=>navigate("/add-expense")}><i className="bi bi-wallet2 me-2"></i>Add expense</button>
+        <button className="btn btn-light border" onClick={()=>navigate("/clients")}><i className="bi bi-person-plus me-2"></i>Clients</button>
+        <button className="btn btn-light border" onClick={()=>navigate("/analytics")}><i className="bi bi-bar-chart me-2"></i>Reports</button>
       </div>
     </div>
 

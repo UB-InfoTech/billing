@@ -72,9 +72,9 @@ button:focus-visible {
 /* ------------ */
 /* for expence */
 body {
-  background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+  background: #f5f7fa;
   min-height: 100vh;
-  font-family: 'Arial', sans-serif;
+  font-family: Arial, sans-serif;
 }
 
 .card {
@@ -1768,4 +1768,234 @@ body {
   .settings-drag-row>.flex-grow-1{flex:1 1 calc(100% - 110px)}
   .settings-workflow-step{flex-direction:column}
   .settings-simple-box{flex-direction:column;align-items:flex-start}
+}
+
+
+/* ---------- Simple no-code progressive disclosure ---------- */
+.form-builder-advanced-details,
+.form-builder-advanced-toggle,
+.settings-advanced-box {
+  border: 1px solid #e0e7ef;
+  border-radius: 11px;
+  background: #fafcfe;
+}
+.form-builder-advanced-details summary {
+  cursor: pointer;
+  padding: 9px 11px;
+  color: #52687d;
+  font-size: 13px;
+  font-weight: 600;
+}
+.form-builder-advanced-details[open] summary {
+  border-bottom: 1px solid #e7edf3;
+  background: #f7fafd;
+}
+.form-builder-advanced-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #f7fbff;
+  color: #245f91;
+  text-align: left;
+  border-style: dashed;
+}
+.form-builder-advanced-toggle:hover {
+  background: #eef7ff;
+  border-color: #b9d4ed;
+}
+.form-builder-advanced-toggle small {
+  color: #71859a;
+  font-weight: 400;
+}
+.settings-advanced-box {
+  overflow: hidden;
+}
+.settings-advanced-box summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 15px 16px;
+  background: #fafcfe;
+}
+.settings-advanced-box summary::-webkit-details-marker { display: none; }
+.settings-advanced-box summary strong {
+  display: block;
+  color: #2f4a63;
+}
+.settings-advanced-box summary span {
+  display: block;
+  margin-top: 3px;
+  color: #74869a;
+  font-size: 13px;
+}
+.settings-advanced-box[open] summary {
+  border-bottom: 1px solid #e7edf3;
+}
+.settings-advanced-box-body {
+  padding: 16px;
+}
+
+/* ---------- Financial metrics: simple, scannable and self-explanatory ---------- */
+.financial-metrics-card {
+  border-radius: 16px;
+  overflow: hidden;
+}
+.financial-metrics-help-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #0b5cab;
+  border: 1px solid #d6e8fb;
+  font-size: 11px;
+  font-weight: 700;
+}
+.financial-metrics-coverage {
+  min-width: 125px;
+  padding: 9px 12px;
+  border: 1px solid #e1e8ef;
+  border-radius: 10px;
+  background: #fbfcfd;
+}
+.financial-metrics-coverage strong,
+.financial-metrics-coverage span {
+  display: block;
+}
+.financial-metrics-coverage strong {
+  color: #234d72;
+  font-size: 18px;
+}
+.financial-metrics-coverage span {
+  color: #7a8998;
+  font-size: 11px;
+}
+.financial-metrics-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.financial-metrics-view .btn {
+  min-width: 105px;
+}
+.financial-metrics-search {
+  max-width: 360px;
+  margin-left: auto;
+}
+.financial-metrics-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  color: #748395;
+  font-size: 12px;
+}
+.financial-metrics-group {
+  margin-bottom: 20px;
+}
+.financial-metrics-group-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 2px 10px;
+}
+.financial-metrics-group-heading h5 {
+  color: #2e465e;
+  font-size: 16px;
+}
+.financial-metrics-group-heading p {
+  margin: 0;
+  color: #7b8b9b;
+  font-size: 12px;
+}
+.financial-metric-card {
+  position: relative;
+  padding: 14px;
+  border: 1px solid #e2e8ef;
+  border-radius: 12px;
+  background: #fff;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.financial-metric-card:hover {
+  border-color: #c7d6e5;
+  box-shadow: 0 5px 16px rgba(37, 65, 92, .06);
+}
+.financial-metric-card.is-needs-setup {
+  background: #fcfcfd;
+}
+.financial-metric-value {
+  margin-top: 8px;
+  margin-bottom: 4px;
+  color: #1f3f5e;
+  font-size: 22px;
+  line-height: 1.1;
+  font-weight: 750;
+}
+.financial-metric-info {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d8e3ee;
+  border-radius: 50%;
+  background: #fff;
+  color: #62809b;
+}
+.financial-metric-info:hover,
+.financial-metric-info:focus {
+  color: #0d6efd;
+  border-color: #b8d2ec;
+  background: #f3f8ff;
+}
+.financial-metric-info-panel {
+  margin-top: 10px;
+  padding: 11px 12px;
+  border-left: 3px solid #79add9;
+  border-radius: 8px;
+  background: #f6faff;
+}
+.financial-metric-setup {
+  padding: 8px 9px;
+  border-radius: 8px;
+  background: #fff8e8;
+  color: #7d5c16;
+  font-size: 12px;
+}
+.financial-metrics-footer {
+  padding: 12px 14px;
+  border: 1px solid #dce9f4;
+  border-radius: 10px;
+  background: #f5faff;
+  color: #62788d;
+  font-size: 12px;
+}
+.financial-metrics-empty {
+  border: 1px dashed #dce4eb;
+  border-radius: 12px;
+  background: #fbfcfd;
+}
+@media (max-width: 767.98px) {
+  .financial-metrics-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .financial-metrics-search {
+    max-width: none;
+    margin-left: 0;
+  }
+  .financial-metrics-view {
+    width: 100%;
+    display: flex;
+  }
+  .financial-metrics-view .btn {
+    flex: 1 1 50%;
+  }
 }

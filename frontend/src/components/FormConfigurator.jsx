@@ -331,7 +331,7 @@ export default function FormConfigurator({
           <div className="min-w-0">
             <div className="form-builder-kicker"><i className="bi bi-sliders2 me-1"></i>Customize</div>
             <h4 className="mb-1">{title}</h4>
-            <p className="mb-0">{subtitle||"Set up the form the way your business works."}</p>
+            <p className="mb-0">{subtitle||"Start with the basics. Drag fields, rename them and choose how people use them. More options stay hidden until you need them."}</p>
           </div>
           <button type="button" className="btn btn-light border rounded-circle form-builder-close" onClick={onClose} aria-label="Close">
             <i className="bi bi-x-lg"></i>
@@ -371,27 +371,12 @@ export default function FormConfigurator({
                     {FIELD_TYPES.map(type=><option key={type.value} value={type.value}>{type.label}</option>)}
                   </select>
                 </div>
-                <div className="col-md-6">
-                  <label className="form-label">Where should it appear?</label>
-                  <input className="form-control" list="formSectionOptions" value={newField.section} onChange={event=>setNewField(prev=>({...prev,section:event.target.value}))} placeholder="Example: Payment details"/>
-                  <datalist id="formSectionOptions">{sections.map(section=><option key={section} value={humanize(section)}/>)}</datalist>
-                </div>
-                <div className="col-md-6">
-                  <label className="form-label">How much space should it use?</label>
-                  <select className="form-select" value={newField.width} onChange={event=>setNewField(prev=>({...prev,width:Number(event.target.value)}))}>
-                    {WIDTHS.map(width=><option key={width.value} value={width.value}>{width.label}</option>)}
-                  </select>
-                </div>
                 {["select","multiselect"].includes(newField.fieldType)&&(
                   <div className="col-12">
                     <label className="form-label">Choices</label>
                     <textarea className="form-control" rows={2} value={newField.optionsText} onChange={event=>setNewField(prev=>({...prev,optionsText:event.target.value}))} placeholder="One choice per line, for example: Retail, Wholesale, Other"/>
                   </div>
                 )}
-                <div className="col-12">
-                  <label className="form-label">Helpful note <span className="text-secondary">(optional)</span></label>
-                  <input className="form-control" value={newField.helpText||""} onChange={event=>setNewField(prev=>({...prev,helpText:event.target.value}))} placeholder="Example: This appears below the field"/>
-                </div>
                 <div className="col-12">
                   <div className="form-check form-switch">
                     <input className="form-check-input" type="checkbox" checked={newField.required} onChange={event=>setNewField(prev=>({...prev,required:event.target.checked}))}/>

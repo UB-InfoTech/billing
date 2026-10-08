@@ -109,12 +109,20 @@ export const EXPENSE_FORM_FIELDS=[
  {key:"notes",label:"Notes",fieldType:"textarea",width:12,section:"details",order:19}
 ];
 
+export const CALENDAR_EVENT_FIELDS=[
+ {key:"title",label:"Event Title",fieldType:"text",width:6,section:"event",required:true,order:0,system:true},
+ {key:"start",label:"Start",fieldType:"datetime",width:3,section:"event",required:true,order:1,system:true},
+ {key:"end",label:"End",fieldType:"datetime",width:3,section:"event",required:true,order:2,system:true},
+ {key:"color",label:"Color",fieldType:"text",width:4,section:"appearance",order:3,defaultValue:"#3788d8"},
+];
+
 export const FORM_CATALOG=[
   {key:"orders.form",label:"Bill information",page:"/orders",query:"form",description:"Arrange bill fields, add your own fields, links, rules and calculations.",fields:ORDER_FORM_FIELDS},
   {key:"orders.items",label:"Bill items",page:"/orders",query:"items",description:"Arrange item columns and create calculations such as quantity × rate.",fields:ORDER_ITEM_FIELDS},
   {key:"clients.form",label:"Client form",page:"/clients",query:"form",description:"Customize customer details, linked records and conditional fields.",fields:CLIENT_FORM_FIELDS},
   {key:"products.form",label:"Product form",page:"/products",query:"form",description:"Customize product details, pricing, stock and your own business fields.",fields:PRODUCT_FORM_FIELDS},
   {key:"expenses.form",label:"Expense form",page:"/add-expense",query:"form",description:"Customize expense details, tax, links, recurring rules and your own business fields.",fields:EXPENSE_FORM_FIELDS},
+  {key:"calendar.event",label:"Calendar event form",page:"/calendar",query:"form",description:"Customize event details and add your own event information.",fields:CALENDAR_EVENT_FIELDS},
 ];
 
 export const TABLE_CATALOG=[
@@ -122,6 +130,7 @@ export const TABLE_CATALOG=[
   {key:"clients.list",label:"Clients list",page:"/clients",description:"Simplify the customer list and show the information your team needs."},
   {key:"products.list",label:"Products list",page:"/products",description:"Choose the product columns your team needs and add custom columns."},
   {key:"expenses.list",label:"Expenses list",page:"/expense",description:"Choose the expense columns your team needs and add custom columns."},
+  {key:"calendar.events",label:"Calendar events",page:"/calendar",description:"Choose the columns shown in the event list and add custom columns."},
   {key:"sales-analytics.orders",label:"Report order list",page:"/analytics",description:"Choose the columns shown in the report order list and add custom columns."},
   {key:"sales-analytics.state-cities",label:"State city list",page:"/analytics",query:"state-table",description:"Choose the columns shown when you open a state on the sales map."},
 ];

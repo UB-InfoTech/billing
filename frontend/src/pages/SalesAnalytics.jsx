@@ -1,5 +1,6 @@
 //using
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import {
   Chart as ChartJS,
@@ -83,8 +84,8 @@ const SalesAnalytics = () => {
   // const [currentPage, setCurrentPage] = useState('');
   const [ordersPerPage] = useState(10); // Adjust as needed
   const [selectedOrders, setSelectedOrders] = useState([]);
+  const [searchParams] = useSearchParams();
   const [reportWidgets,setReportWidgets]=useState(DEFAULT_REPORT_WIDGETS);
-  const [reportConfigLoading,setReportConfigLoading]=useState(true);
 
 
   useEffect(() => {
@@ -95,7 +96,6 @@ const SalesAnalytics = () => {
     let cancelled=false;
     const loadReportConfig=async()=>{
       try{
-        setReportConfigLoading(true);
         const response=await axios.get(`${linkone}/api/report-config`,{
           headers:{'x-auth-token':localStorage.getItem('token')||''}
         });
@@ -105,7 +105,6 @@ const SalesAnalytics = () => {
       }catch(error){
         // Keep the built-in report layout when settings are unavailable.
       }finally{
-        if(!cancelled)setReportConfigLoading(false);
       }
     };
     loadReportConfig();
@@ -730,6 +729,7 @@ const SalesAnalytics = () => {
                     {stateData[selectedState] ? (
                       <DynamicTable
                           tableKey="sales-analytics.state-cities"
+                          autoOpenSettings={searchParams.get("customize")==="state-table"}
                           rows={Object.entries(stateData[selectedState].cities || {}).map(([city,count])=>({
                             city:city||"Unknown",
                             orderCount:count,
@@ -831,6 +831,7 @@ const SalesAnalytics = () => {
                     onToggleRow={id=>toggleSelectOrder(id)}
                     onToggleAll={()=>toggleSelectAll()}
                     onSort={handleSort}
+                    autoOpenSettings={searchParams.get("customize")==="table"}
                     columns={[
                       {key:"orderDate",label:"Date",render:order=>order.orderDate?new Date(order.orderDate).toLocaleDateString():""},
                       {key:"orderNumber",label:"Bill No."},

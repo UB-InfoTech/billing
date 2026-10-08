@@ -80,7 +80,7 @@ export default function Calendar(){
   const openCreate=(dateInput="")=>{
     const values=emptyEvent(eventFields);
     if(dateInput){
-      const start=new Date(dateInput);
+      const start=new Date(dateInput.length===10?dateInput+"T09:00:00":dateInput);
       if(!Number.isNaN(start.getTime())){
         const end=new Date(start);end.setHours(end.getHours()+1);
         values.start=localInput(start);values.end=localInput(end);

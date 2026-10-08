@@ -652,7 +652,7 @@ export default function Settings(){
                 <div className="settings-section-heading">
                   <div>
                     <h2>Reports</h2>
-                    <p>Choose which report panels your team sees, rename them, and drag them into the order you prefer.</p>
+                    <p>Keep Reports simple. Turn sections on or off and rename them only when you need to.</p>
                   </div>
                   <div className="d-flex gap-2">
                     <button type="button" className="btn btn-light border" onClick={resetReportConfig} disabled={reportSaving}>Reset</button>
@@ -701,43 +701,50 @@ export default function Settings(){
 
                 {!reportLoading&&reportConfig&&(
                   <div className="mt-4">
-                    <div className="settings-section-heading mb-3">
-                      <div>
-                        <h3 className="mb-1">Financial data</h3>
-                        <p>Enter accounting figures that this billing data cannot know automatically. Leave a value blank when it is not applicable.</p>
-                      </div>
-                    </div>
-                    <div className="row g-3">
-                      {FINANCIAL_INPUT_GROUPS.map(group=>(
-                        <div className="col-lg-6" key={group.title}>
-                          <div className="settings-feature-card h-100">
-                            <h4>{group.title}</h4>
-                            <div className="row g-2">
-                              {group.fields.map(([key,label])=>(
-                                <div className="col-md-6" key={key}>
-                                  <label className="form-label">{label}</label>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    className="form-control"
-                                    value={reportConfig.financialInputs?.[key]??""}
-                                    onChange={event=>updateFinancialInput(key,event.target.value)}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
+                    <details className="settings-advanced-box">
+                      <summary>
+                        <div>
+                          <strong>Advanced financial data</strong>
+                          <span>Add extra business figures only when you want investor or accounting measures such as ROE, EPS, WACC or P/E.</span>
                         </div>
-                      ))}
-                    </div>
-                    <div className="small text-secondary mt-2">These inputs are used only for metrics that require accounting data such as equity, debt, depreciation, shares or cash flow.</div>
+                        <i className="bi bi-chevron-down"></i>
+                      </summary>
+                      <div className="settings-advanced-box-body">
+                        <div className="settings-builder-tip mb-3">
+                          <i className="bi bi-info-circle me-2"></i>
+                          Your normal sales, bills and expenses are calculated automatically. You only need these extra numbers when the software cannot know them from your billing data.
+                        </div>
+                        <div className="row g-3">
+                          {FINANCIAL_INPUT_GROUPS.map(group=>(
+                            <div className="col-lg-6" key={group.title}>
+                              <div className="settings-feature-card h-100">
+                                <h4>{group.title}</h4>
+                                <div className="small text-secondary mb-3">Leave anything blank that does not apply to your business.</div>
+                                <div className="row g-2">
+                                  {group.fields.map(([key,label])=>(
+                                    <div className="col-md-6" key={key}>
+                                      <label className="form-label">{label}</label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        className="form-control"
+                                        value={reportConfig.financialInputs?.[key]??""}
+                                        onChange={event=>updateFinancialInput(key,event.target.value)}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="small text-secondary mt-3">Use Save report layout below after entering the numbers.</div>
+                      </div>
+                    </details>
                   </div>
                 )}
-              </section>
-            )}
 
-            {section==="invoice"&&(
               <section className="settings-section">
                 <div className="settings-section-heading">
                   <div><h2>Invoice & print</h2><p>Change what appears on printed invoices without editing templates or code.</p></div>

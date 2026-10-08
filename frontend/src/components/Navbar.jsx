@@ -78,7 +78,7 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
           <div className="sidebar-brand-mark"><i className="bi bi-grid-1x2-fill"></i></div>
           <div className="sidebar-brand-text">
             <div className="fw-bold">Billing</div>
-            <div className="small text-white-50">Business Manager</div>
+            <div className="small text-secondary">Simple business workspace</div>
           </div>
           <button
             type="button"

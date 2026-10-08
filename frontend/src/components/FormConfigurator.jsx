@@ -275,6 +275,30 @@ export default function FormConfigurator({
   const save=async()=>{
     try{
       setError("");
+
+      const hiddenRequired=draft.find(field=>field.required&&field.visible===false);
+      if(hiddenRequired){
+        throw new Error(`“${hiddenRequired.label||"This field"}” is required but hidden. Show it or turn off Required.`);
+      }
+
+      const duplicateLabels=new Set();
+      for(const field of draft){
+        const normalized=String(field.label||"").trim().toLowerCase();
+        if(!normalized)throw new Error("Every field needs a name.");
+        if(duplicateLabels.has(normalized))throw new Error(`“${field.label}” appears more than once. Rename one of the fields.`);
+        duplicateLabels.add(normalized);
+      }
+
+      for(const field of draft){
+        const formulaError=validateFormula(field);
+        if(formulaError)throw new Error(`Check the calculation for “${field.label}”: ${formulaError}`);
+        for(const condition of field.conditions||[]){
+          if(condition.fieldKey&&!draft.some(candidate=>candidate.key===condition.fieldKey)){
+            throw new Error(`The rule on “${field.label}” uses a field that no longer exists.`);
+          }
+        }
+      }
+
       await onSave(draft.map((field,index)=>({...field,order:index})));
       onClose();
     }catch(saveError){

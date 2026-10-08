@@ -9,7 +9,8 @@ const widgetSchema=new mongoose.Schema({
 
 const reportConfigurationSchema=new mongoose.Schema({
   createdBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true,index:true},
-  widgets:{type:[widgetSchema],default:[]}
+  widgets:{type:[widgetSchema],default:[]},
+  financialInputs:{type:Map,of:Number,default:{}}
 },{timestamps:true,versionKey:false});
 
 reportConfigurationSchema.index({createdBy:1},{unique:true});

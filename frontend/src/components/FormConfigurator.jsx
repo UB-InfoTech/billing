@@ -480,7 +480,10 @@ export default function FormConfigurator({
                   >
                     <i className={`bi ${field.visible!==false?"bi-eye":"bi-eye-slash"}`}></i>
                   </button>
-                  <button type="button" className="btn btn-sm btn-light border form-builder-more" onClick={()=>setExpandedKey(expandedKey===field.key?null:field.key)}>
+                  <button type="button" className="btn btn-sm btn-light border form-builder-more" onClick={()=>{
+                    setShowAdvanced(false);
+                    setExpandedKey(expandedKey===field.key?null:field.key);
+                  }}>
                     {expandedKey===field.key?"Done":"Edit"}
                   </button>
                 </div>

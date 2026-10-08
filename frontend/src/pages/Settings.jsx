@@ -48,6 +48,11 @@ export default function Settings(){
   const [invoiceSaving,setInvoiceSaving]=useState(false);
   const [invoiceError,setInvoiceError]=useState("");
   const [invoiceDragKey,setInvoiceDragKey]=useState(null);
+  const [reportConfig,setReportConfig]=useState(null);
+  const [reportLoading,setReportLoading]=useState(true);
+  const [reportSaving,setReportSaving]=useState(false);
+  const [reportError,setReportError]=useState("");
+  const [reportDragKey,setReportDragKey]=useState(null);
 
   useEffect(()=>{
     if(configuration?.navigation){
@@ -84,6 +89,59 @@ export default function Settings(){
   };
 
   useEffect(()=>{loadInvoiceConfig();},[]);
+
+  const loadReportConfig=async()=>{
+    try{
+      setReportLoading(true);
+      setReportError("");
+      const response=await axios.get(apiBase+"/api/report-config",auth());
+      setReportConfig(response.data||null);
+    }catch(loadError){
+      setReportError(loadError.response?.data?.message||"Unable to load report settings.");
+    }finally{setReportLoading(false);}
+  };
+
+  useEffect(()=>{loadReportConfig();},[]);
+
+  const updateReportWidget=(key,patch)=>{
+    setReportConfig(prev=>({...prev,widgets:(prev?.widgets||[]).map(widget=>widget.key===key?{...widget,...patch}:widget)}));
+  };
+
+  const moveReportWidget=(source,target)=>{
+    if(!source||!target||source===target)return;
+    setReportConfig(prev=>{
+      const widgets=(prev?.widgets||[]).slice().sort((a,b)=>a.order-b.order);
+      const sourceIndex=widgets.findIndex(item=>item.key===source);
+      const targetIndex=widgets.findIndex(item=>item.key===target);
+      if(sourceIndex<0||targetIndex<0)return prev;
+      const next=widgets.slice();
+      const [moved]=next.splice(sourceIndex,1);
+      next.splice(targetIndex,0,moved);
+      return {...prev,widgets:next.map((item,index)=>({...item,order:index}))};
+    });
+  };
+
+  const saveReportConfig=async()=>{
+    try{
+      setReportSaving(true);
+      setReportError("");
+      const response=await axios.put(apiBase+"/api/report-config",{widgets:(reportConfig?.widgets||[]).map((item,index)=>({...item,order:index}))},auth());
+      setReportConfig(response.data||reportConfig);
+    }catch(saveError){
+      setReportError(saveError.response?.data?.message||"Unable to save report settings.");
+    }finally{setReportSaving(false);}
+  };
+
+  const resetReportConfig=async()=>{
+    try{
+      setReportSaving(true);
+      setReportError("");
+      const response=await axios.post(apiBase+"/api/report-config/reset",{},auth());
+      setReportConfig(response.data||null);
+    }catch(resetError){
+      setReportError(resetError.response?.data?.message||"Unable to reset report settings.");
+    }finally{setReportSaving(false);}
+  };
 
   const updateInvoiceSection=(section,patch)=>{
     setInvoiceConfig(prev=>({...prev,[section]:{...(prev?.[section]||{}),...patch}}));
@@ -286,6 +344,7 @@ export default function Settings(){
               ["navigation","Menu & pages","bi-layout-sidebar"],
               ["forms","Forms","bi-ui-checks-grid"],
               ["tables","Lists & tables","bi-table"],
+              ["reports","Reports","bi-bar-chart"],
               ["invoice","Invoice & print","bi-file-earmark-text"],
               ["workflows","Workflows","bi-diagram-3"]
             ].map(([key,label,icon])=>(
@@ -431,6 +490,60 @@ export default function Settings(){
                 </div>
               </section>
             )}
+            {section==="reports"&&(
+              <section className="settings-section">
+                <div className="settings-section-heading">
+                  <div>
+                    <h2>Reports</h2>
+                    <p>Choose which report panels your team sees, rename them, and drag them into the order you prefer.</p>
+                  </div>
+                  <div className="d-flex gap-2">
+                    <button type="button" className="btn btn-light border" onClick={resetReportConfig} disabled={reportSaving}>Reset</button>
+                    <button type="button" className="btn btn-primary" onClick={saveReportConfig} disabled={reportSaving||reportLoading}>{reportSaving?"Saving...":"Save report layout"}</button>
+                  </div>
+                </div>
+                {reportError&&<div className="alert alert-danger">{reportError}</div>}
+                {reportLoading||!reportConfig?(
+                  <div className="text-center py-5 text-secondary"><span className="spinner-border spinner-border-sm me-2"></span>Loading report settings...</div>
+                ):(
+                  <div className="settings-workflow-list">
+                    {(reportConfig.widgets||[]).slice().sort((a,b)=>a.order-b.order).map(widget=>(
+                      <div
+                        className="settings-workflow-row"
+                        key={widget.key}
+                        draggable
+                        onDragStart={()=>setReportDragKey(widget.key)}
+                        onDragOver={event=>event.preventDefault()}
+                        onDrop={()=>{moveReportWidget(reportDragKey,widget.key);setReportDragKey(null);}}
+                        onDragEnd={()=>setReportDragKey(null)}
+                      >
+                        <div className="d-flex align-items-center gap-3 flex-grow-1">
+                          <span className="text-secondary" style={{cursor:"grab"}} title="Drag to move"><i className="bi bi-grip-vertical"></i></span>
+                          <div className="flex-grow-1">
+                            <input
+                              className="form-control"
+                              value={widget.title||""}
+                              onChange={event=>updateReportWidget(widget.key,{title:event.target.value})}
+                              aria-label={`Title for ${widget.title||widget.key}`}
+                            />
+                            <small className="text-secondary">This panel controls one part of the Reports screen.</small>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className={`btn btn-sm ${widget.visible!==false?"btn-outline-primary":"btn-outline-secondary"}`}
+                          onClick={()=>updateReportWidget(widget.key,{visible:widget.visible===false})}
+                        >
+                          <i className={`bi ${widget.visible!==false?"bi-eye":"bi-eye-slash"} me-1`}></i>
+                          {widget.visible!==false?"Shown":"Hidden"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
             {section==="invoice"&&(
               <section className="settings-section">
                 <div className="settings-section-heading">

@@ -18,6 +18,9 @@ const FIELD_TYPES=[
   {value:"reference",label:"Existing record",icon:"bi-database"},
 ];
 
+const COMMON_FIELD_TYPES=FIELD_TYPES.filter(type=>["text","number","currency","date","select","boolean","phone","reference"].includes(type.value));
+const ADVANCED_FIELD_TYPES=FIELD_TYPES.filter(type=>!COMMON_FIELD_TYPES.some(item=>item.value===type.value));
+
 const DATA_SOURCES=[
   {value:"none",label:"Enter it manually",fields:[]},
   {value:"clients",label:"Client records",fields:[
@@ -113,6 +116,7 @@ export default function FormConfigurator({
   const [dragKey,setDragKey]=useState(null);
   const [expandedKey,setExpandedKey]=useState(null);
   const [showAddField,setShowAddField]=useState(false);
+  const [showAdvanced,setShowAdvanced]=useState(false);
   const [error,setError]=useState("");
   const [newField,setNewField]=useState({
     label:"",
@@ -131,6 +135,7 @@ export default function FormConfigurator({
     setSearch("");
     setExpandedKey(null);
     setShowAddField(false);
+    setShowAdvanced(false);
     setError("");
   },[open,fields]);
 
@@ -495,7 +500,7 @@ export default function FormConfigurator({
                       <div className="col-12">
                         <label className="form-label">Field type</label>
                         <div className="form-builder-type-grid">
-                          {FIELD_TYPES.map(type=>(
+                          {COMMON_FIELD_TYPES.map(type=>(
                             <button
                               type="button"
                               key={type.value}
@@ -515,6 +520,30 @@ export default function FormConfigurator({
                             </button>
                           ))}
                         </div>
+                        <details className="form-builder-advanced-details mt-2">
+                          <summary><i className="bi bi-three-dots me-2"></i>More field types</summary>
+                          <div className="form-builder-type-grid mt-2">
+                            {ADVANCED_FIELD_TYPES.map(type=>(
+                              <button
+                                type="button"
+                                key={type.value}
+                                className={`form-builder-type-card ${field.fieldType===type.value?"active":""}`}
+                                disabled={field.locked||field.system}
+                                onClick={()=>update(field.key,{
+                                  fieldType:type.value,
+                                  options:["select","multiselect"].includes(type.value)?(field.options||[]):[],
+                                  formula:["number","currency"].includes(type.value)?field.formula:"",
+                                  readOnly:["number","currency"].includes(type.value)&&field.formula?true:field.readOnly,
+                                  dataSource:["reference","select","multiselect"].includes(type.value)
+                                    ?field.dataSource
+                                    :{type:"none",resource:"",valueField:"_id",labelField:"",searchField:"",multiple:false,autoFill:[]}
+                                })}
+                              >
+                                <i className={`bi ${type.icon}`}></i><span>{type.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </details>
                       </div>
 
                       <div className="col-md-7">
@@ -571,6 +600,13 @@ export default function FormConfigurator({
                       )}
 
                       <div className="col-12">
+                        <button type="button" className="form-builder-advanced-toggle" onClick={()=>setShowAdvanced(value=>!value)}>
+                          <span><i className={`bi ${showAdvanced?"bi-chevron-up":"bi-sliders2"} me-2`}></i>More options for this field</span>
+                          <small>{showAdvanced?"Hide advanced settings":"Connections, automatic filling, calculations, rules and validation"}</small>
+                        </button>
+                      </div>
+
+                      <div className="col-12" style={{display:showAdvanced?"":"none"}} data-advanced-option>
                         <div className="form-builder-panel">
                           <div className="d-flex justify-content-between gap-3 mb-2">
                             <div>
@@ -633,7 +669,7 @@ export default function FormConfigurator({
                       </div>
 
                       {field.dataSource?.resource&&field.dataSource.resource!=="none"&&(
-                        <div className="col-12">
+                        <div className="col-12" style={{display:showAdvanced?"":"none"}} data-advanced-option>
                           <div className="form-builder-panel">
                             <div className="fw-semibold mb-2">When someone chooses a record, fill these fields too</div>
                             {(field.dataSource?.autoFill||[]).map((mapping,mappingIndex)=>(
@@ -675,7 +711,7 @@ export default function FormConfigurator({
                       )}
 
                       {(field.fieldType==="number"||field.fieldType==="currency")&&(
-                        <div className="col-12">
+                        <div className="col-12" style={{display:showAdvanced?"":"none"}} data-advanced-option>
                           <div className="form-builder-calculation">
                             <div className="d-flex justify-content-between align-items-start gap-2 mb-2">
                               <div>
@@ -721,7 +757,7 @@ export default function FormConfigurator({
                         </div>
                       )}
 
-                      <div className="col-12">
+                      <div className="col-12" style={{display:showAdvanced?"":"none"}} data-advanced-option>
                         <details className="form-builder-panel">
                           <summary className="fw-semibold">Validation</summary>
                           <div className="row g-3 mt-1">
@@ -739,7 +775,7 @@ export default function FormConfigurator({
                         </details>
                       </div>
 
-                      <div className="col-12">
+                      <div className="col-12" style={{display:showAdvanced?"":"none"}} data-advanced-option>
                         <div className="form-builder-panel">
                           <div className="fw-semibold mb-2">Rules</div>
                           <div className="small text-secondary mb-2">Make a field appear, become required, or become read only based on another answer.</div>

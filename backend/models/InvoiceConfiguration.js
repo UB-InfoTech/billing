@@ -9,7 +9,7 @@ const itemColumnSchema=new mongoose.Schema({
 },{_id:false});
 
 const invoiceConfigurationSchema=new mongoose.Schema({
-  createdBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true,index:true},
+  createdBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true},
   pageSize:{type:String,enum:["A4","A5","Letter"],default:"A4"},
   accentColor:{type:String,default:"#111827"},
   invoiceTitle:{type:String,default:"TAX INVOICE",maxlength:80},

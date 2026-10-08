@@ -53,6 +53,11 @@ export default function Settings(){
   const [reportSaving,setReportSaving]=useState(false);
   const [reportError,setReportError]=useState("");
   const [reportDragKey,setReportDragKey]=useState(null);
+  const [dashboardConfig,setDashboardConfig]=useState(null);
+  const [dashboardLoading,setDashboardLoading]=useState(true);
+  const [dashboardSaving,setDashboardSaving]=useState(false);
+  const [dashboardError,setDashboardError]=useState("");
+  const [dashboardDragKey,setDashboardDragKey]=useState(null);
 
   useEffect(()=>{
     if(configuration?.navigation){
@@ -102,6 +107,59 @@ export default function Settings(){
   };
 
   useEffect(()=>{loadReportConfig();},[]);
+
+  const loadDashboardConfig=async()=>{
+    try{
+      setDashboardLoading(true);
+      setDashboardError("");
+      const response=await axios.get(apiBase+"/api/dashboard-config",auth());
+      setDashboardConfig(response.data||null);
+    }catch(loadError){
+      setDashboardError(loadError.response?.data?.message||"Unable to load dashboard settings.");
+    }finally{setDashboardLoading(false);}
+  };
+
+  useEffect(()=>{loadDashboardConfig();},[]);
+
+  const updateDashboardWidget=(key,patch)=>{
+    setDashboardConfig(prev=>({...prev,widgets:(prev?.widgets||[]).map(widget=>widget.key===key?{...widget,...patch}:widget)}));
+  };
+
+  const moveDashboardWidget=(source,target)=>{
+    if(!source||!target||source===target)return;
+    setDashboardConfig(prev=>{
+      const widgets=(prev?.widgets||[]).slice().sort((a,b)=>a.order-b.order);
+      const sourceIndex=widgets.findIndex(item=>item.key===source);
+      const targetIndex=widgets.findIndex(item=>item.key===target);
+      if(sourceIndex<0||targetIndex<0)return prev;
+      const next=widgets.slice();
+      const [moved]=next.splice(sourceIndex,1);
+      next.splice(targetIndex,0,moved);
+      return {...prev,widgets:next.map((item,index)=>({...item,order:index}))};
+    });
+  };
+
+  const saveDashboardConfig=async()=>{
+    try{
+      setDashboardSaving(true);
+      setDashboardError("");
+      const response=await axios.put(apiBase+"/api/dashboard-config",{widgets:(dashboardConfig?.widgets||[]).map((item,index)=>({...item,order:index}))},auth());
+      setDashboardConfig(response.data||dashboardConfig);
+    }catch(saveError){
+      setDashboardError(saveError.response?.data?.message||"Unable to save dashboard settings.");
+    }finally{setDashboardSaving(false);}
+  };
+
+  const resetDashboardConfig=async()=>{
+    try{
+      setDashboardSaving(true);
+      setDashboardError("");
+      const response=await axios.post(apiBase+"/api/dashboard-config/reset",{},auth());
+      setDashboardConfig(response.data||null);
+    }catch(resetError){
+      setDashboardError(resetError.response?.data?.message||"Unable to reset dashboard settings.");
+    }finally{setDashboardSaving(false);}
+  };
 
   const updateReportWidget=(key,patch)=>{
     setReportConfig(prev=>({...prev,widgets:(prev?.widgets||[]).map(widget=>widget.key===key?{...widget,...patch}:widget)}));
@@ -341,6 +399,7 @@ export default function Settings(){
           <aside className="settings-menu">
             {[
               ["home","Overview","bi-house"],
+              ["dashboard","Dashboard","bi-speedometer2"],
               ["navigation","Menu & pages","bi-layout-sidebar"],
               ["forms","Forms","bi-ui-checks-grid"],
               ["tables","Lists & tables","bi-table"],
@@ -356,6 +415,51 @@ export default function Settings(){
 
           <main className="settings-content">
             {configurationError&&<div className="alert alert-danger">{configurationError}</div>}
+
+            {section==="dashboard"&&(
+              <section className="settings-section">
+                <div className="settings-section-heading">
+                  <div>
+                    <h2>Dashboard</h2>
+                    <p>Choose the dashboard information your team sees first. Rename panels, hide what you do not need, and drag to reorder.</p>
+                  </div>
+                  <div className="d-flex gap-2">
+                    <button type="button" className="btn btn-light border" onClick={resetDashboardConfig} disabled={dashboardSaving}>Reset</button>
+                    <button type="button" className="btn btn-primary" onClick={saveDashboardConfig} disabled={dashboardSaving||dashboardLoading}>{dashboardSaving?"Saving...":"Save dashboard"}</button>
+                  </div>
+                </div>
+                {dashboardError&&<div className="alert alert-danger">{dashboardError}</div>}
+                {dashboardLoading||!dashboardConfig?(
+                  <div className="text-center py-5 text-secondary"><span className="spinner-border spinner-border-sm me-2"></span>Loading dashboard settings...</div>
+                ):(
+                  <div className="settings-workflow-list">
+                    {(dashboardConfig.widgets||[]).slice().sort((a,b)=>a.order-b.order).map(widget=>(
+                      <div
+                        className="settings-workflow-row"
+                        key={widget.key}
+                        draggable
+                        onDragStart={()=>setDashboardDragKey(widget.key)}
+                        onDragOver={event=>event.preventDefault()}
+                        onDrop={()=>{moveDashboardWidget(dashboardDragKey,widget.key);setDashboardDragKey(null);}}
+                        onDragEnd={()=>setDashboardDragKey(null)}
+                      >
+                        <div className="d-flex align-items-center gap-3 flex-grow-1">
+                          <span className="text-secondary" style={{cursor:"grab"}} title="Drag to move"><i className="bi bi-grip-vertical"></i></span>
+                          <div className="flex-grow-1">
+                            <input className="form-control" value={widget.title||""} onChange={event=>updateDashboardWidget(widget.key,{title:event.target.value})}/>
+                            <small className="text-secondary">Controls one area of the dashboard.</small>
+                          </div>
+                        </div>
+                        <button type="button" className={`btn btn-sm ${widget.visible!==false?"btn-outline-primary":"btn-outline-secondary"}`} onClick={()=>updateDashboardWidget(widget.key,{visible:widget.visible===false})}>
+                          <i className={`bi ${widget.visible!==false?"bi-eye":"bi-eye-slash"} me-1`}></i>
+                          {widget.visible!==false?"Shown":"Hidden"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
 
             {section==="home"&&(
               <>

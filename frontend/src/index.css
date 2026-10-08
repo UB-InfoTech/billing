@@ -2206,3 +2206,37 @@ body {
   padding:12px;
   border-top:1px solid #e6ebf1;
 }
+
+/* Shared product language */
+.app-main .container-fluid{
+  max-width:1500px;
+}
+.app-main .card{
+  border-radius:14px;
+}
+.app-main .btn{
+  border-radius:9px;
+}
+.app-main .form-control,
+.app-main .form-select{
+  min-height:40px;
+  border-radius:9px;
+}
+.app-main .form-control:focus,
+.app-main .form-select:focus{
+  border-color:#86b7fe;
+  box-shadow:0 0 0 .16rem rgba(13,110,253,.1);
+}
+.app-main .table{
+  --bs-table-border-color:#e7ecf2;
+}
+.app-main .table>thead>tr>th{
+  color:#526174;
+  font-size:12px;
+  font-weight:700;
+  white-space:nowrap;
+  text-transform:none;
+}
+.app-main .table>tbody>tr>td{
+  color:#334155;
+}

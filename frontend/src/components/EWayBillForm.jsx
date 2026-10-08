@@ -21,7 +21,7 @@ const DEFAULT_VALUES={
   customFields:{}
 };
 
-export default function EWayBillForm({orderId,profile,customizeOnly=false}){
+export default function EWayBillForm({orderId,customizeOnly=false,onClose}){
   const {fields,loading:formLoading,save:saveForm,reset:resetForm,saving:formSaving}=useFormConfiguration("ewaybill.form",EWAY_BILL_FIELDS);
   const [formData,setFormData]=useState(()=>buildConfiguredDefaults(DEFAULT_VALUES,EWAY_BILL_FIELDS));
   const [loading,setLoading]=useState(false);
@@ -134,7 +134,7 @@ export default function EWayBillForm({orderId,profile,customizeOnly=false}){
 
       <FormConfigurator
         open={builderOpen}
-        onClose={()=>setBuilderOpen(false)}
+        onClose={()=>{setBuilderOpen(false);onClose?.();}}
         title="Customize E-Way Bill form"
         subtitle="Arrange fields, add your own information, set defaults, visibility, read-only rules and validations."
         fields={eventFields}

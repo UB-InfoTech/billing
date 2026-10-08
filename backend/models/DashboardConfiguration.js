@@ -8,7 +8,7 @@ const dashboardWidgetSchema=new mongoose.Schema({
 },{_id:false});
 
 const dashboardConfigurationSchema=new mongoose.Schema({
-  createdBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true,index:true},
+  createdBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true},
   widgets:{type:[dashboardWidgetSchema],default:[]}
 },{timestamps:true,versionKey:false});
 

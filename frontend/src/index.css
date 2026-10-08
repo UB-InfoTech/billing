@@ -2182,3 +2182,27 @@ body {
     width:100%;
   }
 }
+
+.form-builder-secondary-details{
+  margin:0 0 2px;
+  border:1px solid #e3e9f0;
+  border-radius:12px;
+  background:#fbfcfe;
+}
+.form-builder-secondary-details>summary{
+  cursor:pointer;
+  list-style:none;
+  padding:10px 12px;
+  color:#475569;
+  font-size:13px;
+  font-weight:600;
+}
+.form-builder-secondary-details>summary::-webkit-details-marker{display:none}
+.form-builder-secondary-details>summary:hover{
+  color:#0d6efd;
+  background:#f7fbff;
+}
+.form-builder-secondary-details-body{
+  padding:12px;
+  border-top:1px solid #e6ebf1;
+}

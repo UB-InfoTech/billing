@@ -109,6 +109,27 @@ export const EXPENSE_FORM_FIELDS=[
  {key:"notes",label:"Notes",fieldType:"textarea",width:12,section:"details",order:19}
 ];
 
+export const PROFILE_FORM_FIELDS=[
+ {key:"headerTitle",label:"Header Title",fieldType:"text",width:6,section:"company",required:true,order:0},
+ {key:"companyName",label:"Company Name",fieldType:"text",width:6,section:"company",required:true,order:1},
+ {key:"companyAddress",label:"Company Address",fieldType:"textarea",width:12,section:"company",required:true,order:2},
+ {key:"phoneNumber1",label:"Phone Number",fieldType:"phone",width:6,section:"company",required:true,order:3},
+ {key:"phoneNumber2",label:"Alternate Phone",fieldType:"phone",width:6,section:"company",order:4},
+ {key:"gstin",label:"GSTIN",fieldType:"text",width:6,section:"tax",required:true,order:5},
+ {key:"pan",label:"PAN",fieldType:"text",width:6,section:"tax",required:true,order:6},
+ {key:"pinCode",label:"Pin Code",fieldType:"text",width:4,section:"address",required:true,order:7},
+ {key:"stateCode",label:"State Code",fieldType:"number",width:4,section:"address",required:true,order:8},
+ {key:"bankName",label:"Bank Name",fieldType:"text",width:4,section:"bank",required:true,order:9},
+ {key:"accountNo",label:"Account Number",fieldType:"text",width:4,section:"bank",required:true,order:10},
+ {key:"branchName",label:"Branch Name",fieldType:"text",width:4,section:"bank",required:true,order:11},
+ {key:"ifsc",label:"IFSC",fieldType:"text",width:4,section:"bank",required:true,order:12},
+ {key:"billNoPrefix",label:"Bill Number Prefix",fieldType:"text",width:4,section:"billing",order:13},
+ {key:"billNoSequence",label:"Next Bill Number",fieldType:"number",width:4,section:"billing",defaultValue:1,validation:{min:0},order:14},
+ {key:"billNoSuffix",label:"Bill Number Suffix",fieldType:"text",width:4,section:"billing",order:15},
+ {key:"eWayUserName",label:"E-Way Bill User Name",fieldType:"text",width:6,section:"ewaybill",order:16},
+ {key:"eWayPassword",label:"E-Way Bill Password",fieldType:"text",width:6,section:"ewaybill",order:17,helpText:"Used only by the server when generating E-Way Bills."}
+];
+
 export const CALENDAR_EVENT_FIELDS=[
  {key:"title",label:"Event Title",fieldType:"text",width:6,section:"event",required:true,order:0,system:true,locked:true},
  {key:"start",label:"Start",fieldType:"datetime",width:3,section:"event",required:true,order:1,system:true,locked:true},
@@ -146,6 +167,7 @@ export const FORM_CATALOG=[
   {key:"expenses.form",label:"Expense form",page:"/add-expense",query:"form",description:"Customize expense details, tax, links, recurring rules and your own business fields.",fields:EXPENSE_FORM_FIELDS},
   {key:"calendar.event",label:"Calendar event form",page:"/calendar",query:"form",description:"Customize event details and add your own event information.",fields:CALENDAR_EVENT_FIELDS},
   {key:"ewaybill.form",label:"E-Way Bill form",page:"/orders",query:"ewaybill",description:"Customize transport and compliance details used when generating an E-Way Bill.",fields:EWAY_BILL_FIELDS},
+  {key:"profile.form",label:"Company profile form",page:"/profile",query:"form",description:"Customize company details, bank information, bill numbering and other business settings.",fields:PROFILE_FORM_FIELDS},
 ];
 
 export const TABLE_CATALOG=[

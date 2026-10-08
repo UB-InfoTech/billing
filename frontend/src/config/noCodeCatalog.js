@@ -53,7 +53,7 @@ export const ORDER_ITEM_FIELDS=[
 ];
 
 export const CLIENT_FORM_FIELDS=[
-  {key:"name",label:"Client Name",fieldType:"text",width:12,section:"basic",order:0,system:true},
+  {key:"name",label:"Customer Name",fieldType:"text",width:12,section:"basic",order:0,system:true},
   {key:"email",label:"Email",fieldType:"text",width:6,section:"basic",order:1},
   {key:"phone",label:"Phone",fieldType:"text",width:6,section:"basic",order:2},
   {key:"address",label:"Address",fieldType:"textarea",width:6,section:"address",required:true,order:3},
@@ -101,7 +101,7 @@ export const EXPENSE_FORM_FIELDS=[
  {key:"taxDeductible",label:"Tax Deductible",fieldType:"boolean",width:4,section:"tax",order:11},
  {key:"taxRate",label:"Tax Rate %",fieldType:"number",width:4,section:"tax",order:12},
  {key:"taxAmount",label:"Tax Amount",fieldType:"currency",width:4,section:"tax",order:13,formula:"amount * taxRate / 100"},
- {key:"clientId",label:"Client",fieldType:"reference",width:6,section:"links",order:14,dataSource:{type:"lookup",resource:"clients",valueField:"_id",labelField:"companyName",searchField:"companyName",multiple:false}},
+ {key:"clientId",label:"Customer",fieldType:"reference",width:6,section:"links",order:14,dataSource:{type:"lookup",resource:"clients",valueField:"_id",labelField:"companyName",searchField:"companyName",multiple:false}},
  {key:"orderId",label:"Invoice / Order",fieldType:"reference",width:6,section:"links",order:15,dataSource:{type:"lookup",resource:"orders",valueField:"_id",labelField:"orderNumber",searchField:"orderNumber",multiple:false}},
  {key:"isRecurring",label:"Recurring Expense",fieldType:"boolean",width:4,section:"recurring",order:16},
  {key:"recurringInterval",label:"Recurring Interval",fieldType:"select",width:4,section:"recurring",order:17,options:["Daily","Weekly","Monthly","Yearly"],conditions:[{action:"show",fieldKey:"isRecurring",operator:"equals",value:"true"}]},

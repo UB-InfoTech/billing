@@ -104,7 +104,6 @@ const SalesAnalytics = () => {
         }
       }catch(error){
         // Keep the built-in report layout when settings are unavailable.
-      }finally{
       }
     };
     loadReportConfig();
@@ -262,6 +261,12 @@ const SalesAnalytics = () => {
     }
     return acc;
   }, {});
+
+  useEffect(()=>{
+    if(searchParams.get("customize")!=="state-table"||selectedState)return;
+    const firstState=Object.keys(stateData)[0];
+    if(firstState)setSelectedState(firstState);
+  },[searchParams,stateData,selectedState]);
 
   // const stateData = allOrders.reduce((acc, order) => {
   //   if (order.State) {

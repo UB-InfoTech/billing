@@ -21,6 +21,7 @@ import 'react-date-picker/dist/DatePicker.css';
 import 'react-calendar/dist/Calendar.css';
 import infoSVG from '../assets/info.svg';
 import DynamicTable from "../components/DynamicTable";
+import FinancialMetrics from "../components/FinancialMetrics";
 
 // Register Chart.js components
 ChartJS.register(
@@ -43,13 +44,14 @@ import { ComposableMap, Geographies, Geography, ZoomableGroup } from 'react-simp
 const geoUrl = 'https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/raw/india_states.geojson';
 
 const DEFAULT_REPORT_WIDGETS=[
-  {key:"summary",title:"Sales snapshot",visible:true,order:0},
-  {key:"salesByPeriod",title:"Sales by period",visible:true,order:1},
-  {key:"orderCount",title:"Order count",visible:true,order:2},
-  {key:"statusBreakdown",title:"Order status",visible:true,order:3},
-  {key:"dailyTrend",title:"Daily sales trend",visible:true,order:4},
-  {key:"indiaMap",title:"Sales by state",visible:true,order:5},
-  {key:"ordersTable",title:"Order details",visible:true,order:6}
+  {key:"financialMetrics",title:"Financial metrics",visible:true,order:0},
+  {key:"summary",title:"Sales snapshot",visible:true,order:1},
+  {key:"salesByPeriod",title:"Sales by period",visible:true,order:2},
+  {key:"orderCount",title:"Order count",visible:true,order:3},
+  {key:"statusBreakdown",title:"Order status",visible:true,order:4},
+  {key:"dailyTrend",title:"Daily sales trend",visible:true,order:5},
+  {key:"indiaMap",title:"Sales by state",visible:true,order:6},
+  {key:"ordersTable",title:"Order details",visible:true,order:7}
 ];
 
 import "../index.css"
@@ -583,6 +585,10 @@ const SalesAnalytics = () => {
             <button className="btn btn-success me-2" onClick={exportToCSV}>CSV</button>
             <button className="btn btn-info text-light" onClick={fetchSalesData}>Refresh</button>
           </div>
+        </div>
+
+        <div className="w-100 mb-3" style={reportStyle("financialMetrics")}>
+          <FinancialMetrics startDate={startDate} endDate={endDate} title={reportTitle("financialMetrics")}/>
         </div>
 
         <div className="w-100 d-flex flex-wrap mb-3">

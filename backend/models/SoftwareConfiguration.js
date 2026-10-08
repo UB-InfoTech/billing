@@ -8,7 +8,7 @@ const navigationItemSchema=new mongoose.Schema({
 },{_id:false});
 
 const softwareConfigurationSchema=new mongoose.Schema({
-  createdBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true,index:true},
+  createdBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",required:true},
   navigation:{type:[navigationItemSchema],default:[]},
   appearance:{
     compactMode:{type:Boolean,default:false},

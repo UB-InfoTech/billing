@@ -41,6 +41,16 @@ import { ComposableMap, Geographies, Geography, ZoomableGroup } from 'react-simp
 // Use a public GeoJSON URL instead of local file
 const geoUrl = 'https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/raw/india_states.geojson';
 
+const DEFAULT_REPORT_WIDGETS=[
+  {key:"summary",title:"Sales snapshot",visible:true,order:0},
+  {key:"salesByPeriod",title:"Sales by period",visible:true,order:1},
+  {key:"orderCount",title:"Order count",visible:true,order:2},
+  {key:"statusBreakdown",title:"Order status",visible:true,order:3},
+  {key:"dailyTrend",title:"Daily sales trend",visible:true,order:4},
+  {key:"indiaMap",title:"Sales by state",visible:true,order:5},
+  {key:"ordersTable",title:"Order details",visible:true,order:6}
+];
+
 import "../index.css"
 
 const SalesAnalytics = () => {
@@ -73,11 +83,40 @@ const SalesAnalytics = () => {
   // const [currentPage, setCurrentPage] = useState('');
   const [ordersPerPage] = useState(10); // Adjust as needed
   const [selectedOrders, setSelectedOrders] = useState([]);
+  const [reportWidgets,setReportWidgets]=useState(DEFAULT_REPORT_WIDGETS);
+  const [reportConfigLoading,setReportConfigLoading]=useState(true);
 
 
   useEffect(() => {
     fetchSalesData();
   }, []);
+
+  useEffect(()=>{
+    let cancelled=false;
+    const loadReportConfig=async()=>{
+      try{
+        setReportConfigLoading(true);
+        const response=await axios.get(`${linkone}/api/report-config`,{
+          headers:{'x-auth-token':localStorage.getItem('token')||''}
+        });
+        if(!cancelled&&Array.isArray(response.data?.widgets)&&response.data.widgets.length){
+          setReportWidgets(response.data.widgets.slice().sort((a,b)=>a.order-b.order));
+        }
+      }catch(error){
+        // Keep the built-in report layout when settings are unavailable.
+      }finally{
+        if(!cancelled)setReportConfigLoading(false);
+      }
+    };
+    loadReportConfig();
+    return()=>{cancelled=true;};
+  },[linkone]);
+
+  const reportWidget=(key)=>reportWidgets.find(widget=>widget.key===key)||DEFAULT_REPORT_WIDGETS.find(widget=>widget.key===key)||{};
+  const reportVisible=(key)=>reportWidget(key).visible!==false;
+  const reportOrder=(key)=>Number(reportWidget(key).order??99);
+  const reportTitle=(key)=>reportWidget(key).title||DEFAULT_REPORT_WIDGETS.find(widget=>widget.key===key)?.title||key;
+  const reportStyle=(key)=>({order:reportOrder(key),display:reportVisible(key)?"":"none"});
 
   const fetchSalesData = async () => {
     try {
@@ -280,7 +319,7 @@ const SalesAnalytics = () => {
     responsive: true,
     plugins: {
       legend: { position: 'top' },
-      title: { display: true, text: 'Total Sales by Period' },
+      title: { display: true, text: reportTitle('salesByPeriod') },
     },
     onClick: (event, elements) => {
       if (elements.length > 0) {
@@ -328,7 +367,7 @@ const SalesAnalytics = () => {
     responsive: true,
     plugins: {
       legend: { position: 'top' },
-      title: { display: true, text: 'Order Count Distribution' },
+      title: { display: true, text: reportTitle('orderCount') },
     },
     onClick: (event, elements) => {
       if (elements.length > 0) {
@@ -379,7 +418,7 @@ const SalesAnalytics = () => {
     responsive: true,
     plugins: {
       legend: { position: 'top' },
-      title: { display: true, text: 'Daily Sales Trend (This Month)' },
+      title: { display: true, text: reportTitle('dailyTrend') },
     },
   };
 
@@ -416,7 +455,7 @@ const SalesAnalytics = () => {
     responsive: true,
     plugins: {
       legend: { position: 'top' },
-      title: { display: true, text: 'Order Status Breakdown' },
+      title: { display: true, text: reportTitle('statusBreakdown') },
     },
   };
 
@@ -543,7 +582,7 @@ const SalesAnalytics = () => {
         </div>
 
         <div className="w-100 d-flex flex-wrap mb-3">
-          <div className="d-flex flex-wrap justify-content-center pe-md-3 w-50 tab-w-100 sm-w-100">
+          <div className="d-flex flex-wrap justify-content-center pe-md-3 w-50 tab-w-100 sm-w-100" style={reportStyle("summary")}>
             {/* Summary Cards */}
             <div className="row g-3 p-1">
               {[
@@ -579,7 +618,7 @@ const SalesAnalytics = () => {
             </div>
           </div>
 
-          <div className='w-50 tab-w-100 sm-w-100'>
+          <div className='w-50 tab-w-100 sm-w-100' style={reportStyle("salesByPeriod")}>
             {/* Bar graph */}
             <div className="card h-100">
               <div className="card-body"><Bar data={barChartData} options={barChartOptions} /></div>
@@ -587,45 +626,34 @@ const SalesAnalytics = () => {
           </div>
         </div>
 
-        {/*  */}
-        <div className="d-flex flex-wrap w-100 mb-3">
-          {/* Order Count Pie Diagram */}
-          {/* <div className="card col-md-3" style={{ height: "fit-content" }}> */}
-
-          {/* <div className="col-md-6 gap-2" style={{ display: "flex" ,flexWrap: "wrap" }}> */}
-          <div className="col-md-6 d-flex gap-3 sm-flex-wrap align-items-center tab-w-100 flex-md-nowrap mb-3 mb-md-0" >
-            {/* <div className=" "> */}
-              <div className="card w-50 sm-w-100" style={{ height: "fit-content" }}>
-                <div className="card-body"><Pie data={pieChartData} options={pieChartOptions} /></div>
-              </div>
-            {/* </div> */}
-
-            {/* <div className="w-50 "> */}
-              <div className="card w-50 sm-w-100" style={{ height: "fit-content" }}>
-                <div className="card-body"><Pie data={statusChartData} options={statusChartOptions} /></div>
-              </div>
-            {/* </div> */}
+        <div className="d-flex flex-wrap w-100 mb-3 align-items-start">
+          <div className="col-md-4 tab-w-100 sm-w-100 mb-3 mb-md-0" style={reportStyle("orderCount")}>
+            <div className="card h-100">
+              <div className="card-body"><Pie data={pieChartData} options={pieChartOptions} /></div>
+            </div>
           </div>
-          <div className="col-md-6 overflow-hidden p-md-3 pe-0 tab-w-100 sm-w-100 mb-3 mb-md-0" style={{ minHeight: "100px !important" }}>
+
+          <div className="col-md-4 tab-w-100 sm-w-100 mb-3 mb-md-0" style={reportStyle("statusBreakdown")}>
+            <div className="card h-100">
+              <div className="card-body"><Pie data={statusChartData} options={statusChartOptions} /></div>
+            </div>
+          </div>
+
+          <div className="col-md-4 tab-w-100 sm-w-100 mb-3 mb-md-0" style={reportStyle("dailyTrend")}>
             {Object.keys(dailySales).length > 0 && (
-              // <div className="row">
-              // <div className="col-6 mb-6">
-              <div className="card sm-w-100">
+              <div className="card h-100">
                 <div className="card-body"><Line data={lineChartData} options={lineChartOptions} /></div>
               </div>
-              // </div>
-              // </div>
             )}
           </div>
         </div>
-        {/*  */}
 
         {/*  */}
         <div className="d-flex tab-flex-wrap sm-flex-wrap w-100 gap-3 pe-md-3">
-          <div className="col-md-5 tab-w-100 sm-w-100">
+          <div className="col-md-5 tab-w-100 sm-w-100" style={reportStyle("indiaMap")}>
             <div className="card">
               <div className="card-header d-flex justify-content-between align-items-center">
-                <h5 className="card-title mb-0">India Sales Map</h5>
+                <h5 className="card-title mb-0">{reportTitle("indiaMap")}</h5>
                 {selectedState && (
                   <button className="btn btn-outline-secondary btn-sm" onClick={resetMap}>
                     Reset Zoom
@@ -724,10 +752,10 @@ const SalesAnalytics = () => {
           </div>
 
           {/* Order Status Overview */}
-          <div className="col-md-7 tab-w-100 sm-w-100">
+          <div className="col-md-7 tab-w-100 sm-w-100" style={reportStyle("ordersTable")}>
             <div className="card">
               <div className="card-header d-flex justify-content-between align-items-center">
-                <h5 className="card-title mb-0">Order Status Overview</h5>
+                <h5 className="card-title mb-0">{reportTitle("ordersTable")}</h5>
                 <button className="btn btn-success btn-sm" onClick={exportFilteredToCSV}>
                   Export Filtered Data
                 </button>

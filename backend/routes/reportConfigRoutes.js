@@ -44,7 +44,28 @@ const cleanWidgets=input=>{
   return normalized.map((item,index)=>({...item,order:index}));
 };
 
-const defaultResponse=()=>({widgets:DEFAULT_WIDGETS.map(item=>({...item}))});
+const FINANCIAL_INPUT_KEYS=[
+  "depreciation","amortization","interestExpense","incomeTax","otherIncome","otherExpenses",
+  "equity","averageEquity","totalAssets","averageAssets","currentAssets","currentLiabilities",
+  "cash","accountsReceivable","averageReceivables","inventory","averageInventory",
+  "accountsPayable","averagePayables","debt","principalRepayments","weightedAverageShares",
+  "sharesOutstanding","marketPricePerShare","dividends","capitalExpenditure",
+  "operatingCashFlow","investingCashFlow","financingCashFlow","variableCosts","fixedOperatingCosts",
+  "rAndD","sellingExpenses","administrativeExpenses","wacc","taxRate"
+];
+
+const cleanFinancialInputs=input=>{
+  const source=input&&typeof input==="object"&&!Array.isArray(input)?input:{};
+  const output={};
+  FINANCIAL_INPUT_KEYS.forEach(key=>{
+    if(source[key]===undefined||source[key]===null||source[key]==="")return;
+    const number=Number(source[key]);
+    if(Number.isFinite(number))output[key]=Math.max(0,number);
+  });
+  return output;
+};
+
+const defaultResponse=()=>({widgets:DEFAULT_WIDGETS.map(item=>({...item})),financialInputs:{}});
 
 router.get("/",auth,async(req,res)=>{
   try{
@@ -58,9 +79,10 @@ router.get("/",auth,async(req,res)=>{
 router.put("/",auth,async(req,res)=>{
   try{
     const widgets=cleanWidgets(req.body?.widgets);
+    const financialInputs=cleanFinancialInputs(req.body?.financialInputs);
     const config=await ReportConfiguration.findOneAndUpdate(
       {createdBy:owner(req)},
-      {$set:{widgets}},
+      {$set:{widgets,financialInputs}},
       {new:true,upsert:true,setDefaultsOnInsert:true,runValidators:true}
     ).lean();
     res.json(config);

@@ -567,13 +567,10 @@ export default function Settings(){
                   </div>
                   <div className="settings-simple-box settings-simple-box-enhanced">
                     <div className="settings-simple-copy">
-                      <strong>Show helpful hints</strong>
-                      <span>Keep small explanations and guidance visible where they are useful.</span>
+                      <strong>Customization stays here</strong>
+                      <span>Your team can use invoices, clients, products and reports normally without seeing builder controls.</span>
                     </div>
-                    <div className="form-check form-switch">
-                      <input className="form-check-input" type="checkbox" checked={configuration?.appearance?.showPageHelp!==false} onChange={event=>saveConfiguration({navigation:navigationDraft,appearance:{...(configuration?.appearance||{}),showPageHelp:event.target.checked}})}/>
-                      <label className="form-check-label">On</label>
-                    </div>
+                    <span className="badge bg-light text-dark border"><i className="bi bi-check2-circle me-1"></i>Simple by default</span>
                   </div>
                 </section>
               </>

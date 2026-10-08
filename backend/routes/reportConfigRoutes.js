@@ -7,13 +7,14 @@ const router=express.Router();
 const owner=req=>new mongoose.Types.ObjectId(req.user.id);
 
 const DEFAULT_WIDGETS=[
-  {key:"summary",title:"Sales snapshot",visible:true,order:0},
-  {key:"salesByPeriod",title:"Sales by period",visible:true,order:1},
-  {key:"orderCount",title:"Order count",visible:true,order:2},
-  {key:"statusBreakdown",title:"Order status",visible:true,order:3},
-  {key:"dailyTrend",title:"Daily sales trend",visible:true,order:4},
-  {key:"indiaMap",title:"Sales by state",visible:true,order:5},
-  {key:"ordersTable",title:"Order details",visible:true,order:6}
+  {key:"financialMetrics",title:"Financial metrics",visible:true,order:0},
+  {key:"summary",title:"Sales snapshot",visible:true,order:1},
+  {key:"salesByPeriod",title:"Sales by period",visible:true,order:2},
+  {key:"orderCount",title:"Order count",visible:true,order:3},
+  {key:"statusBreakdown",title:"Order status",visible:true,order:4},
+  {key:"dailyTrend",title:"Daily sales trend",visible:true,order:5},
+  {key:"indiaMap",title:"Sales by state",visible:true,order:6},
+  {key:"ordersTable",title:"Order details",visible:true,order:7}
 ];
 
 const cleanWidgets=input=>{

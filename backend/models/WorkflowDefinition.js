@@ -19,7 +19,7 @@ const workflowSchema=new mongoose.Schema({
   active:{type:Boolean,default:true},
   trigger:{
     event:{type:String,enum:["record_created","record_updated"],default:"record_updated"},
-    resource:{type:String,enum:["orders","clients","products","expenses"],default:"orders"}
+    resource:{type:String,enum:["orders","clients","products","expenses","calendar"],default:"orders"}
   },
   conditions:{type:[workflowConditionSchema],default:[]},
   actions:{type:[workflowActionSchema],default:[]}

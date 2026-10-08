@@ -27,7 +27,19 @@ async function generateEWayBill(body){
   const ewayBillNo=data.ewayBillNo||data.EwayBillNo||data.ewayBillNumber;
   if(!ewayBillNo)throw new Error(data?.error?.message||data?.message||"E-Way Bill was not generated.");
 
-  order.ewbDetails={ewbNo:String(ewayBillNo),ewbDate:data.ewayBillDate||"",validTill:data.validUpto||data.validTill||"",status:"Generated",alert:data.alert||""};
+  order.ewbDetails={
+    ...(order.ewbDetails||{}),
+    ewbNo:String(ewayBillNo),
+    ewbDate:data.ewayBillDate||"",
+    validTill:data.validUpto||data.validTill||"",
+    status:"Generated",
+    alert:data.alert||"",
+    customFields:new Map(Object.entries(
+      body.customFields&&typeof body.customFields==="object"&&!Array.isArray(body.customFields)
+        ?body.customFields
+        :{}
+    ).slice(0,100))
+  };
   await order.save();
   return data;
 }

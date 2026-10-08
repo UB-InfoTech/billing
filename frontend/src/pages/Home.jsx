@@ -6,21 +6,131 @@ const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,
 const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
 const money=v=>"₹"+Number(v||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 
+const DEFAULT_WIDGETS=[
+  {key:"invoices",title:"Invoices",visible:true,order:0},
+  {key:"clients",title:"Clients",visible:true,order:1},
+  {key:"products",title:"Products",visible:true,order:2},
+  {key:"revenue",title:"Revenue",visible:true,order:3},
+  {key:"outstanding",title:"Outstanding",visible:true,order:4},
+  {key:"expenses",title:"Expenses",visible:true,order:5},
+  {key:"paid",title:"Paid",visible:true,order:6},
+  {key:"creditNotes",title:"Credit Notes",visible:true,order:7},
+  {key:"netAfterExpenses",title:"Net after Expenses",visible:true,order:8},
+  {key:"quickActions",title:"Quick actions",visible:true,order:9}
+];
+
 export default function Home(){
   const navigate=useNavigate();
   const [user,setUser]=useState(null);
   const [data,setData]=useState(null);
+  const [widgets,setWidgets]=useState(DEFAULT_WIDGETS);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
-  useEffect(()=>{let alive=true;Promise.all([axios.get(API+"/api/auth/user",auth()),axios.get(API+"/api/reports/dashboard-summary",auth())]).then(([u,d])=>{if(alive){setUser(u.data);setData(d.data);}}).catch(e=>{if(!alive)return;if(e.response?.status===401){localStorage.removeItem("token");navigate("/login");}else setError(e.response?.data?.message||"Unable to load dashboard.");}).finally(()=>alive&&setLoading(false));return()=>{alive=false;};},[navigate]);
+
+  useEffect(()=>{
+    let alive=true;
+    Promise.all([
+      axios.get(API+"/api/auth/user",auth()),
+      axios.get(API+"/api/reports/dashboard-summary",auth()),
+      axios.get(API+"/api/dashboard-config",auth())
+    ]).then(([userResponse,dataResponse,configResponse])=>{
+      if(!alive)return;
+      setUser(userResponse.data);
+      setData(dataResponse.data);
+      if(Array.isArray(configResponse.data?.widgets)&&configResponse.data.widgets.length){
+        setWidgets(configResponse.data.widgets.slice().sort((a,b)=>a.order-b.order));
+      }
+    }).catch(loadError=>{
+      if(!alive)return;
+      if(loadError.response?.status===401){
+        localStorage.removeItem("token");
+        navigate("/login");
+      }else{
+        setError(loadError.response?.data?.message||"Unable to load dashboard.");
+      }
+    }).finally(()=>alive&&setLoading(false));
+    return()=>{alive=false;};
+  },[navigate]);
+
   if(loading)return <div className="container-fluid py-5 text-center"><span className="spinner-border text-primary"/></div>;
-  const cards=[["Invoices",data?.orders||0,"/orders"],["Clients",data?.clients||0,"/clients"],["Products",data?.products||0,"/products"],["Revenue",money(data?.revenue),"/analytics"],["Outstanding",money(data?.due),"/orders"],["Expenses",money(data?.expenses),"/expense"]];
+
+  const widget=key=>widgets.find(item=>item.key===key)||DEFAULT_WIDGETS.find(item=>item.key===key)||{};
+  const isVisible=key=>widget(key).visible!==false;
+  const title=key=>widget(key).title||key;
+  const style=key=>({order:Number(widget(key).order??99)});
+
+  const metricCards=[
+    ["invoices","/orders",data?.orders||0],
+    ["clients","/clients",data?.clients||0],
+    ["products","/products",data?.products||0],
+    ["revenue","/analytics",money(data?.revenue)],
+    ["outstanding","/orders",money(data?.due)],
+    ["expenses","/expense",money(data?.expenses)]
+  ];
+
   return <div className="container-fluid py-4">
-    <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4"><div><h2 className="mb-1">Dashboard</h2><div className="text-muted">Welcome back{user?.username?", "+user.username:""}.</div></div><div className="d-flex gap-2"><button className="btn btn-primary" onClick={()=>navigate("/orders")}>+ New Invoice</button><button className="btn btn-outline-primary" onClick={()=>navigate("/credit-notes")}>Credit Note</button></div></div>
+    <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+      <div><h2 className="mb-1">Dashboard</h2><div className="text-muted">Welcome back{user?.username?", "+user.username:""}.</div></div>
+      <div className="d-flex gap-2">
+        <button className="btn btn-primary" onClick={()=>navigate("/orders")}>+ New Invoice</button>
+        <button className="btn btn-outline-secondary" onClick={()=>navigate("/settings")}>Customize</button>
+      </div>
+    </div>
+
     {error&&<div className="alert alert-danger">{error}</div>}
-    <div className="row g-3 mb-4">{cards.map(([label,value,to])=><div className="col-6 col-md-4 col-xl-2" key={label}><button className="card border-0 shadow-sm w-100 h-100 text-start bg-white" onClick={()=>navigate(to)}><div className="card-body"><div className="text-muted small">{label}</div><div className="fs-4 fw-bold mt-1">{value}</div></div></button></div>)}</div>
-    <div className="row g-3"><div className="col-lg-8"><div className="card border-0 shadow-sm h-100"><div className="card-body"><h5 className="mb-3">Business Snapshot</h5><div className="row g-3"><div className="col-md-4"><div className="small text-muted">Paid</div><div className="fw-bold">{money(data?.paid)}</div></div><div className="col-md-4"><div className="small text-muted">Credit Notes</div><div className="fw-bold">{money(data?.creditNotes)}</div></div><div className="col-md-4"><div className="small text-muted">Net after Expenses</div><div className="fw-bold">{money(Number(data?.revenue||0)-Number(data?.expenses||0))}</div></div></div></div></div></div>
-      <div className="col-lg-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><h5 className="mb-3">Quick Actions</h5><div className="d-grid gap-2"><button className="btn btn-outline-primary" onClick={()=>navigate("/bulk-payment")}>Record Bulk Payment</button><button className="btn btn-outline-secondary" onClick={()=>navigate("/add-expense")}>Add Expense</button><button className="btn btn-outline-success" onClick={()=>navigate("/calendar")}>Schedule Event</button><button className="btn btn-outline-dark" onClick={()=>navigate("/profile")}>Company Settings</button></div></div></div></div>
+
+    <div className="row g-3">
+      {metricCards.map(([key,to,value])=>isVisible(key)?(
+        <div className="col-6 col-md-4 col-xl-2" key={key} style={style(key)}>
+          <button className="card border-0 shadow-sm w-100 h-100 text-start bg-white" onClick={()=>navigate(to)}>
+            <div className="card-body">
+              <div className="text-muted small">{title(key)}</div>
+              <div className="fs-4 fw-bold mt-1">{value}</div>
+            </div>
+          </button>
+        </div>
+      ):null)}
+
+      {isVisible("paid")&&(
+        <div className="col-md-4" style={style("paid")}>
+          <div className="card border-0 shadow-sm h-100"><div className="card-body">
+            <div className="small text-muted">{title("paid")}</div>
+            <div className="fs-5 fw-bold mt-1">{money(data?.paid)}</div>
+          </div></div>
+        </div>
+      )}
+
+      {isVisible("creditNotes")&&(
+        <div className="col-md-4" style={style("creditNotes")}>
+          <div className="card border-0 shadow-sm h-100"><div className="card-body">
+            <div className="small text-muted">{title("creditNotes")}</div>
+            <div className="fs-5 fw-bold mt-1">{money(data?.creditNotes)}</div>
+          </div></div>
+        </div>
+      )}
+
+      {isVisible("netAfterExpenses")&&(
+        <div className="col-md-4" style={style("netAfterExpenses")}>
+          <div className="card border-0 shadow-sm h-100"><div className="card-body">
+            <div className="small text-muted">{title("netAfterExpenses")}</div>
+            <div className="fs-5 fw-bold mt-1">{money(Number(data?.revenue||0)-Number(data?.expenses||0))}</div>
+          </div></div>
+        </div>
+      )}
+
+      {isVisible("quickActions")&&(
+        <div className="col-lg-4" style={style("quickActions")}>
+          <div className="card border-0 shadow-sm h-100"><div className="card-body">
+            <h5 className="mb-3">{title("quickActions")}</h5>
+            <div className="d-grid gap-2">
+              <button className="btn btn-outline-primary" onClick={()=>navigate("/bulk-payment")}>Record Bulk Payment</button>
+              <button className="btn btn-outline-secondary" onClick={()=>navigate("/add-expense")}>Add Expense</button>
+              <button className="btn btn-outline-success" onClick={()=>navigate("/calendar")}>Schedule Event</button>
+              <button className="btn btn-outline-dark" onClick={()=>navigate("/profile")}>Company Settings</button>
+            </div>
+          </div></div>
+        </div>
+      )}
     </div>
   </div>;
 }

@@ -110,9 +110,9 @@ export const EXPENSE_FORM_FIELDS=[
 ];
 
 export const CALENDAR_EVENT_FIELDS=[
- {key:"title",label:"Event Title",fieldType:"text",width:6,section:"event",required:true,order:0,system:true},
- {key:"start",label:"Start",fieldType:"datetime",width:3,section:"event",required:true,order:1,system:true},
- {key:"end",label:"End",fieldType:"datetime",width:3,section:"event",required:true,order:2,system:true},
+ {key:"title",label:"Event Title",fieldType:"text",width:6,section:"event",required:true,order:0,system:true,locked:true},
+ {key:"start",label:"Start",fieldType:"datetime",width:3,section:"event",required:true,order:1,system:true,locked:true},
+ {key:"end",label:"End",fieldType:"datetime",width:3,section:"event",required:true,order:2,system:true,locked:true},
  {key:"color",label:"Color",fieldType:"text",width:4,section:"appearance",order:3,defaultValue:"#3788d8"},
 ];
 

@@ -20,6 +20,7 @@ const profileSchema = new mongoose.Schema({
   createdBy: { type: String, required: true },
   eWayUserName: { type: String },
   eWayPassword: { type: String },
+  customFields: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
 });
 
 module.exports = mongoose.model('Profile', profileSchema);

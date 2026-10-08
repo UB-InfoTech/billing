@@ -124,6 +124,7 @@ const orderSchema=new mongoose.Schema({
     validTill:{type:String,default:""},
     alert:{type:String,default:""},
     status:{type:String,default:null},
+    customFields:{type:Map,of:mongoose.Schema.Types.Mixed,default:{}},
   },
 },{timestamps:true});
 

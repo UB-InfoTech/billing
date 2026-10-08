@@ -1,8 +1,9 @@
 import React,{useState} from "react";
 import Navbar from "./components/Navbar";
-import {Outlet} from "react-router-dom";
+import {Outlet,useLocation} from "react-router-dom";
 
 export default function Layout(){
+  const location=useLocation();
   const [collapsed,setCollapsed]=useState(()=>localStorage.getItem("sidebarCollapsed")==="true");
   const [mobileOpen,setMobileOpen]=useState(false);
 
@@ -23,7 +24,9 @@ export default function Layout(){
         setMobileOpen={setMobileOpen}
       />
       <main className="app-main">
-        <Outlet/>
+        <div key={location.pathname} className="page-transition">
+          <Outlet/>
+        </div>
       </main>
     </div>
   );

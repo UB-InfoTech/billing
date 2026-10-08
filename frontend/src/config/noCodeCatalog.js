@@ -1,9 +1,9 @@
 export const MODULE_CATALOG=[
   {key:"dashboard",label:"Dashboard",route:"/dashboard",icon:"bi-speedometer2",description:"Your business overview"},
   {key:"analytics",label:"Reports",route:"/analytics",icon:"bi-graph-up-arrow",description:"Sales and business reports"},
-  {key:"orders",label:"Bills",route:"/orders",icon:"bi-receipt",description:"Create and manage bills"},
-  {key:"clients",label:"Clients",route:"/clients",icon:"bi-people",description:"Customers and their details"},
-  {key:"products",label:"Products",route:"/products",icon:"bi-box-seam",description:"Items and pricing"},
+  {key:"orders",label:"Invoices",route:"/orders",icon:"bi-receipt",description:"Create and manage invoices"},
+  {key:"clients",label:"Customers",route:"/clients",icon:"bi-people",description:"Customer details and history"},
+  {key:"products",label:"Products",route:"/products",icon:"bi-box-seam",description:"Products, stock and pricing"},
   {key:"expense",label:"Expenses",route:"/expense",icon:"bi-wallet2",description:"Business expenses"},
   {key:"calendar",label:"Calendar",route:"/calendar",icon:"bi-calendar3",description:"Important dates and reminders"},
   {key:"bulk-payment",label:"Payments",route:"/bulk-payment",icon:"bi-cash-stack",description:"Receive and manage payments"},

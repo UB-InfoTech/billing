@@ -595,7 +595,7 @@ export default function DynamicTable({
           disabled={loadingConfig}
         >
           <i className="bi bi-sliders2"></i>
-          Customize Table
+          Customize list
         </button>
       </div>
 

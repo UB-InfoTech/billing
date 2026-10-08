@@ -149,6 +149,7 @@ export default function DynamicTable({
   const [editingCell,setEditingCell]=useState(null);
   const [editingValue,setEditingValue]=useState("");
   const [error,setError]=useState("");
+  const [showColumnDetails,setShowColumnDetails]=useState(false);
 
   const [customForm,setCustomForm]=useState({
     label:"",
@@ -688,10 +689,14 @@ export default function DynamicTable({
               {error&&<div className="alert alert-danger py-2">{error}</div>}
 
               <div className="dynamic-table-builder-summary">
-                <strong>{visibleColumns.length}</strong> of {draft.length} columns are visible
-                <div className="d-flex gap-2">
+                <div>
+                  <strong>{visibleColumns.length}</strong> of {draft.length} columns are visible
+                  <div className="small text-secondary">Most tables only need show, hide, rename and reorder.</div>
+                </div>
+                <div className="d-flex flex-wrap gap-2 justify-content-end">
                   <button type="button" className="btn btn-sm btn-light border" onClick={showAll}><i className="bi bi-eye me-1"></i>Show all</button>
                   <button type="button" className="btn btn-sm btn-light border" onClick={hideOptional}>Hide optional</button>
+                  <button type="button" className="btn btn-sm btn-outline-secondary" onClick={()=>setShowColumnDetails(value=>!value)}><i className="bi bi-sliders2 me-1"></i>{showColumnDetails?"Hide extra settings":"More settings"}</button>
                 </div>
               </div>
 
@@ -763,6 +768,7 @@ export default function DynamicTable({
                           </div>
                         </div>
 
+                        {showColumnDetails&&(
                         <div className="dynamic-table-builder-width">
                           <select
                             className="form-select form-select-sm"
@@ -779,6 +785,7 @@ export default function DynamicTable({
                           </select>
                         </div>
 
+                        )}
                         <button
                           type="button"
                           className={`btn btn-sm dynamic-visibility-btn ${column.visible!==false?"is-visible":"is-hidden"}`}

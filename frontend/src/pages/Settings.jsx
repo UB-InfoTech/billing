@@ -23,6 +23,18 @@ const defaultWorkflow={
   actions:[]
 };
 
+const workflowResourceLabel=key=>{
+  const item=WORKFLOW_RESOURCES.find(resource=>resource.key===key);
+  return item?.label||key||"Record";
+};
+
+const workflowEventLabel=key=>{
+  const item=WORKFLOW_EVENTS.find(event=>event.key===key);
+  return item?.label||key||"Changed";
+};
+
+
+
 const FINANCIAL_INPUT_GROUPS=[
   {title:"Profit & loss",fields:[
     ["depreciation","Depreciation"],
@@ -856,8 +868,8 @@ export default function Settings(){
             {section==="workflows"&&(
               <section className="settings-section">
                 <div className="settings-section-heading">
-                  <div><h2>Workflows</h2><p>Build automatic rules with simple “When this happens → do this” steps.</p></div>
-                  <button type="button" className="btn btn-primary" onClick={newWorkflow}>New workflow</button>
+                  <div><h2>Automations</h2><p>Build simple “When this happens → do this” rules. Start small; add conditions only when you need them.</p></div>
+                  <button type="button" className="btn btn-primary" onClick={newWorkflow}><i className="bi bi-plus-lg me-1"></i>New automation</button>
                 </div>
 
                 {workflowError&&<div className="alert alert-warning">{workflowError}</div>}
@@ -983,14 +995,14 @@ export default function Settings(){
                 </div>
 
                 <div className="mt-4">
-                  <h3 className="h5">Saved workflows</h3>
+                  <h3 className="h5">Saved automations</h3>
                   {workflowLoading?<div className="text-secondary">Loading...</div>:workflows.length===0?<div className="settings-empty-inline">No workflows created yet.</div>:(
                     <div className="settings-workflow-list">
                       {workflows.map(item=>(
                         <div className="settings-workflow-row" key={item._id}>
                           <div>
                             <strong>{item.name}</strong>
-                            <small>{item.trigger?.resource} · {item.trigger?.event==="record_created"?"New record":"Updated record"} · {item.active===false?"Off":"Active"}</small>
+                            <small>{workflowResourceLabel(item.trigger?.resource)} · {workflowEventLabel(item.trigger?.event)} · {item.active===false?"Off":"Active"}</small>
                           </div>
                           <div className="d-flex gap-2">
                             <button type="button" className="btn btn-sm btn-light border" onClick={()=>editWorkflow(item)}>Edit</button>

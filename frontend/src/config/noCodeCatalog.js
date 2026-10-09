@@ -15,14 +15,14 @@ export const ORDER_FORM_FIELDS=[
  {key:"orderNumber",label:"Invoice No.",fieldType:"text",width:3,section:"invoice",required:true,order:1,system:true},
  {key:"clientId",label:"Client link",fieldType:"text",width:3,section:"client",order:999,visible:false,locked:false,system:true,editable:false,readOnly:true},
  {key:"orderDate",label:"Bill Date",fieldType:"date",width:4,section:"invoice",required:true,order:2,system:true},
- {key:"lrNo",label:"LR No.",fieldType:"text",width:5,section:"shipping",order:2},
- {key:"State",label:"State",fieldType:"text",width:4,section:"shipping",order:3},
- {key:"Address",label:"Address",fieldType:"text",width:8,section:"shipping",order:4},
- {key:"City",label:"City",fieldType:"text",width:4,section:"shipping",order:5},
- {key:"pinCode",label:"Pin Code",fieldType:"text",width:4,section:"shipping",order:6},
- {key:"stateCode",label:"State Code",fieldType:"text",width:4,section:"shipping",order:7},
- {key:"status",label:"Status",fieldType:"select",width:4,section:"shipping",order:8,options:["Pending","In Process","Completed","Cancelled","Dispatched"],system:true},
- {key:"companyName",label:"Customer",fieldType:"reference",width:4,section:"client",required:true,order:9,system:true,dataSource:{type:"lookup",resource:"clients",valueField:"companyName",labelField:"companyName",searchField:"companyName",multiple:false,autoFill:[
+ {key:"lrNo",label:"LR No.",fieldType:"text",width:5,section:"shipping",order:3},
+ {key:"State",label:"State",fieldType:"text",width:4,section:"shipping",order:4},
+ {key:"Address",label:"Address",fieldType:"text",width:8,section:"shipping",order:5},
+ {key:"City",label:"City",fieldType:"text",width:4,section:"shipping",order:6},
+ {key:"pinCode",label:"Pin Code",fieldType:"text",width:4,section:"shipping",order:7},
+ {key:"stateCode",label:"State Code",fieldType:"text",width:4,section:"shipping",order:8},
+ {key:"status",label:"Status",fieldType:"select",width:4,section:"shipping",order:9,options:["Pending","In Process","Completed","Cancelled","Dispatched"],system:true},
+ {key:"companyName",label:"Customer",fieldType:"reference",width:6,section:"invoice",required:true,order:0,system:true,dataSource:{type:"lookup",resource:"clients",valueField:"companyName",labelField:"companyName",searchField:"companyName",multiple:false,autoFill:[
   {targetKey:"clientId",sourceKey:"_id"},
   {targetKey:"Address",sourceKey:"address"},
   {targetKey:"State",sourceKey:"state"},
@@ -33,8 +33,8 @@ export const ORDER_FORM_FIELDS=[
   {targetKey:"paymentTerms",sourceKey:"paymentTerms"},
   {targetKey:"discountRate",sourceKey:"discountRate"}
  ]}},
- {key:"gstNumber",label:"GST No.",fieldType:"text",width:4,section:"client",order:9},
- {key:"paymentTerms",label:"Payment Terms",fieldType:"select",width:4,section:"client",order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Advance"}],system:true},
+ {key:"gstNumber",label:"GST No.",fieldType:"text",width:4,section:"client",order:10},
+ {key:"paymentTerms",label:"Payment Terms",fieldType:"select",width:4,section:"client",defaultValue:"30",order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Advance"}],system:true},
  {key:"challanNumber",label:"Challan No.",fieldType:"text",width:4,section:"client",order:12,defaultValue:""},
  {key:"taxPercentage",label:"Tax %",fieldType:"number",width:4,section:"client",order:13,system:true},
  {key:"discountRate",label:"Discount %",fieldType:"number",width:4,section:"client",order:14,system:true}
@@ -44,11 +44,11 @@ export const ORDER_ITEM_FIELDS=[
  {key:"designNumber",label:"Design No.",fieldType:"text",width:3,section:"details",order:1},
  {key:"orderName",label:"Product",fieldType:"reference",width:4,section:"items",order:0,dataSource:{type:"lookup",resource:"products",valueField:"productName",labelField:"productName",searchField:"productName",multiple:false,autoFill:[{targetKey:"designNumber",sourceKey:"designNo"},{targetKey:"unitPrice",sourceKey:"rate"}]}},
  {key:"hsnCode",label:"HSN Code",fieldType:"number",width:3,section:"details",order:2},
- {key:"quantity",label:"Quantity",fieldType:"number",width:2,section:"items",order:3},
- {key:"cut",label:"Cut",fieldType:"number",width:2,section:"items",order:4},
- {key:"MTR",label:"Meters (MTR)",fieldType:"number",width:2,section:"items",order:5,formula:"quantity * cut"},
- {key:"unitPrice",label:"Rate / unit",fieldType:"currency",width:3,section:"items",order:6},
- {key:"qtyUnit",label:"Unit",fieldType:"select",width:2,section:"items",order:7,options:["MTR","PCS","BOX","UNT"]},
+ {key:"quantity",label:"Quantity",fieldType:"number",width:2,section:"items",order:2},
+ {key:"cut",label:"Cut",fieldType:"number",width:2,section:"items",order:3},
+ {key:"MTR",label:"Meters (MTR)",fieldType:"number",width:2,section:"items",order:4,formula:"quantity * cut"},
+ {key:"unitPrice",label:"Rate / unit",fieldType:"currency",width:3,section:"items",order:5},
+ {key:"qtyUnit",label:"Unit",fieldType:"select",width:2,section:"items",order:6,options:["MTR","PCS","BOX","UNT"]},
  {key:"shortPcs",label:"Short pieces",fieldType:"number",width:2,section:"details",order:8,visible:false}
 ];
 

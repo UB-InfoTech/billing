@@ -1298,7 +1298,7 @@ const styles = {
                                     <input id="invoice-date-to" type="date" className="form-control" value={filters.endDate||""} onChange={event=>setFilters(prev=>({...prev,endDate:event.target.value}))}/>
                                 </div>
                                 <div className="col-md-2">
-                                    <button type="button" className="btn btn-light border w-100" onClick={()=>{setFilters(prev=>({...prev,status:"",startDate:"",endDate:"",dateRange:[]}));setCurrentPage(1);}}>Clear dates</button>
+                                    <button type="button" className="btn btn-light border w-100" onClick={()=>{setFilters(prev=>({...prev,status:"",startDate:"",endDate:"",dateRange:[]}));setCurrentPage(1);}}>Clear filters</button>
                                 </div>
                             </div>
                         </details>
@@ -1368,10 +1368,10 @@ const styles = {
                                     <details className="invoice-row-more">
                                         <summary aria-label="More invoice actions" title="More actions"><i className="bi bi-three-dots"></i></summary>
                                         <div className="invoice-row-more-menu">
-                                            <button type="button" onClick={()=>{setShowEwayBillModal(true);setOrderId(order._id);}} disabled={Boolean(order.ewbDetails?.ewbNo)}>
+                                            <button type="button" onClick={event=>{event.currentTarget.closest("details")?.removeAttribute("open");setShowEwayBillModal(true);setOrderId(order._id);}} disabled={Boolean(order.ewbDetails?.ewbNo)}>
                                                 <i className="bi bi-truck me-2"></i>{order.ewbDetails?.ewbNo?"E-Way Bill created":"Create E-Way Bill"}
                                             </button>
-                                            <button type="button" className="is-danger" onClick={()=>handleDeleteOrder(order._id)}>
+                                            <button type="button" className="is-danger" onClick={event=>{event.currentTarget.closest("details")?.removeAttribute("open");handleDeleteOrder(order._id);}}>
                                                 <i className="bi bi-trash me-2"></i>Delete invoice
                                             </button>
                                         </div>

@@ -95,7 +95,7 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
         </div>
 
         <div className="sidebar-quick-create-wrap">
-          <button type="button" className="sidebar-quick-create" onClick={()=>{navigate("/orders");closeMobile();}} title="Create a new invoice">
+          <button type="button" className="sidebar-quick-create" onClick={()=>{navigate("/orders?action=new");closeMobile();}} title="Create a new invoice">
             <i className="bi bi-plus-lg"></i><span>New invoice</span>
           </button>
         </div>

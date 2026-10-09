@@ -577,10 +577,6 @@ function Clients() {
 
           </div>
 
-
-
-        </div>
-
           {showModal && (
             <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}>
               <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">

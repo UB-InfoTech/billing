@@ -8,7 +8,7 @@ const money=v=>"₹"+Number(v||0).toLocaleString("en-IN",{minimumFractionDigits:
 
 const DEFAULT_WIDGETS=[
   {key:"invoices",title:"Invoices",visible:true,order:0},
-  {key:"clients",title:"Clients",visible:true,order:1},
+  {key:"clients",title:"Customers",visible:true,order:1},
   {key:"products",title:"Products",visible:true,order:2},
   {key:"revenue",title:"Revenue",visible:true,order:3},
   {key:"outstanding",title:"Outstanding",visible:true,order:4},
@@ -24,6 +24,7 @@ export default function Home(){
   const [user,setUser]=useState(null);
   const [data,setData]=useState(null);
   const [widgets,setWidgets]=useState(DEFAULT_WIDGETS);
+  const [profile,setProfile]=useState(null);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
 
@@ -32,11 +33,13 @@ export default function Home(){
     Promise.all([
       axios.get(API+"/api/auth/user",auth()),
       axios.get(API+"/api/reports/dashboard-summary",auth()),
-      axios.get(API+"/api/dashboard-config",auth())
-    ]).then(([userResponse,dataResponse,configResponse])=>{
+      axios.get(API+"/api/dashboard-config",auth()),
+      axios.get(API+"/api/profile",auth()).catch(()=>({data:null}))
+    ]).then(([userResponse,dataResponse,configResponse,profileResponse])=>{
       if(!alive)return;
       setUser(userResponse.data);
       setData(dataResponse.data);
+      setProfile(profileResponse.data||null);
       if(Array.isArray(configResponse.data?.widgets)&&configResponse.data.widgets.length){
         setWidgets(configResponse.data.widgets.slice().sort((a,b)=>a.order-b.order));
       }
@@ -69,9 +72,10 @@ export default function Home(){
   ];
 
   const gettingStartedTasks=[
-    {key:"customers",title:"Add your first customer",description:"Save the people or companies you sell to.",done:Number(data?.clients||0)>0,to:"/clients",icon:"bi-people"},
-    {key:"products",title:"Add your products",description:"Save the items and prices you sell.",done:Number(data?.products||0)>0,to:"/products",icon:"bi-box-seam"},
-    {key:"invoice",title:"Create your first invoice",description:"Choose a customer, add items and save the bill.",done:Number(data?.orders||0)>0,to:"/orders",icon:"bi-receipt"}
+    {key:"company",title:"Add your company details",description:"Your company name and address appear on printed invoices.",done:Boolean(profile?.companyName&&profile?.companyAddress),to:"/profile"},
+    {key:"customers",title:"Add your first customer",description:"Save the people or companies you sell to.",done:Number(data?.clients||0)>0,to:"/clients"},
+    {key:"products",title:"Add your products",description:"Save the items and prices you sell.",done:Number(data?.products||0)>0,to:"/products"},
+    {key:"invoice",title:"Create your first invoice",description:"Choose a customer, add items and save the bill.",done:Number(data?.orders||0)>0,to:"/orders"}
   ];
   const completedSetupTasks=gettingStartedTasks.filter(task=>task.done).length;
 
@@ -85,7 +89,7 @@ export default function Home(){
       <div className="dashboard-primary-actions">
         <button className="btn btn-primary" onClick={()=>navigate("/orders")}><i className="bi bi-plus-lg me-2"></i>New invoice</button>
         <button className="btn btn-light border" onClick={()=>navigate("/add-expense")}><i className="bi bi-wallet2 me-2"></i>Add expense</button>
-        <button className="btn btn-light border" onClick={()=>navigate("/clients")}><i className="bi bi-person-plus me-2"></i>Clients</button>
+        <button className="btn btn-light border" onClick={()=>navigate("/clients")}><i className="bi bi-person-plus me-2"></i>Customers</button>
         <button className="btn btn-light border" onClick={()=>navigate("/analytics")}><i className="bi bi-bar-chart me-2"></i>Reports</button>
       </div>
     </div>
@@ -118,7 +122,7 @@ export default function Home(){
               </div>
               {task.done
                 ? <span className="getting-started-done">Done</span>
-                : <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>navigate(task.to)}>{task.key==="invoice"?"Create invoice":"Get started"} <i className="bi bi-arrow-right ms-1"></i></button>}
+                : <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>navigate(task.to)}>{task.key==="invoice"?"Create invoice":task.key==="company"?"Set up company":"Get started"} <i className="bi bi-arrow-right ms-1"></i></button>}
             </div>
           ))}
         </div>

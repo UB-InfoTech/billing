@@ -1508,14 +1508,15 @@ const styles = {
                                         </details>
                                     )}
 
+                                    <div className="row g-3">
                                         <div className="col-12">
                                             <section className="card border-0 shadow-sm">
                                                 <div className="card-header bg-white d-flex align-items-center justify-content-between py-3">
                                                     <div className="d-flex align-items-center gap-2">
                                                         <i className="bi bi-box-seam text-primary"></i>
-                                                        <h6 className="mb-0 fw-semibold">Bill items</h6>
+                                                        <h6 className="mb-0 fw-semibold">Items being sold</h6>
                                                     </div>
-                                                    <button type="button" className="btn btn-primary btn-sm" onClick={addSubOrderRow}>
+                                                    <button type="button" className="btn btn-primary btn-sm" onClick={()=>{setInvoiceFormError("");addSubOrderRow();}}>
                                                         <i className="bi bi-plus-lg me-1"></i>Add item
                                                     </button>
                                                 </div>

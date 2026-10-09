@@ -74,6 +74,16 @@ export default function ProductPage(){
 
   useEffect(()=>{loadProducts();},[search,lowStock]);
 
+  const handleEdit=useCallback(product=>{
+    const hydrated=buildConfiguredDefaults(hydrateConfiguredValues(product,configuredFields),configuredFields);
+    setEditingProduct(product);
+    setForm({...hydrated,customFields:{...(product.customFields||{})}});
+    setImages([]);
+    setError("");
+    setShowForm(true);
+    window.scrollTo({top:0,behavior:"smooth"});
+  },[configuredFields]);
+
   useEffect(()=>{
     if(!showBarcodeScanner)return undefined;
     const reader=document.getElementById("product-barcode-reader");
@@ -114,15 +124,7 @@ export default function ProductPage(){
     });
   };
 
-  const handleEdit=useCallback(product=>{
-    const hydrated=buildConfiguredDefaults(hydrateConfiguredValues(product,configuredFields),configuredFields);
-    setEditingProduct(product);
-    setForm({...hydrated,customFields:{...(product.customFields||{})}});
-    setImages([]);
-    setError("");
-    setShowForm(true);
-    window.scrollTo({top:0,behavior:"smooth"});
-  },[configuredFields]);
+
 
   const handleSubmit=async event=>{
     event.preventDefault();

@@ -978,7 +978,7 @@ function Order2() {
             return (
                 (clientName.toLowerCase().includes(search.toLowerCase()) || order.orderNumber.toLowerCase().includes(search.toLowerCase())) &&
                 (filters.status === '' || order.status === filters.status) &&
-                (filters.paymentStatus === '' || order.paymentStatus === filters.paymentStatus) &&
+                (filters.paymentStatus === '' || (filters.paymentStatus === "Outstanding" ? Number(order.dueAmount||0)>0 : order.paymentStatus === filters.paymentStatus)) &&
                 (filters.dateRange.length === 0 || (new Date(order.orderDate) >= new Date(filters.dateRange[0]) && new Date(order.orderDate) <= new Date(filters.dateRange[1]))) &&
                 // (filters.minTotal === '' || order.totalCost >= parseInt(filters.minTotal)) &&
                 // (filters.maxTotal === '' || order.totalCost <= parseInt(filters.maxTotal)) &&
@@ -1235,50 +1235,70 @@ const styles = {
 
             <div className="py-2">
 
+            <div className="invoice-overview-cards mb-3">
+                <div className="invoice-overview-card">
+                    <span className="invoice-overview-icon"><i className="bi bi-receipt"></i></span>
+                    <div><span className="invoice-overview-label">All invoices</span><strong>{orders.length}</strong><small>Every invoice in your records</small></div>
+                </div>
+                <div className="invoice-overview-card">
+                    <span className="invoice-overview-icon sales"><i className="bi bi-graph-up-arrow"></i></span>
+                    <div><span className="invoice-overview-label">Total invoiced</span><strong>₹{orders.reduce((sum,order)=>sum+Number(order.roundOffFinalRevenue||0),0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2})}</strong><small>Total value of your invoices</small></div>
+                </div>
+                <div className="invoice-overview-card">
+                    <span className="invoice-overview-icon due"><i className="bi bi-hourglass-split"></i></span>
+                    <div><span className="invoice-overview-label">Still to collect</span><strong>₹{orders.reduce((sum,order)=>sum+Number(order.dueAmount||0),0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2})}</strong><small>Money customers still owe</small></div>
+                </div>
+            </div>
+
                 <div className="card p-3">
                     <section className="invoice-filter-panel mb-3" aria-label="Find invoices">
-                        <div className="row g-2 align-items-center">
-                            <div className="col-lg-6">
+                        <div className="invoice-search-and-status">
+                            <div className="invoice-search-control">
                                 <label className="visually-hidden" htmlFor="invoice-search">Search invoices</label>
                                 <div className="input-group">
                                     <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
-                                    <input id="invoice-search" type="search" className="form-control" placeholder="Search invoice number or customer" value={search} onChange={event=>{setSearch(event.target.value);setCurrentPage(1);}}/>
+                                    <input id="invoice-search" type="search" className="form-control" placeholder="Search by invoice number or customer name" value={search} onChange={event=>{setSearch(event.target.value);setCurrentPage(1);}}/>
                                     {search&&<button type="button" className="btn btn-light border" onClick={()=>setSearch("")}>Clear</button>}
                                 </div>
                             </div>
-                            <div className="col-sm-6 col-lg-3">
-                                <select className="form-select" aria-label="Filter invoices by status" value={filters.status} onChange={event=>{setFilters(prev=>({...prev,status:event.target.value}));setCurrentPage(1);}}>
-                                    <option value="">All invoice statuses</option>
-                                    <option value="Pending">Pending</option>
-                                    <option value="In Process">In progress</option>
-                                    <option value="Cancelled">Cancelled</option>
-                                    <option value="Completed">Completed</option>
-                                    <option value="Dispatched">Dispatched</option>
-                                </select>
-                            </div>
-                            <div className="col-sm-6 col-lg-3">
-                                <select className="form-select" aria-label="Filter invoices by payment status" value={filters.paymentStatus} onChange={event=>{setFilters(prev=>({...prev,paymentStatus:event.target.value}));setCurrentPage(1);}}>
-                                    <option value="">All payment statuses</option>
-                                    <option value="Unpaid">Unpaid</option>
-                                    <option value="Partial">Partly paid</option>
-                                    <option value="Paid">Paid</option>
-                                </select>
+                            <div className="invoice-quick-filters" role="group" aria-label="Filter invoices by payment">
+                                {[
+                                    ["","All invoices"],
+                                    ["Outstanding","Needs payment"],
+                                    ["Partial","Partly paid"],
+                                    ["Paid","Paid"]
+                                ].map(([value,label])=>(
+                                    <button key={value||"all"} type="button" className={filters.paymentStatus===value?"active":""} onClick={()=>{setFilters(prev=>({...prev,paymentStatus:value}));setCurrentPage(1);}}>
+                                        {label}
+                                    </button>
+                                ))}
                             </div>
                         </div>
 
                         <details className="filter-details mt-3">
-                            <summary><i className="bi bi-calendar3 me-2"></i>Filter by date <span className="text-secondary fw-normal">(optional)</span></summary>
+                            <summary><i className="bi bi-funnel me-2"></i>More filters <span className="text-secondary fw-normal">(optional)</span></summary>
                             <div className="row g-2 pt-3 align-items-end">
-                                <div className="col-sm-5">
-                                    <label className="form-label small" htmlFor="invoice-date-from">From</label>
+                                <div className="col-md-4">
+                                    <label className="form-label small" htmlFor="invoice-status-filter">Invoice status</label>
+                                    <select id="invoice-status-filter" className="form-select" value={filters.status} onChange={event=>{setFilters(prev=>({...prev,status:event.target.value}));setCurrentPage(1);}}>
+                                        <option value="">All statuses</option>
+                                        <option value="Pending">Pending</option>
+                                        <option value="In Process">In progress</option>
+                                        <option value="Cancelled">Cancelled</option>
+                                        <option value="Completed">Completed</option>
+                                        <option value="Dispatched">Dispatched</option>
+                                    </select>
+                                </div>
+                                <div className="col-md-3">
+                                    <label className="form-label small" htmlFor="invoice-date-from">From date</label>
                                     <input id="invoice-date-from" type="date" className="form-control" value={filters.startDate||""} onChange={event=>setFilters(prev=>({...prev,startDate:event.target.value}))}/>
                                 </div>
-                                <div className="col-sm-5">
-                                    <label className="form-label small" htmlFor="invoice-date-to">To</label>
+                                <div className="col-md-3">
+                                    <label className="form-label small" htmlFor="invoice-date-to">To date</label>
                                     <input id="invoice-date-to" type="date" className="form-control" value={filters.endDate||""} onChange={event=>setFilters(prev=>({...prev,endDate:event.target.value}))}/>
                                 </div>
-                                <div className="col-sm-2">
-                                    <button type="button" className="btn btn-outline-secondary w-100" onClick={()=>setFilters(prev=>({...prev,startDate:"",endDate:"",dateRange:[]}))}>Clear dates</button>
+                                <div className="col-md-2">
+                                    <button type="button" className="btn btn-light border w-100" onClick={()=>{setFilters(prev=>({...prev,status:"",startDate:"",endDate:"",dateRange:[]}));setCurrentPage(1);}}>Clear dates</button>
                                 </div>
                             </div>
                         </details>

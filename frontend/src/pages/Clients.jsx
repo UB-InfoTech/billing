@@ -50,7 +50,7 @@ function Clients() {
     maxRevenue: ''
   });
 
-  const [sortKey, setSortKey] = useState('orderNumber'); // default
+  const [sortKey, setSortKey] = useState('companyName'); // default
   const [sortClient, setSortClient] = useState('asc'); // default
 
 
@@ -367,12 +367,16 @@ function Clients() {
     return sortedClients.filter(client => {
       const revenueNum = client.totalRevenue;
       // const revenueNum = parseInt(client.totalRevenue.replace('$', ''));
+      const query=search.trim().toLowerCase();
+      const searchableValues=[client.companyName,client.name,client.phone,client.email,client.gstNumber]
+        .filter(Boolean)
+        .map(value=>String(value).toLowerCase());
       return (
-        client.companyName.toLowerCase().includes(search.toLowerCase()) &&
+        (!query||searchableValues.some(value=>value.includes(query))) &&
         (filters.businessType === '' || client.businessType === filters.businessType) &&
         (filters.accountStatus === '' || client.accountStatus === filters.accountStatus) &&
-        (filters.minRevenue === '' || revenueNum >= parseInt(filters.minRevenue)) &&
-        (filters.maxRevenue === '' || revenueNum <= parseInt(filters.maxRevenue))
+        (filters.minRevenue === '' || Number(revenueNum||0) >= Number(filters.minRevenue)) &&
+        (filters.maxRevenue === '' || Number(revenueNum||0) <= Number(filters.maxRevenue))
       );
     });
   }, [sortedClients, search, filters]);
@@ -422,6 +426,8 @@ function Clients() {
       : bVal?.toString().localeCompare(aVal?.toString());
   });
 
+  const pagedClientRows=sortedData.slice(indexOfFirstItem,indexOfLastItem);
+
 
   const handleExportExcel = () => {
     const worksheet = XLSX.utils.json_to_sheet(filteredClients);
@@ -466,8 +472,8 @@ function Clients() {
                 <label className="visually-hidden" htmlFor="customer-search">Search customers</label>
                 <div className="input-group">
                   <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
-                  <input id="customer-search" type="search" className="form-control" placeholder="Search by name, phone or GST number" value={search} onChange={event=>{setSearch(event.target.value);setCurrentPage(1);}}/>
-                  {search&&<button type="button" className="btn btn-light border" onClick={()=>setSearch("")}>Clear</button>}
+                  <input id="customer-search" type="search" className="form-control" placeholder="Search company, name, phone or GST" value={search} onChange={event=>{setSearch(event.target.value);setCurrentPage(1);}}/>
+                  {search&&<button type="button" className="btn btn-light border" onClick={()=>{setSearch("");setCurrentPage(1);}}>Clear</button>}
                 </div>
               </div>
               <div className="col-sm-6 col-lg-3">
@@ -509,7 +515,7 @@ function Clients() {
             <DynamicTable
               autoOpenSettings={tableCustomizeRequested}
               tableKey="clients.list"
-              rows={sortedData}
+              rows={pagedClientRows}
               loading={loading}
               emptyText={search.trim()||Object.values(filters).some(Boolean)?"No customers match these filters. Clear them to see everyone.":"No customers yet. Select Add customer to save your first customer."}
               getRowKey={client => client._id}
@@ -543,7 +549,7 @@ function Clients() {
                 )
               }}
               footer={({visibleColumns,hasActions})=>{
-                const totalRevenue=currentClients.reduce((sum,p)=>sum+Number(p.totalRevenue||0),0).toFixed(2);
+                const totalRevenue=filteredClients.reduce((sum,p)=>sum+Number(p.totalRevenue||0),0).toFixed(2);
                 return (
                   <tr>
                     {visibleColumns.map((column,index)=>(

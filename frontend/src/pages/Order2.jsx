@@ -1172,13 +1172,24 @@ const styles = {
     };
 
 
+    const hasActiveInvoiceFilters=Boolean(
+        search.trim()||filters.status||filters.paymentStatus||filters.startDate||filters.endDate||
+        (Array.isArray(filters.dateRange)&&filters.dateRange.length)
+    );
+    const clearInvoiceFilters=()=>{
+        setSearch("");
+        setFilters({status:"",paymentStatus:"",dateRange:[],minTotal:"",maxTotal:"",startDate:"",endDate:""});
+        setCurrentPage(1);
+    };
+
     return (
-        <div className="w-100 mx-3 mt-3">
+        <div className="container-fluid invoice-page py-4">
 
             <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
                 <div>
-                    <h2 className="fw-bold mb-1">Bill Management</h2>
-                    <div className="text-muted small">Create, edit, collect and track sales invoices.</div>
+                    <span className="page-eyebrow">SALES</span>
+                    <h1 className="mb-1">Invoices</h1>
+                    <div className="text-muted">Create invoices, check what is paid, and see what is still due.</div>
                 </div>
 
                 <button className="btn btn-primary d-inline-flex align-items-center gap-2 shadow-sm" onClick={() => {
@@ -1189,112 +1200,83 @@ const styles = {
                     setSubOrders(newSubOrders);
                     setFormData(nextOrder);
                 }}>
-                    <i className="bi bi-plus-lg"></i> Add New Bill
+                    <i className="bi bi-plus-lg"></i> New invoice
                 </button>
 
                 <Link to="/bulk-payment" className="btn btn-success d-inline-flex align-items-center gap-2 shadow-sm">
-                    <i className="bi bi-wallet2"></i> Multi Payment
+                    <i className="bi bi-cash-stack"></i> Record payments
                 </Link>
             </div>
 
             <div className="py-2">
 
                 <div className="card p-3">
-                    {/* Filters and Search */}
-                    <div className="row mb-3 g-3">
-                        <div className="col-md-2">
-                            <input
-                                type="text"
-                                className="form-control"
-                                placeholder="Search by Bill_No. / Client"
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                            />
-                        </div>
-                        <div className="col-md-2 mob-w-50">
-                            <select
-                                className="form-select"
-                                value={filters.status}
-                                onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-                            >
-                                <option value="">All Statuses</option>
-                                <option value="Pending">Pending</option>
-                                <option value="In Process">In Process</option>
-                                <option value="Cancelled">Cancelled</option>
-                                <option value="Completed">Completed</option>
-                                <option value="Dispatched">Dispatched</option>
-                            </select>
-                        </div>
-                        <div className="col-md-2 mob-w-50">
-                            <select
-                                className="form-select"
-                                value={filters.paymentStatus}
-                                onChange={(e) => setFilters({ ...filters, paymentStatus: e.target.value })}
-                            >
-                                <option value="">Payment Statuses</option>
-                                <option value="Unpaid">Unpaid</option>
-                                <option value="Partial">Partial</option>
-                                <option value="Paid">Paid</option>
-                            </select>
-                        </div>
-                        <div className="col-md-2 mob-w-50">
-                            <input
-                                type="date"
-                                className="form-control"
-                                placeholder="Start Date"
-                                value={filters.startDate || ''}
-                                onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-                            />
-                        </div>
-                        <div className="col-md-2 mob-w-50">
-                            <input
-                                type="date"
-                                className="form-control"
-                                placeholder="End Date"
-                                value={filters.endDate || ''}
-                                onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-                            />
-                        </div>
-                        {/* <div className="col-md-2">
-                            <input
-                                type="number"
-                                className="form-control"
-                                placeholder="Min Total"
-                                value={filters.minTotal}
-                                onChange={(e) => setFilters({ ...filters, minTotal: e.target.value })}
-                            />
-                        </div>
-                        <div className="col-md-2">
-                            <input
-                                type="number"
-                                className="form-control"
-                                placeholder="Max Total"
-                                value={filters.maxTotal}
-                                onChange={(e) => setFilters({ ...filters, maxTotal: e.target.value })}
-                            />
-                        </div> */}
-                        <div className="col-md-1 mob-w-50">
-                            <button className="btn btn-success w-100" onClick={handleExportExcel}>
-                                Excel
-                            </button>
-                        </div>
-                        <div className="col-md-1 mob-w-50">
-                            <button className="btn btn-primary w-100" onClick={reactToPrintFn}>
-                                Report
-                            </button>
-                            <div ref={contentRef} className="d-print-block d-none">
-                                <div style={styles.pageReport} >
-                                    <Report ref={reportRef} data={sortedData} />
+                    <section className="invoice-filter-panel mb-3" aria-label="Find invoices">
+                        <div className="row g-2 align-items-center">
+                            <div className="col-lg-6">
+                                <label className="visually-hidden" htmlFor="invoice-search">Search invoices</label>
+                                <div className="input-group">
+                                    <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
+                                    <input id="invoice-search" type="search" className="form-control" placeholder="Search invoice number or customer" value={search} onChange={event=>{setSearch(event.target.value);setCurrentPage(1);}}/>
+                                    {search&&<button type="button" className="btn btn-light border" onClick={()=>setSearch("")}>Clear</button>}
                                 </div>
                             </div>
+                            <div className="col-sm-6 col-lg-3">
+                                <select className="form-select" aria-label="Filter invoices by status" value={filters.status} onChange={event=>{setFilters(prev=>({...prev,status:event.target.value}));setCurrentPage(1);}}>
+                                    <option value="">All invoice statuses</option>
+                                    <option value="Pending">Pending</option>
+                                    <option value="In Process">In progress</option>
+                                    <option value="Cancelled">Cancelled</option>
+                                    <option value="Completed">Completed</option>
+                                    <option value="Dispatched">Dispatched</option>
+                                </select>
+                            </div>
+                            <div className="col-sm-6 col-lg-3">
+                                <select className="form-select" aria-label="Filter invoices by payment status" value={filters.paymentStatus} onChange={event=>{setFilters(prev=>({...prev,paymentStatus:event.target.value}));setCurrentPage(1);}}>
+                                    <option value="">All payment statuses</option>
+                                    <option value="Unpaid">Unpaid</option>
+                                    <option value="Partial">Partly paid</option>
+                                    <option value="Paid">Paid</option>
+                                </select>
+                            </div>
                         </div>
-                    </div>
+
+                        <details className="filter-details mt-3">
+                            <summary><i className="bi bi-calendar3 me-2"></i>Filter by date <span className="text-secondary fw-normal">(optional)</span></summary>
+                            <div className="row g-2 pt-3 align-items-end">
+                                <div className="col-sm-5">
+                                    <label className="form-label small" htmlFor="invoice-date-from">From</label>
+                                    <input id="invoice-date-from" type="date" className="form-control" value={filters.startDate||""} onChange={event=>setFilters(prev=>({...prev,startDate:event.target.value}))}/>
+                                </div>
+                                <div className="col-sm-5">
+                                    <label className="form-label small" htmlFor="invoice-date-to">To</label>
+                                    <input id="invoice-date-to" type="date" className="form-control" value={filters.endDate||""} onChange={event=>setFilters(prev=>({...prev,endDate:event.target.value}))}/>
+                                </div>
+                                <div className="col-sm-2">
+                                    <button type="button" className="btn btn-outline-secondary w-100" onClick={()=>setFilters(prev=>({...prev,startDate:"",endDate:"",dateRange:[]}))}>Clear dates</button>
+                                </div>
+                            </div>
+                        </details>
+
+                        <div className="invoice-list-toolbar mt-3">
+                            <span className="small text-secondary">{filteredOrders.length} invoice{filteredOrders.length===1?"":"s"}{hasActiveInvoiceFilters?" match your filters":" found"}</span>
+                            <div className="d-flex flex-wrap gap-2">
+                                {hasActiveInvoiceFilters&&<button type="button" className="btn btn-sm btn-light border" onClick={clearInvoiceFilters}>Clear filters</button>}
+                                <button type="button" className="btn btn-sm btn-light border" onClick={handleExportExcel}><i className="bi bi-download me-1"></i>Export Excel</button>
+                                <button type="button" className="btn btn-sm btn-light border" onClick={reactToPrintFn}><i className="bi bi-printer me-1"></i>Print report</button>
+                            </div>
+                            <div ref={contentRef} className="d-print-block d-none">
+                                <div style={styles.pageReport}><Report ref={reportRef} data={sortedData}/></div>
+                            </div>
+                        </div>
+                    </section>
                     {/* Table */}
                     <DynamicTable
                         tableKey="orders.list"
                         autoOpenSettings={tableCustomizeRequested}
                         rows={sortedData}
                         getRowKey={order=>order._id}
+                        emptyText={hasActiveInvoiceFilters?"No invoices match these filters. Clear the filters to see all invoices.":"No invoices yet. Select New invoice to create your first invoice."}
                         columns={[
                             {key:"__rowNumber",label:"#",render:(_row,index)=>index+1},
                             {key:"orderDate",label:"Date",render:order=>order.orderDate?new Date(order.orderDate).toLocaleDateString("en-IN"):""},
@@ -1327,18 +1309,22 @@ const styles = {
                             label:"Actions",
                             locked:true,
                             render:order=>(
-                                <div className="d-flex gap-1 justify-content-end flex-wrap">
-                                    <button className="btn btn-warning btn-sm" onClick={()=>handleEdit(order)} title="Edit"><img src={editSVG} alt="Edit" /></button>
-                                    <button className="btn btn-info btn-sm" onClick={()=>handleStatus(order)} title="Status"><img src={infoSVG} alt="Info" /></button>
-                                    <button className="btn btn-success btn-sm" onClick={()=>handlePaymentEdit(order)} title="Payments"><img src={paymentsSVG} alt="Payment" /></button>
-                                    <button className="btn btn-danger btn-sm" onClick={()=>handleDeleteOrder(order._id)} title="Delete"><img src={deleteSVG} alt="Delete" /></button>
-                                    <button className="btn btn-primary btn-sm" onClick={()=>printInvoice(order)} title="Invoice"><img src={invoiceSVG} alt="Invoice" /></button>
-                                    <button
-                                        className="btn btn-secondary btn-sm"
-                                        onClick={()=>{setShowEwayBillModal(true);setOrderId(order._id);}}
-                                        disabled={Boolean(order.ewbDetails?.ewbNo)}
-                                        title="E-Way Bill"
-                                    >Eway</button>
+                                <div className="invoice-row-actions">
+                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>handleEdit(order)} title="Edit this invoice">
+                                        <i className="bi bi-pencil me-1"></i>Edit
+                                    </button>
+                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>handlePaymentEdit(order)} title="Record a payment">
+                                        <i className="bi bi-cash-stack me-1"></i>Payment
+                                    </button>
+                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>printInvoice(order)} title="Print invoice">
+                                        <i className="bi bi-printer me-1"></i>Print
+                                    </button>
+                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>{setShowEwayBillModal(true);setOrderId(order._id);}} disabled={Boolean(order.ewbDetails?.ewbNo)} title={order.ewbDetails?.ewbNo?"E-Way Bill already created":"Create E-Way Bill"}>
+                                        <i className="bi bi-truck me-1"></i>E-Way
+                                    </button>
+                                    <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>handleDeleteOrder(order._id)} title="Delete this invoice">
+                                        <i className="bi bi-trash me-1"></i>Delete
+                                    </button>
                                 </div>
                             )
                         }}

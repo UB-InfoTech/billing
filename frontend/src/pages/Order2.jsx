@@ -1200,7 +1200,7 @@ const styles = {
     return (
         <div className="container-fluid invoice-page py-4">
 
-            <div className="d-flex flex-wrap align-items-center justify-content-between gap-3">
+            <header className="business-page-heading invoice-page-heading mb-3">
                 <div>
                     <span className="page-eyebrow">SALES</span>
                     <h1 className="mb-1">Invoices</h1>
@@ -1218,10 +1218,10 @@ const styles = {
                     <i className="bi bi-plus-lg"></i> New invoice
                 </button>
 
-                <Link to="/bulk-payment" className="btn btn-success d-inline-flex align-items-center gap-2 shadow-sm">
+                <Link to="/bulk-payment" className="btn btn-light border d-inline-flex align-items-center gap-2">
                     <i className="bi bi-cash-stack"></i> Record payments
                 </Link>
-            </div>
+            </header>
 
             {ordersError&&<div className="alert alert-danger" role="alert">{ordersError}</div>}
 

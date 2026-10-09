@@ -40,6 +40,9 @@ function Clients() {
 
   // -----
   const [loading, setLoading] = useState(false);
+  const [formSaving,setFormSaving]=useState(false);
+  const [formError,setFormError]=useState("");
+  const [pageMessage,setPageMessage]=useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
@@ -206,25 +209,43 @@ function Clients() {
     }
   };
 
-  const handleAddClient = async (e) => {
-    e.preventDefault();
+  const missingRequiredCustomerField=values=>{
+    const prepared={...values,...(values.customFields||{})};
+    return clientFormConfig.fields.find(field=>{
+      const state=getFieldState(field,prepared);
+      if(!state.visible||!state.required||state.disabled)return false;
+      const value=field.custom
+        ? values.customFields?.[field.key]??values[field.key]
+        : values[field.key];
+      return String(value??"").trim()==="";
+    });
+  };
+
+  const handleAddClient = async event => {
+    event.preventDefault();
+    setFormError("");
+    setPageMessage("");
+    const prepared=applyFormulas(clientFormConfig.fields,syncConfiguredCustomFields(newClient,clientFormConfig.fields));
+    const missing=missingRequiredCustomerField(prepared);
+    if(missing){
+      setFormError(`Please complete “${missing.label}” before saving.`);
+      return;
+    }
+
     try {
-
-      await axios.post(`${linkone}/api/clients`, newClient, {
-        headers: {
-          'x-auth-token': token
-        }
+      setFormSaving(true);
+      await axios.post(`${linkone}/api/clients`, prepared, {
+        headers: {'x-auth-token': token}
       });
-
-      alert("✅ Client Added Successfully");
       setShowModal(false);
-
       setNewClient(emptyClient());
-      fetchClients();
+      setPageMessage("Customer added successfully.");
+      await fetchClients();
     } catch (error) {
-      // alert(response.data.message);
-      alert("❌ Error adding client");
-      console.error('Error adding client', error);
+      setFormError(error.response?.data?.message||"We could not save this customer. Check the details and try again.");
+      console.error("Error adding customer",error);
+    } finally {
+      setFormSaving(false);
     }
   };
 
@@ -239,161 +260,73 @@ function Clients() {
     setShowModal(true);
   };
 
-  const handleUpdateClient = async () => {
+  const handleUpdateClient = async event => {
+    event?.preventDefault();
+    setFormError("");
+    setPageMessage("");
+    const prepared=applyFormulas(clientFormConfig.fields,syncConfiguredCustomFields(newClient,clientFormConfig.fields));
+    const missing=missingRequiredCustomerField(prepared);
+    if(missing){
+      setFormError(`Please complete “${missing.label}” before saving.`);
+      return;
+    }
+
     try {
+      setFormSaving(true);
       await axios.patch(
         `${linkone}/api/clients/${editingClient}`,
         {
-          name: newClient.name || '',
-          email: newClient.email || '',
-          phone: newClient.phone || '',
-          address: newClient.address || '',
-          state: newClient.state || '',
-          city: newClient.city || '',
-          pinCode: newClient.pinCode || '',
-          stateCode: newClient.stateCode || '',
-          gstNumber: newClient.gstNumber || '',
-          companyName: newClient.companyName || '',
-          businessType: newClient.businessType || '',
-          paymentTerms: newClient.paymentTerms || '30',
-          discountRate: Number(newClient.discountRate || 0),
-          accountStatus: newClient.accountStatus || 'Active',
-          notes: newClient.notes || '',
-          customFields: newClient.customFields || {}
+          name: prepared.name || '',
+          email: prepared.email || '',
+          phone: prepared.phone || '',
+          address: prepared.address || '',
+          state: prepared.state || '',
+          city: prepared.city || '',
+          pinCode: prepared.pinCode || '',
+          stateCode: prepared.stateCode || '',
+          gstNumber: prepared.gstNumber || '',
+          companyName: prepared.companyName || '',
+          businessType: prepared.businessType || '',
+          paymentTerms: prepared.paymentTerms || '30',
+          discountRate: Number(prepared.discountRate || 0),
+          accountStatus: prepared.accountStatus || 'Active',
+          notes: prepared.notes || '',
+          customFields: prepared.customFields || {}
         },
-        {
-          headers: {
-            'x-auth-token': token
-          }
-        }
+        {headers: {'x-auth-token': token}}
       );
 
-      alert("✅ Client Updated Successfully");
       setShowModal(false);
       setEditingClient(null);
-      // setNewClient({ name: "", gstin: "", credit_limit: 0, outstanding_balance: 0 });
       setNewClient(emptyClient());
-
-      fetchClients();
+      setPageMessage("Customer updated successfully.");
+      await fetchClients();
     } catch (error) {
-      alert("❌ Error updating client");
-      console.error('Error updating client', error);
+      setFormError(error.response?.data?.message||"We could not update this customer. Check the details and try again.");
+      console.error("Error updating customer",error);
+    } finally {
+      setFormSaving(false);
     }
   };
 
-  const handleDeleteClient = async (id) => {
-    const password = prompt("Enter password to delete:");
-    if (password === "123") {
-      try {
-        await axios.delete(`${linkone}/api/clients/${id}`, authConfig);
-        alert("✅ Client Deleted Successfully");
-
-        fetchClients();
-      } catch (error) {
-        // alert(response.data.message);
-        console.error('❌ Error deleting client', error);
+  const handleDeleteClient = async id => {
+    const confirmed=window.confirm("Delete this customer? This will remove the customer from your list.");
+    if(!confirmed)return;
+    setPageMessage("");
+    try {
+      await axios.delete(`${linkone}/api/clients/${id}`,authConfig);
+      setPageMessage("Customer deleted.");
+      if(String(editingClient)===String(id)){
+        setShowModal(false);
+        setEditingClient(null);
+        setNewClient(emptyClient());
       }
-    } else {
-      alert("❌ Incorrect password");
+      await fetchClients();
+    } catch (error) {
+      setPageMessage(error.response?.data?.message||"We could not delete this customer. Try again.");
+      console.error("Error deleting customer",error);
     }
   };
-
-  // Indian States and Union Territories
-  const indianStates = [
-    "Gujarat", "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", "Goa", "Haryana",
-    "Himachal Pradesh", "Jharkhand", "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
-    "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", "Rajasthan", "Sikkim", "Tamil Nadu",
-    "Telangana", "Tripura", "Uttar Pradesh", "Uttarakhand", "West Bengal", "Andaman and Nicobar Islands",
-    "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Jammu and Kashmir", "Ladakh",
-    "Lakshadweep", "Puducherry", "Other Territory", "Other Country"
-  ];
-
-  // Expanded State-City Mapping (more cities, still not exhaustive)
-  const stateCityMapping = {
-    "Andhra Pradesh": ["Visakhapatnam", "Vijayawada", "Guntur", "Nellore", "Kurnool", "Tirupati", "Rajahmundry", "Kadapa"],
-    "Arunachal Pradesh": ["Itanagar", "Naharlagun", "Tawang", "Pasighat", "Ziro", "Bomdila", "Tezu"],
-    "Assam": ["Guwahati", "Silchar", "Dibrugarh", "Jorhat", "Nagaon", "Tezpur", "Tinsukia", "Bongaigaon"],
-    "Bihar": ["Patna", "Gaya", "Bhagalpur", "Muzaffarpur", "Darbhanga", "Purnia", "Arrah", "Begusarai"],
-    "Chhattisgarh": ["Raipur", "Bhilai", "Bilaspur", "Korba", "Durg", "Jagdalpur", "Raigarh", "Ambikapur"],
-    "Goa": ["Panaji", "Margao", "Vasco da Gama", "Mapusa", "Ponda", "Bicholim"],
-    "Gujarat": ["Surat", "Ahmedabad", "Vadodara", "Rajkot", "Gandhinagar", "Bhavnagar", "Jamnagar", "Junagadh", "Anand"],
-    "Haryana": ["Gurugram", "Faridabad", "Chandigarh", "Hisar", "Panipat", "Karnal", "Rohtak", "Sonipat", "Yamunanagar"],
-    "Himachal Pradesh": ["Shimla", "Manali", "Dharamshala", "Kullu", "Mandi", "Solan", "Una", "Hamirpur"],
-    "Jharkhand": ["Ranchi", "Jamshedpur", "Dhanbad", "Bokaro", "Deoghar", "Hazaribagh", "Giridih", "Ramgarh"],
-    "Karnataka": ["Bengaluru", "Mysuru", "Hubli", "Mangalore", "Belgaum", "Davangere", "Bellary", "Shimoga", "Tumkur"],
-    "Kerala": ["Thiruvananthapuram", "Kochi", "Kozhikode", "Thrissur", "Kollam", "Kannur", "Alappuzha", "Kottayam"],
-    "Madhya Pradesh": ["Bhopal", "Indore", "Gwalior", "Jabalpur", "Ujjain", "Sagar", "Rewa", "Satna", "Ratlam"],
-    "Maharashtra": ["Mumbai", "Pune", "Nagpur", "Nashik", "Aurangabad", "Thane", "Solapur", "Kolhapur", "Amravati", "Latur"],
-    "Manipur": ["Imphal", "Thoubal", "Bishnupur", "Churachandpur", "Ukhrul", "Senapati"],
-    "Meghalaya": ["Shillong", "Tura", "Nongstoin", "Jowai", "Williamnagar"],
-    "Mizoram": ["Aizawl", "Lunglei", "Champhai", "Saiha", "Kolasib"],
-    "Nagaland": ["Kohima", "Dimapur", "Mokokchung", "Wokha", "Tuensang", "Zunheboto"],
-    "Odisha": ["Bhubaneswar", "Cuttack", "Rourkela", "Berhampur", "Sambalpur", "Puri", "Balasore", "Baripada"],
-    "Punjab": ["Chandigarh", "Ludhiana", "Amritsar", "Jalandhar", "Patiala", "Bathinda", "Mohali", "Hoshiarpur"],
-    "Rajasthan": ["Jaipur", "Udaipur", "Jodhpur", "Kota", "Ajmer", "Bikaner", "Alwar", "Sikar", "Bhilwara"],
-    "Sikkim": ["Gangtok", "Pelling", "Namchi", "Gyalshing", "Mangan"],
-    "Tamil Nadu": ["Chennai", "Coimbatore", "Madurai", "Salem", "Tiruchirappalli", "Tirunelveli", "Erode", "Vellore", "Dindigul"],
-    "Telangana": ["Hyderabad", "Warangal", "Nizamabad", "Karimnagar", "Khammam", "Mahbubnagar", "Adilabad"],
-    "Tripura": ["Agartala", "Udaipur", "Dharmanagar", "Kailashahar", "Belonia"],
-    "Uttar Pradesh": ["Lucknow", "Kanpur", "Varanasi", "Agra", "Meerut", "Ghaziabad", "Noida", "Allahabad", "Bareilly", "Moradabad"],
-    "Uttarakhand": ["Dehradun", "Haridwar", "Rishikesh", "Nainital", "Mussoorie", "Almora", "Haldwani", "Roorkee"],
-    "West Bengal": ["Kolkata", "Darjeeling", "Siliguri", "Howrah", "Durgapur", "Asansol", "Malda", "Kharagpur", "Haldia"],
-    "Andaman and Nicobar Islands": ["Port Blair", "Havelock Island", "Neil Island"],
-    "Chandigarh": ["Chandigarh"],
-    "Dadra and Nagar Haveli and Daman and Diu": ["Daman", "Silvassa", "Diu"],
-    "Delhi": ["New Delhi", "East Delhi", "West Delhi", "South Delhi", "North Delhi"],
-    "Jammu and Kashmir": ["Srinagar", "Jammu", "Anantnag", "Baramulla", "Kathua", "Udhampur"],
-    "Ladakh": ["Leh", "Kargil"],
-    "Lakshadweep": ["Kavaratti", "Agatti", "Minicoy"],
-    "Puducherry": ["Puducherry", "Karaikal", "Mahe", "Yanam"]
-  };
-
-
-  // Sorting function
-  const sortedClients = useMemo(() => {
-    let sortableClients = [...clients];
-    if (sortConfig.key) {
-      sortableClients.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
-    return sortableClients;
-  }, [clients, sortConfig]);
-
-  // Filtering function
-  const filteredClients = useMemo(() => {
-    return sortedClients.filter(client => {
-      const revenueNum = client.totalRevenue;
-      // const revenueNum = parseInt(client.totalRevenue.replace('$', ''));
-      const query=search.trim().toLowerCase();
-      const searchableValues=[client.companyName,client.name,client.phone,client.email,client.gstNumber]
-        .filter(Boolean)
-        .map(value=>String(value).toLowerCase());
-      return (
-        (!query||searchableValues.some(value=>value.includes(query))) &&
-        (filters.businessType === '' || client.businessType === filters.businessType) &&
-        (filters.accountStatus === '' || client.accountStatus === filters.accountStatus) &&
-        (filters.minRevenue === '' || Number(revenueNum||0) >= Number(filters.minRevenue)) &&
-        (filters.maxRevenue === '' || Number(revenueNum||0) <= Number(filters.maxRevenue))
-      );
-    });
-  }, [sortedClients, search, filters]);
-
-  // Pagination
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentClients = filteredClients.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(filteredClients.length / itemsPerPage);
-
-  // // Handlers
-  // const handleSort = (key) => {
-  //   setSortConfig({
-  //     key,
-  //     direction: sortConfig.key === key && sortConfig.direction === 'asc' ? 'desc' : 'asc'
-  //   });
-  // };
 
   const handleSort = (key) => {
     if (sortKey === key) {
@@ -464,6 +397,8 @@ function Clients() {
             <button className="btn btn-primary" onClick={() => { setEditingClient(null); setNewClient(emptyClient()); setShowModal(true); }}><i className="bi bi-person-plus me-2"></i>Add customer</button>
           </div>
         </header>
+
+        {pageMessage&&<div className="alert alert-info" role="status">{pageMessage}</div>}
 
         <div className="py-2">
           <div className="card p-3">
@@ -602,16 +537,14 @@ function Clients() {
 
           {showModal && (
             <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}>
-              <div className="modal-dialog modal-dialog-centered modal-xl">
-                <div className="modal-content shadow-lg border-0" style={{ borderRadius: '20px', overflow: 'hidden', backgroundColor: '#f8f9fa' }}>
-                  <div className="modal-header bg-light text-dark p-3 border-bottom-0 d-flex justify-content-between align-items-center">
+              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+                <div className="modal-content customer-form-modal shadow-sm border-0">
+                  <div className="modal-header bg-white text-dark p-3 border-bottom d-flex justify-content-between align-items-center">
                     <div className="d-flex align-items-center gap-2">
-                      <h5 className="modal-title fw-bold mb-0">
-                        {editingClient ? "Edit Client" : "Add New Client"}
-                      </h5>
-                      <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>setFormSettingsOpen(true)}>
-                        <i className="bi bi-sliders2 me-1"></i>Customize form
-                      </button>
+                      <div>
+                        <h5 className="modal-title fw-bold mb-1">{editingClient ? "Edit customer" : "Add a customer"}</h5>
+                        <div className="small text-muted">Fields marked * are required. You can add more details later.</div>
+                      </div>
                     </div>
                     <button
                       type="button"
@@ -621,25 +554,8 @@ function Clients() {
                     ></button>
                   </div>
 
-                  {/* Progress Bar */}
-                  {/* <div className="px-3 pt-2">
-                  <div className="progress" style={{ height: '8px', borderRadius: '10px' }}>
-                    <div
-                      className="progress-bar bg-primary"
-                      role="progressbar"
-                      style={{ width: `${(Object.values(newClient).filter(Boolean).length / Object.keys(newClient).length) * 100}%`, transition: 'width 0.3s ease' }}
-                      aria-valuenow={(Object.values(newClient).filter(Boolean).length / Object.keys(newClient).length) * 100}
-                      aria-valuemin="0"
-                      aria-valuemax="100"
-                    ></div>
-                  </div>
-                  <small className="text-muted mt-1 d-block text-center">
-                    {Math.round((Object.values(newClient).filter(Boolean).length / Object.keys(newClient).length) * 100)}% Complete
-                  </small>
-                </div> */}
-
-                  {/* <div className="modal-body p-3" style={{ maxHeight: '60vh', overflowY: 'auto' }}> */}
-                  <form onSubmit={handleAddClient}>
+                  {formError&&<div className="alert alert-danger mx-3 mt-3 mb-0" role="alert">{formError}</div>}
+                  <form onSubmit={editingClient?handleUpdateClient:handleAddClient} noValidate>
                     <div className="modal-body p-3">
                       <div className="row g-3">
                         {clientSections.map(section=>(
@@ -705,13 +621,8 @@ function Clients() {
 
                     <div className="modal-footer bg-white p-3 border-top sticky-bottom">
                       <button type="button" className="btn btn-light border" onClick={()=>setShowModal(false)}>Cancel</button>
-                      <button
-                        type={editingClient?"button":"submit"}
-                        className="btn btn-primary px-4"
-                        onClick={editingClient?handleUpdateClient:undefined}
-                        disabled={!visibleClientFields.filter(field=>getFieldState(field,{...newClient,...(newClient.customFields||{})}).visible&&getFieldState(field,{...newClient,...(newClient.customFields||{})}).required).every(field=>String(clientValue(field)??"").trim())}
-                      >
-                        {editingClient?"Update client":"Add client"}
+                      <button type="submit" className="btn btn-primary px-4" disabled={formSaving}>
+                        {formSaving?<><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving...</>:(editingClient?"Save changes":"Add customer")}
                       </button>
                     </div>                  </form>
 

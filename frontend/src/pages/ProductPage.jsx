@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from "react";
+import React,{useEffect,useMemo,useState,useCallback} from "react";
 import {useSearchParams} from "react-router-dom";
 import { createProduct, fetchProducts, updateProduct, deleteProduct, searchProductByBarcode } from "../services/productService";
 import { Html5QrcodeScanner } from "html5-qrcode";
@@ -30,7 +30,8 @@ export default function ProductPage(){
   const [form,setForm]=useState(emptyBase);
   const [images,setImages]=useState([]);
   const [editingProduct,setEditingProduct]=useState(null);
-  const [showForm,setShowForm]=useState(true);
+  const [showForm,setShowForm]=useState(false);
+  const [showBarcodeScanner,setShowBarcodeScanner]=useState(false);
   const [formSettingsOpen,setFormSettingsOpen]=useState(false);
   const [tableCustomizeRequested,setTableCustomizeRequested]=useState(false);
   const [loading,setLoading]=useState(true);
@@ -74,14 +75,23 @@ export default function ProductPage(){
   useEffect(()=>{loadProducts();},[search,lowStock]);
 
   useEffect(()=>{
-    const scanner=new Html5QrcodeScanner("product-barcode-reader",{fps:10,qrbox:220});
-    scanner.render(text=>{searchProductByBarcode(text).then(response=>{
-      const product=response.data?.product;
-      if(product){handleEdit(product);}
-      else setError("No product found for that barcode.");
-    }).catch(err=>setError(err.response?.data?.message||"Unable to find that barcode."));});
+    if(!showBarcodeScanner)return undefined;
+    const reader=document.getElementById("product-barcode-reader");
+    if(!reader)return undefined;
+    const scanner=new Html5QrcodeScanner("product-barcode-reader",{fps:8,qrbox:200});
+    scanner.render(text=>{
+      searchProductByBarcode(text).then(response=>{
+        const product=response.data?.product;
+        if(product){
+          handleEdit(product);
+          setShowBarcodeScanner(false);
+        }else{
+          setError("No product found for that barcode.");
+        }
+      }).catch(err=>setError(err.response?.data?.message||"Unable to find that barcode."));
+    });
     return()=>{scanner.clear().catch(()=>{});};
-  },[]);
+  },[showBarcodeScanner]);
 
   const productValue=(field)=>{
     const raw=field.custom
@@ -196,13 +206,12 @@ export default function ProductPage(){
     <div className="container-fluid py-3">
       <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
         <div>
-          <div className="text-primary small fw-semibold">Products</div>
-          <h2 className="mb-1">Products & pricing</h2>
-          <div className="text-muted">Add products, keep stock information current, and customize this screen without code.</div>
+          <div className="text-primary small fw-semibold">YOUR CATALOGUE</div>
+          <h2 className="mb-1">Products</h2>
+          <div className="text-muted">Keep item names, prices and stock in one place. Add products only when you need to.</div>
         </div>
         <div className="d-flex flex-wrap gap-2">
-          <button type="button" className="btn btn-outline-primary" onClick={()=>setFormSettingsOpen(true)}><i className="bi bi-sliders2 me-1"></i>Customize form</button>
-          <button type="button" className="btn btn-primary" onClick={resetProduct}><i className="bi bi-plus-lg me-1"></i>New product</button>
+          <button type="button" className="btn btn-primary" onClick={resetProduct}><i className="bi bi-plus-lg me-1"></i>Add product</button>
         </div>
       </div>
 
@@ -212,10 +221,10 @@ export default function ProductPage(){
         <form onSubmit={handleSubmit} className="card border-0 shadow-sm mb-4">
           <div className="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div>
-              <h5 className="mb-1">{editingProduct?"Edit product":"Add product"}</h5>
-              <div className="small text-muted">The fields below follow your saved Product form settings.</div>
+              <h5 className="mb-1">{editingProduct?"Edit product details":"Add a product"}</h5>
+              <div className="small text-muted">{editingProduct?"Update the details and save your changes.":"Enter the details you know. You can add more information later."}</div>
             </div>
-            {editingProduct&&<button type="button" className="btn btn-sm btn-light border" onClick={resetProduct}>Cancel edit</button>}
+            <button type="button" className="btn btn-sm btn-light border" onClick={()=>{setShowForm(false);setEditingProduct(null);setImages([]);setError("");}}>Close</button>
           </div>
 
           <div className="card-body">
@@ -290,6 +299,7 @@ export default function ProductPage(){
             rows={products}
             getRowKey={product=>product._id}
             loading={loading}
+            emptyText={search.trim()?"No products match your search. Clear the search to see all products.":lowStock?"No products are at or below the minimum stock level.":"No products yet. Select Add product to add your first item."}
             columns={tableColumns}
             actionColumn={{
               label:"Actions",
@@ -305,21 +315,29 @@ export default function ProductPage(){
         </div>
       </div>
 
-      <div className="mt-3 border rounded-3 p-3 bg-light">
-        <div className="fw-semibold mb-2">Barcode lookup</div>
-        <div className="small text-muted mb-2">Scan or type a product barcode to open that product.</div>
-        <input className="form-control mb-2" placeholder="Enter or scan barcode" onKeyDown={event=>{
-          if(event.key!=="Enter")return;
-          const code=event.currentTarget.value.trim();
-          if(!code)return;
-          searchProductByBarcode(code).then(response=>{
-            const product=response.data?.product;
-            if(product)handleEdit(product); else setError("No product found for that barcode.");
-          }).catch(err=>setError(err.response?.data?.message||"Unable to find that barcode."));
-          event.currentTarget.value="";
-        }}/>
-        <div id="product-barcode-reader" className="d-none"></div>
-      </div>
+      <details className="barcode-lookup-panel mt-3">
+        <summary><i className="bi bi-upc-scan me-2"></i>Find a product by barcode <span className="text-secondary fw-normal">(optional)</span></summary>
+        <div className="barcode-lookup-body">
+          <div className="small text-muted mb-2">Type a barcode or open the scanner when you need it. Your camera will only start after you choose Scan.</div>
+          <div className="d-flex flex-wrap gap-2">
+            <input className="form-control flex-grow-1" style={{minWidth:220,maxWidth:480}} placeholder="Enter barcode and press Enter" onKeyDown={event=>{
+              if(event.key!=="Enter")return;
+              event.preventDefault();
+              const code=event.currentTarget.value.trim();
+              if(!code)return;
+              searchProductByBarcode(code).then(response=>{
+                const product=response.data?.product;
+                if(product)handleEdit(product); else setError("No product found. Check the barcode and try again.");
+              }).catch(err=>setError(err.response?.data?.message||"Unable to find that barcode."));
+              event.currentTarget.value="";
+            }}/>
+            <button type="button" className="btn btn-outline-primary" onClick={()=>setShowBarcodeScanner(value=>!value)}>
+              <i className={"bi "+(showBarcodeScanner?"bi-camera-video-off":"bi-camera-video")+" me-1"}></i>{showBarcodeScanner?"Stop scanner":"Scan barcode"}
+            </button>
+          </div>
+          {showBarcodeScanner&&<div id="product-barcode-reader" className="barcode-reader mt-3"></div>}
+        </div>
+      </details>
 
       <FormConfigurator
         open={formSettingsOpen}

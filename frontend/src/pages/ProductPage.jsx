@@ -308,8 +308,8 @@ export default function ProductPage(){
               locked:true,
               render:product=>(
                 <div className="d-flex justify-content-end gap-1">
-                  <button type="button" className="btn btn-warning btn-sm" onClick={()=>handleEdit(product)} title="Edit"><i className="bi bi-pencil"></i></button>
-                  <button type="button" className="btn btn-danger btn-sm" onClick={()=>handleDelete(product)} title="Delete"><i className="bi bi-trash"></i></button>
+                  <button type="button" className="btn btn-sm btn-light border" onClick={()=>handleEdit(product)} title="Edit product"><i className="bi bi-pencil me-1"></i>Edit</button>
+                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>handleDelete(product)} title="Delete product"><i className="bi bi-trash me-1"></i>Delete</button>
                 </div>
               )
             }}
@@ -317,7 +317,7 @@ export default function ProductPage(){
         </div>
       </div>
 
-      <details className="barcode-lookup-panel mt-3">
+      <details className="barcode-lookup-panel mt-3" onToggle={event=>{if(!event.currentTarget.open)setShowBarcodeScanner(false);}}>
         <summary><i className="bi bi-upc-scan me-2"></i>Find a product by barcode <span className="text-secondary fw-normal">(optional)</span></summary>
         <div className="barcode-lookup-body">
           <div className="small text-muted mb-2">Type a barcode or open the scanner when you need it. Your camera will only start after you choose Scan.</div>

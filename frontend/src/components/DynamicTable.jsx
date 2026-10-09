@@ -595,7 +595,7 @@ export default function DynamicTable({
           disabled={loadingConfig}
         >
           <i className="bi bi-sliders2"></i>
-          Customize list
+          Change columns
         </button>
       </div>
 
@@ -676,9 +676,9 @@ export default function DynamicTable({
           <section className="dynamic-settings-drawer dynamic-table-builder" role="dialog" aria-modal="true" aria-label="Customize table">
             <header className="dynamic-table-builder-header">
               <div className="min-w-0">
-                <div className="dynamic-table-builder-kicker"><i className="bi bi-layout-three-columns me-1"></i>Customize</div>
-                <h5 className="mb-1">Customize this table</h5>
-                <p className="mb-0">Show the columns you need, rename them, and drag them into the order you want.</p>
+                <div className="dynamic-table-builder-kicker"><i className="bi bi-layout-three-columns me-1"></i>LIST OPTIONS</div>
+                <h5 className="mb-1">Choose what this list shows</h5>
+                <p className="mb-0">Show, hide, rename and move columns. These changes affect only your view of the list.</p>
               </div>
               <button type="button" className="btn btn-light border rounded-circle" onClick={()=>setShowSettings(false)} aria-label="Close table customization">
                 <i className="bi bi-x-lg"></i>
@@ -691,11 +691,11 @@ export default function DynamicTable({
               <div className="dynamic-table-builder-summary">
                 <div>
                   <strong>{visibleColumns.length}</strong> of {draft.length} columns are visible
-                  <div className="small text-secondary">Most tables only need show, hide, rename and reorder.</div>
+                  <div className="small text-secondary">Choose the columns people need for their daily work.</div>
                 </div>
                 <div className="d-flex flex-wrap gap-2 justify-content-end">
                   <button type="button" className="btn btn-sm btn-light border" onClick={showAll}><i className="bi bi-eye me-1"></i>Show all</button>
-                  <button type="button" className="btn btn-sm btn-light border" onClick={hideOptional}>Hide optional</button>
+                  <button type="button" className="btn btn-sm btn-light border" onClick={hideOptional}>Hide extra columns</button>
                   <button type="button" className="btn btn-sm btn-outline-secondary" onClick={()=>setShowColumnDetails(value=>!value)}><i className="bi bi-sliders2 me-1"></i>{showColumnDetails?"Hide extra settings":"More settings"}</button>
                 </div>
               </div>

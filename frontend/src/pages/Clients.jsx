@@ -85,6 +85,7 @@ function Clients() {
     ? newClient.customFields?.[field.key]??newClient[field.key]??field.defaultValue??""
     : newClient[field.key]??field.defaultValue??"";
   const updateClientField=(field,value,record=null)=>{
+    setFormError("");
     setNewClient(prev=>{
       let next=field.custom
         ? {...prev,[field.key]:value,customFields:{...(prev.customFields||{}),[field.key]:value}}
@@ -130,6 +131,7 @@ function Clients() {
   };
 
   const fetchGstDetails = async (gstNumber) => {
+    setFormError("");
     try {
       const stateCode = gstNumber.slice(0, 2);
       const pan = gstNumber.slice(2, 12);
@@ -201,7 +203,7 @@ function Clients() {
 
       // return gstData;
     } catch (error) {
-      alert("❌ Error fetching GST details");
+      setFormError("GST details could not be fetched. Check the GST number and try again.");
       // return null;
     }
   };
@@ -560,7 +562,7 @@ function Clients() {
                   </div>
 
                   {formError&&<div className="alert alert-danger mx-3 mt-3 mb-0" role="alert">{formError}</div>}
-                  <form onSubmit={editingClient?handleUpdateClient:handleAddClient} noValidate>
+                  <form onSubmit={editingClient?handleUpdateClient:handleAddClient}>
                     <div className="modal-body p-3">
                       <div className="row g-3">
                         {clientSections.map(section=>(
@@ -602,9 +604,9 @@ function Clients() {
                                       const suffix=(
                                         <button type="button" className="btn btn-sm btn-outline-secondary mt-2" onClick={()=>{
                                           const gst=String(newClient.gstNumber||"").trim().toUpperCase();
-                                          if(!gst){alert("Please enter a GST number first.");return;}
+                                          if(!gst){setFormError("Enter the GST number first.");return;}
                                           const gstRegex=/^(0[1-9]|1[0-9]|2[0-9]|3[0-7])[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
-                                          if(!gstRegex.test(gst)){alert("Please enter a valid GST number.");return;}
+                                          if(!gstRegex.test(gst)){setFormError("Enter a valid 15-character GST number.");return;}
                                           fetchGstDetails(gst);
                                         }}>Fetch GST details</button>
                                       );

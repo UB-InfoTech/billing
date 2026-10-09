@@ -101,6 +101,8 @@ function Order2() {
     const [search, setSearch] = useState('');
 
     const [loading, setLoading] = useState(false);
+    const [loadingOrders,setLoadingOrders]=useState(true);
+    const [ordersError,setOrdersError]=useState("");
     const [orderSubmitting, setOrderSubmitting] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
@@ -168,19 +170,23 @@ function Order2() {
     }
 
     const fetchOrders = async () => {
+        setLoadingOrders(true);
+        setOrdersError("");
         try {
-            const response = await axios.get(`${linkone}` + "/api/order/orders", {
-                headers: {
-                    'x-auth-token': token
-                }
+            const response = await axios.get(`${linkone}/api/order/orders`, {
+                headers: {'x-auth-token': token}
             });
-            setOrders(response.data.orders);
+            setOrders(Array.isArray(response.data?.orders)?response.data.orders:[]);
         } catch (error) {
-            if (error.response && error.response.data && error.response.data.msg === "Token is not valid") {
-                localStorage.removeItem('token');
+            if (error.response?.data?.msg === "Token is not valid") {
+                localStorage.removeItem("token");
                 window.location.reload();
+                return;
             }
-            alert("❌ Error fetching orders: " + error.response.data.message);
+            setOrdersError(error.response?.data?.message||"Invoices could not be loaded. Refresh the page to try again.");
+            console.error("Error fetching invoices",error);
+        } finally {
+            setLoadingOrders(false);
         }
     };
 
@@ -1208,6 +1214,8 @@ const styles = {
                 </Link>
             </div>
 
+            {ordersError&&<div className="alert alert-danger" role="alert">{ordersError}</div>}
+
             <div className="py-2">
 
                 <div className="card p-3">
@@ -1275,14 +1283,15 @@ const styles = {
                         tableKey="orders.list"
                         autoOpenSettings={tableCustomizeRequested}
                         rows={sortedData}
+                        loading={loadingOrders}
                         getRowKey={order=>order._id}
                         emptyText={hasActiveInvoiceFilters?"No invoices match these filters. Clear the filters to see all invoices.":"No invoices yet. Select New invoice to create your first invoice."}
                         columns={[
                             {key:"__rowNumber",label:"#",render:(_row,index)=>index+1},
                             {key:"orderDate",label:"Date",render:order=>order.orderDate?new Date(order.orderDate).toLocaleDateString("en-IN"):""},
-                            {key:"orderNumber",label:"Bill No"},
+                            {key:"orderNumber",label:"Invoice no."},
                             {key:"challanNumber",label:"Challan No"},
-                            {key:"companyName",label:"Client",render:order=>clients.find(client=>client._id===order.clientId)?.companyName||order.companyName||""},
+                            {key:"companyName",label:"Customer",render:order=>clients.find(client=>client._id===order.clientId)?.companyName||order.companyName||""},
                             {key:"status",label:"Status",render:order=>(
                                 <select className="form-select form-select-sm" value={order.status||"Pending"} onChange={e=>handleStatusChange(order._id,e.target.value)}>
                                     <option value="Pending">Pending</option>
@@ -1293,14 +1302,14 @@ const styles = {
                                 </select>
                             )},
                             {key:"paymentStatus",label:"Payment Status",render:order=>(
-                                <span className={`badge ${order.paymentStatus==="Paid"?"bg-success":order.paymentStatus==="Partial"?"bg-warning":"bg-danger"}`}>
+                                <span className={`badge ${order.paymentStatus==="Paid"?"bg-success":order.paymentStatus==="Partial"?"bg-warning text-dark":"bg-secondary"}`}>
                                     {order.paymentStatus||"Unpaid"}
                                 </span>
                             )},
                             {key:"quantity",label:"Qty",render:order=>(order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.quantity)||0),0).toFixed(2)},
                             {key:"cut",label:"Cut",render:order=>(order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.cut)||0),0).toFixed(2)},
                             {key:"unitPrice",label:"Unit Price",render:order=>(order.subOrders||[]).length?((order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.unitPrice)||0),0)/(order.subOrders||[]).length).toFixed(2):"0.00"},
-                            {key:"roundOffFinalRevenue",label:"Total Cost",render:order=>`₹${Number(order.roundOffFinalRevenue||0).toFixed(2)}`},
+                            {key:"roundOffFinalRevenue",label:"Invoice total",render:order=>`₹${Number(order.roundOffFinalRevenue||0).toFixed(2)}`},
                             {key:"paidAmount",label:"Paid Amount",render:order=>`₹${Number(order.paidAmount||0).toFixed(2)}`},
                             {key:"dueAmount",label:"Due Amount",render:order=>`₹${Number(order.dueAmount||0).toFixed(2)}`},
                         ]}

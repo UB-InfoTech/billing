@@ -446,78 +446,72 @@ function Clients() {
   }
 
   return (
-      <div className="w-100 mx-3 mt-3">
-        <div className="d-flex align-items-center gap-4">
-          <h2>Client Management</h2>
-          <button className="btn btn-primary" onClick={() => { setEditingClient(null); setNewClient(emptyClient()); setShowModal(true); }}>Add New Client</button>
-        </div>
+      <div className="container-fluid customer-page py-4">
+        <header className="business-page-heading mb-3">
+          <div>
+            <span className="page-eyebrow">YOUR CONTACTS</span>
+            <h1 className="mb-1">Customers</h1>
+            <p className="text-muted mb-0">Keep customer details and buying history together.</p>
+          </div>
+          <div className="d-flex flex-wrap gap-2">
+            <button className="btn btn-light border" onClick={handleExportExcel}><i className="bi bi-download me-2"></i>Export Excel</button>
+            <button className="btn btn-primary" onClick={() => { setEditingClient(null); setNewClient(emptyClient()); setShowModal(true); }}><i className="bi bi-person-plus me-2"></i>Add customer</button>
+          </div>
+        </header>
 
         <div className="py-2">
           <div className="card p-3">
-            {/* Filters and Search */}
-            <div className="row mb-3 g-3">
-              <div className="col-md-3">
-                <input
-                  type="text"
-                  className="form-control"
-                  placeholder="Search by name..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
+            <div className="row g-2 align-items-center">
+              <div className="col-lg-6">
+                <label className="visually-hidden" htmlFor="customer-search">Search customers</label>
+                <div className="input-group">
+                  <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
+                  <input id="customer-search" type="search" className="form-control" placeholder="Search by name, phone or GST number" value={search} onChange={event=>{setSearch(event.target.value);setCurrentPage(1);}}/>
+                  {search&&<button type="button" className="btn btn-light border" onClick={()=>setSearch("")}>Clear</button>}
+                </div>
               </div>
-              <div className="col-md-2">
-                <select
-                  className="form-select"
-                  value={filters.businessType}
-                  onChange={(e) => setFilters({ ...filters, businessType: e.target.value })}
-                >
-                  <option value="">All Business Types</option>
+              <div className="col-sm-6 col-lg-3">
+                <select aria-label="Filter by business type" className="form-select" value={filters.businessType} onChange={event=>{setFilters(prev=>({...prev,businessType:event.target.value}));setCurrentPage(1);}}>
+                  <option value="">All customer types</option>
                   <option value="Retail">Retail</option>
                   <option value="Wholesale">Wholesale</option>
                   <option value="Service">Service</option>
                 </select>
               </div>
-              <div className="col-md-2">
-                <select
-                  className="form-select"
-                  value={filters.accountStatus}
-                  onChange={(e) => setFilters({ ...filters, accountStatus: e.target.value })}
-                >
-                  <option value="">All Statuses</option>
+              <div className="col-sm-6 col-lg-3">
+                <select aria-label="Filter by status" className="form-select" value={filters.accountStatus} onChange={event=>{setFilters(prev=>({...prev,accountStatus:event.target.value}));setCurrentPage(1);}}>
+                  <option value="">All statuses</option>
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
                 </select>
               </div>
-              <div className="col-md-2">
-                <input
-                  type="number"
-                  className="form-control"
-                  placeholder="Min Revenue"
-                  value={filters.minRevenue}
-                  onChange={(e) => setFilters({ ...filters, minRevenue: e.target.value })}
-                />
-              </div>
-              <div className="col-md-2">
-                <input
-                  type="number"
-                  className="form-control"
-                  placeholder="Max Revenue"
-                  value={filters.maxRevenue}
-                  onChange={(e) => setFilters({ ...filters, maxRevenue: e.target.value })}
-                />
-              </div>
-              <div className="col-md-1">
-                <button className="btn btn-success w-100" onClick={handleExportExcel}>
-                  Excel
-                </button>
-              </div>
             </div>
+
+            <details className="filter-details mt-3">
+              <summary><i className="bi bi-sliders me-2"></i>More filters <span className="text-secondary fw-normal">(optional)</span></summary>
+              <div className="row g-2 align-items-end pt-3">
+                <div className="col-sm-5">
+                  <label className="form-label small" htmlFor="customer-min-revenue">Minimum total sales (₹)</label>
+                  <input id="customer-min-revenue" type="number" min="0" className="form-control" placeholder="No minimum" value={filters.minRevenue} onChange={event=>setFilters(prev=>({...prev,minRevenue:event.target.value}))}/>
+                </div>
+                <div className="col-sm-5">
+                  <label className="form-label small" htmlFor="customer-max-revenue">Maximum total sales (₹)</label>
+                  <input id="customer-max-revenue" type="number" min="0" className="form-control" placeholder="No maximum" value={filters.maxRevenue} onChange={event=>setFilters(prev=>({...prev,maxRevenue:event.target.value}))}/>
+                </div>
+                <div className="col-sm-2">
+                  <button type="button" className="btn btn-outline-secondary w-100" onClick={()=>{setSearch("");setFilters({businessType:"",accountStatus:"",minRevenue:"",maxRevenue:""});setCurrentPage(1);}}>Clear all</button>
+                </div>
+              </div>
+            </details>
+          </div>
 
             {/* Table */}
             <DynamicTable
               autoOpenSettings={tableCustomizeRequested}
               tableKey="clients.list"
               rows={sortedData}
+              loading={loading}
+              emptyText={search.trim()||Object.values(filters).some(Boolean)?"No customers match these filters. Clear them to see everyone.":"No customers yet. Select Add customer to save your first customer."}
               getRowKey={client => client._id}
               columns={[
                 { key:"__rowNumber", label:"#", locked:false, render:(_row,index)=>index+1 },

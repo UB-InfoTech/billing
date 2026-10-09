@@ -976,7 +976,7 @@ function Order2() {
         return sortedOrders.filter(order => {
             const clientName = clients.find(client => client._id === order.clientId)?.companyName || '';
             return (
-                (clientName.toLowerCase().includes(search.toLowerCase()) || order.orderNumber.toLowerCase().includes(search.toLowerCase())) &&
+                (clientName.toLowerCase().includes(search.toLowerCase()) || String(order.orderNumber||"").toLowerCase().includes(search.toLowerCase())) &&
                 (filters.status === '' || order.status === filters.status) &&
                 (filters.paymentStatus === '' || (filters.paymentStatus === "Outstanding" ? Number(order.dueAmount||0)>0 : order.paymentStatus === filters.paymentStatus)) &&
                 (filters.dateRange.length === 0 || (new Date(order.orderDate) >= new Date(filters.dateRange[0]) && new Date(order.orderDate) <= new Date(filters.dateRange[1]))) &&
@@ -1324,10 +1324,10 @@ const styles = {
                         getRowKey={order=>order._id}
                         emptyText={hasActiveInvoiceFilters?"No invoices match these filters. Clear the filters to see all invoices.":"No invoices yet. Select New invoice to create your first invoice."}
                         columns={[
-                            {key:"__rowNumber",label:"#",render:(_row,index)=>index+1},
+                            {key:"__rowNumber",label:"#",visible:false,render:(_row,index)=>index+1},
                             {key:"orderDate",label:"Date",render:order=>order.orderDate?new Date(order.orderDate).toLocaleDateString("en-IN"):""},
                             {key:"orderNumber",label:"Invoice no."},
-                            {key:"challanNumber",label:"Challan No"},
+                            {key:"challanNumber",label:"Challan No",visible:false},
                             {key:"companyName",label:"Customer",render:order=>clients.find(client=>client._id===order.clientId)?.companyName||order.companyName||""},
                             {key:"status",label:"Status",render:order=>(
                                 <select className="form-select form-select-sm" value={order.status||"Pending"} onChange={e=>handleStatusChange(order._id,e.target.value)}>
@@ -1343,9 +1343,9 @@ const styles = {
                                     {order.paymentStatus||"Unpaid"}
                                 </span>
                             )},
-                            {key:"quantity",label:"Qty",render:order=>(order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.quantity)||0),0).toFixed(2)},
-                            {key:"cut",label:"Cut",render:order=>(order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.cut)||0),0).toFixed(2)},
-                            {key:"unitPrice",label:"Unit Price",render:order=>(order.subOrders||[]).length?((order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.unitPrice)||0),0)/(order.subOrders||[]).length).toFixed(2):"0.00"},
+                            {key:"quantity",label:"Qty",visible:false,render:order=>(order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.quantity)||0),0).toFixed(2)},
+                            {key:"cut",label:"Cut",visible:false,render:order=>(order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.cut)||0),0).toFixed(2)},
+                            {key:"unitPrice",label:"Unit Price",visible:false,render:order=>(order.subOrders||[]).length?((order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.unitPrice)||0),0)/(order.subOrders||[]).length).toFixed(2):"0.00"},
                             {key:"roundOffFinalRevenue",label:"Invoice total",render:order=>`₹${Number(order.roundOffFinalRevenue||0).toFixed(2)}`},
                             {key:"paidAmount",label:"Paid Amount",render:order=>`₹${Number(order.paidAmount||0).toFixed(2)}`},
                             {key:"dueAmount",label:"Due Amount",render:order=>`₹${Number(order.dueAmount||0).toFixed(2)}`},
@@ -1365,12 +1365,17 @@ const styles = {
                                     <button type="button" className="btn btn-sm btn-light border" onClick={()=>printInvoice(order)} title="Print invoice">
                                         <i className="bi bi-printer me-1"></i>Print
                                     </button>
-                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>{setShowEwayBillModal(true);setOrderId(order._id);}} disabled={Boolean(order.ewbDetails?.ewbNo)} title={order.ewbDetails?.ewbNo?"E-Way Bill already created":"Create E-Way Bill"}>
-                                        <i className="bi bi-truck me-1"></i>E-Way
-                                    </button>
-                                    <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>handleDeleteOrder(order._id)} title="Delete this invoice">
-                                        <i className="bi bi-trash me-1"></i>Delete
-                                    </button>
+                                    <details className="invoice-row-more">
+                                        <summary aria-label="More invoice actions" title="More actions"><i className="bi bi-three-dots"></i></summary>
+                                        <div className="invoice-row-more-menu">
+                                            <button type="button" onClick={()=>{setShowEwayBillModal(true);setOrderId(order._id);}} disabled={Boolean(order.ewbDetails?.ewbNo)}>
+                                                <i className="bi bi-truck me-2"></i>{order.ewbDetails?.ewbNo?"E-Way Bill created":"Create E-Way Bill"}
+                                            </button>
+                                            <button type="button" className="is-danger" onClick={()=>handleDeleteOrder(order._id)}>
+                                                <i className="bi bi-trash me-2"></i>Delete invoice
+                                            </button>
+                                        </div>
+                                    </details>
                                 </div>
                             )
                         }}

@@ -3197,3 +3197,123 @@ body{
   background:#f9fbfd;
   border-bottom:1px solid #e8edf3;
 }
+
+/* ---------- Friendly sign-in and account creation ---------- */
+.auth-page{
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:18px;
+  padding:28px 16px;
+  background:
+    radial-gradient(ellipse at 12% 8%,rgba(13,110,253,.07),transparent 42%),
+    radial-gradient(ellipse at 90% 88%,rgba(32,201,151,.06),transparent 38%),
+    #f6f8fb;
+}
+.auth-card{
+  width:min(440px,100%);
+  padding:clamp(24px,5vw,38px);
+  border:1px solid #e6ebf2;
+  border-radius:22px;
+  background:#fff;
+  box-shadow:0 18px 55px rgba(31,56,85,.09);
+  animation:surfaceIn .24s ease-out both;
+}
+.auth-brand-mark{
+  width:48px;
+  height:48px;
+  display:grid;
+  place-items:center;
+  margin-bottom:22px;
+  border-radius:15px;
+  background:#edf5ff;
+  color:#0d6efd;
+  font-size:22px;
+}
+.auth-eyebrow{
+  margin-bottom:8px;
+  color:#0d6efd;
+  font-size:11px;
+  font-weight:750;
+  letter-spacing:.13em;
+}
+.auth-card h1{
+  margin:0 0 8px;
+  color:#25364a;
+  font-size:clamp(25px,5vw,30px);
+  font-weight:750;
+  letter-spacing:-.035em;
+}
+.auth-subtitle{
+  margin:0 0 24px;
+  color:#758397;
+  font-size:14px;
+  line-height:1.55;
+}
+.auth-card .form-label{
+  margin-bottom:7px;
+  color:#405269;
+  font-size:13px;
+  font-weight:650;
+}
+.auth-input{
+  min-height:46px !important;
+  border-color:#dfe6ee !important;
+  border-radius:10px !important;
+  font-size:14px;
+}
+.auth-password-group .auth-input{
+  border-top-right-radius:0 !important;
+  border-bottom-right-radius:0 !important;
+}
+.auth-password-toggle{
+  min-width:47px;
+  border:1px solid #dfe6ee;
+  border-left:0;
+  border-radius:0 10px 10px 0;
+  color:#617187;
+}
+.auth-password-toggle:hover{
+  background:#f0f6ff;
+  color:#0d6efd;
+}
+.auth-submit{
+  min-height:46px;
+  border-radius:10px !important;
+  font-weight:650;
+  box-shadow:0 6px 15px rgba(13,110,253,.15);
+}
+.auth-submit:disabled{
+  box-shadow:none;
+  cursor:wait;
+}
+.auth-alert{
+  padding:11px 12px;
+  border-radius:10px;
+  font-size:13px;
+}
+.auth-switch{
+  margin-top:23px;
+  color:#718096;
+  text-align:center;
+  font-size:13px;
+}
+.auth-switch a{
+  color:#0d6efd;
+  font-weight:700;
+  text-decoration:none;
+}
+.auth-switch a:hover{
+  text-decoration:underline;
+}
+.auth-footnote{
+  color:#8794a5;
+  text-align:center;
+  font-size:12px;
+}
+@media(max-width:480px){
+  .auth-page{justify-content:flex-start;padding:28px 14px}
+  .auth-card{padding:24px 20px;border-radius:18px}
+}

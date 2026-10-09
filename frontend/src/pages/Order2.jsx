@@ -1263,13 +1263,13 @@ const styles = {
                             </div>
                             <div className="invoice-quick-filters" role="group" aria-label="Filter invoices by payment">
                                 {[
-                                    ["","All invoices"],
-                                    ["Outstanding","Needs payment"],
-                                    ["Partial","Partly paid"],
-                                    ["Paid","Paid"]
-                                ].map(([value,label])=>(
+                                    ["","All invoices",orders.length],
+                                    ["Outstanding","Needs payment",orders.filter(order=>Number(order.dueAmount||0)>0).length],
+                                    ["Partial","Partly paid",orders.filter(order=>order.paymentStatus==="Partial").length],
+                                    ["Paid","Paid",orders.filter(order=>order.paymentStatus==="Paid").length]
+                                ].map(([value,label,count])=>(
                                     <button key={value||"all"} type="button" className={filters.paymentStatus===value?"active":""} onClick={()=>{setFilters(prev=>({...prev,paymentStatus:value}));setCurrentPage(1);}}>
-                                        {label}
+                                        <span>{label}</span><span className="invoice-filter-count">{count}</span>
                                     </button>
                                 ))}
                             </div>

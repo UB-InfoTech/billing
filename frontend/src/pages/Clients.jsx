@@ -9,6 +9,16 @@ import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,syncConfi
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
 
+const indianStates=[
+  "Andhra Pradesh","Arunachal Pradesh","Assam","Bihar","Chhattisgarh","Goa","Gujarat",
+  "Haryana","Himachal Pradesh","Jharkhand","Karnataka","Kerala","Madhya Pradesh",
+  "Maharashtra","Manipur","Meghalaya","Mizoram","Nagaland","Odisha","Punjab",
+  "Rajasthan","Sikkim","Tamil Nadu","Telangana","Tripura","Uttar Pradesh",
+  "Uttarakhand","West Bengal","Andaman and Nicobar Islands","Chandigarh",
+  "Dadra and Nagar Haveli and Daman and Diu","Delhi","Jammu and Kashmir",
+  "Ladakh","Lakshadweep","Puducherry"
+];
+
 function Clients() {
   const [searchParams,setSearchParams]=useSearchParams();
 
@@ -118,7 +128,11 @@ function Clients() {
       return <div key={field.key} className={`col-12 col-md-${field.width||6}`}><ConfiguredField {...common} options={indianStates}/></div>;
     }
     if(field.key==="city"&&!field.dataSource?.resource){
-      return <div key={field.key} className={`col-12 col-md-${field.width||6}`}><ConfiguredField {...common} options={newClient.state?(stateCityMapping[newClient.state]||[]):[]} disabled={!newClient.state}/></div>;
+      const cityChoices=Array.isArray(field.options)?field.options:[];
+      if(cityChoices.length){
+        return <div key={field.key} className={`col-12 col-md-${field.width||6}`}><ConfiguredField {...common} options={cityChoices}/></div>;
+      }
+      return <div key={field.key} className={`col-12 col-md-${field.width||6}`}><ConfiguredField {...common} field={{...common.field,fieldType:"text"}}/></div>;
     }
     if(field.key==="companyName"&&!field.custom&&!field.dataSource?.resource){
       return <div key={field.key} className={`col-12 col-md-${field.width||6}`}><ConfiguredField {...common} listId="clientCompanyName" listOptions={clients.map(client=>client.companyName)}/></div>;

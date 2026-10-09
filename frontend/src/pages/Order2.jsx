@@ -321,7 +321,6 @@ function Order2() {
         const state=getFieldState(field,orderFieldValues);
         return state.visible&&(state.required||primaryInvoiceFieldKeys.has(field.key));
     });
-    const primaryOrderFieldKeys=new Set(primaryOrderFields.map(field=>field.key));
     const additionalOrderFields=visibleOrderFields.filter(field=>!primaryOrderFieldKeys.has(field.key));
 
 

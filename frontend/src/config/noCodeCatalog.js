@@ -41,15 +41,15 @@ export const ORDER_FORM_FIELDS=[
 ];
 
 export const ORDER_ITEM_FIELDS=[
- {key:"designNumber",label:"Design No.",fieldType:"text",width:2,section:"items",order:0},
- {key:"orderName",label:"Product Name",fieldType:"reference",width:2,section:"items",order:1,dataSource:{type:"lookup",resource:"products",valueField:"productName",labelField:"productName",searchField:"productName",multiple:false,autoFill:[{targetKey:"designNumber",sourceKey:"designNo"},{targetKey:"unitPrice",sourceKey:"rate"}]}},
- {key:"hsnCode",label:"HSN Code",fieldType:"number",width:2,section:"items",order:2},
- {key:"quantity",label:"Qty",fieldType:"number",width:1,section:"items",order:3},
- {key:"cut",label:"Cut",fieldType:"number",width:1,section:"items",order:4},
- {key:"MTR",label:"MTR",fieldType:"number",width:1,section:"items",order:5,formula:"quantity * cut"},
- {key:"unitPrice",label:"Rate",fieldType:"currency",width:1,section:"items",order:6},
- {key:"qtyUnit",label:"Qty Unit",fieldType:"select",width:1,section:"items",order:7,options:["MTR","PCS","BOX","UNT"]},
- {key:"shortPcs",label:"Short Pcs",fieldType:"number",width:1,section:"items",order:8,visible:false}
+ {key:"designNumber",label:"Design No.",fieldType:"text",width:3,section:"details",order:1},
+ {key:"orderName",label:"Product",fieldType:"reference",width:4,section:"items",order:0,dataSource:{type:"lookup",resource:"products",valueField:"productName",labelField:"productName",searchField:"productName",multiple:false,autoFill:[{targetKey:"designNumber",sourceKey:"designNo"},{targetKey:"unitPrice",sourceKey:"rate"}]}},
+ {key:"hsnCode",label:"HSN Code",fieldType:"number",width:3,section:"details",order:2},
+ {key:"quantity",label:"Quantity",fieldType:"number",width:2,section:"items",order:3},
+ {key:"cut",label:"Cut",fieldType:"number",width:2,section:"items",order:4},
+ {key:"MTR",label:"Meters (MTR)",fieldType:"number",width:2,section:"items",order:5,formula:"quantity * cut"},
+ {key:"unitPrice",label:"Rate / unit",fieldType:"currency",width:3,section:"items",order:6},
+ {key:"qtyUnit",label:"Unit",fieldType:"select",width:2,section:"items",order:7,options:["MTR","PCS","BOX","UNT"]},
+ {key:"shortPcs",label:"Short pieces",fieldType:"number",width:2,section:"details",order:8,visible:false}
 ];
 
 export const CLIENT_FORM_FIELDS=[

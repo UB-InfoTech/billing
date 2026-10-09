@@ -73,9 +73,9 @@ export default function Home(){
 
   const gettingStartedTasks=[
     {key:"company",title:"Add your company details",description:"Your company name and address appear on printed invoices.",done:Boolean(profile?.companyName&&profile?.companyAddress),to:"/profile"},
-    {key:"customers",title:"Add your first customer",description:"Save the people or companies you sell to.",done:Number(data?.clients||0)>0,to:"/clients"},
-    {key:"products",title:"Add your products",description:"Save the items and prices you sell.",done:Number(data?.products||0)>0,to:"/products"},
-    {key:"invoice",title:"Create your first invoice",description:"Choose a customer, add items and save the bill.",done:Number(data?.orders||0)>0,to:"/orders"}
+    {key:"customers",title:"Add your first customer",description:"Save the people or companies you sell to.",done:Number(data?.clients||0)>0,to:"/clients?action=new"},
+    {key:"products",title:"Add your products",description:"Save the items and prices you sell.",done:Number(data?.products||0)>0,to:"/products?action=new"},
+    {key:"invoice",title:"Create your first invoice",description:"Choose a customer, add items and save the bill.",done:Number(data?.orders||0)>0,to:"/orders?action=new"}
   ];
   const completedSetupTasks=gettingStartedTasks.filter(task=>task.done).length;
 
@@ -87,7 +87,7 @@ export default function Home(){
         <div className="text-muted">Start with a task or check your most important numbers.</div>
       </div>
       <div className="dashboard-primary-actions">
-        <button className="btn btn-primary" onClick={()=>navigate("/orders")}><i className="bi bi-plus-lg me-2"></i>New invoice</button>
+        <button className="btn btn-primary" onClick={()=>navigate("/orders?action=new")}><i className="bi bi-plus-lg me-2"></i>New invoice</button>
         <button className="btn btn-light border" onClick={()=>navigate("/add-expense")}><i className="bi bi-wallet2 me-2"></i>Add expense</button>
         <button className="btn btn-light border" onClick={()=>navigate("/clients")}><i className="bi bi-person-plus me-2"></i>Customers</button>
         <button className="btn btn-light border" onClick={()=>navigate("/analytics")}><i className="bi bi-bar-chart me-2"></i>Reports</button>

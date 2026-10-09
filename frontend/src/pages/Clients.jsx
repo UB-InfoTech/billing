@@ -60,13 +60,19 @@ function Clients() {
 
   useEffect(()=>{
     const customize=searchParams.get("customize");
+    const action=searchParams.get("action");
     if(customize==="table")setTableCustomizeRequested(true);
-    if(customize==="form"){
-      setFormSettingsOpen(true);
-      searchParams.delete("customize");
+    if(customize==="form")setFormSettingsOpen(true);
+    if(action==="new"){
+      setEditingClient(null);
+      setNewClient(emptyClient());
+      setFormError("");
+      setPageMessage("");
+      setShowModal(true);
     }
-    if(customize){
+    if(customize||action){
       searchParams.delete("customize");
+      searchParams.delete("action");
       setSearchParams(searchParams,{replace:true});
     }
   },[searchParams,setSearchParams]);

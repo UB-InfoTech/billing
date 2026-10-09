@@ -3028,3 +3028,108 @@ body{
   z-index:2;
   border-top:1px solid #e8edf3;
 }
+
+/* ---------- Expense entry: record essentials first ---------- */
+.expense-form-options{
+  position:relative;
+}
+.expense-form-options>summary{
+  cursor:pointer;
+  list-style:none;
+  padding:8px 11px;
+  border:1px solid #e3e9f0;
+  border-radius:9px;
+  background:#f8fafc;
+  color:#65758a;
+  font-size:12px;
+}
+.expense-form-options>summary::-webkit-details-marker{display:none}
+.expense-form-options-panel{
+  position:absolute;
+  z-index:5;
+  right:0;
+  top:calc(100% + 7px);
+  min-width:180px;
+  padding:8px;
+  border:1px solid #e3e9f0;
+  border-radius:11px;
+  background:#fff;
+  box-shadow:0 12px 32px rgba(31,56,85,.12);
+}
+.expense-quick-fields{
+  padding:18px;
+  border:1px solid #e4eaf2;
+  border-radius:14px;
+  background:#fff;
+}
+.expense-fields-heading{
+  display:flex;
+  align-items:flex-start;
+  gap:11px;
+  margin-bottom:16px;
+}
+.expense-fields-heading h6{
+  color:#26364a;
+  font-weight:700;
+}
+.expense-fields-heading p{
+  color:#77869a;
+  font-size:13px;
+}
+.expense-step-number{
+  width:30px;
+  height:30px;
+  flex:0 0 30px;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:#eaf3ff;
+  color:#0d6efd;
+  font-size:13px;
+  font-weight:700;
+}
+.expense-additional-details{
+  border:1px solid #e4eaf2;
+  border-radius:13px;
+  background:#fff;
+  overflow:hidden;
+}
+.expense-additional-details>summary{
+  cursor:pointer;
+  list-style:none;
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:4px;
+  padding:14px 16px;
+  color:#40536a;
+  font-size:14px;
+  font-weight:650;
+}
+.expense-additional-details>summary::-webkit-details-marker{display:none}
+.expense-additional-details>summary span{
+  width:100%;
+  padding-left:26px;
+  color:#8190a2;
+  font-size:12px;
+  font-weight:400;
+}
+.expense-additional-details[open]>summary{
+  background:#f9fbfd;
+  border-bottom:1px solid #e8edf3;
+}
+.expense-additional-details-body{
+  padding:16px;
+}
+.expense-detail-section{
+  padding:14px;
+  border:1px solid #e7ecf2;
+  border-radius:11px;
+  background:#fff;
+}
+.expense-detail-section h6{
+  margin-bottom:12px;
+  color:#526277;
+  font-size:13px;
+  font-weight:700;
+}

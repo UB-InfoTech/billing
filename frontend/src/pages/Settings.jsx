@@ -122,7 +122,13 @@ export default function Settings(){
 
   useEffect(()=>{
     if(configuration?.navigation){
-      setNavigationDraft(configuration.navigation.slice().sort((a,b)=>a.order-b.order));
+      const legacyDefaultLabels={orders:"Bills",clients:"Clients"};
+      setNavigationDraft(configuration.navigation.slice().sort((a,b)=>a.order-b.order).map(item=>{
+        const fallback=currentModuleMap.get(item.key);
+        const savedLabel=String(item.label||"").trim();
+        const isOldDefault=savedLabel&&savedLabel===legacyDefaultLabels[item.key];
+        return {...item,label:!savedLabel||isOldDefault?(fallback?.label||item.label):savedLabel};
+      }));
     }
   },[configuration]);
 

@@ -92,8 +92,8 @@ export default function Expenses(){
     {error&&<div className="alert alert-danger">{error}</div>}
 
     <div className="row g-3 mb-3">
-      <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Total Expense</div><div className="fs-4 fw-bold">{money(summary.totalExpense)}</div></div></div></div>
-      <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Expense Count</div><div className="fs-4 fw-bold">{summary.expenseCount||0}</div></div></div></div>
+      <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Total spent</div><div className="fs-4 fw-bold">{money(summary.totalExpense)}</div></div></div></div>
+      <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Number of expenses</div><div className="fs-4 fw-bold">{summary.expenseCount||0}</div></div></div></div>
       <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Average Expense</div><div className="fs-4 fw-bold">{money(summary.averageExpense)}</div></div></div></div>
     </div>
 
@@ -147,8 +147,8 @@ export default function Expenses(){
           locked:true,
           render:expense=>(
             <div className="d-flex gap-1 justify-content-end">
-              <button className="btn btn-warning btn-sm" onClick={()=>navigate("/edit-expense/"+expense._id)} title="Edit"><i className="bi bi-pencil"></i></button>
-              <button className="btn btn-danger btn-sm" onClick={()=>remove(expense)} title="Delete"><i className="bi bi-trash"></i></button>
+              <button className="btn btn-sm btn-light border" onClick={()=>navigate("/edit-expense/"+expense._id)} title="Edit expense"><i className="bi bi-pencil me-1"></i>Edit</button>
+              <button className="btn btn-sm btn-outline-danger" onClick={()=>remove(expense)} title="Delete expense"><i className="bi bi-trash me-1"></i>Delete</button>
             </div>
           )
         }}

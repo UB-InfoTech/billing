@@ -2,8 +2,6 @@ import React, { useEffect, useState, useMemo } from 'react';
 import {useSearchParams} from "react-router-dom";
 import {CLIENT_FORM_FIELDS} from "../config/noCodeCatalog";
 import axios from 'axios';
-import editSVG from '../assets/edit.svg';
-import deleteSVG from '../assets/delete.svg';
 import DynamicTable from '../components/DynamicTable';
 import FormConfigurator from '../components/FormConfigurator';
 import ConfiguredField from '../components/ConfiguredField';
@@ -45,7 +43,6 @@ function Clients() {
   const [pageMessage,setPageMessage]=useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
   const [filters, setFilters] = useState({
     businessType: '',
     accountStatus: '',
@@ -120,8 +117,8 @@ function Clients() {
       });
       setClients(Array.isArray(response.data)?response.data:[]);
     } catch (error) {
-      if (error.response && error.response.data && error.response.data.msg === "Token is not valid") {
-        localStorage.removeItem('token');
+      if (error.response?.data?.msg === "Token is not valid") {
+        localStorage.removeItem("token");
         window.location.reload();
         return;
       }
@@ -250,6 +247,8 @@ function Clients() {
   };
 
   const handleEditClient = (client) => {
+    setFormError("");
+    setPageMessage("");
     setEditingClient(client._id);
     const hydrated={
       ...client,
@@ -328,6 +327,27 @@ function Clients() {
     }
   };
 
+  const filteredClients=useMemo(()=>{
+    const query=search.trim().toLowerCase();
+    return clients.filter(client=>{
+      const searchableValues=[client.companyName,client.name,client.phone,client.email,client.gstNumber]
+        .filter(Boolean)
+        .map(value=>String(value).toLowerCase());
+      const revenue=Number(client.totalRevenue||0);
+      return (
+        (!query||searchableValues.some(value=>value.includes(query))) &&
+        (!filters.businessType||client.businessType===filters.businessType) &&
+        (!filters.accountStatus||client.accountStatus===filters.accountStatus) &&
+        (filters.minRevenue===""||revenue>=Number(filters.minRevenue)) &&
+        (filters.maxRevenue===""||revenue<=Number(filters.maxRevenue))
+      );
+    });
+  },[clients,search,filters]);
+
+  const totalPages=Math.ceil(filteredClients.length/itemsPerPage);
+  const indexOfLastItem=currentPage*itemsPerPage;
+  const indexOfFirstItem=indexOfLastItem-itemsPerPage;
+
   const handleSort = (key) => {
     if (sortKey === key) {
       setSortClient(sortClient === 'asc' ? 'desc' : 'asc');
@@ -367,11 +387,6 @@ function Clients() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Clients');
     XLSX.writeFile(workbook, 'clients_report.xlsx');
-  };
-
-  const getSortIcon = (key) => {
-    if (sortConfig.key !== key) return '';
-    return sortConfig.direction === 'asc' ? '↑' : '↓';
   };
 
   return (

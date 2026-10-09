@@ -22,7 +22,7 @@ export const ORDER_FORM_FIELDS=[
  {key:"pinCode",label:"Pin Code",fieldType:"text",width:4,section:"shipping",order:6},
  {key:"stateCode",label:"State Code",fieldType:"text",width:4,section:"shipping",order:7},
  {key:"status",label:"Status",fieldType:"select",width:4,section:"shipping",order:8,options:["Pending","In Process","Completed","Cancelled","Dispatched"],system:true},
- {key:"companyName",label:"Company Name",fieldType:"reference",width:4,section:"client",required:true,order:9,system:true,dataSource:{type:"lookup",resource:"clients",valueField:"companyName",labelField:"companyName",searchField:"companyName",multiple:false,autoFill:[
+ {key:"companyName",label:"Customer",fieldType:"reference",width:4,section:"client",required:true,order:9,system:true,dataSource:{type:"lookup",resource:"clients",valueField:"companyName",labelField:"companyName",searchField:"companyName",multiple:false,autoFill:[
   {targetKey:"clientId",sourceKey:"_id"},
   {targetKey:"Address",sourceKey:"address"},
   {targetKey:"State",sourceKey:"state"},

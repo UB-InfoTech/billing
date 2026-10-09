@@ -1549,35 +1549,47 @@ const styles = {
                                                     {subOrders.map((order,index)=>{
                                                         const itemValues={...order,...(order.customFields||{})};
                                                         const itemFields=orderItemConfig.fields.filter(field=>getFieldState(field,itemValues).visible).sort((a,b)=>a.order-b.order);
+                                                        const primaryItemKeys=new Set(["orderName","quantity","cut","MTR","unitPrice","qtyUnit"]);
+                                                        const primaryItemFields=itemFields.filter(field=>primaryItemKeys.has(field.key)||field.custom);
+                                                        const additionalItemFields=itemFields.filter(field=>!primaryItemKeys.has(field.key)&&!field.custom);
+                                                        const renderItemField=field=>(
+                                                            <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
+                                                                <ConfiguredField
+                                                                    field={{...field,...getFieldState(field,itemValues)}}
+                                                                    value={configuredItemValue(order,field)}
+                                                                    onChange={next=>handleSubOrderValueChange(index,field.key,next,null,field)}
+                                                                    onRecordChange={record=>handleSubOrderValueChange(index,field.key,record?.[field.dataSource?.valueField||"_id"]??"",record,field)}
+                                                                    lookupRecords={field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[]}
+                                                                    options={field.options||[]}
+                                                                    listId={field.key==="orderName"&&!field.custom?"orderItemName":undefined}
+                                                                    listOptions={field.key==="orderName"&&!field.custom?products.map(product=>product.productName):[]}
+                                                                    required={getFieldState(field,itemValues).required}
+                                                                    readOnly={getFieldState(field,itemValues).readOnly}
+                                                                    disabled={getFieldState(field,itemValues).disabled}
+                                                                />
+                                                            </div>
+                                                        );
                                                         return (
                                                             <div key={index} className="order-config-item-row border rounded-3 bg-light p-3 mb-3">
                                                                 <div className="d-flex align-items-center justify-content-between mb-3">
                                                                     <span className="fw-semibold">Item {index+1}</span>
                                                                     {subOrders.length>1&&(
-                                                                        <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>deleteSubOrder(index)}>
+                                                                        <button type="button" className="btn btn-sm btn-light border" onClick={()=>deleteSubOrder(index)} aria-label={`Remove item ${index+1}`}>
                                                                             <i className="bi bi-trash me-1"></i>Remove
                                                                         </button>
                                                                     )}
                                                                 </div>
                                                                 <div className="row g-3">
-                                                                    {itemFields.map(field=>(
-                                                                        <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
-                                                                            <ConfiguredField
-                                                                                field={{...field,...getFieldState(field,itemValues)}}
-                                                                                value={configuredItemValue(order,field)}
-                                                                                onChange={next=>handleSubOrderValueChange(index,field.key,next,null,field)}
-                                                                                onRecordChange={record=>handleSubOrderValueChange(index,field.key,record?.[field.dataSource?.valueField||"_id"]??"",record,field)}
-                                                                                lookupRecords={field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[]}
-                                                                                options={field.options||[]}
-                                                                                listId={field.key==="orderName"&&!field.custom?"orderItemName":undefined}
-                                                                                listOptions={field.key==="orderName"&&!field.custom?products.map(product=>product.productName):[]}
-                                                                                required={getFieldState(field,itemValues).required}
-                                                                                readOnly={getFieldState(field,itemValues).readOnly}
-                                                                                disabled={getFieldState(field,itemValues).disabled}
-                                                                            />
-                                                                        </div>
-                                                                    ))}
+                                                                    {primaryItemFields.map(renderItemField)}
                                                                 </div>
+                                                                {additionalItemFields.length>0&&(
+                                                                    <details className="invoice-item-more-details mt-3">
+                                                                        <summary><i className="bi bi-plus-circle me-2"></i>More item details <span>Design number, HSN code and other fields</span></summary>
+                                                                        <div className="row g-3 pt-3">
+                                                                            {additionalItemFields.map(renderItemField)}
+                                                                        </div>
+                                                                    </details>
+                                                                )}
                                                             </div>
                                                         );
                                                     })}

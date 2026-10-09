@@ -37,18 +37,27 @@ export default function ProductPage(){
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
+  const [successMessage,setSuccessMessage]=useState("");
   const [search,setSearch]=useState("");
   const [lowStock,setLowStock]=useState(false);
 
   const configuredFields=productFormConfig.fields||[];
   const visibleFields=configuredFields.filter(field=>field.visible!==false);
+  const primaryProductKeys=new Set(["productName","rate","quantity"]);
+  const productFieldValues={...form,...(form.customFields||{})};
+  const primaryProductFields=visibleFields.filter(field=>{
+    const state=getFieldState(field,productFieldValues);
+    return state.visible&&(state.required||primaryProductKeys.has(field.key));
+  });
+  const primaryProductKeySet=new Set(primaryProductFields.map(field=>field.key));
+  const additionalProductFields=visibleFields.filter(field=>!primaryProductKeySet.has(field.key));
 
-  const resetProduct=()=>{
+  const resetProduct=(openForm=true)=>{
     setEditingProduct(null);
     setImages([]);
     setForm(buildConfiguredDefaults({...emptyBase},configuredFields));
     setError("");
-    setShowForm(true);
+    setShowForm(openForm);
   };
 
   useEffect(()=>{
@@ -83,6 +92,7 @@ export default function ProductPage(){
     setForm({...hydrated,customFields:{...(product.customFields||{})}});
     setImages([]);
     setError("");
+    setSuccessMessage("");
     setShowForm(true);
     window.scrollTo({top:0,behavior:"smooth"});
   },[configuredFields]);
@@ -142,7 +152,7 @@ export default function ProductPage(){
       return String(value??"").trim()==="";
     });
     if(missing){
-      setError("Please fill the required field: "+missing.label);
+      setError(`Please complete “${missing.label}” before saving.`);
       return;
     }
 
@@ -159,10 +169,12 @@ export default function ProductPage(){
       data.append("customFields",JSON.stringify(values.customFields||{}));
       images.forEach(image=>data.append("images",image));
 
-      if(editingProduct?._id)await updateProduct(editingProduct._id,data);
+      const wasEditing=Boolean(editingProduct?._id);
+      if(wasEditing)await updateProduct(editingProduct._id,data);
       else await createProduct(data);
 
-      resetProduct();
+      resetProduct(false);
+      setSuccessMessage(wasEditing?"Product updated successfully.":"Product added successfully.");
       await loadProducts();
     }catch(saveError){
       setError(saveError.response?.data?.message||saveError.message||"Unable to save product.");
@@ -173,7 +185,8 @@ export default function ProductPage(){
     if(!window.confirm("Delete this product?"))return;
     try{
       await deleteProduct(product._id);
-      if(editingProduct?._id===product._id)resetProduct();
+      if(editingProduct?._id===product._id)resetProduct(false);
+      setSuccessMessage("Product deleted successfully.");
       await loadProducts();
     }catch(deleteError){
       setError(deleteError.response?.data?.message||"Unable to delete product.");
@@ -181,9 +194,22 @@ export default function ProductPage(){
   };
 
   const productSections=useMemo(
-    ()=>[...new Set(visibleFields.map(field=>field.section||"General"))],
-    [visibleFields]
+    ()=>[...new Set(additionalProductFields.map(field=>field.section||"General"))],
+    [additionalProductFields]
   );
+  const renderProductField=field=>{
+    const state=getFieldState(field,{...form,...(form.customFields||{})});
+    if(!state.visible)return null;
+    const common={
+      field:{...field,...state},
+      value:productValue(field),
+      onChange:value=>updateField(field,value),
+      required:state.required,
+      disabled:state.disabled,
+      readOnly:state.readOnly
+    };
+    return <div className={`col-12 col-md-${field.width||6}`} key={field.key}><ConfiguredField {...common}/></div>;
+  };
 
   const tableColumns=useMemo(()=>{
     const base=[
@@ -220,10 +246,11 @@ export default function ProductPage(){
         </div>
       </div>
 
-      {error&&<div className="alert alert-danger">{error}</div>}
+      {error&&<div className="alert alert-danger" role="alert">{error}</div>}
+      {successMessage&&<div className="alert alert-success d-flex align-items-center gap-2" role="status"><i className="bi bi-check-circle-fill"></i><span>{successMessage}</span><button type="button" className="btn-close ms-auto" aria-label="Dismiss message" onClick={()=>setSuccessMessage("")}></button></div>}
 
       {showForm&&(
-        <form onSubmit={handleSubmit} className="card border-0 shadow-sm mb-4">
+        <form onSubmit={handleSubmit} className="card border-0 shadow-sm mb-4 product-edit-form">
           <div className="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div>
               <h5 className="mb-1">{editingProduct?"Edit product details":"Add a product"}</h5>
@@ -234,45 +261,47 @@ export default function ProductPage(){
 
           <div className="card-body">
             {productFormConfig.loading?(
-              <div className="text-center py-4"><span className="spinner-border spinner-border-sm me-2"></span>Loading form settings...</div>
+              <div className="text-center py-4"><span className="spinner-border spinner-border-sm me-2"></span>Loading product details...</div>
             ):(
-              <div className="row g-3">
-                {productSections.map(section=>(
-                  <div className="col-12" key={section}>
-                    <div className="border rounded-3 p-3">
-                      <div className="fw-semibold mb-3">{String(section).replace(/[_-]+/g," ").replace(/\b\w/g,char=>char.toUpperCase())}</div>
-                      <div className="row g-3">
-                        {visibleFields.filter(field=>(field.section||"General")===section).map(field=>{
-                          const state=getFieldState(field,{...form,...(form.customFields||{})});
-                          if(!state.visible)return null;
-                          const common={
-                            field:{...field,...state},
-                            value:productValue(field),
-                            onChange:value=>updateField(field,value),
-                            required:state.required,
-                            disabled:state.disabled,
-                            readOnly:state.readOnly
-                          };
-                          return <div className={`col-12 col-md-${field.width||6}`} key={field.key}><ConfiguredField {...common}/></div>;
-                        })}
-                      </div>
+              <>
+                <section className="product-quick-fields">
+                  <div className="product-fields-heading">
+                    <span className="product-step-number">1</span>
+                    <div>
+                      <h6 className="mb-1">Basic details</h6>
+                      <p className="mb-0">Start with the product name and selling price. Add stock or other details when needed.</p>
                     </div>
                   </div>
-                ))}
+                  <div className="row g-3">{primaryProductFields.map(renderProductField)}</div>
+                </section>
 
-                <div className="col-12">
-                  <div className="border rounded-3 p-3">
-                    <div className="fw-semibold mb-2">Product images</div>
-                    <div className="small text-muted mb-2">Images stay with the product. Up to 5 image files can be added.</div>
-                    <input type="file" className="form-control" accept="image/jpeg,image/png,image/webp,image/gif" multiple onChange={event=>setImages(Array.from(event.target.files||[]).slice(0,5))}/>
-                    {editingProduct?.images?.length>0&&(
-                      <div className="d-flex flex-wrap gap-2 mt-2">
-                        {editingProduct.images.map((src,index)=><img key={index} src={src} alt="" style={{width:72,height:72,objectFit:"cover"}} className="rounded border"/> )}
-                      </div>
-                    )}
+                <details className="product-additional-details mt-3">
+                  <summary><i className="bi bi-plus-circle me-2"></i>More product details <span>Codes, stock, purchase price, description and images</span></summary>
+                  <div className="product-additional-details-body">
+                    {productSections.map(section=>{
+                      const sectionFields=additionalProductFields.filter(field=>(field.section||"General")===section);
+                      if(!sectionFields.some(field=>getFieldState(field,{...form,...(form.customFields||{})}).visible))return null;
+                      return (
+                        <section className="product-detail-section mb-3" key={section}>
+                          <h6>{String(section).replace(/[_-]+/g," ").replace(/[A-Z]/g,char=>char.toUpperCase())}</h6>
+                          <div className="row g-3">{sectionFields.map(renderProductField)}</div>
+                        </section>
+                      );
+                    })}
+
+                    <div className="product-detail-section">
+                      <h6>Product images</h6>
+                      <div className="small text-muted mb-2">Optional. Add up to 5 images to help identify this product.</div>
+                      <input type="file" className="form-control" accept="image/jpeg,image/png,image/webp,image/gif" multiple onChange={event=>setImages(Array.from(event.target.files||[]).slice(0,5))}/>
+                      {editingProduct?.images?.length>0&&(
+                        <div className="d-flex flex-wrap gap-2 mt-2">
+                          {editingProduct.images.map((src,index)=><img key={index} src={src} alt={`${form.productName||"Product"} ${index+1}`} style={{width:72,height:72,objectFit:"cover"}} className="rounded border"/> )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </div>
+                </details>
+              </>
             )}
           </div>
 

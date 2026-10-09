@@ -79,14 +79,6 @@ function Clients() {
   const clientFormConfig=useFormConfiguration("clients.form",CLIENT_FORM_FIELDS);
   const linkedClientSources=useMemo(()=>Array.from(new Set(clientFormConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean))),[clientFormConfig.fields]);
   const {records:linkedRecords}=useNoCodeDataSources(linkedClientSources);
-  const clientSectionTitle=section=>String(section||"General").replace(/[_-]+/g," ").replace(/\b\w/g,letter=>letter.toUpperCase());
-  const clientSectionIcon=section=>{
-    const value=String(section||"").toLowerCase();
-    if(value.includes("address"))return "bi-geo-alt";
-    if(value.includes("business")||value.includes("company"))return "bi-briefcase";
-    if(value.includes("payment"))return "bi-wallet2";
-    return value.includes("basic")? "bi-person":"bi-folder2-open";
-  };
   const clientValue=field=>field.custom
     ? newClient.customFields?.[field.key]??newClient[field.key]??field.defaultValue??""
     : newClient[field.key]??field.defaultValue??"";
@@ -102,8 +94,49 @@ function Clients() {
     });
   };
   const visibleClientFields=clientFormConfig.fields.filter(field=>field.visible!==false);
+  const clientPrimaryKeys=new Set(["name","companyName","phone","email"]);
+  const clientFieldValues={...newClient,...(newClient.customFields||{})};
+  const primaryClientFields=visibleClientFields.filter(field=>{
+    const state=getFieldState(field,clientFieldValues);
+    return state.visible&&(state.required||clientPrimaryKeys.has(field.key));
+  });
+  const primaryClientKeys=new Set(primaryClientFields.map(field=>field.key));
+  const additionalClientFields=visibleClientFields.filter(field=>!primaryClientKeys.has(field.key));
   const emptyClient=()=>buildConfiguredDefaults({name:"",email:"",phone:"",address:"",state:"",city:"",pinCode:"",stateCode:"",gstNumber:"",companyName:"",businessType:"",paymentTerms:"30",discountRate:0,accountStatus:"Active",notes:"",customFields:{}},clientFormConfig.fields);
-  const clientSections=[...new Set(visibleClientFields.map(field=>field.section||"General"))];
+  const renderClientField=field=>{
+    const state=getFieldState(field,{...newClient,...(newClient.customFields||{})});
+    if(!state.visible)return null;
+    const source=field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[];
+    const common={
+      field:{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled},
+      value:clientValue(field),
+      onChange:value=>updateClientField(field,value,null),
+      onRecordChange:record=>updateClientField(field,record?.[field.dataSource?.valueField||"_id"]??"",record),
+      lookupRecords:source
+    };
+    if(field.key==="state"&&!field.dataSource?.resource){
+      return <div key={field.key} className={\`col-12 col-md-${field.width||6}\`}><ConfiguredField {...common} options={indianStates}/></div>;
+    }
+    if(field.key==="city"&&!field.dataSource?.resource){
+      return <div key={field.key} className={\`col-12 col-md-${field.width||6}\`}><ConfiguredField {...common} options={newClient.state?(stateCityMapping[newClient.state]||[]):[]} disabled={!newClient.state}/></div>;
+    }
+    if(field.key==="companyName"&&!field.custom&&!field.dataSource?.resource){
+      return <div key={field.key} className={\`col-12 col-md-${field.width||6}\`}><ConfiguredField {...common} listId="clientCompanyName" listOptions={clients.map(client=>client.companyName)}/></div>;
+    }
+    if(field.key==="gstNumber"&&!field.custom&&!field.dataSource?.resource){
+      const suffix=(
+        <button type="button" className="btn btn-sm btn-outline-secondary mt-2" onClick={()=>{
+          const gst=String(newClient.gstNumber||"").trim().toUpperCase();
+          if(!gst){setFormError("Enter the GST number first.");return;}
+          const gstRegex=/^(0[1-9]|1[0-9]|2[0-9]|3[0-7])[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
+          if(!gstRegex.test(gst)){setFormError("Enter a valid 15-character GST number.");return;}
+          fetchGstDetails(gst);
+        }}>Fetch GST details</button>
+      );
+      return <div key={field.key} className={\`col-12 col-md-${field.width||6}\`}><ConfiguredField {...common} suffix={suffix}/></div>;
+    }
+    return <div key={field.key} className={\`col-12 col-md-${field.width||6}\`}><ConfiguredField {...common}/></div>;
+  };
 
   useEffect(() => {
     // setLoading(true);
@@ -556,7 +589,7 @@ function Clients() {
                     <div className="d-flex align-items-center gap-2">
                       <div>
                         <h5 className="modal-title fw-bold mb-1">{editingClient ? "Edit customer" : "Add a customer"}</h5>
-                        <div className="small text-muted">Fields marked * are required. You can add more details later.</div>
+                        <div className="small text-muted">Start with the customer or company name. Add other details only when you need them.</div>
                       </div>
                     </div>
                     <button
@@ -570,67 +603,27 @@ function Clients() {
                   {formError&&<div className="alert alert-danger mx-3 mt-3 mb-0" role="alert">{formError}</div>}
                   <form onSubmit={editingClient?handleUpdateClient:handleAddClient}>
                     <div className="modal-body p-3">
-                      <div className="row g-3">
-                        {clientSections.map(section=>(
-                          <div className="col-12 col-lg-6" key={section}>
-                            <section className="card border-0 shadow-sm h-100">
-                              <div className="card-header bg-white d-flex align-items-center gap-2 py-3">
-                                <i className={`bi ${clientSectionIcon(section)} text-primary`}></i>
-                                <h6 className="mb-0 fw-semibold">{clientSectionTitle(section)}</h6>
-                              </div>
-                              <div className="card-body">
-                                <div className="row g-3">
-                                  {visibleClientFields.filter(field=>(field.section||"General")===section).sort((a,b)=>(a.order??0)-(b.order??0)).map(field=>{
-                                    const state=getFieldState(field,{...newClient,...(newClient.customFields||{})});
-                                    if(!state.visible)return null;
-                                    const source=field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[];
-                                    const common={
-                                      field:{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled},
-                                      value:clientValue(field),
-                                      onChange:value=>updateClientField(field,value,null),
-                                      onRecordChange:record=>updateClientField(field,record?.[field.dataSource?.valueField||"_id"]??"",record),
-                                      lookupRecords:source
-                                    };
-                                    if(field.key==="state"&&!field.dataSource?.resource){
-                                      return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
-                                        <ConfiguredField {...common} options={indianStates}/>
-                                      </div>;
-                                    }
-                                    if(field.key==="city"&&!field.dataSource?.resource){
-                                      return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
-                                        <ConfiguredField {...common} options={newClient.state?(stateCityMapping[newClient.state]||[]):[]} disabled={!newClient.state}/>
-                                      </div>;
-                                    }
-                                    if(field.key==="companyName"&&!field.custom&&!field.dataSource?.resource){
-                                      return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
-                                        <ConfiguredField {...common} listId="clientCompanyName" listOptions={clients.map(client=>client.companyName)}/>
-                                      </div>;
-                                    }
-                                    if(field.key==="gstNumber"&&!field.custom&&!field.dataSource?.resource){
-                                      const suffix=(
-                                        <button type="button" className="btn btn-sm btn-outline-secondary mt-2" onClick={()=>{
-                                          const gst=String(newClient.gstNumber||"").trim().toUpperCase();
-                                          if(!gst){setFormError("Enter the GST number first.");return;}
-                                          const gstRegex=/^(0[1-9]|1[0-9]|2[0-9]|3[0-7])[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/;
-                                          if(!gstRegex.test(gst)){setFormError("Enter a valid 15-character GST number.");return;}
-                                          fetchGstDetails(gst);
-                                        }}>Fetch GST details</button>
-                                      );
-                                      return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
-                                        <ConfiguredField {...common} suffix={suffix}/>
-                                      </div>;
-                                    }
-                                    return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
-                                      <ConfiguredField {...common}/>
-                                    </div>;
-                                  })}
-                                </div>
-                              </div>
-                            </section>
+                      <section className="customer-quick-fields">
+                        <div className="customer-fields-heading">
+                          <span className="customer-step-number">1</span>
+                          <div>
+                            <h6 className="mb-1">Basic details</h6>
+                            <p className="mb-0">The name is enough to start. Phone and email make follow-up easier.</p>
                           </div>
-                        ))}
-                      </div>
-                    </div>
+                        </div>
+                        <div className="row g-3">
+                          {primaryClientFields.map(renderClientField)}
+                        </div>
+                      </section>
+
+                      {additionalClientFields.some(field=>getFieldState(field,{...newClient,...(newClient.customFields||{})}).visible)&&(
+                        <details className="customer-additional-details mt-3">
+                          <summary><i className="bi bi-plus-circle me-2"></i>More customer details <span>Address, GST, payment terms and other information</span></summary>
+                          <div className="row g-3 p-3">
+                            {additionalClientFields.map(renderClientField)}
+                          </div>
+                        </details>
+                      )}                    </div>
 
                     <div className="modal-footer bg-white p-3 border-top sticky-bottom">
                       <button type="button" className="btn btn-light border" onClick={()=>{setShowModal(false);setFormError("");}}>Cancel</button>

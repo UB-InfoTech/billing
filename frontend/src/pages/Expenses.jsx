@@ -74,21 +74,18 @@ export default function Expenses(){
   return <div className="container-fluid py-4">
     <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
       <div>
-        <div className="text-primary small fw-semibold">Expenses</div>
-        <h1 className="mb-1">Business expenses</h1>
-        <div className="text-muted">Track, filter, export and customize expense information without code.</div>
+        <span className="page-eyebrow">MONEY GOING OUT</span>
+        <h1 className="mb-1">Expenses</h1>
+        <div className="text-muted">Record what your business spends and see where the money goes.</div>
       </div>
-      <div className="d-flex gap-2">
-        <button className="btn btn-outline-primary" onClick={()=>navigate("/add-expense?customize=form")}>
-          <i className="bi bi-sliders2 me-1"></i>Customize form
-        </button>
-        <button className="btn btn-outline-success" onClick={()=>{
-          const data=expenses.map(e=>({Date:e.date?new Date(e.date).toLocaleDateString("en-IN"):"",Title:e.title||e.description,Category:e.category||"",Vendor:e.vendor||"",Amount:e.amount||0,Tax:e.taxAmount||0,Total:Number(e.amount||0)+Number(e.taxAmount||0)}));
+      <div className="d-flex flex-wrap gap-2">
+        <button className="btn btn-light border" onClick={()=>{
+          const exportRows=expenses.map(e=>({Date:e.date?new Date(e.date).toLocaleDateString("en-IN"):"",Title:e.title||e.description,Category:e.category||"",Vendor:e.vendor||"",Amount:e.amount||0,Tax:e.taxAmount||0,Total:Number(e.amount||0)+Number(e.taxAmount||0)}));
           import("xlsx").then(XLSX=>{
-            const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Expenses");XLSX.writeFile(wb,"expenses_report.xlsx");
+            const ws=XLSX.utils.json_to_sheet(exportRows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Expenses");XLSX.writeFile(wb,"expenses_report.xlsx");
           });
-        }}>Excel</button>
-        <button className="btn btn-primary" onClick={()=>navigate("/add-expense")}>+ Add Expense</button>
+        }}><i className="bi bi-download me-2"></i>Export Excel</button>
+        <button className="btn btn-primary" onClick={()=>navigate("/add-expense")}><i className="bi bi-plus-lg me-2"></i>Add expense</button>
       </div>
     </div>
 
@@ -100,15 +97,43 @@ export default function Expenses(){
       <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Average Expense</div><div className="fs-4 fw-bold">{money(summary.averageExpense)}</div></div></div></div>
     </div>
 
-    <div className="card border-0 shadow-sm mb-3"><div className="card-body"><div className="row g-2">
-      <div className="col-md-4"><input className="form-control" placeholder="Search description, vendor, GST..." value={filters.search} onChange={e=>setFilters(v=>({...v,search:e.target.value}))}/></div>
-      <div className="col-md-3"><select className="form-select" value={filters.category} onChange={e=>setFilters(v=>({...v,category:e.target.value}))}><option value="">All Categories</option>{categories.map(c=><option key={c}>{c}</option>)}</select></div>
-      <div className="col-md-2"><input type="date" className="form-control" value={filters.startDate} onChange={e=>setFilters(v=>({...v,startDate:e.target.value}))}/></div>
-      <div className="col-md-2"><input type="date" className="form-control" value={filters.endDate} onChange={e=>setFilters(v=>({...v,endDate:e.target.value}))}/></div>
-      <div className="col-md-1"><button className="btn btn-outline-secondary w-100" onClick={()=>setFilters({search:"",category:"",startDate:"",endDate:""})}>Reset</button></div>
-    </div></div></div>
+    <div className="card border-0 shadow-sm mb-3"><div className="card-body">
+      <div className="row g-2 align-items-center">
+        <div className="col-lg-7">
+          <label className="visually-hidden" htmlFor="expense-search">Search expenses</label>
+          <div className="input-group">
+            <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
+            <input id="expense-search" className="form-control" placeholder="Search description, supplier or GST number" value={filters.search} onChange={event=>setFilters(v=>({...v,search:event.target.value}))}/>
+            {filters.search&&<button type="button" className="btn btn-light border" onClick={()=>setFilters(v=>({...v,search:""}))}>Clear</button>}
+          </div>
+        </div>
+        <div className="col-lg-5">
+          <select aria-label="Filter expenses by category" className="form-select" value={filters.category} onChange={event=>setFilters(v=>({...v,category:event.target.value}))}>
+            <option value="">All expense categories</option>{categories.map(category=><option key={category} value={category}>{category}</option>)}
+          </select>
+        </div>
+      </div>
+      <details className="filter-details mt-3">
+        <summary><i className="bi bi-calendar3 me-2"></i>Filter by date <span className="text-secondary fw-normal">(optional)</span></summary>
+        <div className="row g-2 align-items-end pt-3">
+          <div className="col-sm-5">
+            <label htmlFor="expense-date-from" className="form-label small">From</label>
+            <input id="expense-date-from" type="date" className="form-control" value={filters.startDate} onChange={event=>setFilters(v=>({...v,startDate:event.target.value}))}/>
+          </div>
+          <div className="col-sm-5">
+            <label htmlFor="expense-date-to" className="form-label small">To</label>
+            <input id="expense-date-to" type="date" className="form-control" value={filters.endDate} onChange={event=>setFilters(v=>({...v,endDate:event.target.value}))}/>
+          </div>
+          <div className="col-sm-2">
+            <button type="button" className="btn btn-outline-secondary w-100" onClick={()=>setFilters(v=>({...v,startDate:"",endDate:""}))}>Clear dates</button>
+          </div>
+        </div>
+      </details>
+      {Object.values(filters).some(Boolean)&&<div className="d-flex justify-content-end mt-3"><button type="button" className="btn btn-sm btn-light border" onClick={()=>setFilters({search:"",category:"",startDate:"",endDate:""})}>Clear all filters</button></div>}
+    </div></div>
 
     <div className="card border-0 shadow-sm"><div className="card-body">
+      <div className="d-flex justify-content-between align-items-center small text-secondary mb-2"><span>{expenses.length} expense{expenses.length===1?"":"s"} shown</span><span>Amounts in INR (₹)</span></div>
       <DynamicTable
         tableKey="expenses.list"
         autoOpenSettings={tableCustomizeRequested}
@@ -116,6 +141,7 @@ export default function Expenses(){
         getRowKey={expense=>expense._id}
         columns={columns}
         loading={loading}
+        emptyText={Object.values(filters).some(Boolean)?"No expenses match these filters. Clear filters to see all expenses.":"No expenses recorded yet. Select Add expense to record your first business cost."}
         actionColumn={{
           label:"Actions",
           locked:true,

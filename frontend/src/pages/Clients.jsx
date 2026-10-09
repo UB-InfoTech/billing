@@ -115,13 +115,13 @@ function Clients() {
       lookupRecords:source
     };
     if(field.key==="state"&&!field.dataSource?.resource){
-      return <div key={field.key} className={\`col-12 col-md-${field.width||6}\`}><ConfiguredField {...common} options={indianStates}/></div>;
+      return <div key={field.key} className={`col-12 col-md-${field.width||6}`}><ConfiguredField {...common} options={indianStates}/></div>;
     }
     if(field.key==="city"&&!field.dataSource?.resource){
-      return <div key={field.key} className={\`col-12 col-md-${field.width||6}\`}><ConfiguredField {...common} options={newClient.state?(stateCityMapping[newClient.state]||[]):[]} disabled={!newClient.state}/></div>;
+      return <div key={field.key} className={`col-12 col-md-${field.width||6}`}><ConfiguredField {...common} options={newClient.state?(stateCityMapping[newClient.state]||[]):[]} disabled={!newClient.state}/></div>;
     }
     if(field.key==="companyName"&&!field.custom&&!field.dataSource?.resource){
-      return <div key={field.key} className={\`col-12 col-md-${field.width||6}\`}><ConfiguredField {...common} listId="clientCompanyName" listOptions={clients.map(client=>client.companyName)}/></div>;
+      return <div key={field.key} className={`col-12 col-md-${field.width||6}`}><ConfiguredField {...common} listId="clientCompanyName" listOptions={clients.map(client=>client.companyName)}/></div>;
     }
     if(field.key==="gstNumber"&&!field.custom&&!field.dataSource?.resource){
       const suffix=(
@@ -133,9 +133,9 @@ function Clients() {
           fetchGstDetails(gst);
         }}>Fetch GST details</button>
       );
-      return <div key={field.key} className={\`col-12 col-md-${field.width||6}\`}><ConfiguredField {...common} suffix={suffix}/></div>;
+      return <div key={field.key} className={`col-12 col-md-${field.width||6}`}><ConfiguredField {...common} suffix={suffix}/></div>;
     }
-    return <div key={field.key} className={\`col-12 col-md-${field.width||6}\`}><ConfiguredField {...common}/></div>;
+    return <div key={field.key} className={`col-12 col-md-${field.width||6}`}><ConfiguredField {...common}/></div>;
   };
 
   useEffect(() => {

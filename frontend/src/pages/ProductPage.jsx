@@ -91,7 +91,7 @@ export default function ProductPage(){
       }).catch(err=>setError(err.response?.data?.message||"Unable to find that barcode."));
     });
     return()=>{scanner.clear().catch(()=>{});};
-  },[showBarcodeScanner]);
+  },[showBarcodeScanner,handleEdit]);
 
   const productValue=(field)=>{
     const raw=field.custom
@@ -114,7 +114,7 @@ export default function ProductPage(){
     });
   };
 
-  const handleEdit=product=>{
+  const handleEdit=useCallback(product=>{
     const hydrated=buildConfiguredDefaults(hydrateConfiguredValues(product,configuredFields),configuredFields);
     setEditingProduct(product);
     setForm({...hydrated,customFields:{...(product.customFields||{})}});
@@ -122,7 +122,7 @@ export default function ProductPage(){
     setError("");
     setShowForm(true);
     window.scrollTo({top:0,behavior:"smooth"});
-  };
+  },[configuredFields]);
 
   const handleSubmit=async event=>{
     event.preventDefault();

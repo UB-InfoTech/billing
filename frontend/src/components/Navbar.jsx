@@ -4,6 +4,7 @@ import {MODULE_CATALOG} from "../config/noCodeCatalog";
 import {NavLink,useNavigate} from "react-router-dom";
 
 const MENU_ITEMS=MODULE_CATALOG;
+const LEGACY_DEFAULT_LABELS={orders:"Bills",clients:"Clients"};
 
 export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}){
   const navigate=useNavigate();
@@ -35,7 +36,12 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
           .slice()
           .sort((a,b)=>(a.order??0)-(b.order??0))
           .filter(item=>item.visible!==false&&byKey.has(item.key))
-          .map(item=>({...byKey.get(item.key),label:item.label||byKey.get(item.key).label}));
+          .map(item=>{
+            const fallback=byKey.get(item.key);
+            const savedLabel=String(item.label||"").trim();
+            const isOldDefault=savedLabel&&savedLabel===LEGACY_DEFAULT_LABELS[item.key];
+            return {...fallback,label:!savedLabel||isOldDefault?fallback.label:savedLabel};
+          });
         if(next.length)setMenuItems(next);
       }catch{
         if(!cancelled)setMenuItems(MENU_ITEMS);

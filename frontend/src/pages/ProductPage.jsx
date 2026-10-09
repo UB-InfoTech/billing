@@ -215,16 +215,16 @@ export default function ProductPage(){
   const tableColumns=useMemo(()=>{
     const base=[
       {key:"productName",label:"Product",sortKey:"productName"},
-      {key:"productCode",label:"Code",sortKey:"productCode"},
-      {key:"designNo",label:"Design No.",sortKey:"designNo"},
+      {key:"productCode",label:"Code",sortKey:"productCode",visible:false},
+      {key:"designNo",label:"Design No.",sortKey:"designNo",visible:false},
       {key:"rate",label:"Selling Rate",sortKey:"rate",render:product=>`₹${Number(product.rate||0).toFixed(2)}`},
       {key:"quantity",label:"Stock",sortKey:"quantity",render:product=>{
         const low=Number(product.quantity||0)<=Number(product.minStock||0);
         return <span className={low?"text-danger fw-bold":""}>{Number(product.quantity||0).toLocaleString("en-IN")}</span>;
       }},
-      {key:"minStock",label:"Min Stock",sortKey:"minStock"},
-      {key:"purchasePrice",label:"Purchase Price",sortKey:"purchasePrice",render:product=>`₹${Number(product.purchasePrice||0).toFixed(2)}`},
-      {key:"barcode",label:"Barcode",sortKey:"barcode"},
+      {key:"minStock",label:"Min Stock",sortKey:"minStock",visible:false},
+      {key:"purchasePrice",label:"Purchase Price",sortKey:"purchasePrice",visible:false,render:product=>`₹${Number(product.purchasePrice||0).toFixed(2)}`},
+      {key:"barcode",label:"Barcode",sortKey:"barcode",visible:false},
     ];
     const custom=configuredFields.filter(field=>field.custom).map(field=>({
       key:field.key,

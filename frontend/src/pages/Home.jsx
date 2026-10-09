@@ -102,7 +102,7 @@ export default function Home(){
           <div>
             <span className="dashboard-eyebrow">A SIMPLE START</span>
             <h3 id="getting-started-title">Get your business ready</h3>
-            <p>Follow these three steps. You do not need to set up everything today.</p>
+            <p>Follow these four steps. You do not need to set up everything today.</p>
           </div>
           <div className="getting-started-progress">
             <strong>{completedSetupTasks} of {gettingStartedTasks.length}</strong>

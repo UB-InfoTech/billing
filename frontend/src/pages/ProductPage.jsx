@@ -57,6 +57,7 @@ export default function ProductPage(){
     setImages([]);
     setForm(buildConfiguredDefaults({...emptyBase},configuredFields));
     setError("");
+    setSuccessMessage("");
     setShowForm(openForm);
   };
 
@@ -283,7 +284,7 @@ export default function ProductPage(){
                       if(!sectionFields.some(field=>getFieldState(field,{...form,...(form.customFields||{})}).visible))return null;
                       return (
                         <section className="product-detail-section mb-3" key={section}>
-                          <h6>{String(section).replace(/[_-]+/g," ").replace(/[A-Z]/g,char=>char.toUpperCase())}</h6>
+                          <h6>{String(section).replace(/[_-]+/g," ").replace(/\b\w/g,char=>char.toUpperCase())}</h6>
                           <div className="row g-3">{sectionFields.map(renderProductField)}</div>
                         </section>
                       );

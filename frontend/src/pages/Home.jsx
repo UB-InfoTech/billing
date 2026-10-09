@@ -68,6 +68,13 @@ export default function Home(){
     ["expenses","/expense",money(data?.expenses)]
   ];
 
+  const gettingStartedTasks=[
+    {key:"customers",title:"Add your first customer",description:"Save the people or companies you sell to.",done:Number(data?.clients||0)>0,to:"/clients",icon:"bi-people"},
+    {key:"products",title:"Add your products",description:"Save the items and prices you sell.",done:Number(data?.products||0)>0,to:"/products",icon:"bi-box-seam"},
+    {key:"invoice",title:"Create your first invoice",description:"Choose a customer, add items and save the bill.",done:Number(data?.orders||0)>0,to:"/orders",icon:"bi-receipt"}
+  ];
+  const completedSetupTasks=gettingStartedTasks.filter(task=>task.done).length;
+
   return <div className="container-fluid py-4">
     <div className="dashboard-welcome mb-4">
       <div>
@@ -84,6 +91,39 @@ export default function Home(){
     </div>
 
     {error&&<div className="alert alert-danger">{error}</div>}
+
+    {completedSetupTasks<gettingStartedTasks.length&&(
+      <section className="getting-started-card mb-4" aria-labelledby="getting-started-title">
+        <div className="getting-started-heading">
+          <div>
+            <span className="dashboard-eyebrow">A SIMPLE START</span>
+            <h3 id="getting-started-title">Get your business ready</h3>
+            <p>Follow these three steps. You do not need to set up everything today.</p>
+          </div>
+          <div className="getting-started-progress">
+            <strong>{completedSetupTasks} of {gettingStartedTasks.length}</strong>
+            <span>steps complete</span>
+          </div>
+        </div>
+        <div className="getting-started-progress-track" role="progressbar" aria-valuenow={completedSetupTasks} aria-valuemin={0} aria-valuemax={gettingStartedTasks.length}>
+          <span style={{width:(completedSetupTasks/gettingStartedTasks.length*100)+"%"}}/>
+        </div>
+        <div className="getting-started-steps">
+          {gettingStartedTasks.map((task,index)=>(
+            <div className={"getting-started-step "+(task.done?"is-complete":"")} key={task.key}>
+              <span className="getting-started-step-number">{task.done?<i className="bi bi-check-lg"></i>:index+1}</span>
+              <div className="getting-started-step-copy">
+                <strong>{task.title}</strong>
+                <span>{task.description}</span>
+              </div>
+              {task.done
+                ? <span className="getting-started-done">Done</span>
+                : <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>navigate(task.to)}>{task.key==="invoice"?"Create invoice":"Get started"} <i className="bi bi-arrow-right ms-1"></i></button>}
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
 
     <div className="row g-3">
       {metricCards.map(([key,to,value])=>isVisible(key)?(

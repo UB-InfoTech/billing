@@ -53,10 +53,13 @@ export default function ProductPage(){
 
   useEffect(()=>{
     const customize=searchParams.get("customize");
-    if(customize==="form"){setFormSettingsOpen(true);}
-    if(customize==="table"){setTableCustomizeRequested(true);}
-    if(customize){
+    const action=searchParams.get("action");
+    if(customize==="form")setFormSettingsOpen(true);
+    if(customize==="table")setTableCustomizeRequested(true);
+    if(action==="new")resetProduct();
+    if(customize||action){
       searchParams.delete("customize");
+      searchParams.delete("action");
       setSearchParams(searchParams,{replace:true});
     }
   },[searchParams,setSearchParams]);

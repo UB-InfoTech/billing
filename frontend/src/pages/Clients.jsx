@@ -460,6 +460,21 @@ function Clients() {
 
         {pageMessage&&<div className="alert alert-info" role="status">{pageMessage}</div>}
 
+        <div className="customer-overview-grid mb-3">
+          <div className="customer-overview-card">
+            <span className="customer-overview-icon"><i className="bi bi-people"></i></span>
+            <div><span>Total customers</span><strong>{clients.length.toLocaleString("en-IN")}</strong><small>Saved in your records</small></div>
+          </div>
+          <div className="customer-overview-card">
+            <span className="customer-overview-icon active"><i className="bi bi-person-check"></i></span>
+            <div><span>Active customers</span><strong>{clients.filter(client=>client.accountStatus!=="Inactive").length.toLocaleString("en-IN")}</strong><small>Ready for new invoices</small></div>
+          </div>
+          <div className="customer-overview-card">
+            <span className="customer-overview-icon sales"><i className="bi bi-currency-rupee"></i></span>
+            <div><span>Total sales</span><strong>₹{clients.reduce((sum,client)=>sum+Number(client.totalRevenue||0),0).toLocaleString("en-IN",{maximumFractionDigits:0})}</strong><small>Sales recorded for customers</small></div>
+          </div>
+        </div>
+
         <div className="py-2">
           <div className="card p-3">
             <div className="row g-2 align-items-center">
@@ -518,15 +533,15 @@ function Clients() {
                 { key:"__rowNumber", label:"#", locked:false, render:(_row,index)=>index+1 },
                 { key:"companyName", label:"Name", sortKey:"companyName" },
                 { key:"phone", label:"Phone", sortKey:"phone" },
-                { key:"address", label:"Address" },
-                { key:"gstNumber", label:"GST No." },
-                { key:"businessType", label:"Business Type", sortKey:"businessType" },
-                { key:"paymentTerms", label:"Payment Terms", render:client=>`${client.paymentTerms||""}${client.paymentTerms!=="Advance"&&client.paymentTerms?" days":""}` },
-                { key:"discountRate", label:"Dis%", render:client=>`${client.discountRate??0} %` },
-                { key:"orderCount", label:"Orders", sortKey:"orderCount" },
+                { key:"address", label:"Address", visible:false },
+                { key:"gstNumber", label:"GST No.", visible:false },
+                { key:"businessType", label:"Business Type", sortKey:"businessType", visible:false },
+                { key:"paymentTerms", label:"Payment Terms", visible:false, render:client=>`${client.paymentTerms||""}${client.paymentTerms!=="Advance"&&client.paymentTerms?" days":""}` },
+                { key:"discountRate", label:"Dis%", visible:false, render:client=>`${client.discountRate??0} %` },
+                { key:"orderCount", label:"Orders", sortKey:"orderCount", visible:false },
                 { key:"totalRevenue", label:"Total Revenue", sortKey:"totalRevenue", render:client=>`₹${Number(client.totalRevenue||0).toFixed(2)}` },
                 { key:"accountStatus", label:"A/C Status", render:client=><span className={`badge ${client.accountStatus==="Active"?"bg-success":"bg-danger"}`}>{client.accountStatus}</span> },
-                { key:"notes", label:"Notes" },
+                { key:"notes", label:"Notes", visible:false },
               ]}
               onSort={handleSort}
               actionColumn={{

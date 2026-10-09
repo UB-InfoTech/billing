@@ -446,11 +446,11 @@ function Clients() {
               <div className="row g-2 align-items-end pt-3">
                 <div className="col-sm-5">
                   <label className="form-label small" htmlFor="customer-min-revenue">Minimum total sales (₹)</label>
-                  <input id="customer-min-revenue" type="number" min="0" className="form-control" placeholder="No minimum" value={filters.minRevenue} onChange={event=>setFilters(prev=>({...prev,minRevenue:event.target.value}))}/>
+                  <input id="customer-min-revenue" type="number" min="0" className="form-control" placeholder="No minimum" value={filters.minRevenue} onChange={event=>{setFilters(prev=>({...prev,minRevenue:event.target.value}));setCurrentPage(1);}}/>
                 </div>
                 <div className="col-sm-5">
                   <label className="form-label small" htmlFor="customer-max-revenue">Maximum total sales (₹)</label>
-                  <input id="customer-max-revenue" type="number" min="0" className="form-control" placeholder="No maximum" value={filters.maxRevenue} onChange={event=>setFilters(prev=>({...prev,maxRevenue:event.target.value}))}/>
+                  <input id="customer-max-revenue" type="number" min="0" className="form-control" placeholder="No maximum" value={filters.maxRevenue} onChange={event=>{setFilters(prev=>({...prev,maxRevenue:event.target.value}));setCurrentPage(1);}}/>
                 </div>
                 <div className="col-sm-2">
                   <button type="button" className="btn btn-outline-secondary w-100" onClick={()=>{setSearch("");setFilters({businessType:"",accountStatus:"",minRevenue:"",maxRevenue:""});setCurrentPage(1);}}>Clear all</button>

@@ -70,6 +70,8 @@ function Order2() {
             const newSubOrders=[emptyOrderItem()];
             setShowModal(true);
             setEditingOrder(null);
+            setInvoiceFormError("");
+            setOrdersMessage("");
             setSubOrders(newSubOrders);
             setFormData({...emptyOrder(),subOrders:newSubOrders});
         }
@@ -112,6 +114,8 @@ function Order2() {
     const [loading, setLoading] = useState(false);
     const [loadingOrders,setLoadingOrders]=useState(true);
     const [ordersError,setOrdersError]=useState("");
+    const [ordersMessage,setOrdersMessage]=useState("");
+    const [invoiceFormError,setInvoiceFormError]=useState("");
     const [orderSubmitting, setOrderSubmitting] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
@@ -302,15 +306,6 @@ function Order2() {
     };
 
     const fieldFor=(fields,key)=>fields.find(field=>field.key===key)||{key,label:key,fieldType:"text",width:6,visible:true,order:0};
-    const sectionTitle=section=>String(section||"General").replace(/[_-]+/g," ").replace(/\b\w/g,letter=>letter.toUpperCase());
-    const sectionIcon=section=>{
-        const value=String(section||"").toLowerCase();
-        if(value.includes("shipping"))return "bi-truck";
-        if(value.includes("client")||value.includes("customer"))return "bi-person";
-        if(value.includes("payment"))return "bi-wallet2";
-        if(value.includes("tax"))return "bi-percent";
-        return "bi-folder2-open";
-    };
     const configuredOrderValue=field=>{
         if(field.custom)return formData.customFields?.[field.key]??formData[field.key]??field.defaultValue??"";
         return formData[field.key]??field.defaultValue??"";
@@ -320,7 +315,14 @@ function Order2() {
         return item[field.key]??field.defaultValue??"";
     };
     const visibleOrderFields=orderFormConfig.fields.filter(field=>field.visible!==false);
-    const orderSections=[...new Set(visibleOrderFields.map(field=>field.section||"General"))];
+    const primaryInvoiceFieldKeys=new Set(["orderNumber","orderDate","companyName"]);
+    const orderFieldValues={...formData,...(formData.customFields||{})};
+    const primaryOrderFields=visibleOrderFields.filter(field=>{
+        const state=getFieldState(field,orderFieldValues);
+        return state.visible&&(state.required||primaryInvoiceFieldKeys.has(field.key));
+    });
+    const primaryOrderFieldKeys=new Set(primaryOrderFields.map(field=>field.key));
+    const additionalOrderFields=visibleOrderFields.filter(field=>!primaryOrderFieldKeys.has(field.key));
 
 
     // const addSubOrderRow = () => {
@@ -608,6 +610,8 @@ function Order2() {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
+        setInvoiceFormError("");
+        setOrdersMessage("");
         const orderValues={...formData,...(formData.customFields||{})};
         const requiredOrderFields=orderFormConfig.fields.filter(field=>{
             const state=getFieldState(field,orderValues);
@@ -615,7 +619,7 @@ function Order2() {
         });
         const missingOrderField=requiredOrderFields.find(field=>String(configuredOrderValue(field)??"").trim()==="");
         if(missingOrderField){
-            alert("Please fill the required field: "+missingOrderField.label);
+            setInvoiceFormError(`Please complete “${missingOrderField.label}” before saving.`);
             return;
         }
 
@@ -628,7 +632,7 @@ function Order2() {
             : null;
         if(missingItem){
             const missingField=requiredItemFields.find(field=>String(configuredItemValue(missingItem,field)??"").trim()==="");
-            alert("Please fill the required item field: "+(missingField?.label||"item field"));
+            setInvoiceFormError(`Please complete “${missingField?.label||"the item details"}” for the item before saving.`);
             return;
         }
 
@@ -653,15 +657,15 @@ function Order2() {
         }));
 
         if (!String(formData.orderNumber || "").trim()) {
-            alert("❌ Invoice number is required.");
+            setInvoiceFormError("Invoice number is missing. Check the invoice number field.");
             return;
         }
         if (!String(formData.companyName || "").trim()) {
-            alert("❌ Please select or enter a client.");
+            setInvoiceFormError("Choose a customer before saving this invoice.");
             return;
         }
         if (!cleanItems.length || cleanItems.every(item => !String(item.orderName || "").trim())) {
-            alert("❌ Add at least one bill item.");
+            setInvoiceFormError("Add at least one item before saving this invoice.");
             return;
         }
 
@@ -677,13 +681,13 @@ function Order2() {
                 customFields:orderCustomFields,
             };
 
-            if (editingOrder) {
+            const wasEditing=Boolean(editingOrder);
+            if (wasEditing) {
                 await axios.put(
                     `${linkone}/api/order/orders/${editingOrder._id}/update`,
                     payload,
                     authConfig()
                 );
-                alert("✅ Order updated successfully.");
             } else {
                 await axios.post(
                     `${linkone}/api/order/orders/create`,
@@ -691,21 +695,23 @@ function Order2() {
                     authConfig()
                 );
                 await incrementBillNoSequence();
-                alert("✅ Order created successfully.");
             }
 
             setShowModal(false);
             setEditingOrder(null);
             setSubOrders([]);
+            setOrdersMessage(wasEditing?"Invoice updated successfully.":"Invoice created successfully.");
             await fetchOrders();
         } catch (error) {
-            alert("❌ " + (error.response?.data?.message || error.message || "Unable to save order."));
+            setInvoiceFormError(error.response?.data?.message || error.message || "We could not save this invoice. Check the details and try again.");
         } finally {
             setOrderSubmitting(false);
         }
     };
 
     const handleEdit = (order) => {
+        setInvoiceFormError("");
+        setOrdersMessage("");
         setEditingOrder(order);
         const configuredOrder=buildConfiguredDefaults(hydrateConfiguredValues(order,orderFormConfig.fields),orderFormConfig.fields);
         const configuredItems=(order.subOrders||[]).map(item=>buildConfiguredDefaults(hydrateConfiguredValues(item,orderItemConfig.fields),orderItemConfig.fields));
@@ -1212,6 +1218,8 @@ const styles = {
                     const nextOrder={...emptyOrder(),subOrders:newSubOrders};
                     setShowModal(true);
                     setEditingOrder(null);
+                    setInvoiceFormError("");
+                    setOrdersMessage("");
                     setSubOrders(newSubOrders);
                     setFormData(nextOrder);
                 }}>
@@ -1224,6 +1232,7 @@ const styles = {
             </header>
 
             {ordersError&&<div className="alert alert-danger" role="alert">{ordersError}</div>}
+            {ordersMessage&&<div className="alert alert-success d-flex align-items-center gap-2" role="status"><i className="bi bi-check-circle-fill"></i><span>{ordersMessage}</span><button type="button" className="btn-close ms-auto" aria-label="Dismiss message" onClick={()=>setOrdersMessage("")}></button></div>}
 
             <div className="py-2">
 
@@ -1400,27 +1409,26 @@ const styles = {
 
 
             {showModal && (
-                <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(15, 23, 42, 0.58)' }}>
+                <div className="modal show d-block invoice-modal-backdrop" tabIndex="-1" role="presentation">
                     <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
-                        <div className="modal-content shadow-lg border-0" ref={modalRef} style={{ borderRadius: '20px', overflow: 'hidden', backgroundColor: '#f8f9fa' }}>
-                            <div className="modal-header text-white p-4 border-bottom-0" style={{ background: 'linear-gradient(135deg, #0f172a, #1e3a8a)' }}>
+                        <div className="modal-content invoice-create-modal border-0" ref={modalRef}>
+                            <div className="modal-header invoice-create-header p-4">
                                 <div className="d-flex flex-wrap align-items-center justify-content-between gap-3 w-100">
                                     <div className="d-flex align-items-center gap-2">
                                         <div>
-                                            <div className="small text-uppercase opacity-75 fw-semibold">Sales Invoice</div>
+                                            <div className="small text-primary text-uppercase fw-semibold mb-1">INVOICE</div>
                                             <h5 className="modal-title fw-bold mb-1">
-                                                {editingOrder ? "Edit Bill" : "Generate Bill"}
+                                                {editingOrder ? "Edit invoice" : "Create an invoice"}
                                             </h5>
-                                            <div className="small opacity-75">Totals, tax, discount and due balance update automatically.</div>
+                                            <div className="small text-secondary">Choose a customer, add the items you sold, and the total is worked out for you.</div>
                                         </div>
-                                        <div className="d-flex gap-2 ms-2">
-                                            <button type="button" className="btn btn-sm btn-light" onClick={()=>setFormSettingsOpen(true)}>
-                                                <i className="bi bi-sliders2 me-1"></i>Customize form
-                                            </button>
-                                            <button type="button" className="btn btn-sm btn-light" onClick={()=>setItemSettingsOpen(true)}>
-                                                <i className="bi bi-list-columns me-1"></i>Customize bill items
-                                            </button>
-                                        </div>
+                                        <details className="invoice-more-options">
+                                            <summary><i className="bi bi-three-dots me-1"></i>More options</summary>
+                                            <div className="invoice-more-options-panel">
+                                                <button type="button" className="btn btn-sm btn-light border" onClick={()=>setFormSettingsOpen(true)}>Customize invoice fields</button>
+                                                <button type="button" className="btn btn-sm btn-light border" onClick={()=>setItemSettingsOpen(true)}>Customize item fields</button>
+                                            </div>
+                                        </details>
                                     </div>
                                 </div>
                                 <button
@@ -1430,45 +1438,76 @@ const styles = {
                                     aria-label="Close"
                                 ></button>
                             </div>
-                            <div className="modal-body p-4" style={{ background: '#f1f5f9' }}>
+                            <div className="modal-body p-4 invoice-create-body">
                                 <form onSubmit={handleSubmit}>
-                                    <div className="row g-3">
-                                        {orderSections.map(section=>(
-                                            <div className="col-12" key={section}>
-                                                <section className="card border-0 shadow-sm">
-                                                    <div className="card-header bg-white d-flex align-items-center gap-2 py-3">
-                                                        <i className={`bi ${sectionIcon(section)} text-primary`}></i>
-                                                        <h6 className="mb-0 fw-semibold">{sectionTitle(section)}</h6>
-                                                    </div>
-                                                    <div className="card-body">
-                                                        <div className="row g-3">
-                                                            {visibleOrderFields.filter(field=>(field.section||"General")===section).sort((a,b)=>a.order-b.order).map(field=>{
-                                                                const state=getFieldState(field,{...formData,...(formData.customFields||{})});
-                                                                if(!state.visible)return null;
-                                                                const source=field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[];
-                                                                const value=field.key==="orderDate"
-                                                                    ? (configuredOrderValue(field)?new Date(configuredOrderValue(field)).toISOString().slice(0,10):"")
-                                                                    : configuredOrderValue(field);
-                                                                return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
-                                                                    <ConfiguredField
-                                                                        field={{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled}}
-                                                                        value={value}
-                                                                        onChange={next=>handleConfiguredOrderValue(field.key,next,null,field)}
-                                                                        onRecordChange={record=>handleConfiguredOrderValue(field.key,record?.[field.dataSource?.valueField||"_id"]??"",record,field)}
-                                                                        lookupRecords={source}
-                                                                        options={field.options||[]}
-                                                                        listId={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?"orderCompanyName":undefined}
-                                                                        listOptions={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?clients.map(client=>client.companyName):[]}
-                                                                        icon=""
-                                                                        required={state.required}
-                                                                    />
-                                                                </div>;
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                </section>
+                                    {invoiceFormError&&<div className="alert alert-danger d-flex gap-2 align-items-start" role="alert"><i className="bi bi-exclamation-circle-fill mt-1"></i><div>{invoiceFormError}</div></div>}
+                                    <section className="card border-0 shadow-sm mb-3 invoice-basics-card">
+                                        <div className="card-header bg-white d-flex align-items-start gap-2 py-3">
+                                            <span className="invoice-step-number">1</span>
+                                            <div>
+                                                <h6 className="mb-1 fw-semibold">Invoice basics</h6>
+                                                <div className="small text-secondary">Start with the invoice number, date and customer. Other details can be added if needed.</div>
                                             </div>
-                                        ))}
+                                        </div>
+                                        <div className="card-body">
+                                            <div className="row g-3">
+                                                {primaryOrderFields.map(field=>{
+                                                    const state=getFieldState(field,{...formData,...(formData.customFields||{})});
+                                                    if(!state.visible)return null;
+                                                    const source=field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[];
+                                                    const value=field.key==="orderDate"
+                                                        ? (configuredOrderValue(field)?new Date(configuredOrderValue(field)).toISOString().slice(0,10):"")
+                                                        : configuredOrderValue(field);
+                                                    return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
+                                                        <ConfiguredField
+                                                            field={{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled}}
+                                                            value={value}
+                                                            onChange={next=>{setInvoiceFormError("");handleConfiguredOrderValue(field.key,next,null,field);}}
+                                                            onRecordChange={record=>{setInvoiceFormError("");handleConfiguredOrderValue(field.key,record?.[field.dataSource?.valueField||"_id"]??"",record,field);}}
+                                                            lookupRecords={source}
+                                                            options={field.options||[]}
+                                                            listId={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?"orderCompanyName":undefined}
+                                                            listOptions={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?clients.map(client=>client.companyName):[]}
+                                                            icon=""
+                                                            required={state.required}
+                                                        />
+                                                    </div>;
+                                                })}
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    {additionalOrderFields.some(field=>getFieldState(field,{...formData,...(formData.customFields||{})}).visible)&&(
+                                        <details className="invoice-additional-details mb-3">
+                                            <summary><i className="bi bi-sliders me-2"></i>More invoice details <span>Optional fields such as address, delivery and tax settings</span></summary>
+                                            <div className="invoice-additional-details-body">
+                                                <div className="row g-3">
+                                                    {additionalOrderFields.map(field=>{
+                                                        const state=getFieldState(field,{...formData,...(formData.customFields||{})});
+                                                        if(!state.visible)return null;
+                                                        const source=field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[];
+                                                        const value=field.key==="orderDate"
+                                                            ? (configuredOrderValue(field)?new Date(configuredOrderValue(field)).toISOString().slice(0,10):"")
+                                                            : configuredOrderValue(field);
+                                                        return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
+                                                            <ConfiguredField
+                                                                field={{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled}}
+                                                                value={value}
+                                                                onChange={next=>{setInvoiceFormError("");handleConfiguredOrderValue(field.key,next,null,field);}}
+                                                                onRecordChange={record=>{setInvoiceFormError("");handleConfiguredOrderValue(field.key,record?.[field.dataSource?.valueField||"_id"]??"",record,field);}}
+                                                                lookupRecords={source}
+                                                                options={field.options||[]}
+                                                                listId={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?"orderCompanyName":undefined}
+                                                                listOptions={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?clients.map(client=>client.companyName):[]}
+                                                                icon=""
+                                                                required={state.required}
+                                                            />
+                                                        </div>;
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </details>
+                                    )}
 
                                         <div className="col-12">
                                             <section className="card border-0 shadow-sm">
@@ -1518,8 +1557,8 @@ const styles = {
                                                         );
                                                     })}
                                                     <div className="small text-secondary">
-                                                        <i className="bi bi-calculator me-1"></i>
-                                                        Number fields can use simple calculations such as <b>10*5</b> or <b>(10+5)/2</b>.
+                                                        <i className="bi bi-lightbulb me-1"></i>
+                                                        Choose a product, enter its quantity, and check the rate. Item amounts and invoice totals update automatically.
                                                     </div>
                                                 </div>
                                             </section>
@@ -1549,11 +1588,14 @@ const styles = {
                                         </div>
                                     </div>
 
-                                    <div className="d-flex justify-content-end gap-2 mt-4">
-                                        <button type="button" className="btn btn-light border" onClick={()=>setShowModal(false)}>Cancel</button>
-                                        <button type="submit" className="btn btn-primary px-4" disabled={orderSubmitting}>
-                                            {orderSubmitting?"Saving...":(editingOrder?"Update bill":"Save bill")}
-                                        </button>
+                                    <div className="invoice-save-footer mt-4">
+                                        <div className="small text-secondary"><i className="bi bi-shield-check me-1"></i>You can print or record a payment after saving.</div>
+                                        <div className="d-flex justify-content-end gap-2">
+                                            <button type="button" className="btn btn-light border" onClick={()=>{setShowModal(false);setInvoiceFormError("");}}>Cancel</button>
+                                            <button type="submit" className="btn btn-primary px-4" disabled={orderSubmitting}>
+                                                {orderSubmitting?<><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>:(editingOrder?"Save invoice changes":"Save invoice")}
+                                            </button>
+                                        </div>
                                     </div>
                                 </form>
                             </div>

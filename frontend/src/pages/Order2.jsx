@@ -61,12 +61,21 @@ function Order2() {
 
     useEffect(()=>{
         const customize=searchParams.get("customize");
+        const action=searchParams.get("action");
         if(customize==="form")setFormSettingsOpen(true);
         if(customize==="items")setItemSettingsOpen(true);
         if(customize==="table")setTableCustomizeRequested(true);
         if(customize==="ewaybill")setEwayCustomizeRequested(true);
-        if(customize){
+        if(action==="new"){
+            const newSubOrders=[emptyOrderItem()];
+            setShowModal(true);
+            setEditingOrder(null);
+            setSubOrders(newSubOrders);
+            setFormData({...emptyOrder(),subOrders:newSubOrders});
+        }
+        if(customize||action){
             searchParams.delete("customize");
+            searchParams.delete("action");
             setSearchParams(searchParams,{replace:true});
         }
     },[searchParams,setSearchParams]);

@@ -60,7 +60,15 @@ export default function ExpenseForm({onSubmit,initialData={}}){
     setForm(buildConfiguredDefaults({...EMPTY,...hydrated,customFields:{...(hydrated.customFields||{})}},fields));
   },[initialData,fields]);
 
-  const sectionNames=useMemo(()=>[...new Set(visibleFields.map(field=>field.section||"General"))],[visibleFields]);
+  const primaryExpenseKeys=new Set(["date","title","description","amount","category"]);
+  const currentExpenseValues={...form,...(form.customFields||{})};
+  const primaryFields=visibleFields.filter(field=>{
+    const state=getFieldState(field,currentExpenseValues);
+    return state.visible&&(state.required||primaryExpenseKeys.has(field.key));
+  });
+  const primaryFieldKeys=new Set(primaryFields.map(field=>field.key));
+  const additionalFields=visibleFields.filter(field=>!primaryFieldKeys.has(field.key));
+  const sectionNames=useMemo(()=>[...new Set(additionalFields.map(field=>field.section||"General"))],[additionalFields]);
 
   const valueFor=(field)=>{
     const raw=field.custom
@@ -136,70 +144,90 @@ export default function ExpenseForm({onSubmit,initialData={}}){
   };
 
   const fieldStateValues={...form,...(form.customFields||{})};
+  const renderExpenseField=field=>{
+    const state=getFieldState(field,fieldStateValues);
+    if(!state.visible)return null;
+    const lookupRecords=field.dataSource?.resource?(linkedRecords[field.dataSource.resource]||[]):[];
+    return(
+      <div className={`col-12 col-md-${field.width||6}`} key={field.key}>
+        <ConfiguredField
+          field={{...field,...state}}
+          value={valueFor(field)}
+          onChange={value=>updateField(field,value)}
+          lookupRecords={lookupRecords}
+          options={field.options}
+          required={state.required}
+          disabled={state.disabled}
+          readOnly={state.readOnly}
+        />
+      </div>
+    );
+  };
 
   return(
     <>
       <form onSubmit={submit} className="card p-4 bg-white shadow-sm border-0">
-        <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div className="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
           <div>
-            <h3 className="mb-1">Expense</h3>
-            <div className="small text-muted">Use your saved expense form layout. Customize it without code from the button above.</div>
+            <h3 className="mb-1">{initialData?._id?"Edit expense":"Add an expense"}</h3>
+            <div className="small text-muted">Enter what you spent and what it was for. Other details are optional.</div>
           </div>
-          <button type="button" className="btn btn-outline-primary btn-sm" onClick={()=>setFormSettingsOpen(true)}>
-            <i className="bi bi-sliders2 me-1"></i>Customize form
-          </button>
+          <details className="expense-form-options">
+            <summary><i className="bi bi-three-dots me-1"></i>More options</summary>
+            <div className="expense-form-options-panel">
+              <button type="button" className="btn btn-sm btn-light border" onClick={()=>setFormSettingsOpen(true)}>
+                <i className="bi bi-sliders2 me-1"></i>Customize fields
+              </button>
+            </div>
+          </details>
         </div>
 
-        {error&&<div className="alert alert-danger">{error}</div>}
+        {error&&<div className="alert alert-danger" role="alert">{error}</div>}
 
         {expenseFormConfig.loading?(
-          <div className="text-center py-5"><span className="spinner-border spinner-border-sm me-2"></span>Loading form settings...</div>
+          <div className="text-center py-5"><span className="spinner-border spinner-border-sm me-2"></span>Loading expense details...</div>
         ):(
-          <div className="row g-3">
-            {sectionNames.map(section=>(
-              <div className="col-12" key={section}>
-                <div className="border rounded-3 p-3">
-                  <div className="fw-semibold mb-3">{String(section).replace(/[_-]+/g," ").replace(/\b\w/g,char=>char.toUpperCase())}</div>
-                  <div className="row g-3">
-                    {visibleFields.filter(field=>(field.section||"General")===section).map(field=>{
-                      const state=getFieldState(field,fieldStateValues);
-                      if(!state.visible)return null;
-                      const lookupRecords=field.dataSource?.resource?(linkedRecords[field.dataSource.resource]||[]):[];
-                      return(
-                        <div className={`col-12 col-md-${field.width||6}`} key={field.key}>
-                          <ConfiguredField
-                            field={{...field,...state}}
-                            value={valueFor(field)}
-                            onChange={value=>updateField(field,value)}
-                            lookupRecords={lookupRecords}
-                            options={field.options}
-                            required={state.required}
-                            disabled={state.disabled}
-                            readOnly={state.readOnly}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
+          <>
+            <section className="expense-quick-fields">
+              <div className="expense-fields-heading">
+                <span className="expense-step-number">1</span>
+                <div>
+                  <h6 className="mb-1">Expense basics</h6>
+                  <p className="mb-0">Date, description, category and amount are enough for most expenses.</p>
                 </div>
               </div>
-            ))}
+              <div className="row g-3">{primaryFields.map(renderExpenseField)}</div>
+            </section>
 
-            <div className="col-12">
-              <div className="border rounded-3 p-3">
-                <div className="fw-semibold mb-1">Receipt</div>
-                <div className="small text-muted mb-2">Upload an image or PDF receipt. This remains an attachment rather than a normal form field.</div>
-                <input type="file" accept="image/*,.pdf" className="form-control" onChange={receiptUpload} disabled={uploading||saving}/>
-                {uploading&&<div className="small text-muted mt-1">Uploading...</div>}
-                {form.receipt&&<a className="d-inline-block mt-2" target="_blank" rel="noreferrer" href={form.receipt}>View uploaded receipt</a>}
-              </div>
-            </div>
-          </div>
+            {additionalFields.some(field=>getFieldState(field,fieldStateValues).visible)&&(
+              <details className="expense-additional-details mt-3">
+                <summary><i className="bi bi-plus-circle me-2"></i>More expense details <span>Payment method, GST, customer links, recurring settings and custom fields</span></summary>
+                <div className="expense-additional-details-body">
+                  {sectionNames.map(section=>{
+                    const sectionFields=additionalFields.filter(field=>(field.section||"General")===section);
+                    if(!sectionFields.some(field=>getFieldState(field,fieldStateValues).visible))return null;
+                    return(
+                      <section className="expense-detail-section mb-3" key={section}>
+                        <h6>{String(section).replace(/[_-]+/g," ").replace(/\b\w/g,char=>char.toUpperCase())}</h6>
+                        <div className="row g-3">{sectionFields.map(renderExpenseField)}</div>
+                      </section>
+                    );
+                  })}
+                  <div className="expense-detail-section">
+                    <h6>Receipt</h6>
+                    <div className="small text-muted mb-2">Optional. Add an image or PDF receipt for your records.</div>
+                    <input type="file" accept="image/*,.pdf" className="form-control" onChange={receiptUpload} disabled={uploading||saving}/>
+                    {uploading&&<div className="small text-muted mt-1">Uploading receipt...</div>}
+                    {form.receipt&&<a className="d-inline-block mt-2" target="_blank" rel="noreferrer" href={form.receipt}>View uploaded receipt</a>}
+                  </div>
+                </div>
+              </details>
+            )}
+          </>
         )}
-
-        <div className="d-flex justify-content-end mt-4">
+<div className="d-flex justify-content-end mt-4">
           <button className="btn btn-primary px-4" type="submit" disabled={saving||uploading||expenseFormConfig.loading}>
-            {saving?<><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>:"Save Expense"}
+            {saving?<><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>:"Save expense"}
           </button>
         </div>
       </form>

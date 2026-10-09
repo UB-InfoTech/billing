@@ -7,12 +7,8 @@ function AddExpense() {
   const navigate = useNavigate();
 
   const handleSubmit = async (formData) => {
-    try {
-      await createExpense(formData);
-      navigate('/expense');
-    } catch (error) {
-      console.error('Error adding expense:', error);
-    }
+    await createExpense(formData);
+    navigate('/expense');
   };
 
   return (

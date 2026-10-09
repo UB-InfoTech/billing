@@ -12,9 +12,9 @@ export const MODULE_CATALOG=[
 ];
 
 export const ORDER_FORM_FIELDS=[
- {key:"orderNumber",label:"Invoice No.",fieldType:"text",width:3,section:"shipping",required:true,order:0,system:true},
+ {key:"orderNumber",label:"Invoice No.",fieldType:"text",width:3,section:"invoice",required:true,order:1,system:true},
  {key:"clientId",label:"Client link",fieldType:"text",width:3,section:"client",order:999,visible:false,locked:false,system:true,editable:false,readOnly:true},
- {key:"orderDate",label:"Bill Date",fieldType:"date",width:4,section:"shipping",required:true,order:1,system:true},
+ {key:"orderDate",label:"Bill Date",fieldType:"date",width:4,section:"invoice",required:true,order:2,system:true},
  {key:"lrNo",label:"LR No.",fieldType:"text",width:5,section:"shipping",order:2},
  {key:"State",label:"State",fieldType:"text",width:4,section:"shipping",order:3},
  {key:"Address",label:"Address",fieldType:"text",width:8,section:"shipping",order:4},
@@ -33,7 +33,7 @@ export const ORDER_FORM_FIELDS=[
   {targetKey:"paymentTerms",sourceKey:"paymentTerms"},
   {targetKey:"discountRate",sourceKey:"discountRate"}
  ]}},
- {key:"gstNumber",label:"GST No.",fieldType:"text",width:4,section:"client",order:10},
+ {key:"gstNumber",label:"GST No.",fieldType:"text",width:4,section:"client",order:9},
  {key:"paymentTerms",label:"Payment Terms",fieldType:"select",width:4,section:"client",order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Advance"}],system:true},
  {key:"challanNumber",label:"Challan No.",fieldType:"text",width:4,section:"client",order:12,defaultValue:""},
  {key:"taxPercentage",label:"Tax %",fieldType:"number",width:4,section:"client",order:13,system:true},

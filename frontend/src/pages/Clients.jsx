@@ -113,22 +113,22 @@ function Clients() {
     throw new Error('No token found');
   }
   const fetchClients = async () => {
+    setLoading(true);
     try {
-
-
       const response = await axios.get(`${linkone}/api/clients`, {
-        headers: {
-          'x-auth-token': token
-        }
+        headers: {'x-auth-token': token}
       });
-      setClients(response.data);
+      setClients(Array.isArray(response.data)?response.data:[]);
     } catch (error) {
-      // alert(error.response.data.msg);
       if (error.response && error.response.data && error.response.data.msg === "Token is not valid") {
         localStorage.removeItem('token');
         window.location.reload();
+        return;
       }
-      console.error('Error fetching clients', error);
+      setPageMessage(error.response?.data?.message||"Customers could not be loaded. Refresh the page to try again.");
+      console.error("Error fetching customers",error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -374,16 +374,6 @@ function Clients() {
     return sortConfig.direction === 'asc' ? '↑' : '↓';
   };
 
-  if (loading) {
-    return (
-      <div className="d-flex justify-content-center align-items-center" style={{ height: '100vh' }}>
-        <div className="spinner-border" role="status">
-          <span className="visually-hidden">Loading...</span>
-        </div>
-      </div>
-    );
-  }
-
   return (
       <div className="container-fluid customer-page py-4">
         <header className="business-page-heading mb-3">
@@ -394,7 +384,7 @@ function Clients() {
           </div>
           <div className="d-flex flex-wrap gap-2">
             <button className="btn btn-light border" onClick={handleExportExcel}><i className="bi bi-download me-2"></i>Export Excel</button>
-            <button className="btn btn-primary" onClick={() => { setEditingClient(null); setNewClient(emptyClient()); setShowModal(true); }}><i className="bi bi-person-plus me-2"></i>Add customer</button>
+            <button className="btn btn-primary" onClick={() => { setEditingClient(null); setNewClient(emptyClient()); setFormError(""); setPageMessage(""); setShowModal(true); }}><i className="bi bi-person-plus me-2"></i>Add customer</button>
           </div>
         </header>
 
@@ -474,11 +464,11 @@ function Clients() {
                 locked:true,
                 render:client=>(
                   <div className="d-flex gap-1 justify-content-end">
-                    <button className="btn btn-warning btn-sm" onClick={()=>handleEditClient(client)} title="Edit">
-                      <img src={editSVG} alt="Edit" />
+                    <button className="btn btn-sm btn-light border" onClick={()=>handleEditClient(client)} title="Edit customer">
+                      <i className="bi bi-pencil me-1"></i>Edit
                     </button>
-                    <button className="btn btn-danger btn-sm" onClick={()=>handleDeleteClient(client._id)} title="Delete">
-                      <img src={deleteSVG} alt="Delete" />
+                    <button className="btn btn-sm btn-outline-danger" onClick={()=>handleDeleteClient(client._id)} title="Delete customer">
+                      <i className="bi bi-trash me-1"></i>Delete
                     </button>
                   </div>
                 )
@@ -499,7 +489,7 @@ function Clients() {
             />
 
             {/* Pagination */}
-            <nav aria-label="Page navigation">
+            {totalPages>1&&<nav aria-label="Customer pages">
               <ul className="pagination justify-content-center mt-3">
                 <li className="page-item">
                   <button
@@ -527,7 +517,7 @@ function Clients() {
                   </button>
                 </li>
               </ul>
-            </nav>
+            </nav>}
 
           </div>
 
@@ -549,7 +539,7 @@ function Clients() {
                     <button
                       type="button"
                       className="btn-close"
-                      onClick={() => setShowModal(false)}
+                      onClick={() => {setShowModal(false);setFormError("");}}
                       aria-label="Close"
                     ></button>
                   </div>
@@ -620,7 +610,7 @@ function Clients() {
                     </div>
 
                     <div className="modal-footer bg-white p-3 border-top sticky-bottom">
-                      <button type="button" className="btn btn-light border" onClick={()=>setShowModal(false)}>Cancel</button>
+                      <button type="button" className="btn btn-light border" onClick={()=>{setShowModal(false);setFormError("");}}>Cancel</button>
                       <button type="submit" className="btn btn-primary px-4" disabled={formSaving}>
                         {formSaving?<><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving...</>:(editingClient?"Save changes":"Add customer")}
                       </button>
@@ -637,8 +627,8 @@ function Clients() {
         <FormConfigurator
         open={formSettingsOpen}
         onClose={()=>setFormSettingsOpen(false)}
-        title="Customize Client Form"
-        subtitle="Arrange Client fields, show or hide them, change field type and width, and save the layout."
+        title="Customize customer form"
+        subtitle="Change which customer details your team sees and which ones are required."
         fields={clientFormConfig.fields}
         saving={clientFormConfig.saving}
         onSave={clientFormConfig.save}

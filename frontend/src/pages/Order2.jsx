@@ -1,3 +1,4 @@
+import BusinessPageHeader from "../components/BusinessPageHeader";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {useSearchParams} from "react-router-dom";
 import {ORDER_FORM_FIELDS,ORDER_ITEM_FIELDS} from "../config/noCodeCatalog";
@@ -1205,14 +1206,13 @@ const styles = {
     return (
         <div className="container-fluid invoice-page py-4">
 
-            <header className="business-page-heading invoice-page-heading mb-3">
-                <div>
-                    <span className="page-eyebrow">SALES</span>
-                    <h1 className="mb-1">Invoices</h1>
-                    <div className="text-muted">Create invoices, check what is paid, and see what is still due.</div>
-                </div>
-
-                <button className="btn btn-primary d-inline-flex align-items-center gap-2 shadow-sm" onClick={() => {
+            <BusinessPageHeader
+                eyebrow="SALES"
+                title="Invoices"
+                description="Create invoices, see what customers have paid, and follow up on amounts still due."
+                className="invoice-page-heading mb-3"
+            >
+                <button type="button" className="btn btn-primary d-inline-flex align-items-center gap-2" onClick={() => {
                     const newSubOrders=[emptyOrderItem()];
                     const nextOrder={...emptyOrder(),subOrders:newSubOrders};
                     setShowModal(true);
@@ -1224,11 +1224,10 @@ const styles = {
                 }}>
                     <i className="bi bi-plus-lg"></i> New invoice
                 </button>
-
                 <Link to="/bulk-payment" className="btn btn-light border d-inline-flex align-items-center gap-2">
-                    <i className="bi bi-cash-stack"></i> Record payments
+                    <i className="bi bi-cash-stack"></i> Record a payment
                 </Link>
-            </header>
+            </BusinessPageHeader>
 
             {ordersError&&<div className="alert alert-danger" role="alert">{ordersError}</div>}
             {ordersMessage&&<div className="alert alert-success d-flex align-items-center gap-2" role="status"><i className="bi bi-check-circle-fill"></i><span>{ordersMessage}</span><button type="button" className="btn-close ms-auto" aria-label="Dismiss message" onClick={()=>setOrdersMessage("")}></button></div>}

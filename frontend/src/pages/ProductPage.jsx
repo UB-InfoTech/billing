@@ -40,6 +40,7 @@ export default function ProductPage(){
   const [error,setError]=useState("");
   const [successMessage,setSuccessMessage]=useState("");
   const [search,setSearch]=useState("");
+  const [searchInput,setSearchInput]=useState("");
   const [lowStock,setLowStock]=useState(false);
 
   const configuredFields=productFormConfig.fields||[];
@@ -85,6 +86,11 @@ export default function ProductPage(){
       setError(loadError.response?.data?.message||"Unable to load products.");
     }finally{setLoading(false);}
   };
+
+  useEffect(()=>{
+    const timer=window.setTimeout(()=>setSearch(searchInput.trim()),250);
+    return()=>window.clearTimeout(timer);
+  },[searchInput]);
 
   useEffect(()=>{loadProducts();},[search,lowStock]);
 
@@ -317,7 +323,8 @@ export default function ProductPage(){
             <div className="d-flex flex-wrap gap-2">
               <div className="input-group" style={{maxWidth:360}}>
                 <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
-                <input className="form-control" placeholder="Search products, codes or designs" value={search} onChange={event=>setSearch(event.target.value)}/>
+                <input className="form-control" placeholder="Search products, codes or designs" value={searchInput} onChange={event=>setSearchInput(event.target.value)} aria-label="Search products"/>
+                {searchInput&&<button type="button" className="btn btn-light border" onClick={()=>{setSearchInput("");setSearch("");}} aria-label="Clear product search">Clear</button>}
               </div>
               <label className="form-check form-switch d-flex align-items-center gap-2 px-3 mb-0 border rounded">
                 <input className="form-check-input" type="checkbox" checked={lowStock} onChange={event=>setLowStock(event.target.checked)}/>

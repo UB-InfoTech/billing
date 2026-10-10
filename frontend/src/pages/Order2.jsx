@@ -1549,8 +1549,8 @@ const styles = {
                                                         const itemValues={...order,...(order.customFields||{})};
                                                         const itemFields=orderItemConfig.fields.filter(field=>getFieldState(field,itemValues).visible).sort((a,b)=>a.order-b.order);
                                                         const primaryItemKeys=new Set(["orderName","quantity","cut","MTR","unitPrice","qtyUnit"]);
-                                                        const primaryItemFields=itemFields.filter(field=>primaryItemKeys.has(field.key)||field.custom);
-                                                        const additionalItemFields=itemFields.filter(field=>!primaryItemKeys.has(field.key)&&!field.custom);
+                                                        const primaryItemFields=itemFields.filter(field=>primaryItemKeys.has(field.key)||(field.custom&&getFieldState(field,itemValues).required));
+                                                        const additionalItemFields=itemFields.filter(field=>!primaryItemKeys.has(field.key)&&!(field.custom&&getFieldState(field,itemValues).required));
                                                         const renderItemField=field=>(
                                                             <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
                                                                 <ConfiguredField

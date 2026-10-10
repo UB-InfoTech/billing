@@ -632,7 +632,11 @@ export default function DynamicTable({
                 </th>
               )}
               {visibleColumns.map(column=>(
-                <th key={column.key} onClick={()=>onSort?.(column.key)}>
+                <th
+                  key={column.key}
+                  onClick={()=>onSort?.(column.key)}
+                  style={column.width?{width:`${(column.width/12)*100}%`}:undefined}
+                >
                   {column.label}
                 </th>
               ))}
@@ -664,7 +668,12 @@ export default function DynamicTable({
                     </td>
                   )}
                   {visibleColumns.map(column=>(
-                    <td key={column.key}>{cellText(column,row,index)}</td>
+                    <td
+                      key={column.key}
+                      style={column.width?{width:`${(column.width/12)*100}%`}:undefined}
+                    >
+                      {cellText(column,row,index)}
+                    </td>
                   ))}
                   {actionColumn&&<td className="text-end">{actionColumn.render(row,index)}</td>}
                 </tr>

@@ -23,7 +23,38 @@ export const applyFormulas=(fields,values)=>{
   return next;
 };
 
-export const mergeFormFields=(baseFields,savedFields)=>{
+const LEGACY_DEFAULT_LABELS={
+  "orders.form":{
+    orderDate:["Bill Date"],
+    lrNo:["LR No."],
+    paymentTerms:["Payment Terms"],
+    challanNumber:["Challan No."]
+  },
+  "clients.form":{
+    name:["Customer Name"],
+    companyName:["Customer / Company Name","Company Name"],
+    paymentTerms:["Payment Terms"],
+    discountRate:["Discount Rate"],
+    accountStatus:["Account Status"]
+  },
+  "products.form":{
+    rate:["Selling Rate"]
+  },
+  "expenses.form":{
+    title:["Title"],
+    description:["Description"],
+    category:["Category"],
+    paymentMethod:["Payment Method"]
+  }
+};
+
+const resolveSavedLabel=(formKey,field,savedField)=>{
+  const previousDefaults=LEGACY_DEFAULT_LABELS[formKey]?.[field.key]||[];
+  if(previousDefaults.includes(savedField.label))return field.label;
+  return savedField.label||field.label;
+};
+
+export const mergeFormFields=(baseFields,savedFields,formKey="")=>{
   const normalize=(field,index)=>({
     key:field.key,
     label:field.label||field.key,
@@ -66,7 +97,7 @@ export const mergeFormFields=(baseFields,savedFields)=>{
     if(!savedField)return {...field,order:index};
     return {
       ...field,
-      label:savedField.label||field.label,
+      label:resolveSavedLabel(formKey,field,savedField),
       helpText:String(savedField.helpText??field.helpText??""),
       visible:field.locked?true:savedField.visible!==false,
       required:Object.prototype.hasOwnProperty.call(savedField,"required")?Boolean(savedField.required):field.required,
@@ -154,7 +185,7 @@ export function useFormConfiguration(formKey,baseFields){
     try{
       setLoading(true);setError("");
       const response=await axios.get(`${apiBase}/api/form-config/${encodeURIComponent(formKey)}`,authConfig());
-      setFields(mergeFormFields(baseFields,response.data?.fields));
+      setFields(mergeFormFields(baseFields,response.data?.fields,formKey));
     }catch(loadError){
       setFields(mergeFormFields(baseFields,[]));
       setError(loadError.response?.data?.message||"Unable to load form settings.");
@@ -165,7 +196,7 @@ export function useFormConfiguration(formKey,baseFields){
     try{
       setSaving(true);setError("");
       const response=await axios.put(`${apiBase}/api/form-config/${encodeURIComponent(formKey)}`,{fields:nextFields.map((field,index)=>({...field,order:index}))},authConfig());
-      const merged=mergeFormFields(baseFields,response.data?.fields);
+      const merged=mergeFormFields(baseFields,response.data?.fields,formKey);
       setFields(merged);return merged;
     }catch(saveError){setError(saveError.response?.data?.message||"Unable to save form settings.");throw saveError;}
     finally{setSaving(false);}

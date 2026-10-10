@@ -3725,3 +3725,67 @@ body{
     padding:13px 15px;
   }
 }
+
+
+/* ---------- Clear data-entry controls and A4 record sheets ---------- */
+.form-entry-label{display:flex;align-items:center;flex-wrap:wrap;gap:2px;margin-bottom:7px;color:#243449!important;font-size:14px;font-weight:700!important;line-height:1.35}
+.form-entry-required,.form-entry-optional{display:inline-flex;align-items:center;border-radius:5px;padding:2px 6px;font-size:10px;font-weight:700;line-height:1.4;letter-spacing:.01em}
+.form-entry-required{color:#a12622;background:#fff0ef}
+.form-entry-optional{color:#5b6b7e;background:#f0f3f7}
+.form-entry-control{min-height:44px;border:1.5px solid #b9c5d3!important;border-radius:8px!important;background:#fff!important;color:#172536!important;box-shadow:none!important;font-size:15px!important}
+textarea.form-entry-control{min-height:84px;resize:vertical}
+.form-entry-control::placeholder{color:#8794a4!important;opacity:1}
+.form-entry-control:focus{border-color:#2874c8!important;box-shadow:0 0 0 3px rgba(40,116,200,.14)!important;outline:0}
+.form-entry-control:disabled,.form-entry-control[readonly]{background:#f2f5f8!important;border-style:dashed!important;color:#526274!important}
+.form-config-field .form-text{color:#5d6c7c;font-size:12px}
+.form-builder-live-stage{padding:14px;background:#eef2f7;border:1px solid #dce4ed;border-radius:14px}
+.form-builder-live-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.form-builder-paper{width:100%;max-width:210mm;min-height:170mm;margin:0 auto;padding:12mm;border:1px solid #dfe5ec;border-radius:3px;background:#fff;box-shadow:0 5px 18px rgba(28,44,63,.08)}
+.form-builder-paper-heading{display:flex;align-items:center;gap:12px;margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #e8edf2}
+.form-builder-paper-mark{width:42px;height:42px;display:grid;place-items:center;border-radius:10px;background:#eaf3ff;color:#2166ae;font-size:20px}
+.form-builder-canvas-field{position:relative;padding:12px;border:1px dashed transparent;border-radius:9px;cursor:grab;transition:border-color .15s,background .15s}
+.form-builder-canvas-field:hover{border-color:#b8cde3;background:#f8fbff}
+.form-builder-canvas-field:active{cursor:grabbing}
+.form-builder-canvas-field .form-entry-control{pointer-events:none}
+.form-builder-canvas-field.is-dragging{opacity:.4}
+.form-builder-canvas-field.is-drop-target{border:2px dashed #2874c8;background:#eef6ff}
+.form-builder-canvas-hint{margin-top:5px;color:#91a0b0;font-size:10px;text-align:right;opacity:0}
+.form-builder-canvas-field:hover .form-builder-canvas-hint{opacity:1}
+.customer-a4-dialog{width:calc(100% - 2rem);max-width:210mm}
+.customer-form-modal{max-height:calc(100vh - 2rem);border-radius:12px;overflow:hidden;background:#edf1f6}
+.customer-form-modal .modal-body{padding:16px!important;background:#edf1f6}
+.customer-a4-sheet{width:100%;max-width:210mm;min-height:245mm;margin:0 auto;padding:10mm;background:#fff;border:1px solid #dce3eb;box-shadow:0 3px 16px rgba(29,47,69,.08)}
+.customer-a4-sheet .modal-footer{position:sticky;bottom:0}
+.customer-view-backdrop{z-index:1360;background:rgba(23,36,52,.45);overflow-y:auto}
+.customer-view-modal{max-height:calc(100vh - 2rem);overflow:hidden;border-radius:12px;background:#edf1f6}
+.customer-view-toolbar,.customer-view-footer{background:#fff;border-color:#e2e8ef}
+.customer-view-body{overflow:auto;padding:16px;background:#edf1f6}
+.customer-a4-read-sheet{min-height:245mm}
+.customer-record-title{display:flex;align-items:center;gap:16px;padding-bottom:22px;border-bottom:2px solid #243449;margin-bottom:24px}
+.customer-record-avatar{width:54px;height:54px;display:grid;place-items:center;border-radius:12px;background:#eaf3ff;color:#2166ae;font-size:26px}
+.customer-record-title h3{font-size:23px;font-weight:750;margin:3px 0 4px;color:#1e2d40;overflow-wrap:anywhere}
+.customer-record-section-title{font-size:12px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#65758a;margin-bottom:12px}
+.customer-record-field{height:100%;min-height:64px;padding:11px 12px;border:1px solid #e1e7ef;border-radius:8px;background:#fbfcfe}
+.customer-record-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#6d7d90;margin-bottom:5px}
+.customer-record-value{font-size:14px;font-weight:600;color:#1d2d41;overflow-wrap:anywhere;white-space:pre-wrap}
+.invoice-a4-dialog{width:calc(100% - 2rem);max-width:230mm}
+.invoice-create-modal{max-height:calc(100vh - 2rem);border-radius:12px!important;background:#e9edf3!important}
+.invoice-create-body{overflow-y:auto!important;padding:14px!important;background:#e9edf3!important}
+.invoice-a4-sheet{width:100%;max-width:210mm;min-height:250mm;margin:0 auto;padding:9mm;background:#fff;border:1px solid #dce3eb;box-shadow:0 3px 16px rgba(29,47,69,.08)}
+.invoice-a4-sheet .invoice-save-footer{padding-top:12px}
+@media(max-width:767px){
+ .form-builder-paper{padding:16px;min-height:0}
+ .form-builder-live-toolbar{align-items:flex-start;flex-direction:column}
+ .customer-a4-dialog,.invoice-a4-dialog{width:100%;max-width:100%;margin:0}
+ .customer-form-modal,.customer-view-modal,.invoice-create-modal{max-height:100vh;min-height:100vh;border-radius:0!important}
+ .customer-a4-sheet,.invoice-a4-sheet{min-height:0;padding:18px;border-left:0;border-right:0}
+ .customer-form-modal .modal-body,.customer-view-body,.invoice-create-body{padding:8px!important}
+}
+@media print{
+ body *{visibility:hidden!important}
+ .customer-view-modal,.customer-view-modal *{visibility:visible!important}
+ .customer-view-modal{position:absolute;inset:0;max-height:none;overflow:visible;border:0!important;box-shadow:none!important}
+ .customer-view-toolbar,.customer-view-footer{display:none!important}
+ .customer-view-body{overflow:visible;padding:0!important;background:#fff!important}
+ .customer-a4-read-sheet{max-width:210mm;min-height:0;margin:0;padding:12mm;border:0;box-shadow:none}
+}

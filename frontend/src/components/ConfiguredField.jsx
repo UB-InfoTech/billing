@@ -39,10 +39,10 @@ export default function ConfiguredField({
   };
 
   const common={
-    className:"form-control shadow-sm bg-white",
+    className:"form-control form-entry-control",
     value:value??"",
     onChange:event=>handleValue(event.target.value),
-    placeholder:placeholder||label,
+    placeholder:placeholder||(effectiveReadOnly?"Filled automatically":field.fieldType==="date"?"Choose a date":field.fieldType==="datetime"?"Choose date and time":field.fieldType==="number"||field.fieldType==="currency"?"Enter "+label.toLowerCase():"Enter "+label.toLowerCase()),
     disabled:effectiveDisabled,
     required:effectiveRequired,
     readOnly:effectiveReadOnly,
@@ -59,7 +59,7 @@ export default function ConfiguredField({
     const multiple=field.fieldType==="multiselect"||Boolean(field.dataSource.multiple);
     control=(
       <select
-        className="form-select shadow-sm bg-white"
+        className="form-select form-entry-control"
         multiple={multiple}
         value={multiple?(Array.isArray(value)?value:[]):(value??"")}
         onChange={event=>{
@@ -100,7 +100,7 @@ export default function ConfiguredField({
     control=<ArithmeticInput
       value={value}
       onValueChange={handleValue}
-      className="form-control shadow-sm bg-white"
+      className="form-control form-entry-control"
       min={field.validation?.min??min}
       max={field.validation?.max??max}
       step={step||"0.01"}
@@ -124,10 +124,10 @@ export default function ConfiguredField({
 
   return (
     <div className="form-config-field" style={{order:Number(field.order)||0}}>
-      <label className="form-label fw-semibold text-muted">
+      <label className="form-label form-entry-label">
         {icon&&<i className={icon+" me-1"}></i>}
         {label}
-        {effectiveRequired&&<span className="text-danger ms-1">*</span>}
+        {effectiveRequired?<span className="form-entry-required ms-2">Required</span>:<span className="form-entry-optional ms-2">Optional</span>}
         {effectiveReadOnly&&<span className="badge bg-light text-secondary border ms-2">Read only</span>}
       </label>
       {control}

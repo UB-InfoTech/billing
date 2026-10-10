@@ -83,7 +83,13 @@ const mergeSavedColumns=(baseColumns,savedColumns)=>{
     if(merged.some(item=>item.key===column.key))return;
     if(!["merged","custom"].includes(column.kind))return;
 
-    const availableSources=new Set(base.map(item=>item.key));
+    // A merged column can combine built-in columns and custom columns that
+    // were created in this same table. Keep those custom sources valid when
+    // the saved configuration is loaded again.
+    const availableSources=new Set([
+      ...base.map(item=>item.key),
+      ...saved.filter(item=>item.kind==="custom").map(item=>item.key),
+    ]);
     const sourceKeys=(Array.isArray(column.sourceKeys)?column.sourceKeys:[]).filter(sourceKey=>availableSources.has(sourceKey));
 
     if(column.kind==="merged"&&sourceKeys.length<2)return;

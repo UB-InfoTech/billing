@@ -106,7 +106,7 @@ function Clients() {
     });
   };
   const visibleClientFields=clientFormConfig.fields.filter(field=>field.visible!==false);
-  const clientPrimaryKeys=new Set(["companyName","phone"]);
+  const clientPrimaryKeys=new Set(["companyName","name","phone","email"]);
   const clientFieldValues={...newClient,...(newClient.customFields||{})};
   const primaryClientFields=visibleClientFields.filter(field=>{
     const state=getFieldState(field,clientFieldValues);
@@ -675,7 +675,7 @@ function Clients() {
                       </section>
 
                       {additionalClientFields.some(field=>getFieldState(field,{...newClient,...(newClient.customFields||{})}).visible)&&(
-                        <details className="customer-additional-details mt-3">
+                        <details className="customer-additional-details mt-3" open>
                           <summary><i className="bi bi-plus-circle me-2"></i>More customer details <span>Address, GST, payment terms and other information</span></summary>
                           <div className="row g-3 p-3">
                             {additionalClientFields.map(renderClientField)}

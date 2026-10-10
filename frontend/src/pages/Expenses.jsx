@@ -1,3 +1,4 @@
+import BusinessPageHeader from "../components/BusinessPageHeader";
 import React,{useEffect,useMemo,useState} from "react";
 import {getExpenses,getExpenseSummary,deleteExpense} from "../services/api";
 import {useNavigate,useSearchParams} from "react-router-dom";
@@ -62,32 +63,30 @@ export default function Expenses(){
     {key:"date",label:"Date",sortKey:"date",render:expense=>expense.date?new Date(expense.date).toLocaleDateString("en-IN"):""},
     {key:"title",label:"Title",sortKey:"title",render:expense=>expense.title||expense.description||""},
     {key:"category",label:"Category",sortKey:"category"},
-    {key:"paymentMethod",label:"Payment",sortKey:"paymentMethod"},
-    {key:"vendor",label:"Vendor",sortKey:"vendor"},
+    {key:"paymentMethod",label:"Payment",sortKey:"paymentMethod",visible:false},
+    {key:"vendor",label:"Vendor",sortKey:"vendor",visible:false},
     {key:"amount",label:"Amount",sortKey:"amount",render:expense=>money(expense.amount)},
-    {key:"taxAmount",label:"Tax",render:expense=>money(expense.taxAmount)},
-    {key:"client",label:"Client",render:expense=>expense.clientId?.companyName||expense.clientId?.name||""},
-    {key:"order",label:"Invoice",render:expense=>expense.orderId?.orderNumber||""},
+    {key:"taxAmount",label:"Tax",visible:false,render:expense=>money(expense.taxAmount)},
+    {key:"client",label:"Customer",visible:false,render:expense=>expense.clientId?.companyName||expense.clientId?.name||""},
+    {key:"order",label:"Invoice",visible:false,render:expense=>expense.orderId?.orderNumber||""},
     ...customColumns
   ];
 
   return <div className="container-fluid py-4">
-    <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-      <div>
-        <span className="page-eyebrow">MONEY GOING OUT</span>
-        <h1 className="mb-1">Expenses</h1>
-        <div className="text-muted">Record what your business spends and see where the money goes.</div>
-      </div>
-      <div className="d-flex flex-wrap gap-2">
-        <button className="btn btn-light border" onClick={()=>{
-          const exportRows=expenses.map(e=>({Date:e.date?new Date(e.date).toLocaleDateString("en-IN"):"",Title:e.title||e.description,Category:e.category||"",Vendor:e.vendor||"",Amount:e.amount||0,Tax:e.taxAmount||0,Total:Number(e.amount||0)+Number(e.taxAmount||0)}));
-          import("xlsx").then(XLSX=>{
-            const ws=XLSX.utils.json_to_sheet(exportRows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Expenses");XLSX.writeFile(wb,"expenses_report.xlsx");
-          });
-        }}><i className="bi bi-download me-2"></i>Export Excel</button>
-        <button className="btn btn-primary" onClick={()=>navigate("/add-expense")}><i className="bi bi-plus-lg me-2"></i>Add expense</button>
-      </div>
-    </div>
+    <BusinessPageHeader
+      eyebrow="MONEY GOING OUT"
+      title="Expenses"
+      description="Record business costs, keep receipts, and see where your money goes."
+      className="mb-3"
+    >
+      <button type="button" className="btn btn-light border" onClick={()=>{
+        const exportRows=expenses.map(e=>({Date:e.date?new Date(e.date).toLocaleDateString("en-IN"):"",Title:e.title||e.description,Category:e.category||"",Vendor:e.vendor||"",Amount:e.amount||0,Tax:e.taxAmount||0,Total:Number(e.amount||0)+Number(e.taxAmount||0)}));
+        import("xlsx").then(XLSX=>{
+          const ws=XLSX.utils.json_to_sheet(exportRows);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Expenses");XLSX.writeFile(wb,"expenses_report.xlsx");
+        });
+      }}><i className="bi bi-download me-2"></i>Export Excel</button>
+      <button type="button" className="btn btn-primary" onClick={()=>navigate("/add-expense")}><i className="bi bi-plus-lg me-2"></i>Add expense</button>
+    </BusinessPageHeader>
 
     {error&&<div className="alert alert-danger">{error}</div>}
 

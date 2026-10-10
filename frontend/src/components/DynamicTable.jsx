@@ -60,7 +60,20 @@ const mergeSavedColumns=(baseColumns,savedColumns)=>{
       label:savedColumn.label||column.label,
       visible:column.locked?true:savedColumn.visible!==false,
       order:Number.isFinite(Number(savedColumn.order))?Number(savedColumn.order):index,
+      // Keep supported per-column settings when the column already exists in the
+      // page definition. Previously only label/visibility/order/separator were
+      // restored, so saved width, editability, lookup and field settings silently
+      // reverted whenever the table configuration was loaded again.
+      fieldType:FIELD_TYPES.some(type=>type.value===savedColumn.fieldType)?savedColumn.fieldType:column.fieldType,
+      options:Array.isArray(savedColumn.options)?savedColumn.options.slice():column.options,
+      defaultValue:savedColumn.defaultValue??column.defaultValue,
+      sourceKeys:Array.isArray(savedColumn.sourceKeys)?savedColumn.sourceKeys.slice():column.sourceKeys,
       separator:savedColumn.separator??column.separator,
+      editable:column.locked?false:savedColumn.editable!==false,
+      dataSource:savedColumn.dataSource&&typeof savedColumn.dataSource==="object"
+        ?{...savedColumn.dataSource}
+        :column.dataSource,
+      width:Math.min(12,Math.max(0,Number(savedColumn.width)||0)),
     };
   });
 

@@ -138,7 +138,7 @@ export default function FormConfigurator({
     setExpandedKey(null);
     setShowAddField(false);
     setShowAdvanced(false);
-    setShowPreview(false);
+    setShowPreview(true);
     setError("");
   },[open,fields]);
 
@@ -425,7 +425,7 @@ export default function FormConfigurator({
                 <div className="form-builder-paper-heading"><span className="form-builder-paper-mark"><i className="bi bi-file-earmark-text"></i></span><div><div className="fw-bold">{title.replace(/^Customize\s*/i,"")}</div><div className="small text-secondary">Example of the form your team will use</div></div></div>
                 <div className="row g-3">
                   {draft.filter(field=>field.visible!==false).map(field=>(
-                    <div key={field.key} className={`col-12 col-md-${field.width||6} form-builder-canvas-field ${dragKey===field.key?"is-dragging ":""}${dropTargetKey===field.key&&dragKey!==field.key?"is-drop-target":""}`} draggable={!field.locked} onDragStart={event=>{if(field.locked){event.preventDefault();return;}event.dataTransfer?.setData("text/plain",field.key);if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDragKey(field.key);setDropTargetKey(null);}} onDragOver={event=>{if(dragKey&&dragKey!==field.key){event.preventDefault();setDropTargetKey(field.key);}}} onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDropTargetKey(current=>current===field.key?null:current);}} onDrop={event=>{event.preventDefault();reorder(dragKey,field.key);setDragKey(null);setDropTargetKey(null);}} onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}} title={field.locked?"Built-in field":"Drag to rearrange"}>
+                    <div key={field.key} className={`col-12 col-md-${field.width||6} form-builder-canvas-field ${dragKey===field.key?"is-dragging ":""}${dropTargetKey===field.key&&dragKey!==field.key?"is-drop-target ":""}${expandedKey===field.key?"is-selected":""}`} draggable={!field.locked} onDragStart={event=>{if(field.locked){event.preventDefault();return;}event.dataTransfer?.setData("text/plain",field.key);if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDragKey(field.key);setDropTargetKey(null);}} onDragOver={event=>{if(dragKey&&dragKey!==field.key){event.preventDefault();setDropTargetKey(field.key);}}} onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDropTargetKey(current=>current===field.key?null:current);}} onDrop={event=>{event.preventDefault();reorder(dragKey,field.key);setDragKey(null);setDropTargetKey(null);}} onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}} onClick={()=>{setExpandedKey(field.key);setShowAdvanced(false);}} title={field.locked?"Select to edit settings":"Click to edit settings; drag to rearrange"}>
                       <label className="form-label form-entry-label">{field.label}{field.required?<span className="form-entry-required ms-2">Required</span>:<span className="form-entry-optional ms-2">Optional</span>}</label>
                       {["select","reference","multiselect"].includes(field.fieldType)||field.dataSource?.resource ? <select className="form-select form-entry-control" disabled><option>{field.dataSource?.resource?"Choose "+field.label:"Select an option"}</option>{normalizePreviewOptions(field.options).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>
                       :field.fieldType==="textarea"?<textarea className="form-control form-entry-control" rows={2} placeholder={field.formula?"Calculated automatically":"Enter "+field.label.toLowerCase()} readOnly/>
@@ -442,6 +442,7 @@ export default function FormConfigurator({
             </div>
           )}
 
+          <aside className="form-builder-side-panel">
           <div className="form-builder-guide">
             <div className="form-builder-guide-step is-active"><span>1</span><div><strong>Choose fields</strong><small>Keep only what your team needs.</small></div></div>
             <div className="form-builder-guide-line"></div>
@@ -859,6 +860,7 @@ export default function FormConfigurator({
             ))}
             {!filtered.length&&<div className="form-builder-empty">No fields match your search.</div>}
           </div>
+          </aside>
         </div>
 
         <footer className="form-builder-footer">

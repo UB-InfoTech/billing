@@ -69,11 +69,13 @@ const mergeSavedColumns=(baseColumns,savedColumns)=>{
       defaultValue:savedColumn.defaultValue??column.defaultValue,
       sourceKeys:Array.isArray(savedColumn.sourceKeys)?savedColumn.sourceKeys.slice():column.sourceKeys,
       separator:savedColumn.separator??column.separator,
-      editable:column.locked?false:savedColumn.editable!==false,
+      editable:savedColumn.editable==null?column.editable:savedColumn.editable!==false,
       dataSource:savedColumn.dataSource&&typeof savedColumn.dataSource==="object"
         ?{...savedColumn.dataSource}
         :column.dataSource,
-      width:Math.min(12,Math.max(0,Number(savedColumn.width)||0)),
+      width:savedColumn.width==null
+        ?column.width
+        :Math.min(12,Math.max(0,Number(savedColumn.width)||0)),
     };
   });
 

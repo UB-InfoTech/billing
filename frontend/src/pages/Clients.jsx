@@ -1,3 +1,4 @@
+import BusinessPageHeader from "../components/BusinessPageHeader";
 import React, { useEffect, useState, useMemo } from 'react';
 import {useSearchParams} from "react-router-dom";
 import {CLIENT_FORM_FIELDS} from "../config/noCodeCatalog";
@@ -446,17 +447,15 @@ function Clients() {
 
   return (
       <div className="container-fluid customer-page py-4">
-        <header className="business-page-heading mb-3">
-          <div>
-            <span className="page-eyebrow">YOUR CONTACTS</span>
-            <h1 className="mb-1">Customers</h1>
-            <p className="text-muted mb-0">Keep customer details and buying history together.</p>
-          </div>
-          <div className="d-flex flex-wrap gap-2">
-            <button className="btn btn-light border" onClick={handleExportExcel}><i className="bi bi-download me-2"></i>Export Excel</button>
-            <button className="btn btn-primary" onClick={() => { setEditingClient(null); setNewClient(emptyClient()); setFormError(""); setPageMessage(""); setShowModal(true); }}><i className="bi bi-person-plus me-2"></i>Add customer</button>
-          </div>
-        </header>
+        <BusinessPageHeader
+          eyebrow="YOUR CONTACTS"
+          title="Customers"
+          description="Save each person or business once. Their details will be ready when you create an invoice."
+          className="mb-3"
+        >
+          <button type="button" className="btn btn-light border" onClick={handleExportExcel}><i className="bi bi-download me-2"></i>Export Excel</button>
+          <button type="button" className="btn btn-primary" onClick={() => { setEditingClient(null); setNewClient(emptyClient()); setFormError(""); setPageMessage(""); setShowModal(true); }}><i className="bi bi-person-plus me-2"></i>Add customer</button>
+        </BusinessPageHeader>
 
         {pageMessage&&<div className="alert alert-info" role="status">{pageMessage}</div>}
 
@@ -492,6 +491,9 @@ function Clients() {
                   <option value="Retail">Retail</option>
                   <option value="Wholesale">Wholesale</option>
                   <option value="Service">Service</option>
+                  <option value="Manufacturer">Manufacturer</option>
+                  <option value="Trader">Trader</option>
+                  <option value="Supplier">Supplier</option>
                 </select>
               </div>
               <div className="col-sm-6 col-lg-3">

@@ -118,7 +118,7 @@ export default function FormConfigurator({
   const [expandedKey,setExpandedKey]=useState(null);
   const [showAddField,setShowAddField]=useState(false);
   const [showAdvanced,setShowAdvanced]=useState(false);
-  const [showPreview,setShowPreview]=useState(false);
+  const [showPreview,setShowPreview]=useState(true);
   const [error,setError]=useState("");
   const [newField,setNewField]=useState({
     label:"",
@@ -416,43 +416,31 @@ export default function FormConfigurator({
           )}
 
           {showPreview&&(
-            <div className="card border-0 shadow-sm bg-white mb-3">
-              <div className="card-header bg-white d-flex align-items-center justify-content-between">
-                <div>
-                  <div className="fw-semibold">Live preview</div>
-                  <div className="small text-secondary">This is how the form will look when people use it.</div>
-                </div>
-                <span className="badge bg-light text-dark border">{shownCount} visible</span>
+            <div className="form-builder-live-stage mb-3">
+              <div className="form-builder-live-toolbar">
+                <div><div className="fw-semibold"><i className="bi bi-layout-text-window-reverse me-2"></i>Form preview</div><div className="small text-secondary">Drag a field on this page to change its position. Changes update as you customize.</div></div>
+                <span className="badge bg-light text-dark border">{shownCount} visible fields</span>
               </div>
-              <div className="card-body">
+              <div className="form-builder-paper">
+                <div className="form-builder-paper-heading"><span className="form-builder-paper-mark"><i className="bi bi-file-earmark-text"></i></span><div><div className="fw-bold">{title.replace(/^Customize\\s*/i,"")}</div><div className="small text-secondary">Example of the form your team will use</div></div></div>
                 <div className="row g-3">
-                  {draft.filter(field=>field.visible!==false).map(field=>{
-                    return (
-                      <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
-                        <label className="form-label fw-semibold">{field.label}{field.required&&<span className="text-danger ms-1">*</span>}</label>
-                        {["select","reference"].includes(field.fieldType)||field.dataSource?.resource ? (
-                          <select className="form-select" disabled>
-                            <option>{field.dataSource?.resource?"Select "+field.label:"Choose an option"}</option>
-                            {normalizePreviewOptions(field.options).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
-                          </select>
-                        ) : field.fieldType==="textarea" ? (
-                          <textarea className="form-control" rows={2} placeholder={field.formula?"Automatic calculation":""} readOnly />
-                        ) : field.fieldType==="boolean" ? (
-                          <div className="form-check form-switch pt-2"><input className="form-check-input" type="checkbox" disabled /></div>
-                        ) : (
-                          <input className="form-control" type={field.fieldType==="date"?"date":field.fieldType==="datetime"?"datetime-local":field.fieldType==="email"?"email":field.fieldType==="url"?"url":field.fieldType==="number"||field.fieldType==="currency"?"number":"text"} placeholder={field.formula?"Automatic calculation":""} readOnly={Boolean(field.formula)} />
-                        )}
-                        {field.helpText&&<div className="form-text">{field.helpText}</div>}
-                        {field.formula&&<div className="form-text">Calculated automatically</div>}
-                        {field.readOnly&&!field.formula&&<div className="form-text">Read only</div>}
-                      </div>
-                    );
-                  })}
+                  {draft.filter(field=>field.visible!==false).map(field=>(
+                    <div key={field.key} className={`col-12 col-md-${field.width||6} form-builder-canvas-field ${dragKey===field.key?"is-dragging ":""}${dropTargetKey===field.key&&dragKey!==field.key?"is-drop-target":""}`} draggable={!field.locked} onDragStart={event=>{if(field.locked){event.preventDefault();return;}event.dataTransfer?.setData("text/plain",field.key);if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDragKey(field.key);setDropTargetKey(null);}} onDragOver={event=>{if(dragKey&&dragKey!==field.key){event.preventDefault();setDropTargetKey(field.key);}}} onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDropTargetKey(current=>current===field.key?null:current);}} onDrop={event=>{event.preventDefault();reorder(dragKey,field.key);setDragKey(null);setDropTargetKey(null);}} onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}} title={field.locked?"Built-in field":"Drag to rearrange"}>
+                      <label className="form-label form-entry-label">{field.label}{field.required?<span className="form-entry-required ms-2">Required</span>:<span className="form-entry-optional ms-2">Optional</span>}</label>
+                      {["select","reference","multiselect"].includes(field.fieldType)||field.dataSource?.resource ? <select className="form-select form-entry-control" disabled><option>{field.dataSource?.resource?"Choose "+field.label:"Select an option"}</option>{normalizePreviewOptions(field.options).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>
+                      :field.fieldType==="textarea"?<textarea className="form-control form-entry-control" rows={2} placeholder={field.formula?"Calculated automatically":"Enter "+field.label.toLowerCase()} readOnly/>
+                      :field.fieldType==="boolean"?<div className="form-check form-switch pt-2"><input className="form-check-input" type="checkbox" disabled/></div>
+                      :<input className="form-control form-entry-control" type={field.fieldType==="date"?"date":field.fieldType==="datetime"?"datetime-local":field.fieldType==="email"?"email":field.fieldType==="url"?"url":field.fieldType==="number"||field.fieldType==="currency"?"number":"text"} placeholder={field.formula?"Calculated automatically":"Enter "+field.label.toLowerCase()} readOnly={Boolean(field.formula)}/>}
+                      {field.helpText&&<div className="form-text">{field.helpText}</div>}
+                      {field.formula&&<div className="form-text">Calculated automatically</div>}
+                      <div className="form-builder-canvas-hint"><i className="bi bi-grip-vertical me-1"></i>{field.locked?"Built-in field":"Drag to move"}</div>
+                    </div>
+                  ))}
                 </div>
+                {shownCount===0&&<div className="text-center text-secondary py-4">No fields are visible. Use Show all or turn fields back on below.</div>}
               </div>
             </div>
-  
-            )}
+          )}
 
           <div className="form-builder-guide">
             <div className="form-builder-guide-step is-active"><span>1</span><div><strong>Choose fields</strong><small>Keep only what your team needs.</small></div></div>

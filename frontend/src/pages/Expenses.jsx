@@ -69,7 +69,7 @@ export default function Expenses(){
 
   const columns=[
     {key:"date",label:"Date",sortKey:"date",render:expense=>expense.date?new Date(expense.date).toLocaleDateString("en-IN"):""},
-    {key:"title",label:"Title",sortKey:"title",render:expense=>expense.title||expense.description||""},
+    {key:"title",label:"Description",sortKey:"title",render:expense=>expense.title||expense.description||""},
     {key:"category",label:"Category",sortKey:"category"},
     {key:"paymentMethod",label:"Payment",sortKey:"paymentMethod",visible:false},
     {key:"vendor",label:"Vendor",sortKey:"vendor",visible:false},
@@ -148,7 +148,7 @@ export default function Expenses(){
         getRowKey={expense=>expense._id}
         columns={columns}
         loading={loading}
-        emptyText={Object.values(filters).some(Boolean)?"No expenses match these filters. Clear filters to see all expenses.":"No expenses recorded yet. Select Add expense to record your first business cost."}
+        emptyText={Object.values(filters).some(Boolean)?"No expenses match these filters. Clear filters to see all expenses.":"No expenses yet. Add your first business cost to keep your spending up to date."}
         actionColumn={{
           label:"Actions",
           locked:true,

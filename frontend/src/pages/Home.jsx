@@ -24,7 +24,6 @@ export default function Home(){
   const [user,setUser]=useState(null);
   const [data,setData]=useState(null);
   const [widgets,setWidgets]=useState(DEFAULT_WIDGETS);
-  const [profile,setProfile]=useState(null);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [setupGuideDismissed,setSetupGuideDismissed]=useState(false);
@@ -53,13 +52,11 @@ export default function Home(){
     Promise.all([
       axios.get(API+"/api/auth/user",auth()),
       axios.get(API+"/api/reports/dashboard-summary",auth()),
-      axios.get(API+"/api/dashboard-config",auth()).catch(()=>({data:null})),
-      axios.get(API+"/api/profile",auth()).catch(()=>({data:null}))
-    ]).then(([userResponse,dataResponse,configResponse,profileResponse])=>{
+      axios.get(API+"/api/dashboard-config",auth()).catch(()=>({data:null}))
+    ]).then(([userResponse,dataResponse,configResponse])=>{
       if(!alive)return;
       setUser(userResponse.data);
       setData(dataResponse.data);
-      setProfile(profileResponse.data||null);
       if(Array.isArray(configResponse.data?.widgets)&&configResponse.data.widgets.length){
         setWidgets(configResponse.data.widgets.slice().sort((a,b)=>a.order-b.order));
       }

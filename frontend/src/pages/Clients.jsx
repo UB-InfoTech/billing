@@ -105,7 +105,7 @@ function Clients() {
     });
   };
   const visibleClientFields=clientFormConfig.fields.filter(field=>field.visible!==false);
-  const clientPrimaryKeys=new Set(["name","companyName","phone","email"]);
+  const clientPrimaryKeys=new Set(["companyName","phone"]);
   const clientFieldValues={...newClient,...(newClient.customFields||{})};
   const primaryClientFields=visibleClientFields.filter(field=>{
     const state=getFieldState(field,clientFieldValues);
@@ -616,7 +616,7 @@ function Clients() {
                     <div className="d-flex align-items-center gap-2">
                       <div>
                         <h5 className="modal-title fw-bold mb-1">{editingClient ? "Edit customer" : "Add a customer"}</h5>
-                        <div className="small text-muted">Start with the customer or company name. Add other details only when you need them.</div>
+                        <div className="small text-muted">Start with the customer or business name. Add contact details only when you need them.</div>
                       </div>
                     </div>
                     <button

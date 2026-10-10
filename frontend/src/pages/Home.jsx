@@ -33,7 +33,7 @@ export default function Home(){
     Promise.all([
       axios.get(API+"/api/auth/user",auth()),
       axios.get(API+"/api/reports/dashboard-summary",auth()),
-      axios.get(API+"/api/dashboard-config",auth()),
+      axios.get(API+"/api/dashboard-config",auth()).catch(()=>({data:null})),
       axios.get(API+"/api/profile",auth()).catch(()=>({data:null}))
     ]).then(([userResponse,dataResponse,configResponse,profileResponse])=>{
       if(!alive)return;

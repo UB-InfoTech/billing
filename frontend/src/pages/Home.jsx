@@ -11,7 +11,7 @@ const DEFAULT_WIDGETS=[
   {key:"clients",title:"Customers",visible:true,order:1},
   {key:"products",title:"Products",visible:true,order:2},
   {key:"revenue",title:"Revenue",visible:true,order:3},
-  {key:"outstanding",title:"Outstanding",visible:true,order:4},
+  {key:"outstanding",title:"To collect",visible:true,order:4},
   {key:"expenses",title:"Expenses",visible:true,order:5},
   {key:"paid",title:"Paid",visible:true,order:6},
   {key:"creditNotes",title:"Credit Notes",visible:true,order:7},
@@ -173,9 +173,9 @@ export default function Home(){
           <div className="card border-0 shadow-sm h-100"><div className="card-body">
             <h5 className="mb-3">{title("quickActions")}</h5>
             <div className="d-grid gap-2">
-              <button className="btn btn-outline-primary" onClick={()=>navigate("/bulk-payment")}>Record Bulk Payment</button>
+              <button className="btn btn-outline-primary" onClick={()=>navigate("/bulk-payment")}>Record a payment</button>
               <button className="btn btn-outline-secondary" onClick={()=>navigate("/add-expense")}>Add Expense</button>
-              <button className="btn btn-outline-success" onClick={()=>navigate("/calendar")}>Schedule Event</button>
+              <button className="btn btn-outline-success" onClick={()=>navigate("/calendar")}>Add a reminder</button>
               <button className="btn btn-outline-dark" onClick={()=>navigate("/profile")}>Company Settings</button>
             </div>
           </div></div>

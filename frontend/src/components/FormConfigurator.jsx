@@ -114,6 +114,7 @@ export default function FormConfigurator({
   const [draft,setDraft]=useState(()=>fields.map(clone));
   const [search,setSearch]=useState("");
   const [dragKey,setDragKey]=useState(null);
+  const [dropTargetKey,setDropTargetKey]=useState(null);
   const [expandedKey,setExpandedKey]=useState(null);
   const [showAddField,setShowAddField]=useState(false);
   const [showAdvanced,setShowAdvanced]=useState(false);
@@ -474,15 +475,14 @@ export default function FormConfigurator({
             {filtered.map(field=>(
               <article
                 key={field.key}
-                className={`form-builder-item ${field.visible===false?"is-hidden ":""}${expandedKey===field.key?"is-open ":""}${dragKey===field.key?"is-dragging":""}`}
-                draggable={!field.locked}
-                onDragStart={()=>setDragKey(field.key)}
-                onDragOver={event=>event.preventDefault()}
-                onDrop={()=>{reorder(dragKey,field.key);setDragKey(null);}}
-                onDragEnd={()=>setDragKey(null)}
+                className={`form-builder-item ${field.visible===false?"is-hidden ":""}${expandedKey===field.key?"is-open ":""}${dragKey===field.key?"is-dragging ":""}${dropTargetKey===field.key&&dragKey!==field.key?"is-drop-target":""}`}
+                onDragOver={event=>{if(dragKey&&dragKey!==field.key){event.preventDefault();setDropTargetKey(field.key);}}}
+                onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDropTargetKey(current=>current===field.key?null:current);}}
+                onDrop={event=>{event.preventDefault();reorder(dragKey,field.key);setDragKey(null);setDropTargetKey(null);}}
+                onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}}
               >
                 <div className="form-builder-item-head">
-                  <span className="form-builder-handle" title="Drag to move"><i className="bi bi-grip-vertical"></i></span>
+                  <span className={`form-builder-handle ${field.locked?"is-locked":""}`} title={field.locked?"This field cannot be moved":"Drag this handle to move the field"} draggable={!field.locked} onDragStart={event=>{if(field.locked){event.preventDefault();return;}event.dataTransfer?.setData("text/plain",field.key);if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDragKey(field.key);setDropTargetKey(null);}} onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}} aria-label={`Move ${field.label}`}><i className="bi bi-grip-vertical"></i></span>
                   <div className="form-builder-type-icon"><i className={`bi ${FIELD_TYPES.find(type=>type.value===field.fieldType)?.icon||"bi-fonts"}`}></i></div>
                   <div className="flex-grow-1 min-w-0">
                     <div className="d-flex flex-wrap align-items-center gap-2">

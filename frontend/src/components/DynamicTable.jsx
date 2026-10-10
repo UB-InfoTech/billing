@@ -375,11 +375,12 @@ export default function DynamicTable({
           value={multiple?(Array.isArray(editingValue)?editingValue:[]):editingValue??""}
           onChange={event=>{
             if(multiple){
-              saveCustomValue(rowKey,column.key,Array.from(event.target.selectedOptions).map(option=>option.value));
+              setEditingValue(Array.from(event.target.selectedOptions).map(option=>option.value));
               return;
             }
             saveCustomValue(rowKey,column.key,event.target.value);
           }}
+          onBlur={multiple?commit:common.onBlur}
           style={multiple?{minHeight:90}:undefined}
         >
           {!multiple&&<option value="">Select...</option>}

@@ -340,7 +340,7 @@ export default function ProductPage(){
             rows={products}
             getRowKey={product=>product._id}
             loading={loading}
-            emptyText={search.trim()?"No products match your search. Clear the search to see all products.":lowStock?"No products are at or below the minimum stock level.":"No products yet. Select Add product to add your first item."}
+            emptyText={search.trim()?"No products match your search. Clear the search to see all products.":lowStock?"No products are at or below the minimum stock level.":"No products yet. Add a product once and reuse its name and price on invoices."}
             columns={tableColumns}
             actionColumn={{
               label:"Actions",

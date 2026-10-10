@@ -85,7 +85,7 @@ export default function ConfiguredField({
   }else if(field.fieldType==="textarea"){
     control=<textarea {...common} rows={2}/>;
   }else if(field.fieldType==="select"){
-    control=<select className="form-select shadow-sm bg-white" value={value??""} onChange={event=>handleValue(event.target.value)} disabled={effectiveDisabled||effectiveReadOnly} required={effectiveRequired}>
+    control=<select className="form-select form-entry-control" value={value??""} onChange={event=>handleValue(event.target.value)} disabled={effectiveDisabled||effectiveReadOnly} required={effectiveRequired}>
       <option value="">Select {label}</option>
       {(options||[]).map(option=>typeof option==="string"
         ?<option key={option} value={option}>{option}</option>

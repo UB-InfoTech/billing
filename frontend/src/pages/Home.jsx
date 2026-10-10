@@ -92,7 +92,6 @@ export default function Home(){
   ];
 
   const gettingStartedTasks=[
-    {key:"company",title:"Add your company details",description:"Your company name and address appear on printed invoices.",done:Boolean(profile?.companyName&&profile?.companyAddress),to:"/profile"},
     {key:"customers",title:"Add your first customer",description:"Save the people or companies you sell to.",done:Number(data?.clients||0)>0,to:"/clients?action=new"},
     {key:"products",title:"Add your products",description:"Save the items and prices you sell.",done:Number(data?.products||0)>0,to:"/products?action=new"},
     {key:"invoice",title:"Create your first invoice",description:"Choose a customer, add items and save the bill.",done:Number(data?.orders||0)>0,to:"/orders?action=new"}
@@ -154,9 +153,13 @@ export default function Home(){
               </div>
               {task.done
                 ? <span className="getting-started-done">Done</span>
-                : <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>navigate(task.to)}>{task.key==="invoice"?"Create invoice":task.key==="company"?"Set up company":"Get started"} <i className="bi bi-arrow-right ms-1"></i></button>}
+                : <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>navigate(task.to)}>{task.key==="invoice"?"Create invoice":"Get started"} <i className="bi bi-arrow-right ms-1"></i></button>}
             </div>
           ))}
+        </div>
+        <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-3 pt-3 border-top">
+          <span className="small text-muted"><i className="bi bi-info-circle me-1"></i>Company details are optional and can be added later.</span>
+          <button type="button" className="btn btn-sm btn-link text-decoration-none" onClick={()=>navigate("/profile")}>Add company details <i className="bi bi-arrow-right ms-1"></i></button>
         </div>
       </section>
       )

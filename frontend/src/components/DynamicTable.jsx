@@ -99,6 +99,9 @@ const mergeSavedColumns=(baseColumns,savedColumns)=>{
         defaultValue:column.defaultValue??"",
         sourceKeys:[],
         separator:" ",
+        editable:column.editable!==false,
+        dataSource:column.dataSource&&typeof column.dataSource==="object"?{...column.dataSource}:null,
+        width:column.width==null?0:Math.min(12,Math.max(0,Number(column.width)||0)),
         order:Number.isFinite(Number(column.order))?Number(column.order):merged.length,
       });
       return;
@@ -115,6 +118,7 @@ const mergeSavedColumns=(baseColumns,savedColumns)=>{
       defaultValue:"",
       sourceKeys,
       separator:column.separator??" ",
+      width:column.width==null?0:Math.min(12,Math.max(0,Number(column.width)||0)),
       order:Number.isFinite(Number(column.order))?Number(column.order):merged.length,
     });
   });

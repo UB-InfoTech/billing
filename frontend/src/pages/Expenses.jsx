@@ -15,6 +15,7 @@ export default function Expenses(){
   const [expenses,setExpenses]=useState([]);
   const [summary,setSummary]=useState({totalExpense:0,expenseCount:0,averageExpense:0});
   const [filters,setFilters]=useState({search:"",category:"",startDate:"",endDate:""});
+  const [searchInput,setSearchInput]=useState("");
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
   const [tableCustomizeRequested,setTableCustomizeRequested]=useState(false);
@@ -38,6 +39,13 @@ export default function Expenses(){
       setError(e.response?.data?.message||"Unable to load expenses.");
     }finally{setLoading(false);}
   };
+
+  useEffect(()=>{
+    const timer=window.setTimeout(()=>{
+      setFilters(current=>current.search===searchInput?current:{...current,search:searchInput.trim()});
+    },250);
+    return()=>window.clearTimeout(timer);
+  },[searchInput]);
 
   useEffect(()=>{load();},[filters]);
 
@@ -102,8 +110,8 @@ export default function Expenses(){
           <label className="visually-hidden" htmlFor="expense-search">Search expenses</label>
           <div className="input-group">
             <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
-            <input id="expense-search" className="form-control" placeholder="Search description, supplier or GST number" value={filters.search} onChange={event=>setFilters(v=>({...v,search:event.target.value}))}/>
-            {filters.search&&<button type="button" className="btn btn-light border" onClick={()=>setFilters(v=>({...v,search:""}))}>Clear</button>}
+            <input id="expense-search" className="form-control" placeholder="Search by description or supplier" value={searchInput} onChange={event=>setSearchInput(event.target.value)}/>
+            {searchInput&&<button type="button" className="btn btn-light border" onClick={()=>{setSearchInput("");setFilters(v=>({...v,search:""}));}}>Clear</button>}
           </div>
         </div>
         <div className="col-lg-5">
@@ -128,7 +136,7 @@ export default function Expenses(){
           </div>
         </div>
       </details>
-      {Object.values(filters).some(Boolean)&&<div className="d-flex justify-content-end mt-3"><button type="button" className="btn btn-sm btn-light border" onClick={()=>setFilters({search:"",category:"",startDate:"",endDate:""})}>Clear all filters</button></div>}
+      {(Object.values(filters).some(Boolean)||searchInput)&&<div className="d-flex justify-content-end mt-3"><button type="button" className="btn btn-sm btn-light border" onClick={()=>{setSearchInput("");setFilters({search:"",category:"",startDate:"",endDate:""});}}>Clear all filters</button></div>}
     </div></div>
 
     <div className="card border-0 shadow-sm"><div className="card-body">

@@ -60,7 +60,7 @@ export default function ExpenseForm({onSubmit,initialData={}}){
     setForm(buildConfiguredDefaults({...EMPTY,...hydrated,customFields:{...(hydrated.customFields||{})}},fields));
   },[initialData,fields]);
 
-  const primaryExpenseKeys=new Set(["date","title","description","amount","category"]);
+  const primaryExpenseKeys=new Set(["date","description","amount","category"]);
   const currentExpenseValues={...form,...(form.customFields||{})};
   const primaryFields=visibleFields.filter(field=>{
     const state=getFieldState(field,currentExpenseValues);
@@ -193,7 +193,7 @@ export default function ExpenseForm({onSubmit,initialData={}}){
                 <span className="expense-step-number">1</span>
                 <div>
                   <h6 className="mb-1">Expense basics</h6>
-                  <p className="mb-0">Date, description, category and amount are enough for most expenses.</p>
+                  <p className="mb-0">Enter the date, what you spent money on, the amount and the type of expense.</p>
                 </div>
               </div>
               <div className="row g-3">{primaryFields.map(renderExpenseField)}</div>
@@ -201,7 +201,7 @@ export default function ExpenseForm({onSubmit,initialData={}}){
 
             {additionalFields.some(field=>getFieldState(field,fieldStateValues).visible)&&(
               <details className="expense-additional-details mt-3">
-                <summary><i className="bi bi-plus-circle me-2"></i>More expense details <span>Payment method, GST, customer links, recurring settings and custom fields</span></summary>
+                <summary><i className="bi bi-plus-circle me-2"></i>More details <span>Short title, payment method, GST, customer links and other optional information</span></summary>
                 <div className="expense-additional-details-body">
                   {sectionNames.map(section=>{
                     const sectionFields=additionalFields.filter(field=>(field.section||"General")===section);

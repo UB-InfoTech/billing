@@ -27,6 +27,26 @@ export default function Home(){
   const [profile,setProfile]=useState(null);
   const [loading,setLoading]=useState(true);
   const [error,setError]=useState("");
+  const [setupGuideDismissed,setSetupGuideDismissed]=useState(false);
+
+  const setupGuideStorageKey="billingSetupGuideDismissed:"+String(user?._id||user?.id||user?.username||"account");
+
+  useEffect(()=>{
+    try{
+      setSetupGuideDismissed(localStorage.getItem(setupGuideStorageKey)==="true");
+    }catch{
+      setSetupGuideDismissed(false);
+    }
+  },[setupGuideStorageKey]);
+
+  const dismissSetupGuide=()=>{
+    setSetupGuideDismissed(true);
+    try{
+      localStorage.setItem(setupGuideStorageKey,"true");
+    }catch{
+      // The guide can still be dismissed for this session if browser storage is unavailable.
+    }
+  };
 
   useEffect(()=>{
     let alive=true;
@@ -97,16 +117,28 @@ export default function Home(){
     {error&&<div className="alert alert-danger">{error}</div>}
 
     {completedSetupTasks<gettingStartedTasks.length&&(
+      setupGuideDismissed?(
+        <div className="d-flex align-items-center justify-content-between gap-3 flex-wrap mb-4 p-3 bg-white border rounded-3">
+          <div>
+            <strong>Want help getting started?</strong>
+            <div className="small text-muted">Your setup guide is optional. You can add business details whenever you're ready.</div>
+          </div>
+          <button type="button" className="btn btn-outline-primary btn-sm" onClick={()=>{setSetupGuideDismissed(false);try{localStorage.removeItem(setupGuideStorageKey);}catch{}}}>Show setup guide</button>
+        </div>
+      ):(
       <section className="getting-started-card mb-4" aria-labelledby="getting-started-title">
         <div className="getting-started-heading">
           <div>
-            <span className="dashboard-eyebrow">A SIMPLE START</span>
-            <h3 id="getting-started-title">Get your business ready</h3>
-            <p>Follow these four steps. You do not need to set up everything today.</p>
+            <span className="dashboard-eyebrow">OPTIONAL · START WHEN YOU'RE READY</span>
+            <h3 id="getting-started-title">Get comfortable, one step at a time</h3>
+            <p>You can start billing now and add company details or products later. Nothing here is compulsory.</p>
           </div>
-          <div className="getting-started-progress">
-            <strong>{completedSetupTasks} of {gettingStartedTasks.length}</strong>
-            <span>steps complete</span>
+          <div className="d-flex align-items-center gap-3">
+            <div className="getting-started-progress">
+              <strong>{completedSetupTasks} of {gettingStartedTasks.length}</strong>
+              <span>steps complete</span>
+            </div>
+            <button type="button" className="btn btn-sm btn-light border" onClick={dismissSetupGuide}>Skip for now</button>
           </div>
         </div>
         <div className="getting-started-progress-track" role="progressbar" aria-valuenow={completedSetupTasks} aria-valuemin={0} aria-valuemax={gettingStartedTasks.length}>
@@ -127,6 +159,7 @@ export default function Home(){
           ))}
         </div>
       </section>
+      )
     )}
 
     <div className="row g-3">

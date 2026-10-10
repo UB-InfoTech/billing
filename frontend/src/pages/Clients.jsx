@@ -529,11 +529,11 @@ function Clients() {
               tableKey="clients.list"
               rows={pagedClientRows}
               loading={loading}
-              emptyText={search.trim()||Object.values(filters).some(Boolean)?"No customers match these filters. Clear them to see everyone.":"No customers yet. Select Add customer to save your first customer."}
+              emptyText={search.trim()||Object.values(filters).some(Boolean)?"No customers match these filters. Clear them to see everyone.":"No customers yet. Add a customer so their details are ready when you create an invoice."}
               getRowKey={client => client._id}
               columns={[
                 { key:"__rowNumber", label:"#", locked:false, render:(_row,index)=>index+1 },
-                { key:"companyName", label:"Name", sortKey:"companyName" },
+                { key:"companyName", label:"Customer", sortKey:"companyName" },
                 { key:"phone", label:"Phone", sortKey:"phone" },
                 { key:"address", label:"Address", visible:false },
                 { key:"gstNumber", label:"GST No.", visible:false },

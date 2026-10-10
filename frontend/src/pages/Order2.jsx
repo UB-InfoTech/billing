@@ -1434,7 +1434,7 @@ const styles = {
 
             {showModal && (
                 <div className="modal show d-block invoice-modal-backdrop" tabIndex="-1" role="presentation">
-                    <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+                    <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable invoice-a4-dialog">
                         <div className="modal-content invoice-create-modal border-0" ref={modalRef}>
                             <div className="modal-header invoice-create-header p-4">
                                 <div className="d-flex flex-wrap align-items-center justify-content-between gap-3 w-100">
@@ -1463,7 +1463,7 @@ const styles = {
                                 ></button>
                             </div>
                             <div className="modal-body p-4 invoice-create-body">
-                                <form onSubmit={handleSubmit}>
+                                <form className="invoice-a4-sheet" onSubmit={handleSubmit}>
                                     {invoiceFormError&&<div className="alert alert-danger d-flex gap-2 align-items-start" role="alert"><i className="bi bi-exclamation-circle-fill mt-1"></i><div>{invoiceFormError}</div></div>}
                                     <section className="card border-0 shadow-sm mb-3 invoice-basics-card">
                                         <div className="card-header bg-white d-flex align-items-start gap-2 py-3">

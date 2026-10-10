@@ -31,14 +31,14 @@ const LEGACY_DEFAULT_LABELS={
     challanNumber:["Challan No."]
   },
   "clients.form":{
-    name:["Customer Name"],
+    name:["Client Name","Customer Name"],
     companyName:["Customer / Company Name","Company Name"],
     paymentTerms:["Payment Terms"],
     discountRate:["Discount Rate"],
     accountStatus:["Account Status"]
   },
   "products.form":{
-    rate:["Selling Rate"]
+    rate:["Rate","Selling Rate"]
   },
   "expenses.form":{
     title:["Title"],

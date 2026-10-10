@@ -3753,7 +3753,7 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
 .form-builder-canvas-field:hover .form-builder-canvas-hint{opacity:1}
 .customer-a4-dialog{width:calc(100% - 2rem);max-width:210mm}
 .customer-form-modal{max-height:calc(100vh - 2rem);border-radius:12px;overflow:hidden;background:#edf1f6}
-.customer-form-modal .modal-body{padding:16px!important;background:#edf1f6}
+.customer-form-modal .modal-body{padding:16px!important;background:#fff}
 .customer-a4-sheet{width:100%;max-width:210mm;min-height:245mm;margin:0 auto;padding:10mm;background:#fff;border:1px solid #dce3eb;box-shadow:0 3px 16px rgba(29,47,69,.08)}
 .customer-a4-sheet .modal-footer{position:sticky;bottom:0}
 .customer-view-backdrop{z-index:1360;background:rgba(23,36,52,.45);overflow-y:auto}
@@ -3779,7 +3779,7 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
  .customer-a4-dialog,.invoice-a4-dialog{width:100%;max-width:100%;margin:0}
  .customer-form-modal,.customer-view-modal,.invoice-create-modal{max-height:100vh;min-height:100vh;border-radius:0!important}
  .customer-a4-sheet,.invoice-a4-sheet{min-height:0;padding:18px;border-left:0;border-right:0}
- .customer-form-modal .modal-body,.customer-view-body,.invoice-create-body{padding:8px!important}
+ .customer-form-modal .modal-body{padding:8px!important;background:#fff}.customer-view-body,.invoice-create-body{padding:8px!important}
 }
 @media print{
  body *{visibility:hidden!important}

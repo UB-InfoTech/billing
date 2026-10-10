@@ -170,6 +170,7 @@ export default function DynamicTable({
   const [saving,setSaving]=useState(false);
   const [showSettings,setShowSettings]=useState(false);
   const [draggedColumnKey,setDraggedColumnKey]=useState(null);
+  const [dropTargetColumnKey,setDropTargetColumnKey]=useState(null);
   const [searchTerm,setSearchTerm]=useState("");
   const [editingCell,setEditingCell]=useState(null);
   const [editingValue,setEditingValue]=useState("");
@@ -757,12 +758,12 @@ export default function DynamicTable({
                     return(
                       <div
                         key={column.key}
-                        className={`dynamic-simple-column dynamic-table-builder-row ${column.visible!==false?"is-visible":"is-hidden"} ${draggedColumnKey===column.key?"is-dragging":""}`}
-                        draggable={!column.locked}
-                        onDragStart={()=>setDraggedColumnKey(column.key)}
-                        onDragOver={event=>event.preventDefault()}
-                        onDrop={()=>{
-                          if(!draggedColumnKey||draggedColumnKey===column.key)return;
+                        className={`dynamic-simple-column dynamic-table-builder-row ${column.visible!==false?"is-visible":"is-hidden"} ${draggedColumnKey===column.key?"is-dragging ":""}${dropTargetColumnKey===column.key&&draggedColumnKey!==column.key?"is-drop-target":""}`}
+                        onDragOver={event=>{if(draggedColumnKey&&draggedColumnKey!==column.key){event.preventDefault();setDropTargetColumnKey(column.key);}}}
+                        onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDropTargetColumnKey(current=>current===column.key?null:current);}}
+                        onDrop={event=>{
+                          event.preventDefault();
+                          if(!draggedColumnKey||draggedColumnKey===column.key){setDropTargetColumnKey(null);return;}
                           setDraft(prev=>{
                             const sourceIndex=prev.findIndex(item=>item.key===draggedColumnKey);
                             const targetIndex=prev.findIndex(item=>item.key===column.key);
@@ -773,15 +774,16 @@ export default function DynamicTable({
                             return next.map((item,itemIndex)=>({...item,order:itemIndex}));
                           });
                           setDraggedColumnKey(null);
+                          setDropTargetColumnKey(null);
                         }}
-                        onDragEnd={()=>setDraggedColumnKey(null)}
+                        onDragEnd={()=>{setDraggedColumnKey(null);setDropTargetColumnKey(null);}}
                       >
                         <span
                           className="dynamic-column-drag-handle"
                           draggable={!column.locked}
-                          onDragStart={event=>{event.stopPropagation();setDraggedColumnKey(column.key);}}
-                          onDragEnd={()=>setDraggedColumnKey(null)}
-                          title="Drag to move"
+                          onDragStart={event=>{event.stopPropagation();if(column.locked){event.preventDefault();return;}event.dataTransfer?.setData("text/plain",column.key);if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDraggedColumnKey(column.key);setDropTargetColumnKey(null);}}
+                          onDragEnd={()=>{setDraggedColumnKey(null);setDropTargetColumnKey(null);}}
+                          title={column.locked?"This column cannot be moved":"Drag this handle to move the column"}
                         >
                           <i className="bi bi-grip-vertical"></i>
                         </span>

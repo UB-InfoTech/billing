@@ -92,6 +92,7 @@ function Order2() {
     ])),[orderFormConfig.fields,orderItemConfig.fields]);
     const {records:linkedRecords}=useNoCodeDataSources(linkedOrderSources);
     const [editingOrder, setEditingOrder] = useState(null);
+    const [viewingOrder,setViewingOrder]=useState(null);
 
 
     const [payments, setPayments] = useState([]);
@@ -1356,6 +1357,9 @@ const styles = {
                             locked:true,
                             render:order=>(
                                 <div className="invoice-row-actions">
+                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>setViewingOrder(order)} title="View invoice details">
+                                        <i className="bi bi-eye me-1"></i>View
+                                    </button>
                                     <button type="button" className="btn btn-sm btn-light border" onClick={()=>handleEdit(order)} title="Edit this invoice">
                                         <i className="bi bi-pencil me-1"></i>Edit
                                     </button>
@@ -1432,6 +1436,100 @@ const styles = {
             </div>
 
 
+            {viewingOrder&&(
+                <div className="modal show d-block invoice-view-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-label="Invoice details">
+                    <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable invoice-view-dialog">
+                        <div className="modal-content invoice-view-modal border-0">
+                            <div className="modal-header invoice-view-toolbar">
+                                <div>
+                                    <div className="small text-primary text-uppercase fw-semibold mb-1">INVOICE RECORD</div>
+                                    <h5 className="modal-title fw-bold mb-1">Invoice {viewingOrder.orderNumber||"Details"}</h5>
+                                    <div className="small text-secondary">{viewingOrder.companyName||clients.find(client=>client._id===viewingOrder.clientId)?.companyName||"Customer not linked"} · {viewingOrder.orderDate?new Date(viewingOrder.orderDate).toLocaleDateString("en-IN"):"No date"}</div>
+                                </div>
+                                <div className="d-flex align-items-center gap-2">
+                                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>{handleEdit(viewingOrder);setViewingOrder(null);}}><i className="bi bi-pencil me-1"></i>Edit</button>
+                                    <button type="button" className="btn-close" aria-label="Close invoice details" onClick={()=>setViewingOrder(null)} />
+                                </div>
+                            </div>
+                            <div className="modal-body invoice-view-body">
+                                <article className="invoice-view-sheet">
+                                    <div className="invoice-view-paper-heading">
+                                        <div>
+                                            <div className="small text-secondary text-uppercase fw-semibold">Invoice</div>
+                                            <h2>{viewingOrder.orderNumber||"Invoice details"}</h2>
+                                            <div className="small text-secondary">Issued {viewingOrder.orderDate?new Date(viewingOrder.orderDate).toLocaleDateString("en-IN"):"—"}</div>
+                                        </div>
+                                        <div className="invoice-view-status">{viewingOrder.status||"Pending"}</div>
+                                    </div>
+                                    <section className="invoice-view-section">
+                                        <h6>Invoice information</h6>
+                                        <div className="row g-3">
+                                            {orderFormConfig.fields.filter(field=>field.visible!==false).map(field=>{
+                                                const value=field.custom
+                                                    ?viewingOrder.customFields?.[field.key]??viewingOrder[field.key]
+                                                    :viewingOrder[field.key];
+                                                const displayValue=Array.isArray(value)
+                                                    ?value.join(", ")
+                                                    :field.key==="orderDate"&&value
+                                                        ?new Date(value).toLocaleDateString("en-IN")
+                                                        :field.key==="paymentTerms"&&value&&value!=="Advance"
+                                                            ?String(value)+" days"
+                                                            :field.key==="discountRate"&&value!==undefined&&value!==null
+                                                                ?String(value)+"%"
+                                                                :value===null||value===undefined||value===""
+                                                                    ?"—"
+                                                                    :String(value);
+                                                return <div className={`col-12 col-sm-6 ${Number(field.width)>=12?"col-md-12":""}`} key={field.key}>
+                                                    <div className="invoice-view-field">
+                                                        <div className="invoice-view-field-label">{field.label}</div>
+                                                        <div className="invoice-view-field-value">{displayValue}</div>
+                                                    </div>
+                                                </div>;
+                                            })}
+                                        </div>
+                                    </section>
+                                    <section className="invoice-view-section">
+                                        <h6>Items on this invoice</h6>
+                                        {(viewingOrder.subOrders||[]).length===0
+                                            ?<div className="text-secondary small">No items recorded.</div>
+                                            :(viewingOrder.subOrders||[]).map((item,index)=>(
+                                                <div className="invoice-view-item" key={item._id||index}>
+                                                    <div className="invoice-view-item-title">Item {index+1}: {item.orderName||item.productName||"Item"}</div>
+                                                    <div className="row g-2">
+                                                        {orderItemConfig.fields.filter(field=>field.visible!==false).map(field=>{
+                                                            const value=field.custom
+                                                                ?item.customFields?.[field.key]??item[field.key]
+                                                                :item[field.key];
+                                                            if(value===undefined||value===null||value==="")return null;
+                                                            const displayValue=Array.isArray(value)?value.join(", "):String(value);
+                                                            return <div className="col-6 col-md-4" key={field.key}>
+                                                                <div className="invoice-view-field invoice-view-item-field">
+                                                                    <div className="invoice-view-field-label">{field.label}</div>
+                                                                    <div className="invoice-view-field-value">{displayValue}</div>
+                                                                </div>
+                                                            </div>;
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ))
+                                        }
+                                    </section>
+                                    <section className="invoice-view-summary">
+                                        <div><span>Invoice total</span><strong>₹{Number(viewingOrder.roundOffFinalRevenue??viewingOrder.totalAmount??0).toFixed(2)}</strong></div>
+                                        <div><span>Paid</span><strong>₹{Number(viewingOrder.paidAmount??0).toFixed(2)}</strong></div>
+                                        <div><span>Due</span><strong>₹{Number(viewingOrder.dueAmount??0).toFixed(2)}</strong></div>
+                                    </section>
+                                </article>
+                            </div>
+                            <div className="modal-footer invoice-view-footer">
+                                <button type="button" className="btn btn-light border" onClick={()=>setViewingOrder(null)}>Close</button>
+                                <button type="button" className="btn btn-primary" onClick={()=>window.print()}><i className="bi bi-printer me-2"></i>Print details</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {showModal && (
                 <div className="modal show d-block invoice-modal-backdrop" tabIndex="-1" role="presentation">
                     <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable invoice-a4-dialog">
@@ -1502,7 +1600,7 @@ const styles = {
                                     </section>
 
                                     {additionalOrderFields.some(field=>getFieldState(field,{...formData,...(formData.customFields||{})}).visible)&&(
-                                        <details className="invoice-additional-details mb-3">
+                                        <details className="invoice-additional-details mb-3" open>
                                             <summary><i className="bi bi-sliders me-2"></i>More invoice details <span>Optional fields such as address, delivery and tax settings</span></summary>
                                             <div className="invoice-additional-details-body">
                                                 <div className="row g-3">
@@ -1583,7 +1681,7 @@ const styles = {
                                                                     {primaryItemFields.map(renderItemField)}
                                                                 </div>
                                                                 {additionalItemFields.length>0&&(
-                                                                    <details className="invoice-item-more-details mt-3">
+                                                                    <details className="invoice-item-more-details mt-3" open>
                                                                         <summary><i className="bi bi-plus-circle me-2"></i>More item details <span>Design number, HSN code and other fields</span></summary>
                                                                         <div className="row g-3 pt-3">
                                                                             {additionalItemFields.map(renderItemField)}

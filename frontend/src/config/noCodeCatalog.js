@@ -14,8 +14,8 @@ export const MODULE_CATALOG=[
 export const ORDER_FORM_FIELDS=[
  {key:"orderNumber",label:"Invoice No.",fieldType:"text",width:3,section:"invoice",required:true,order:1,system:true},
  {key:"clientId",label:"Customer link",fieldType:"text",width:3,section:"client",order:999,visible:false,locked:false,system:true,editable:false,readOnly:true},
- {key:"orderDate",label:"Bill Date",fieldType:"date",width:4,section:"invoice",required:true,order:2,system:true},
- {key:"lrNo",label:"LR No.",fieldType:"text",width:5,section:"shipping",order:3},
+ {key:"orderDate",label:"Invoice date",fieldType:"date",width:4,section:"invoice",required:true,order:2,system:true},
+ {key:"lrNo",label:"Transport receipt no. (LR)",fieldType:"text",width:5,section:"shipping",order:3},
  {key:"State",label:"State",fieldType:"text",width:4,section:"shipping",order:4},
  {key:"Address",label:"Address",fieldType:"text",width:8,section:"shipping",order:5},
  {key:"City",label:"City",fieldType:"text",width:4,section:"shipping",order:6},
@@ -34,8 +34,8 @@ export const ORDER_FORM_FIELDS=[
   {targetKey:"discountRate",sourceKey:"discountRate"}
  ]}},
  {key:"gstNumber",label:"GST No.",fieldType:"text",width:4,section:"client",order:10},
- {key:"paymentTerms",label:"Payment Terms",fieldType:"select",width:4,section:"client",defaultValue:"30",order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Advance"}],system:true},
- {key:"challanNumber",label:"Challan No.",fieldType:"text",width:4,section:"client",order:12,defaultValue:""},
+ {key:"paymentTerms",label:"When should payment be made?",fieldType:"select",width:4,section:"client",defaultValue:"30",order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Pay in advance"}],system:true},
+ {key:"challanNumber",label:"Delivery challan no.",fieldType:"text",width:4,section:"client",order:12,defaultValue:""},
  {key:"taxPercentage",label:"Tax %",fieldType:"number",width:4,section:"client",order:13,system:true},
  {key:"discountRate",label:"Discount %",fieldType:"number",width:4,section:"client",order:14,system:true}
 ];
@@ -64,9 +64,9 @@ export const CLIENT_FORM_FIELDS=[
   {key:"gstNumber",label:"GST Number",fieldType:"text",width:6,section:"business",order:8,system:true},
   {key:"companyName",label:"Customer or business name",helpText:"For a business, enter its company name.",fieldType:"text",width:12,section:"basic",required:true,order:0,system:true},
   {key:"businessType",label:"Business Type",fieldType:"select",width:6,section:"business",order:10,options:["Retail","Wholesale","Manufacturer","Trader","Supplier"]},
-  {key:"paymentTerms",label:"Payment Terms",fieldType:"select",width:6,section:"business",order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Advance Payment"}],system:true},
-  {key:"discountRate",label:"Discount Rate",fieldType:"number",width:4,section:"additional",order:12,system:true},
-  {key:"accountStatus",label:"Account Status",fieldType:"select",width:8,section:"additional",order:13,options:["Active","Inactive"],system:true},
+  {key:"paymentTerms",label:"When should payment be made?",fieldType:"select",width:6,section:"business",order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Pay in advance"}],system:true},
+  {key:"discountRate",label:"Default discount (%)",fieldType:"number",width:4,section:"additional",order:12,system:true},
+  {key:"accountStatus",label:"Customer status",fieldType:"select",width:8,section:"additional",order:13,options:["Active","Inactive"],system:true},
   {key:"notes",label:"Notes",fieldType:"textarea",width:12,section:"additional",order:14}
 ];
 
@@ -75,7 +75,7 @@ export const PRODUCT_FORM_FIELDS=[
  {key:"productName",label:"Product Name",fieldType:"text",width:6,section:"basic",required:true,order:0,system:true},
  {key:"productCode",label:"Product Code",fieldType:"text",width:3,section:"basic",order:3,system:true},
  {key:"designNo",label:"Design No.",fieldType:"text",width:3,section:"basic",order:4},
- {key:"rate",label:"Selling Rate",fieldType:"currency",width:4,section:"pricing",required:true,order:1,system:true},
+ {key:"rate",label:"Selling price",fieldType:"currency",width:4,section:"pricing",required:true,order:1,system:true},
  {key:"purchasePrice",label:"Purchase Price",fieldType:"currency",width:4,section:"pricing",order:5},
  {key:"minStock",label:"Minimum Stock",fieldType:"number",width:4,section:"stock",order:6},
  {key:"quantity",label:"Current Stock",fieldType:"number",width:4,section:"stock",order:2},
@@ -88,13 +88,13 @@ export const PRODUCT_FORM_FIELDS=[
 
 export const EXPENSE_FORM_FIELDS=[
  {key:"date",label:"Date",fieldType:"date",width:4,section:"basic",required:true,order:0,system:true},
- {key:"title",label:"Title",fieldType:"text",width:4,section:"basic",order:1},
- {key:"description",label:"Description",fieldType:"textarea",width:4,section:"basic",required:true,order:2,system:true},
+ {key:"title",label:"Short name (optional)",fieldType:"text",width:4,section:"basic",order:1},
+ {key:"description",label:"What was this expense for?",helpText:"For example: office rent, packing material or fuel.",fieldType:"textarea",width:4,section:"basic",required:true,order:2,system:true},
  {key:"amount",label:"Amount",fieldType:"currency",width:4,section:"amount",required:true,order:3,system:true},
- {key:"category",label:"Category",fieldType:"select",width:4,section:"classification",required:true,order:4,options:["Production","Operational","Marketing","Financial","Miscellaneous","Raw Materials","Labor","Maintenance","Shipping","Utilities","Rent","Other"]},
+ {key:"category",label:"Type of expense",fieldType:"select",width:4,section:"classification",required:true,order:4,options:["Production","Operational","Marketing","Financial","Miscellaneous","Raw Materials","Labor","Maintenance","Shipping","Utilities","Rent","Other"]},
  {key:"subCategory",label:"Sub Category",fieldType:"text",width:4,section:"classification",order:5},
  {key:"tags",label:"Tags",fieldType:"text",width:4,section:"classification",order:6},
- {key:"paymentMethod",label:"Payment Method",fieldType:"select",width:4,section:"payment",order:7,options:["Cash","Bank Transfer","UPI","Cheque","Credit"]},
+ {key:"paymentMethod",label:"How did you pay?",fieldType:"select",width:4,section:"payment",order:7,options:["Cash","Bank Transfer","UPI","Cheque","Credit"]},
  {key:"currency",label:"Currency",fieldType:"text",width:4,section:"payment",order:8,defaultValue:"INR"},
  {key:"vendor",label:"Vendor",fieldType:"text",width:4,section:"payment",order:9},
  {key:"gstNo",label:"GST Number",fieldType:"text",width:4,section:"tax",order:10},

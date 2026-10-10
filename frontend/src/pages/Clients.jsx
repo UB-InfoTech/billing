@@ -28,6 +28,7 @@ function Clients() {
   const [clients, setClients] = useState([]);
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [viewingClient,setViewingClient]=useState(null);
   const [newClient, setNewClient] = useState({
     name: '',
     email: '',
@@ -551,6 +552,7 @@ function Clients() {
                 locked:true,
                 render:client=>(
                   <div className="d-flex gap-1 justify-content-end">
+                    <button className="btn btn-sm btn-light border" onClick={()=>setViewingClient(client)} title="View customer details"><i className="bi bi-eye me-1"></i>View</button>
                     <button className="btn btn-sm btn-light border" onClick={()=>handleEditClient(client)} title="Edit customer">
                       <i className="bi bi-pencil me-1"></i>Edit
                     </button>
@@ -608,9 +610,38 @@ function Clients() {
 
           </div>
 
+          {viewingClient&&(
+            <div className="modal show d-block customer-view-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-label="Customer details">
+              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable customer-a4-dialog">
+                <div className="modal-content customer-view-modal border-0">
+                  <div className="modal-header customer-view-toolbar">
+                    <div><div className="small text-primary text-uppercase fw-semibold mb-1">CUSTOMER RECORD</div><h5 className="modal-title fw-bold mb-1">{viewingClient.companyName||viewingClient.name||"Customer details"}</h5><div className="small text-secondary">A clear, print-friendly summary of this customer.</div></div>
+                    <div className="d-flex gap-2"><button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>{handleEditClient(viewingClient);setViewingClient(null);}}><i className="bi bi-pencil me-1"></i>Edit</button><button type="button" className="btn-close" aria-label="Close customer details" onClick={()=>setViewingClient(null)} /></div>
+                  </div>
+                  <div className="modal-body customer-view-body">
+                    <article className="customer-a4-sheet customer-a4-read-sheet">
+                      <div className="customer-record-title"><span className="customer-record-avatar"><i className="bi bi-person-vcard"></i></span><div><div className="small text-secondary">CUSTOMER / BUSINESS</div><h3>{viewingClient.companyName||viewingClient.name||"Unnamed customer"}</h3><div className="small text-secondary">{viewingClient.phone||"No phone added"}{viewingClient.email?" · "+viewingClient.email:""}</div></div></div>
+                      <div className="customer-record-section-title">Customer information</div>
+                      <div className="row g-3">
+                        {clientFormConfig.fields.filter(field=>field.visible!==false).map(field=>{
+                          const value=(field.custom?viewingClient.customFields?.[field.key]??viewingClient[field.key]:viewingClient[field.key])??field.defaultValue;
+                          const display=Array.isArray(value)?value.join(", "):typeof value==="boolean"?(value?"Yes":"No"):value===null||value===undefined||value===""?"—":field.key==="paymentTerms"&&value!=="Advance"?value+" days":field.key==="discountRate"?value+"%":String(value);
+                          return <div className={`col-12 col-sm-6 ${field.width>=12?"col-md-12":""}`} key={field.key}><div className="customer-record-field"><div className="customer-record-label">{field.label}</div><div className="customer-record-value">{display}</div></div></div>;
+                        })}
+                      </div>
+                      <div className="customer-record-section-title mt-4">Account summary</div>
+                      <div className="row g-3"><div className="col-6"><div className="customer-record-field"><div className="customer-record-label">Orders</div><div className="customer-record-value">{Number(viewingClient.orderCount||0)}</div></div></div><div className="col-6"><div className="customer-record-field"><div className="customer-record-label">Total billed</div><div className="customer-record-value">₹{Number(viewingClient.totalRevenue||0).toFixed(2)}</div></div></div></div>
+                    </article>
+                  </div>
+                  <div className="modal-footer customer-view-footer"><button type="button" className="btn btn-light border" onClick={()=>setViewingClient(null)}>Close</button><button type="button" className="btn btn-primary" onClick={()=>window.print()}><i className="bi bi-printer me-2"></i>Print details</button></div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {showModal && (
             <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}>
-              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-xl">
+              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable customer-a4-dialog">
                 <div className="modal-content customer-form-modal shadow-sm border-0">
                   <div className="modal-header bg-white text-dark p-3 border-bottom d-flex justify-content-between align-items-center">
                     <div className="d-flex align-items-center gap-2">
@@ -628,7 +659,7 @@ function Clients() {
                   </div>
 
                   {formError&&<div className="alert alert-danger mx-3 mt-3 mb-0" role="alert">{formError}</div>}
-                  <form onSubmit={editingClient?handleUpdateClient:handleAddClient}>
+                  <form className="customer-a4-sheet" onSubmit={editingClient?handleUpdateClient:handleAddClient}>
                     <div className="modal-body p-3">
                       <section className="customer-quick-fields">
                         <div className="customer-fields-heading">

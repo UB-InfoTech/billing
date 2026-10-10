@@ -1,3 +1,4 @@
+import BusinessPageHeader from "../components/BusinessPageHeader";
 import React,{useEffect,useMemo,useState,useCallback} from "react";
 import {useSearchParams} from "react-router-dom";
 import { createProduct, fetchProducts, updateProduct, deleteProduct, searchProductByBarcode } from "../services/productService";
@@ -236,16 +237,14 @@ export default function ProductPage(){
 
   return(
     <div className="container-fluid py-3">
-      <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-        <div>
-          <div className="text-primary small fw-semibold">YOUR CATALOGUE</div>
-          <h2 className="mb-1">Products</h2>
-          <div className="text-muted">Keep item names, prices and stock in one place. Add products only when you need to.</div>
-        </div>
-        <div className="d-flex flex-wrap gap-2">
-          <button type="button" className="btn btn-primary" onClick={resetProduct}><i className="bi bi-plus-lg me-1"></i>Add product</button>
-        </div>
-      </div>
+      <BusinessPageHeader
+        eyebrow="YOUR CATALOGUE"
+        title="Products"
+        description="Keep product names, selling prices and stock in one place. Add the details you know; the rest can wait."
+        className="mb-3"
+      >
+        <button type="button" className="btn btn-primary" onClick={resetProduct}><i className="bi bi-plus-lg me-1"></i>Add product</button>
+      </BusinessPageHeader>
 
       {error&&<div className="alert alert-danger" role="alert">{error}</div>}
       {successMessage&&<div className="alert alert-success d-flex align-items-center gap-2" role="status"><i className="bi bi-check-circle-fill"></i><span>{successMessage}</span><button type="button" className="btn-close ms-auto" aria-label="Dismiss message" onClick={()=>setSuccessMessage("")}></button></div>}

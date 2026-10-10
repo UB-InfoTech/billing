@@ -11,7 +11,7 @@ const cleanString=(value,max)=>String(value??"").trim().slice(0,max);
 const FIELD_TYPES=["text","textarea","number","currency","date","datetime","boolean","select","multiselect","reference"];
 
 const normalizeCustomValue=(field,value)=>{
-  if(value===null||value===undefined||value==="")return null;
+  if(value===null||value===undefined||value===""||(Array.isArray(value)&&value.length===0))return null;
   switch(field.fieldType){
     case "number":
     case "currency":{
@@ -21,6 +21,13 @@ const normalizeCustomValue=(field,value)=>{
     }
     case "boolean":
       return value===true||value==="true"||value===1||value==="1";
+    case "multiselect":{
+      if(!Array.isArray(value))throw new Error("Choose one or more valid options.");
+      const allowed=new Set((field.options||[]).map(option=>String(option?.value??option)));
+      const selected=[...new Set(value.map(item=>cleanString(item,200)).filter(Boolean))];
+      if(selected.some(item=>!allowed.has(item)))throw new Error("Please choose valid options.");
+      return selected;
+    }
     default:
       return cleanString(value,5000);
   }

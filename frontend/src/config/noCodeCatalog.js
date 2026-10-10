@@ -88,7 +88,7 @@ export const PRODUCT_FORM_FIELDS=[
 
 export const EXPENSE_FORM_FIELDS=[
  {key:"date",label:"Date",fieldType:"date",width:4,section:"basic",required:true,order:0,system:true},
- {key:"title",label:"Short name (optional)",fieldType:"text",width:4,section:"basic",order:1},
+ {key:"title",label:"Short name (optional)",fieldType:"text",width:4,section:"details",order:19},
  {key:"description",label:"What was this expense for?",helpText:"For example: office rent, packing material or fuel.",fieldType:"textarea",width:4,section:"basic",required:true,order:2,system:true},
  {key:"amount",label:"Amount",fieldType:"currency",width:4,section:"amount",required:true,order:3,system:true},
  {key:"category",label:"Type of expense",fieldType:"select",width:4,section:"classification",required:true,order:4,options:["Production","Operational","Marketing","Financial","Miscellaneous","Raw Materials","Labor","Maintenance","Shipping","Utilities","Rent","Other"]},

@@ -1251,6 +1251,10 @@ body {
 }
 .form-builder-item:hover{border-color:#d5e0eb}
 .form-builder-item.is-hidden{background:#fafbfc}
+.form-builder-item.is-drop-target,
+.dynamic-simple-column.is-drop-target{border-color:#3984d6!important;box-shadow:0 0 0 2px rgba(57,132,214,.18);background:#f0f7ff!important;}
+.form-builder-item.is-drop-target{border-top:3px solid #3984d6;}
+.dynamic-simple-column.is-drop-target{outline:2px dashed #3984d6;outline-offset:1px;}
 .form-builder-item.is-open{border-color:#c9d9ea;box-shadow:0 4px 16px rgba(38,72,104,.06)}
 .form-builder-item-head{
   display:flex;
@@ -1270,8 +1274,11 @@ body {
   color:#8190a0;
   background:#fafbfd;
   cursor:grab;
+  user-select:none;
+  touch-action:none;
 }
 .form-builder-handle:active{cursor:grabbing}
+.form-builder-handle.is-locked{cursor:not-allowed;opacity:.45}
 .form-builder-type-icon{
   width:30px;
   height:30px;

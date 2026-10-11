@@ -15,7 +15,7 @@ import DynamicTable from "../components/DynamicTable";
 import FormConfigurator from "../components/FormConfigurator";
 import ConfiguredField from "../components/ConfiguredField";
 import ArithmeticInput from "../components/ArithmeticInput";
-import {useFormConfiguration,applyFormulas,hydrateConfiguredValues,applyAutoFill,getFieldState,syncConfiguredCustomFields,buildConfiguredDefaults} from "../hooks/useFormConfiguration";
+import {useFormConfiguration,applyFormulas,hydrateConfiguredValues,applyAutoFill,getFieldState,syncConfiguredCustomFields,buildConfiguredDefaults,groupFieldsBySection} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
 import Report from '../components/Report';
@@ -317,14 +317,8 @@ function Order2() {
         return item[field.key]??field.defaultValue??"";
     };
     const visibleOrderFields=orderFormConfig.fields.filter(field=>field.visible!==false);
-    const primaryInvoiceFieldKeys=new Set(["orderNumber","orderDate","companyName"]);
+    const orderFormSections=groupFieldsBySection(visibleOrderFields);
     const orderFieldValues={...formData,...(formData.customFields||{})};
-    const primaryOrderFields=visibleOrderFields.filter(field=>{
-        const state=getFieldState(field,orderFieldValues);
-        return state.visible&&(state.required||primaryInvoiceFieldKeys.has(field.key));
-    });
-    const primaryOrderFieldKeys=new Set(primaryOrderFields.map(field=>field.key));
-    const additionalOrderFields=visibleOrderFields.filter(field=>!primaryOrderFieldKeys.has(field.key));
 
 
     // const addSubOrderRow = () => {
@@ -1563,73 +1557,50 @@ const styles = {
                             <div className="modal-body p-4 invoice-create-body">
                                 <form className="invoice-a4-sheet" onSubmit={handleSubmit}>
                                     {invoiceFormError&&<div className="alert alert-danger d-flex gap-2 align-items-start" role="alert"><i className="bi bi-exclamation-circle-fill mt-1"></i><div>{invoiceFormError}</div></div>}
-                                    <section className="card border-0 shadow-sm mb-3 invoice-basics-card">
-                                        <div className="card-header bg-white d-flex align-items-start gap-2 py-3">
+                                    <section className="invoice-configured-fields">
+                                        <div className="invoice-configured-heading">
                                             <span className="invoice-step-number">1</span>
                                             <div>
-                                                <h6 className="mb-1 fw-semibold">Invoice basics</h6>
-                                                <div className="small text-secondary">Start with the invoice number, date and customer. Other details can be added if needed.</div>
+                                                <h6>Invoice details</h6>
+                                                <p>Fill in the customer and invoice information. Customer details can fill in automatically when you choose a customer.</p>
                                             </div>
                                         </div>
-                                        <div className="card-body">
-                                            <div className="row g-3">
-                                                {primaryOrderFields.map(field=>{
-                                                    const state=getFieldState(field,{...formData,...(formData.customFields||{})});
-                                                    if(!state.visible)return null;
-                                                    const source=field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[];
-                                                    const value=field.key==="orderDate"
-                                                        ? (configuredOrderValue(field)?new Date(configuredOrderValue(field)).toISOString().slice(0,10):"")
-                                                        : configuredOrderValue(field);
-                                                    return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
-                                                        <ConfiguredField
-                                                            field={{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled}}
-                                                            value={value}
-                                                            onChange={next=>{setInvoiceFormError("");handleConfiguredOrderValue(field.key,next,null,field);}}
-                                                            onRecordChange={record=>{setInvoiceFormError("");handleConfiguredOrderValue(field.key,record?.[field.dataSource?.valueField||"_id"]??"",record,field);}}
-                                                            lookupRecords={source}
-                                                            options={field.options||[]}
-                                                            listId={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?"orderCompanyName":undefined}
-                                                            listOptions={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?clients.map(client=>client.companyName):[]}
-                                                            icon=""
-                                                            required={state.required}
-                                                        />
-                                                    </div>;
-                                                })}
-                                            </div>
-                                        </div>
+                                        {orderFormSections.map((section,sectionIndex)=>{
+                                            const sectionFields=section.fields.filter(field=>getFieldState(field,{...formData,...(formData.customFields||{})}).visible);
+                                            if(!sectionFields.length)return null;
+                                            return (
+                                                <section className="invoice-form-section" key={section.key}>
+                                                    <div className="invoice-form-section-heading">
+                                                        <span>{sectionIndex+1}</span>
+                                                        <h6>{section.label}</h6>
+                                                    </div>
+                                                    <div className="row g-3">
+                                                        {sectionFields.map(field=>{
+                                                            const state=getFieldState(field,{...formData,...(formData.customFields||{})});
+                                                            const source=field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[];
+                                                            const value=field.key==="orderDate"
+                                                                ? (configuredOrderValue(field)?new Date(configuredOrderValue(field)).toISOString().slice(0,10):"")
+                                                                : configuredOrderValue(field);
+                                                            return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
+                                                                <ConfiguredField
+                                                                    field={{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled}}
+                                                                    value={value}
+                                                                    onChange={next=>{setInvoiceFormError("");handleConfiguredOrderValue(field.key,next,null,field);}}
+                                                                    onRecordChange={record=>{setInvoiceFormError("");handleConfiguredOrderValue(field.key,record?.[field.dataSource?.valueField||"_id"]??"",record,field);}}
+                                                                    lookupRecords={source}
+                                                                    options={field.options||[]}
+                                                                    listId={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?"orderCompanyName":undefined}
+                                                                    listOptions={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?clients.map(client=>client.companyName):[]}
+                                                                    icon=""
+                                                                    required={state.required}
+                                                                />
+                                                            </div>;
+                                                        })}
+                                                    </div>
+                                                </section>
+                                            );
+                                        })}
                                     </section>
-
-                                    {additionalOrderFields.some(field=>getFieldState(field,{...formData,...(formData.customFields||{})}).visible)&&(
-                                        <details className="invoice-additional-details mb-3" open>
-                                            <summary><i className="bi bi-sliders me-2"></i>More invoice details <span>Optional fields such as address, delivery and tax settings</span></summary>
-                                            <div className="invoice-additional-details-body">
-                                                <div className="row g-3">
-                                                    {additionalOrderFields.map(field=>{
-                                                        const state=getFieldState(field,{...formData,...(formData.customFields||{})});
-                                                        if(!state.visible)return null;
-                                                        const source=field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[];
-                                                        const value=field.key==="orderDate"
-                                                            ? (configuredOrderValue(field)?new Date(configuredOrderValue(field)).toISOString().slice(0,10):"")
-                                                            : configuredOrderValue(field);
-                                                        return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
-                                                            <ConfiguredField
-                                                                field={{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled}}
-                                                                value={value}
-                                                                onChange={next=>{setInvoiceFormError("");handleConfiguredOrderValue(field.key,next,null,field);}}
-                                                                onRecordChange={record=>{setInvoiceFormError("");handleConfiguredOrderValue(field.key,record?.[field.dataSource?.valueField||"_id"]??"",record,field);}}
-                                                                lookupRecords={source}
-                                                                options={field.options||[]}
-                                                                listId={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?"orderCompanyName":undefined}
-                                                                listOptions={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?clients.map(client=>client.companyName):[]}
-                                                                icon=""
-                                                                required={state.required}
-                                                            />
-                                                        </div>;
-                                                    })}
-                                                </div>
-                                            </div>
-                                        </details>
-                                    )}
 
                                     <div className="row g-3">
                                         <div className="col-12">
@@ -1647,9 +1618,7 @@ const styles = {
                                                     {subOrders.map((order,index)=>{
                                                         const itemValues={...order,...(order.customFields||{})};
                                                         const itemFields=orderItemConfig.fields.filter(field=>getFieldState(field,itemValues).visible).sort((a,b)=>a.order-b.order);
-                                                        const primaryItemKeys=new Set(["orderName","quantity","cut","MTR","unitPrice","qtyUnit"]);
-                                                        const primaryItemFields=itemFields.filter(field=>primaryItemKeys.has(field.key)||(field.custom&&getFieldState(field,itemValues).required));
-                                                        const additionalItemFields=itemFields.filter(field=>!primaryItemKeys.has(field.key)&&!(field.custom&&getFieldState(field,itemValues).required));
+                                                        const itemSections=groupFieldsBySection(itemFields);
                                                         const renderItemField=field=>(
                                                             <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
                                                                 <ConfiguredField
@@ -1677,17 +1646,14 @@ const styles = {
                                                                         </button>
                                                                     )}
                                                                 </div>
-                                                                <div className="row g-3">
-                                                                    {primaryItemFields.map(renderItemField)}
-                                                                </div>
-                                                                {additionalItemFields.length>0&&(
-                                                                    <details className="invoice-item-more-details mt-3" open>
-                                                                        <summary><i className="bi bi-plus-circle me-2"></i>More item details <span>Design number, HSN code and other fields</span></summary>
-                                                                        <div className="row g-3 pt-3">
-                                                                            {additionalItemFields.map(renderItemField)}
+                                                                {itemSections.map(section=>(
+                                                                    <section className="invoice-item-section" key={section.key}>
+                                                                        <div className="invoice-item-section-heading">{section.label}</div>
+                                                                        <div className="row g-3">
+                                                                            {section.fields.map(renderItemField)}
                                                                         </div>
-                                                                    </details>
-                                                                )}
+                                                                    </section>
+                                                                ))}
                                                             </div>
                                                         );
                                                     })}

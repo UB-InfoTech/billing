@@ -624,7 +624,7 @@ function Clients() {
                                {fields.map(field=>{
                                  const value=(field.custom?viewingClient.customFields?.[field.key]??viewingClient[field.key]:viewingClient[field.key])??field.defaultValue;
                                  const display=Array.isArray(value)?value.join(", "):typeof value==="boolean"?(value?"Yes":"No"):value===null||value===undefined||value===""?"—":field.key==="paymentTerms"&&value!=="Advance"?value+" days":field.key==="discountRate"?value+"%":String(value);
-                                 return <div className={`col-12 col-sm-6 ${field.width>=12?"col-md-12":""}`} key={field.key}><div className="customer-record-field"><div className="customer-record-label">{field.label}</div><div className="customer-record-value">{display}</div></div></div>;
+                                 return <div className={`col-12 col-sm-${field.width||6}`} key={field.key}><div className="customer-record-field"><div className="customer-record-label">{field.label}</div><div className="customer-record-value">{display}</div></div></div>;
                                })}
                              </div>
                            </section>

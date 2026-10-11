@@ -4200,3 +4200,9 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
   .customer-form-modal>form.customer-a4-sheet{padding:18px!important}
   .customer-form-modal .customer-a4-sheet-body{padding:8px!important}
 }
+
+
+.customer-record-form-section+.customer-record-form-section{margin-top:18px}
+.invoice-view-item-section{padding:9px 0 3px;border-top:1px solid #edf0f4}
+.invoice-view-item-section>.invoice-view-field-label{margin-bottom:8px;color:#63758a;font-size:10px;font-weight:800;letter-spacing:.05em}
+.invoice-view-item-section .invoice-view-field{min-height:48px}

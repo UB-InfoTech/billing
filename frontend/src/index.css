@@ -4486,3 +4486,92 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
     box-shadow:none!important;
   }
 }
+
+
+/* Full-screen secondary forms inside Orders: payments, E-Way Bill and history */
+@media screen{
+  .orders-fullscreen-backdrop{
+    position:fixed!important;
+    inset:0!important;
+    z-index:1420!important;
+    width:100vw!important;
+    height:100dvh!important;
+    padding:0!important;
+    overflow:hidden!important;
+    background:#eef2f6!important;
+  }
+  .orders-fullscreen-dialog{
+    display:flex!important;
+    align-items:stretch!important;
+    width:100vw!important;
+    max-width:none!important;
+    height:100dvh!important;
+    max-height:100dvh!important;
+    margin:0!important;
+    padding:0!important;
+  }
+  .orders-fullscreen-content{
+    display:flex!important;
+    flex:1 1 auto!important;
+    flex-direction:column!important;
+    width:100%!important;
+    min-width:0!important;
+    height:100dvh!important;
+    min-height:100dvh!important;
+    max-height:100dvh!important;
+    border:0!important;
+    border-radius:0!important;
+    overflow:hidden!important;
+    background:#fff!important;
+    box-shadow:none!important;
+  }
+  .orders-fullscreen-content>.modal-header{
+    flex:0 0 auto!important;
+    padding:14px 24px!important;
+    border-bottom:1px solid #dce4ed!important;
+    background:#fff!important;
+  }
+  .orders-fullscreen-body{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow:auto!important;
+    overscroll-behavior:contain;
+    padding:24px clamp(18px,3vw,48px)!important;
+    background:#fff!important;
+  }
+  .orders-fullscreen-body>.card,
+  .orders-fullscreen-body>form,
+  .orders-fullscreen-body>.container,
+  .orders-fullscreen-body>.row{
+    width:100%;
+  }
+  .orders-payment-entry-row{
+    display:grid!important;
+    grid-template-columns:minmax(180px,260px) minmax(180px,220px) minmax(260px,1fr);
+    align-items:start;
+    gap:14px!important;
+    max-width:1250px;
+    padding:16px;
+    margin:0 0 16px!important;
+    border:1px solid #e0e6ed;
+    border-radius:10px;
+    background:#f9fbfd;
+  }
+  .orders-payment-entry-row>.col-3,
+  .orders-payment-entry-row>.col-5{
+    width:auto!important;
+    max-width:none!important;
+    padding:0!important;
+    flex:none!important;
+  }
+  .orders-payment-entry-row .form-control,
+  .orders-payment-entry-row .form-select{min-height:42px}
+  .payments-fullscreen .orders-fullscreen-body>.btn-primary{min-width:150px;min-height:42px}
+}
+@media screen and (max-width:767.98px){
+  .orders-fullscreen-content>.modal-header{padding:12px 15px!important}
+  .orders-fullscreen-body{padding:14px!important}
+  .orders-payment-entry-row{grid-template-columns:minmax(0,1fr);padding:12px;gap:10px!important}
+  .orders-payment-entry-row>.col-3,
+  .orders-payment-entry-row>.col-5{width:100%!important}
+}

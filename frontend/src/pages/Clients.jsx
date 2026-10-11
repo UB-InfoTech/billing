@@ -660,7 +660,7 @@ function Clients() {
                   </div>
 
                   {formError&&<div className="alert alert-danger mx-3 mt-3 mb-0" role="alert">{formError}</div>}
-                  <form className="customer-a4-sheet" onSubmit={editingClient?handleUpdateClient:handleAddClient}>
+                  <form className="customer-form-workspace" onSubmit={editingClient?handleUpdateClient:handleAddClient}>
                     <div className="modal-body p-3 customer-a4-sheet-body">
                       <div className="customer-paper-intro">
                         <div className="customer-paper-instruction"><i className="bi bi-info-circle me-2"></i>Complete fields marked Required. Optional fields can be left blank and added later.</div>

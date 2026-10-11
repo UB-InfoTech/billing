@@ -212,7 +212,7 @@ export default function FormConfigurator({
     });
   };
 
-  const addPaletteField=(fieldType,targetKey=null)=>{
+  const addPaletteField=(fieldType,targetKey=null,appendToEnd=false)=>{
     const type=FIELD_TYPES.find(item=>item.value===fieldType);
     if(!type)return;
     const existingLabels=new Set(draft.map(field=>String(field.label||"").trim().toLowerCase()));
@@ -231,7 +231,7 @@ export default function FormConfigurator({
     setDraft(prev=>{
       const next=prev.slice();
       const targetIndex=targetKey?next.findIndex(field=>field.key===targetKey):-1;
-      const selectedIndex=!targetKey&&expandedKey?next.findIndex(field=>field.key===expandedKey):-1;
+      const selectedIndex=!targetKey&&!appendToEnd&&expandedKey?next.findIndex(field=>field.key===expandedKey):-1;
       const index=targetIndex>=0?targetIndex:selectedIndex>=0?selectedIndex:next.length;
       const section=next[index]?.section||"General";
       next.splice(index,0,{
@@ -251,11 +251,25 @@ export default function FormConfigurator({
     setError("");
   };
 
-  const handleDrop=(event,targetKey)=>{
+  const handleDrop=(event,targetKey=null)=>{
     event.preventDefault();
     const payload=event.dataTransfer?.getData("text/plain")||"";
-    if(payload.startsWith("new-field:"))addPaletteField(payload.slice("new-field:".length),targetKey);
-    else reorder(payload||dragKey,targetKey);
+    if(payload.startsWith("new-field:")){
+      addPaletteField(payload.slice("new-field:".length),targetKey,targetKey===null);
+    }else if(targetKey){
+      reorder(payload||dragKey,targetKey);
+    }else{
+      const sourceKey=payload||dragKey;
+      setDraft(prev=>{
+        const index=prev.findIndex(field=>field.key===sourceKey);
+        if(index<0)return prev;
+        const next=prev.slice();
+        const [moved]=next.splice(index,1);
+        const targetSection=next[next.length-1]?.section||moved.section||"General";
+        next.push({...moved,section:targetSection});
+        return next.map((field,order)=>({...field,order}));
+      });
+    }
     setDragKey(null);
     setDropTargetKey(null);
   };
@@ -489,7 +503,7 @@ export default function FormConfigurator({
                 </div>
                 <span className="badge bg-light text-dark border">{shownCount} visible fields</span>
               </div>
-              <div className="form-builder-paper">
+              <div className="form-builder-paper" onDragOver={event=>{if(event.dataTransfer?.types?.includes("text/plain"))event.preventDefault();}} onDrop={event=>{if(event.target===event.currentTarget)handleDrop(event,null);}}>
                 <div className="form-builder-paper-heading">
                   <span className="form-builder-paper-mark"><i className="bi bi-file-earmark-text"></i></span>
                   <div><div className="fw-bold">{title.replace(/^Customize\s*/i,"")}</div><div className="small text-secondary">This is the layout your team will fill in</div></div>

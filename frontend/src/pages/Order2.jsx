@@ -1569,7 +1569,7 @@ const styles = {
                                 ></button>
                             </div>
                             <div className="modal-body p-4 invoice-create-body">
-                                <form className="invoice-a4-sheet" onSubmit={handleSubmit}>
+                                <form className="invoice-form-workspace" onSubmit={handleSubmit}>
                                     {invoiceFormError&&<div className="alert alert-danger d-flex gap-2 align-items-start" role="alert"><i className="bi bi-exclamation-circle-fill mt-1"></i><div>{invoiceFormError}</div></div>}
                                     <section className="invoice-configured-fields">
                                         <div className="invoice-configured-heading">

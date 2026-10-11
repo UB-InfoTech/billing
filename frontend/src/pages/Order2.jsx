@@ -1748,14 +1748,14 @@ const styles = {
             />
 
             {showEwayBillModal && (
-                <div className="modal fade show d-block" tabIndex="-1">
-                    <div className="modal-dialog modal-lg">
-                        <div className="modal-content">
+                <div className="modal fade show d-block orders-fullscreen-backdrop" tabIndex="-1">
+                    <div className="modal-dialog orders-fullscreen-dialog">
+                        <div className="modal-content orders-fullscreen-content">
                             <div className="modal-header">
                                 <h5 className="modal-title">E-Way Bill Details</h5>
                                 <button type="button" className="btn-close" onClick={() => setShowEwayBillModal(false)}></button>
                             </div>
-                            <div className="modal-body">
+                            <div className="modal-body orders-fullscreen-body">
                                 <EWayBillForm orderId={orderId} profile={profile} />
                                 {/* <EWayBillForm orderId={editingOrder} /> */}
                             </div>
@@ -1778,14 +1778,14 @@ const styles = {
             }
             {/* {loading ? 'Downloading...' : 'Download PDF'} */}
             {statusModal && (
-                <div className="modal show d-block" tabIndex="-1">
-                    <div className="modal-dialog">
-                        <div className="modal-content">
+                <div className="modal show d-block orders-fullscreen-backdrop status-history-fullscreen" tabIndex="-1">
+                    <div className="modal-dialog orders-fullscreen-dialog">
+                        <div className="modal-content orders-fullscreen-content">
                             <div className="modal-header">
                                 <h5 className="modal-title">Status History</h5>
                                 <button type="button" className="btn-close" onClick={() => setStatusModal(false)}></button>
                             </div>
-                            <div className="modal-body">
+                            <div className="modal-body orders-fullscreen-body">
 
                                 {/* e way bill generated  */}
                                 <h6 className="d-flex">e-way bill Generated : {
@@ -1847,17 +1847,17 @@ const styles = {
 
             {
                 showPaymentModal && (
-                    <div className="modal fade show d-block" tabIndex="-1">
-                        <div className="modal-dialog">
-                            <div className="modal-content">
+                    <div className="modal fade show d-block orders-fullscreen-backdrop payments-fullscreen" tabIndex="-1">
+                        <div className="modal-dialog orders-fullscreen-dialog">
+                            <div className="modal-content orders-fullscreen-content">
                                 <div className="modal-header">
                                     <h5 className="modal-title">Manage Payments — {editingOrder?.companyName || "Customer"}</h5>
                                     <button type="button" className="btn-close" onClick={() => setShowPaymentModal(false)}></button>
                                 </div>
-                                <div className="modal-body">
+                                <div className="modal-body orders-fullscreen-body">
 
                                     <h6>Add Payment :</h6>
-                                    <div className="d-flex gap-2 mb-2">
+                                    <div className="d-flex gap-2 mb-2 orders-payment-entry-row">
 
                                         <div className="col-3">
                                             <ArithmeticInput

@@ -176,10 +176,6 @@ export default function FormConfigurator({
 
   const shownCount=draft.filter(field=>field.visible!==false).length;
   const previewSections=useMemo(()=>groupFieldsBySection(draft.filter(field=>field.visible!==false)),[draft]);
-  const sections=useMemo(
-    ()=>Array.from(new Set(draft.map(field=>field.section||"General").filter(Boolean))),
-    [draft]
-  );
   const numericFields=useMemo(
     ()=>draft.filter(field=>["number","currency"].includes(field.fieldType)),
     [draft]

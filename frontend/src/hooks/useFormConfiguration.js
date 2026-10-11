@@ -33,7 +33,7 @@ export const formatFormSection=section=>{
   const value=String(section||"general").trim()||"general";
   const normalized=value.toLowerCase().replace(/[_-]+/g," ");
   if(FORM_SECTION_LABELS[normalized])return FORM_SECTION_LABELS[normalized];
-  return normalized.replace(/\\b\\w/g,char=>char.toUpperCase());
+  return normalized.replace(/\b\w/g,char=>char.toUpperCase());
 };
 
 export const groupFieldsBySection=fields=>{

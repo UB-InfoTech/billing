@@ -1491,26 +1491,35 @@ const styles = {
                                         <h6>Items on this invoice</h6>
                                         {(viewingOrder.subOrders||[]).length===0
                                             ?<div className="text-secondary small">No items recorded.</div>
-                                            :(viewingOrder.subOrders||[]).map((item,index)=>(
-                                                <div className="invoice-view-item" key={item._id||index}>
-                                                    <div className="invoice-view-item-title">Item {index+1}: {item.orderName||item.productName||"Item"}</div>
-                                                    <div className="row g-2">
-                                                        {orderItemConfig.fields.filter(field=>field.visible!==false).map(field=>{
-                                                            const value=field.custom
-                                                                ?item.customFields?.[field.key]??item[field.key]
-                                                                :item[field.key];
-                                                            if(value===undefined||value===null||value==="")return null;
-                                                            const displayValue=Array.isArray(value)?value.join(", "):String(value);
-                                                            return <div className="col-6 col-md-4" key={field.key}>
-                                                                <div className="invoice-view-field invoice-view-item-field">
-                                                                    <div className="invoice-view-field-label">{field.label}</div>
-                                                                    <div className="invoice-view-field-value">{displayValue}</div>
+                                            :(viewingOrder.subOrders||[]).map((item,index)=>{
+                                                const fields=orderItemConfig.fields.filter(field=>getFieldState(field,{...item,...(item.customFields||{})}).visible).sort((a,b)=>a.order-b.order);
+                                                const itemViewSections=groupFieldsBySection(fields);
+                                                return (
+                                                    <div className="invoice-view-item" key={item._id||index}>
+                                                        <div className="invoice-view-item-title">Item {index+1}: {item.orderName||item.productName||"Item"}</div>
+                                                        {itemViewSections.map(section=>(
+                                                            <section className="invoice-view-item-section" key={section.key}>
+                                                                <div className="invoice-view-field-label">{section.label}</div>
+                                                                <div className="row g-2">
+                                                                    {section.fields.map(field=>{
+                                                                        const value=field.custom
+                                                                            ?item.customFields?.[field.key]??item[field.key]
+                                                                            :item[field.key];
+                                                                        if(value===undefined||value===null||value==="")return null;
+                                                                        const displayValue=Array.isArray(value)?value.join(", "):String(value);
+                                                                        return <div className="col-6 col-md-4" key={field.key}>
+                                                                            <div className="invoice-view-field invoice-view-item-field">
+                                                                                <div className="invoice-view-field-label">{field.label}</div>
+                                                                                <div className="invoice-view-field-value">{displayValue}</div>
+                                                                            </div>
+                                                                        </div>;
+                                                                    })}
                                                                 </div>
-                                                            </div>;
-                                                        })}
+                                                            </section>
+                                                        ))}
                                                     </div>
-                                                </div>
-                                            ))
+                                                );
+                                            })
                                         }
                                     </section>
                                     <section className="invoice-view-summary">

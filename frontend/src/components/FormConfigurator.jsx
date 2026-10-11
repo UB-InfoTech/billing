@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useState} from "react";
 import axios from "axios";
 import {evaluateArithmeticExpression} from "../utils/arithmetic";
+import {groupFieldsBySection} from "../hooks/useFormConfiguration";
 
 const FIELD_TYPES=[
   {value:"text",label:"Short text",icon:"bi-fonts"},
@@ -174,6 +175,7 @@ export default function FormConfigurator({
   )).filter(option=>option.value);
 
   const shownCount=draft.filter(field=>field.visible!==false).length;
+  const previewSections=useMemo(()=>groupFieldsBySection(draft.filter(field=>field.visible!==false)),[draft]);
   const sections=useMemo(
     ()=>Array.from(new Set(draft.map(field=>field.section||"General").filter(Boolean))),
     [draft]
@@ -201,11 +203,61 @@ export default function FormConfigurator({
       const sourceIndex=prev.findIndex(field=>field.key===sourceKey);
       const targetIndex=prev.findIndex(field=>field.key===targetKey);
       if(sourceIndex<0||targetIndex<0)return prev;
+      const targetSection=prev[targetIndex]?.section||"General";
       const next=prev.slice();
       const [moved]=next.splice(sourceIndex,1);
-      next.splice(targetIndex,0,moved);
+      const insertionIndex=sourceIndex<targetIndex?targetIndex-1:targetIndex;
+      next.splice(Math.max(0,insertionIndex),0,{...moved,section:targetSection});
       return next.map((field,index)=>({...field,order:index}));
     });
+  };
+
+  const addPaletteField=(fieldType,targetKey=null)=>{
+    const type=FIELD_TYPES.find(item=>item.value===fieldType);
+    if(!type)return;
+    const existingLabels=new Set(draft.map(field=>String(field.label||"").trim().toLowerCase()));
+    let label=`New ${type.label.toLowerCase()}`;
+    if(existingLabels.has(label.toLowerCase())){
+      let suffix=2;
+      while(existingLabels.has(`${label} ${suffix}`.toLowerCase()))suffix+=1;
+      label=`${label} ${suffix}`;
+    }
+    const slug=label.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,42)||"field";
+    const key=`custom_${slug}_${Date.now()}_${draft.length}`;
+    const options=["select","multiselect"].includes(fieldType)
+      ?[{value:"Option 1",label:"Option 1"},{value:"Option 2",label:"Option 2"}]
+      :[];
+    const width=fieldType==="textarea"?12:["number","currency","date","boolean"].includes(fieldType)?4:6;
+    setDraft(prev=>{
+      const next=prev.slice();
+      const targetIndex=targetKey?next.findIndex(field=>field.key===targetKey):-1;
+      const selectedIndex=!targetKey&&expandedKey?next.findIndex(field=>field.key===expandedKey):-1;
+      const index=targetIndex>=0?targetIndex:selectedIndex>=0?selectedIndex:next.length;
+      const section=next[index]?.section||"General";
+      next.splice(index,0,{
+        key,label,visible:true,required:false,locked:false,system:false,custom:true,
+        fieldType,width,order:index,section,helpText:"",options,formula:"",defaultValue:"",
+        validation:{min:null,max:null,pattern:""},editable:true,readOnly:false,disabled:false,
+        dataSource:{type:"none",resource:"",valueField:"_id",labelField:"",searchField:"",multiple:fieldType==="multiselect",autoFill:[]},
+        conditions:[]
+      });
+      return next.map((field,order)=>({...field,order}));
+    });
+    setExpandedKey(key);
+    setShowAddField(false);
+    setShowAdvanced(false);
+    setShowPreview(true);
+    setSearch("");
+    setError("");
+  };
+
+  const handleDrop=(event,targetKey)=>{
+    event.preventDefault();
+    const payload=event.dataTransfer?.getData("text/plain")||"";
+    if(payload.startsWith("new-field:"))addPaletteField(payload.slice("new-field:".length),targetKey);
+    else reorder(payload||dragKey,targetKey);
+    setDragKey(null);
+    setDropTargetKey(null);
   };
 
   const addField=()=>{
@@ -415,32 +467,72 @@ export default function FormConfigurator({
             </section>
           )}
 
+          <section className="form-builder-palette">
+            <div className="form-builder-palette-heading">Add fields</div>
+            <div className="small text-secondary mb-3">Drag one onto the paper, or select a type to add it.</div>
+            <div className="form-builder-palette-items">
+              {FIELD_TYPES.map(type=>(
+                <button type="button" key={type.value} className="form-builder-palette-item" draggable onDragStart={event=>{event.dataTransfer?.setData("text/plain",`new-field:${type.value}`);if(event.dataTransfer)event.dataTransfer.effectAllowed="copy";setDragKey(null);}} onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}} onClick={()=>addPaletteField(type.value,expandedKey)}>
+                  <i className={`bi ${type.icon}`}></i><span>{type.label}</span><i className="bi bi-plus-lg ms-auto"></i>
+                </button>
+              ))}
+            </div>
+            <button type="button" className="btn btn-sm btn-light border w-100 mt-3" onClick={()=>setShowAddField(value=>!value)}><i className="bi bi-pencil-square me-1"></i>Custom field setup</button>
+          </section>
+
           {showPreview&&(
             <div className="form-builder-live-stage mb-3">
               <div className="form-builder-live-toolbar">
-                <div><div className="fw-semibold"><i className="bi bi-layout-text-window-reverse me-2"></i>Form preview</div><div className="small text-secondary">Drag a field on this page to change its position. Changes update as you customize.</div></div>
+                <div>
+                  <div className="fw-semibold"><i className="bi bi-layout-text-window-reverse me-2"></i>Paper preview</div>
+                  <div className="small text-secondary">Drop a new field on the paper or drag existing fields to move them.</div>
+                </div>
                 <span className="badge bg-light text-dark border">{shownCount} visible fields</span>
               </div>
               <div className="form-builder-paper">
-                <div className="form-builder-paper-heading"><span className="form-builder-paper-mark"><i className="bi bi-file-earmark-text"></i></span><div><div className="fw-bold">{title.replace(/^Customize\s*/i,"")}</div><div className="small text-secondary">Example of the form your team will use</div></div></div>
-                <div className="row g-3">
-                  {draft.filter(field=>field.visible!==false).map(field=>(
-                    <div key={field.key} className={`col-12 col-md-${field.width||6} form-builder-canvas-field ${dragKey===field.key?"is-dragging ":""}${dropTargetKey===field.key&&dragKey!==field.key?"is-drop-target ":""}${expandedKey===field.key?"is-selected":""}`} draggable={!field.locked} onDragStart={event=>{if(field.locked){event.preventDefault();return;}event.dataTransfer?.setData("text/plain",field.key);if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDragKey(field.key);setDropTargetKey(null);}} onDragOver={event=>{if(dragKey&&dragKey!==field.key){event.preventDefault();setDropTargetKey(field.key);}}} onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDropTargetKey(current=>current===field.key?null:current);}} onDrop={event=>{event.preventDefault();reorder(dragKey,field.key);setDragKey(null);setDropTargetKey(null);}} onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}} onClick={()=>{setExpandedKey(field.key);setShowAdvanced(false);}} title={field.locked?"Select to edit settings":"Click to edit settings; drag to rearrange"}>
-                      <label className="form-label form-entry-label">{field.label}{field.required?<span className="form-entry-required ms-2">Required</span>:<span className="form-entry-optional ms-2">Optional</span>}</label>
-                      {["select","reference","multiselect"].includes(field.fieldType)||field.dataSource?.resource ? <select className="form-select form-entry-control" disabled><option>{field.dataSource?.resource?"Choose "+field.label:"Select an option"}</option>{normalizePreviewOptions(field.options).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>
-                      :field.fieldType==="textarea"?<textarea className="form-control form-entry-control" rows={2} placeholder={field.formula?"Calculated automatically":"Enter "+field.label.toLowerCase()} readOnly/>
-                      :field.fieldType==="boolean"?<div className="form-check form-switch pt-2"><input className="form-check-input" type="checkbox" disabled/></div>
-                      :<input className="form-control form-entry-control" type={field.fieldType==="date"?"date":field.fieldType==="datetime"?"datetime-local":field.fieldType==="email"?"email":field.fieldType==="url"?"url":field.fieldType==="number"||field.fieldType==="currency"?"number":"text"} placeholder={field.formula?"Calculated automatically":"Enter "+field.label.toLowerCase()} readOnly={Boolean(field.formula)}/>}
-                      {field.helpText&&<div className="form-text">{field.helpText}</div>}
-                      {field.formula&&<div className="form-text">Calculated automatically</div>}
-                      <div className="form-builder-canvas-hint"><i className="bi bi-grip-vertical me-1"></i>{field.locked?"Built-in field":"Drag to move"}</div>
-                    </div>
-                  ))}
+                <div className="form-builder-paper-heading">
+                  <span className="form-builder-paper-mark"><i className="bi bi-file-earmark-text"></i></span>
+                  <div><div className="fw-bold">{title.replace(/^Customize\s*/i,"")}</div><div className="small text-secondary">This is the layout your team will fill in</div></div>
                 </div>
-                {shownCount===0&&<div className="text-center text-secondary py-4">No fields are visible. Use Show all or turn fields back on below.</div>}
+                {previewSections.map(section=>(
+                  <section className="form-builder-paper-section" key={section.key}>
+                    <h6>{section.label}</h6>
+                    <div className="row g-2">
+                      {section.fields.map(field=>(
+                        <div
+                          key={field.key}
+                          className={`col-12 col-md-${field.width||6} form-builder-canvas-field ${dragKey===field.key?"is-dragging ":""}${dropTargetKey===field.key&&dragKey!==field.key?"is-drop-target ":""}${expandedKey===field.key?"is-selected":""}`}
+                          draggable
+                          onDragStart={event=>{event.dataTransfer?.setData("text/plain",field.key);if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDragKey(field.key);setDropTargetKey(null);}}
+                          onDragOver={event=>{if((dragKey&&dragKey!==field.key)||(!dragKey&&event.dataTransfer?.types?.includes("text/plain"))){event.preventDefault();setDropTargetKey(field.key);}}}
+                          onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDropTargetKey(current=>current===field.key?null:current);}}
+                          onDrop={event=>handleDrop(event,field.key)}
+                          onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}}
+                          onClick={()=>{setExpandedKey(field.key);setShowAdvanced(false);}}
+                          title="Click to edit; drag to move or drop a new field"
+                        >
+                          <label className="form-label form-entry-label">{field.label}{field.required?<span className="form-entry-required ms-2">Required</span>:<span className="form-entry-optional ms-2">Optional</span>}</label>
+                          {["select","reference","multiselect"].includes(field.fieldType)||field.dataSource?.resource
+                            ?<select className="form-select form-entry-control" disabled><option>{field.dataSource?.resource?"Choose "+field.label:"Select an option"}</option>{normalizePreviewOptions(field.options).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>
+                            :field.fieldType==="textarea"
+                              ?<textarea className="form-control form-entry-control" rows={2} placeholder={field.formula?"Calculated automatically":"Enter "+field.label.toLowerCase()} readOnly/>
+                              :field.fieldType==="boolean"
+                                ?<div className="form-check form-switch pt-2"><input className="form-check-input" type="checkbox" disabled/></div>
+                                :<input className="form-control form-entry-control" type={field.fieldType==="date"?"date":field.fieldType==="datetime"?"datetime-local":field.fieldType==="email"?"email":field.fieldType==="url"?"url":field.fieldType==="number"||field.fieldType==="currency"?"number":"text"} placeholder={field.formula?"Calculated automatically":"Enter "+field.label.toLowerCase()} readOnly={Boolean(field.formula)}/>}
+                          {field.helpText&&<div className="form-text">{field.helpText}</div>}
+                          {field.formula&&<div className="form-text">Calculated automatically</div>}
+                          <div className="form-builder-canvas-hint"><i className="bi bi-grip-vertical me-1"></i>Drag to move</div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+                {shownCount===0&&<div className="text-center text-secondary py-4">No fields are visible. Add a field or turn a field back on below.</div>}
               </div>
             </div>
           )}
+          
+
 
           <aside className="form-builder-side-panel">
           <div className="form-builder-guide">
@@ -465,13 +557,13 @@ export default function FormConfigurator({
               <article
                 key={field.key}
                 className={`form-builder-item ${field.visible===false?"is-hidden ":""}${expandedKey===field.key?"is-open ":""}${dragKey===field.key?"is-dragging ":""}${dropTargetKey===field.key&&dragKey!==field.key?"is-drop-target":""}`}
-                onDragOver={event=>{if(dragKey&&dragKey!==field.key){event.preventDefault();setDropTargetKey(field.key);}}}
+                onDragOver={event=>{if((dragKey&&dragKey!==field.key)||(!dragKey&&event.dataTransfer?.types?.includes("text/plain"))){event.preventDefault();setDropTargetKey(field.key);}}}
                 onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDropTargetKey(current=>current===field.key?null:current);}}
-                onDrop={event=>{event.preventDefault();reorder(dragKey,field.key);setDragKey(null);setDropTargetKey(null);}}
+                onDrop={event=>handleDrop(event,field.key)}
                 onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}}
               >
                 <div className="form-builder-item-head">
-                  <span className={`form-builder-handle ${field.locked?"is-locked":""}`} title={field.locked?"This field cannot be moved":"Drag this handle to move the field"} draggable={!field.locked} onDragStart={event=>{if(field.locked){event.preventDefault();return;}event.dataTransfer?.setData("text/plain",field.key);if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDragKey(field.key);setDropTargetKey(null);}} onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}} aria-label={`Move ${field.label}`}><i className="bi bi-grip-vertical"></i></span>
+                  <span className="form-builder-handle" title="Drag this handle to move the field" draggable onDragStart={event=>{event.dataTransfer?.setData("text/plain",field.key);if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDragKey(field.key);setDropTargetKey(null);}} onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}} aria-label={`Move ${field.label}`}><i className="bi bi-grip-vertical"></i></span>
                   <div className="form-builder-type-icon"><i className={`bi ${FIELD_TYPES.find(type=>type.value===field.fieldType)?.icon||"bi-fonts"}`}></i></div>
                   <div className="flex-grow-1 min-w-0">
                     <div className="d-flex flex-wrap align-items-center gap-2">

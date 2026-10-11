@@ -4177,3 +4177,26 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
 .invoice-a4-sheet .invoice-save-footer{margin-top:18px!important;padding:15px 0 0!important;border-top:1px solid #d5dde7}
 @media(max-width:1180px){.form-builder-body{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)}.form-builder-palette{grid-column:1;grid-row:auto}.form-builder-live-stage{grid-column:2;grid-row:auto;position:static;max-height:none;overflow:visible}.form-builder-side-panel{grid-column:1/-1;grid-row:auto}.form-builder-palette-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:767.98px){.form-builder-body{grid-template-columns:minmax(0,1fr)}.form-builder-palette,.form-builder-live-stage,.form-builder-side-panel{grid-column:1;grid-row:auto;position:static;max-height:none;overflow:visible}.form-builder-palette-items{grid-template-columns:repeat(2,minmax(0,1fr))}.form-builder-paper{min-height:0;padding:14px;aspect-ratio:auto}.customer-a4-sheet,.customer-a4-read-sheet,.invoice-a4-sheet,.invoice-view-sheet{min-height:0;padding:18px!important;border-left:0;border-right:0;box-shadow:none}.customer-a4-sheet .modal-footer{margin:14px -18px -18px;padding:14px 18px!important}}
+
+
+/* Keep the customer entry sheet usable in shorter laptop windows */
+.customer-form-modal{display:flex;flex-direction:column;min-height:0}
+.customer-form-modal>form.customer-a4-sheet{
+  display:flex;
+  flex:1 1 auto;
+  flex-direction:column;
+  min-height:0!important;
+  max-height:none;
+  overflow:hidden;
+}
+.customer-form-modal .customer-a4-sheet-body{
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+}
+.customer-form-modal .modal-footer{flex:0 0 auto}
+@media(max-width:767.98px){
+  .customer-form-modal>form.customer-a4-sheet{padding:18px!important}
+  .customer-form-modal .customer-a4-sheet-body{padding:8px!important}
+}

@@ -6,7 +6,7 @@ import axios from 'axios';
 import DynamicTable from '../components/DynamicTable';
 import FormConfigurator from '../components/FormConfigurator';
 import ConfiguredField from '../components/ConfiguredField';
-import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,syncConfiguredCustomFields,buildConfiguredDefaults} from "../hooks/useFormConfiguration";
+import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,syncConfiguredCustomFields,buildConfiguredDefaults,groupFieldsBySection} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
 
@@ -106,14 +106,8 @@ function Clients() {
     });
   };
   const visibleClientFields=clientFormConfig.fields.filter(field=>field.visible!==false);
-  const clientPrimaryKeys=new Set(["companyName","name","phone","email"]);
   const clientFieldValues={...newClient,...(newClient.customFields||{})};
-  const primaryClientFields=visibleClientFields.filter(field=>{
-    const state=getFieldState(field,clientFieldValues);
-    return state.visible&&(state.required||clientPrimaryKeys.has(field.key));
-  });
-  const primaryClientKeys=new Set(primaryClientFields.map(field=>field.key));
-  const additionalClientFields=visibleClientFields.filter(field=>!primaryClientKeys.has(field.key));
+  const clientFormSections=groupFieldsBySection(visibleClientFields);
   const emptyClient=()=>buildConfiguredDefaults({name:"",email:"",phone:"",address:"",state:"",city:"",pinCode:"",stateCode:"",gstNumber:"",companyName:"",businessType:"",paymentTerms:"30",discountRate:0,accountStatus:"Active",notes:"",customFields:{}},clientFormConfig.fields);
   const renderClientField=field=>{
     const state=getFieldState(field,{...newClient,...(newClient.customFields||{})});
@@ -660,35 +654,34 @@ function Clients() {
 
                   {formError&&<div className="alert alert-danger mx-3 mt-3 mb-0" role="alert">{formError}</div>}
                   <form className="customer-a4-sheet" onSubmit={editingClient?handleUpdateClient:handleAddClient}>
-                    <div className="modal-body p-3">
-                      <section className="customer-quick-fields">
-                        <div className="customer-fields-heading">
-                          <span className="customer-step-number">1</span>
-                          <div>
-                            <h6 className="mb-1">Basic details</h6>
-                            <p className="mb-0">The name is enough to start. Phone and email make follow-up easier.</p>
-                          </div>
-                        </div>
-                        <div className="row g-3">
-                          {primaryClientFields.map(renderClientField)}
-                        </div>
-                      </section>
-
-                      {additionalClientFields.some(field=>getFieldState(field,{...newClient,...(newClient.customFields||{})}).visible)&&(
-                        <details className="customer-additional-details mt-3" open>
-                          <summary><i className="bi bi-plus-circle me-2"></i>More customer details <span>Address, GST, payment terms and other information</span></summary>
-                          <div className="row g-3 p-3">
-                            {additionalClientFields.map(renderClientField)}
-                          </div>
-                        </details>
-                      )}                    </div>
-
+                    <div className="modal-body p-3 customer-a4-sheet-body">
+                      <div className="customer-paper-intro">
+                        <div className="customer-paper-instruction"><i className="bi bi-pencil-square me-2"></i>Fill in the fields like a paper form. Fields marked Required must be completed.</div>
+                      </div>
+                      {clientFormSections.map((section,sectionIndex)=>{
+                        const sectionFields=section.fields.filter(field=>getFieldState(field,{...newClient,...(newClient.customFields||{})}).visible);
+                        if(!sectionFields.length)return null;
+                        return (
+                          <section className="customer-form-section" key={section.key}>
+                            <div className="customer-form-section-heading">
+                              <span className="customer-section-number">{sectionIndex+1}</span>
+                              <div><h6>{section.label}</h6><div className="small text-secondary">Write or choose the details below</div></div>
+                            </div>
+                            <div className="row g-3">
+                              {sectionFields.map(renderClientField)}
+                            </div>
+                          </section>
+                        );
+                      })}
+                      <div className="customer-paper-note"><i className="bi bi-info-circle me-2"></i>You can leave optional fields blank and add details later.</div>
+                    </div>
                     <div className="modal-footer bg-white p-3 border-top sticky-bottom">
                       <button type="button" className="btn btn-light border" onClick={()=>{setShowModal(false);setFormError("");}}>Cancel</button>
                       <button type="submit" className="btn btn-primary px-4" disabled={formSaving}>
                         {formSaving?<><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving...</>:(editingClient?"Save changes":"Add customer")}
                       </button>
-                    </div>                  </form>
+                    </div>
+                  </form>
 
                 </div>
               </div>

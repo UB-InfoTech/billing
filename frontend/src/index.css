@@ -4113,3 +4113,67 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
     box-shadow:none!important;
   }
 }
+
+
+/* Visual form builder: drag palette + A4 paper + field properties */
+.form-builder-body{grid-template-columns:minmax(145px,.58fr) minmax(330px,1.15fr) minmax(300px,.98fr);align-items:start}
+.form-builder-add{grid-column:1/-1;grid-row:auto}
+.form-builder-palette{grid-column:1;grid-row:auto;min-width:0;padding:12px;border:1px solid #e1e7ef;border-radius:12px;background:#fff}
+.form-builder-palette-heading{font-size:14px;font-weight:800;color:#27394f;margin-bottom:4px}
+.form-builder-palette-items{display:flex;flex-direction:column;gap:6px}
+.form-builder-palette-item{display:flex;align-items:center;gap:9px;width:100%;min-width:0;padding:9px 8px;border:1px solid #e1e7ef;border-radius:8px;background:#fff;color:#34485e;text-align:left;font-size:12px;cursor:grab;transition:border-color .15s,background .15s}
+.form-builder-palette-item>i:first-child{width:17px;text-align:center;color:#3b74ad;font-size:15px}
+.form-builder-palette-item span{flex:1;min-width:0}
+.form-builder-palette-item>i:last-child{color:#8190a1;font-size:11px}
+.form-builder-palette-item:hover{border-color:#8fb7e0;background:#f4f9ff}
+.form-builder-palette-item:active{cursor:grabbing}
+.form-builder-live-stage{grid-column:2;grid-row:auto;position:sticky;top:0;max-height:calc(100vh - 205px);overflow:auto}
+.form-builder-side-panel{grid-column:3;grid-row:auto;min-width:0}
+.form-builder-paper{width:100%;max-width:210mm;min-height:297mm;aspect-ratio:auto;margin:0 auto;padding:8mm;border:1px solid #d7dfe8;border-radius:2px;background:#fff;box-shadow:0 5px 18px rgba(28,44,63,.08)}
+.form-builder-paper-heading{margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid #dfe5ec}
+.form-builder-paper-section{margin:0 0 10px;padding:0 0 8px;border-bottom:1px solid #e3e8ef}
+.form-builder-paper-section>h6{padding-bottom:5px;margin-bottom:4px;color:#5c6c7f;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.form-builder-canvas-field{padding:5px 7px 3px;cursor:grab;user-select:none}
+.form-builder-canvas-field .form-entry-label{font-size:11px!important;margin-bottom:2px;gap:2px}
+.form-builder-canvas-field .form-entry-control{min-height:25px!important;height:25px;padding:2px 1px!important;border:0!important;border-bottom:1px solid #bbc6d3!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;font-size:11px!important}
+.form-builder-canvas-field textarea.form-entry-control{min-height:32px!important;height:32px}
+.form-builder-canvas-field .form-entry-required,.form-builder-canvas-field .form-entry-optional{font-size:7px;padding:1px 3px}
+.form-builder-canvas-field.is-selected{border:1px dashed #3984d6;background:#f3f8ff;box-shadow:0 0 0 2px rgba(57,132,214,.08)}
+.form-builder-canvas-field.is-selected .form-builder-canvas-hint{opacity:1;color:#2a70b5}
+.form-builder-canvas-field.is-drop-target{border:2px dashed #2874c8;background:#eef6ff}
+.form-builder-side-panel .form-builder-guide,.form-builder-side-panel .form-builder-toolbar{margin:0!important}
+.form-builder-side-panel .form-builder-type-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.form-builder-side-panel .form-builder-item-head strong{font-size:12px}
+.form-builder-side-panel .form-builder-item-head{gap:6px;padding:8px}
+.form-builder-side-panel .form-builder-editor{padding:11px}
+.customer-a4-sheet,.customer-a4-read-sheet,.invoice-a4-sheet,.invoice-view-sheet{box-sizing:border-box;width:100%;max-width:210mm;min-height:297mm;margin:0 auto;padding:10mm;border:1px solid #d9e1eb;background:#fff;box-shadow:0 3px 16px rgba(29,47,69,.08)}
+.customer-a4-sheet .modal-body,.customer-a4-sheet-body{background:#fff}
+.customer-paper-intro{padding:0 0 8px;border-bottom:1px solid #e2e8ef}
+.customer-paper-instruction{color:#66778a;font-size:12px}
+.customer-form-section{padding:17px 0;border-bottom:1px solid #dfe5ec}
+.customer-form-section-heading{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.customer-form-section-heading h6{margin:0;color:#26374b;font-size:14px;font-weight:800}
+.customer-section-number{display:grid;place-items:center;width:28px;height:28px;flex:0 0 28px;border:1px solid #b7c6d7;border-radius:50%;color:#344b64;font-size:12px;font-weight:800}
+.customer-paper-note{padding:14px 0 0;color:#6c7d90;font-size:12px}
+.customer-a4-sheet .form-entry-control,.invoice-a4-sheet .form-entry-control{min-height:38px!important;padding:5px 2px!important;border:0!important;border-bottom:1px solid #abb8c8!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+.customer-a4-sheet .form-entry-control:focus,.invoice-a4-sheet .form-entry-control:focus{border-bottom:2px solid #2874c8!important;box-shadow:0 2px 0 rgba(40,116,200,.08)!important}
+.customer-a4-sheet textarea.form-entry-control,.invoice-a4-sheet textarea.form-entry-control{min-height:54px!important;padding:8px!important;border:1px solid #cbd5e1!important;border-radius:2px!important}
+.customer-a4-sheet .form-select.form-entry-control,.invoice-a4-sheet .form-select.form-entry-control{padding-right:22px!important}
+.customer-a4-sheet .modal-footer{margin:14px -10mm -10mm;padding:14px 10mm!important;background:#fff!important}
+.invoice-configured-fields{padding:0 0 12px;border-bottom:1px solid #e0e6ed}
+.invoice-configured-heading{display:flex;align-items:flex-start;gap:12px;padding:4px 0 16px}
+.invoice-configured-heading h6{margin:0 0 4px;color:#26374b;font-size:18px;font-weight:800}
+.invoice-configured-heading p{margin:0;color:#6b7c90;font-size:12px}
+.invoice-form-section{padding:14px 0;border-top:1px solid #e2e7ee}
+.invoice-form-section-heading{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.invoice-form-section-heading>span{display:grid;place-items:center;width:21px;height:21px;border:1px solid #c4d0de;border-radius:50%;font-size:10px;font-weight:800;color:#52677e}
+.invoice-form-section-heading h6{margin:0;color:#586b80;font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.invoice-a4-sheet .card{border:0!important;border-bottom:1px solid #e0e6ed!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+.invoice-a4-sheet .card-header{padding:13px 0!important;border:0!important;border-radius:0!important;background:transparent!important}
+.invoice-a4-sheet .card-body{padding:12px 0!important}
+.invoice-a4-sheet .order-config-item-row{padding:14px 0!important;border:0!important;border-bottom:1px solid #d6dee8!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+.invoice-item-section{padding:12px 0;border-top:1px solid #e3e8ef}
+.invoice-item-section-heading{margin-bottom:10px;color:#617286;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
+.invoice-a4-sheet .invoice-save-footer{margin-top:18px!important;padding:15px 0 0!important;border-top:1px solid #d5dde7}
+@media(max-width:1180px){.form-builder-body{grid-template-columns:minmax(0,1fr) minmax(0,1.4fr)}.form-builder-palette{grid-column:1;grid-row:auto}.form-builder-live-stage{grid-column:2;grid-row:auto;position:static;max-height:none;overflow:visible}.form-builder-side-panel{grid-column:1/-1;grid-row:auto}.form-builder-palette-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:767.98px){.form-builder-body{grid-template-columns:minmax(0,1fr)}.form-builder-palette,.form-builder-live-stage,.form-builder-side-panel{grid-column:1;grid-row:auto;position:static;max-height:none;overflow:visible}.form-builder-palette-items{grid-template-columns:repeat(2,minmax(0,1fr))}.form-builder-paper{min-height:0;padding:14px;aspect-ratio:auto}.customer-a4-sheet,.customer-a4-read-sheet,.invoice-a4-sheet,.invoice-view-sheet{min-height:0;padding:18px!important;border-left:0;border-right:0;box-shadow:none}.customer-a4-sheet .modal-footer{margin:14px -18px -18px;padding:14px 18px!important}}

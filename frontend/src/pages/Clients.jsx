@@ -614,15 +614,23 @@ function Clients() {
                   <div className="modal-body customer-view-body">
                     <article className="customer-a4-sheet customer-a4-read-sheet">
                       <div className="customer-record-title"><span className="customer-record-avatar"><i className="bi bi-person-vcard"></i></span><div><div className="small text-secondary">CUSTOMER / BUSINESS</div><h3>{viewingClient.companyName||viewingClient.name||"Unnamed customer"}</h3><div className="small text-secondary">{viewingClient.phone||"No phone added"}{viewingClient.email?" · "+viewingClient.email:""}</div></div></div>
-                      <div className="customer-record-section-title">Customer information</div>
-                      <div className="row g-3">
-                        {clientFormConfig.fields.filter(field=>field.visible!==false).map(field=>{
-                          const value=(field.custom?viewingClient.customFields?.[field.key]??viewingClient[field.key]:viewingClient[field.key])??field.defaultValue;
-                          const display=Array.isArray(value)?value.join(", "):typeof value==="boolean"?(value?"Yes":"No"):value===null||value===undefined||value===""?"—":field.key==="paymentTerms"&&value!=="Advance"?value+" days":field.key==="discountRate"?value+"%":String(value);
-                          return <div className={`col-12 col-sm-6 ${field.width>=12?"col-md-12":""}`} key={field.key}><div className="customer-record-field"><div className="customer-record-label">{field.label}</div><div className="customer-record-value">{display}</div></div></div>;
-                        })}
-                      </div>
-                      <div className="customer-record-section-title mt-4">Account summary</div>
+                      {clientFormSections.map(section=>{
+                         const fields=section.fields.filter(field=>getFieldState(field,{...viewingClient,...(viewingClient.customFields||{})}).visible);
+                         if(!fields.length)return null;
+                         return (
+                           <section key={section.key} className="customer-record-form-section">
+                             <div className="customer-record-section-title">{section.label}</div>
+                             <div className="row g-3">
+                               {fields.map(field=>{
+                                 const value=(field.custom?viewingClient.customFields?.[field.key]??viewingClient[field.key]:viewingClient[field.key])??field.defaultValue;
+                                 const display=Array.isArray(value)?value.join(", "):typeof value==="boolean"?(value?"Yes":"No"):value===null||value===undefined||value===""?"—":field.key==="paymentTerms"&&value!=="Advance"?value+" days":field.key==="discountRate"?value+"%":String(value);
+                                 return <div className={`col-12 col-sm-6 ${field.width>=12?"col-md-12":""}`} key={field.key}><div className="customer-record-field"><div className="customer-record-label">{field.label}</div><div className="customer-record-value">{display}</div></div></div>;
+                               })}
+                             </div>
+                           </section>
+                         );
+                       })}
+                       <div className="customer-record-section-title mt-4">Account summary</div>
                       <div className="row g-3"><div className="col-6"><div className="customer-record-field"><div className="customer-record-label">Orders</div><div className="customer-record-value">{Number(viewingClient.orderCount||0)}</div></div></div><div className="col-6"><div className="customer-record-field"><div className="customer-record-label">Total billed</div><div className="customer-record-value">₹{Number(viewingClient.totalRevenue||0).toFixed(2)}</div></div></div></div>
                     </article>
                   </div>

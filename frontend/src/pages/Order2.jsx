@@ -1550,7 +1550,7 @@ const styles = {
                                             <h5 className="modal-title fw-bold mb-1">
                                                 {editingOrder ? "Edit invoice" : "Create an invoice"}
                                             </h5>
-                                            <div className="small text-secondary">Choose a customer, add the items you sold, and the total is worked out for you.</div>
+                                            <div className="small text-secondary">Fill in the invoice details, add the items sold, then review the total and save.</div>
                                         </div>
                                         <details className="invoice-more-options">
                                             <summary><i className="bi bi-three-dots me-1"></i>More options</summary>
@@ -1576,7 +1576,7 @@ const styles = {
                                             <span className="invoice-step-number">1</span>
                                             <div>
                                                 <h6>Invoice details</h6>
-                                                <p>Fill in the customer and invoice information. Customer details can fill in automatically when you choose a customer.</p>
+                                                <p>Choose the customer and enter the invoice details. Linked customer information may fill in automatically.</p>
                                             </div>
                                         </div>
                                         {orderFormSections.map((section,sectionIndex)=>{
@@ -1622,7 +1622,7 @@ const styles = {
                                                 <div className="card-header bg-white d-flex align-items-center justify-content-between py-3">
                                                     <div className="d-flex align-items-center gap-2">
                                                         <i className="bi bi-box-seam text-primary"></i>
-                                                        <h6 className="mb-0 fw-semibold">Items being sold</h6>
+                                                        <div><h6 className="mb-1 fw-semibold">Step 2: Items being sold</h6><div className="small text-secondary">Add one row for each product or service in this invoice.</div></div>
                                                     </div>
                                                     <button type="button" className="btn btn-primary btn-sm" onClick={()=>{setInvoiceFormError("");addSubOrderRow();}}>
                                                         <i className="bi bi-plus-lg me-1"></i>Add item
@@ -1684,8 +1684,8 @@ const styles = {
                                         <div className="card-body p-4">
                                             <div className="row g-3 align-items-center">
                                                 <div className="col-md-7">
-                                                    <div className="fw-bold text-dark mb-1">Invoice summary</div>
-                                                    <div className="small text-muted">Totals update automatically while you enter the bill.</div>
+                                                    <div className="fw-bold text-dark mb-1">Step 3: Review invoice</div>
+                                                    <div className="small text-muted">Check the subtotal, discount, tax, amount paid and amount due before saving.</div>
                                                 </div>
                                                 <div className="col-md-5">
                                                     <div className="d-flex justify-content-between small mb-1"><span className="text-muted">Items Subtotal</span><strong>₹{orderTotals.subtotal.toFixed(2)}</strong></div>

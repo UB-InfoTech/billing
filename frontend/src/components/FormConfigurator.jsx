@@ -499,7 +499,7 @@ export default function FormConfigurator({
                 </div>
                 <span className="badge bg-light text-dark border">{shownCount} visible fields</span>
               </div>
-              <div className="form-builder-paper" onDragOver={event=>{if(event.dataTransfer?.types?.includes("text/plain"))event.preventDefault();}} onDrop={event=>{if(event.target===event.currentTarget)handleDrop(event,null);}}>
+              <div className="form-builder-paper" onDragOver={event=>{if(Array.from(event.dataTransfer?.types||[]).includes("text/plain"))event.preventDefault();}} onDrop={event=>{if(event.target===event.currentTarget)handleDrop(event,null);}}>
                 <div className="form-builder-paper-heading">
                   <span className="form-builder-paper-mark"><i className="bi bi-file-earmark-text"></i></span>
                   <div><div className="fw-bold">{title.replace(/^Customize\s*/i,"")}</div><div className="small text-secondary">This is the layout your team will fill in</div></div>
@@ -514,7 +514,7 @@ export default function FormConfigurator({
                           className={`col-12 col-md-${field.width||6} form-builder-canvas-field ${dragKey===field.key?"is-dragging ":""}${dropTargetKey===field.key&&dragKey!==field.key?"is-drop-target ":""}${expandedKey===field.key?"is-selected":""}`}
                           draggable
                           onDragStart={event=>{event.dataTransfer?.setData("text/plain",field.key);if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDragKey(field.key);setDropTargetKey(null);}}
-                          onDragOver={event=>{if((dragKey&&dragKey!==field.key)||(!dragKey&&event.dataTransfer?.types?.includes("text/plain"))){event.preventDefault();setDropTargetKey(field.key);}}}
+                          onDragOver={event=>{if((dragKey&&dragKey!==field.key)||(!dragKey&&Array.from(event.dataTransfer?.types||[]).includes("text/plain"))){event.preventDefault();setDropTargetKey(field.key);}}}
                           onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDropTargetKey(current=>current===field.key?null:current);}}
                           onDrop={event=>handleDrop(event,field.key)}
                           onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}}
@@ -567,7 +567,7 @@ export default function FormConfigurator({
               <article
                 key={field.key}
                 className={`form-builder-item ${field.visible===false?"is-hidden ":""}${expandedKey===field.key?"is-open ":""}${dragKey===field.key?"is-dragging ":""}${dropTargetKey===field.key&&dragKey!==field.key?"is-drop-target":""}`}
-                onDragOver={event=>{if((dragKey&&dragKey!==field.key)||(!dragKey&&event.dataTransfer?.types?.includes("text/plain"))){event.preventDefault();setDropTargetKey(field.key);}}}
+                onDragOver={event=>{if((dragKey&&dragKey!==field.key)||(!dragKey&&Array.from(event.dataTransfer?.types||[]).includes("text/plain"))){event.preventDefault();setDropTargetKey(field.key);}}}
                 onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDropTargetKey(current=>current===field.key?null:current);}}
                 onDrop={event=>handleDrop(event,field.key)}
                 onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}}

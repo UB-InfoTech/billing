@@ -1476,7 +1476,7 @@ const styles = {
                                                                         :value===null||value===undefined||value===""
                                                                             ?"—"
                                                                             :String(value);
-                                                        return <div className={`col-12 col-sm-6 ${Number(field.width)>=12?"col-md-12":""}`} key={field.key}>
+                                                        return <div className={`col-12 col-sm-${field.width||6}`} key={field.key}>
                                                             <div className="invoice-view-field">
                                                                 <div className="invoice-view-field-label">{field.label}</div>
                                                                 <div className="invoice-view-field-value">{displayValue}</div>

@@ -1,6 +1,58 @@
 import {evaluateArithmeticExpression} from "../utils/arithmetic";
 import {useCallback,useEffect,useMemo,useState} from "react";
 import axios from "axios";
+const FORM_SECTION_LABELS={
+  general:"General details",
+  basic:"Basic details",
+  invoice:"Invoice details",
+  shipping:"Delivery and transport",
+  client:"Customer and payment",
+  address:"Address details",
+  business:"Business details",
+  additional:"Additional details",
+  items:"Items",
+  details:"Other details",
+  pricing:"Pricing",
+  stock:"Stock and inventory",
+  payment:"Payment details",
+  classification:"Category and tags",
+  tax:"Tax details",
+  links:"Linked records",
+  recurring:"Recurring details",
+  amount:"Amount",
+  company:"Company details",
+  bank:"Bank details",
+  billing:"Billing details",
+  compliance:"Compliance details",
+  transport:"Transport details",
+  event:"Event details",
+  appearance:"Appearance"
+};
+
+export const formatFormSection=section=>{
+  const value=String(section||"general").trim()||"general";
+  const normalized=value.toLowerCase().replace(/[_-]+/g," ");
+  if(FORM_SECTION_LABELS[normalized])return FORM_SECTION_LABELS[normalized];
+  return normalized.replace(/\\b\\w/g,char=>char.toUpperCase());
+};
+
+export const groupFieldsBySection=fields=>{
+  const groups=[];
+  const indexed=new Map();
+  (fields||[]).forEach(field=>{
+    const key=String(field?.section||"general").trim()||"general";
+    const normalized=key.toLowerCase();
+    let group=indexed.get(normalized);
+    if(!group){
+      group={key,label:formatFormSection(key),fields:[]};
+      indexed.set(normalized,group);
+      groups.push(group);
+    }
+    group.fields.push(field);
+  });
+  return groups;
+};
+
 
 const apiBase=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const authConfig=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});

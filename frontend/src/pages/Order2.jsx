@@ -1454,33 +1454,39 @@ const styles = {
                                         </div>
                                         <div className="invoice-view-status">{viewingOrder.status||"Pending"}</div>
                                     </div>
-                                    <section className="invoice-view-section">
-                                        <h6>Invoice information</h6>
-                                        <div className="row g-3">
-                                            {orderFormConfig.fields.filter(field=>field.visible!==false).map(field=>{
-                                                const value=field.custom
-                                                    ?viewingOrder.customFields?.[field.key]??viewingOrder[field.key]
-                                                    :viewingOrder[field.key];
-                                                const displayValue=Array.isArray(value)
-                                                    ?value.join(", ")
-                                                    :field.key==="orderDate"&&value
-                                                        ?new Date(value).toLocaleDateString("en-IN")
-                                                        :field.key==="paymentTerms"&&value&&value!=="Advance"
-                                                            ?String(value)+" days"
-                                                            :field.key==="discountRate"&&value!==undefined&&value!==null
-                                                                ?String(value)+"%"
-                                                                :value===null||value===undefined||value===""
-                                                                    ?"—"
-                                                                    :String(value);
-                                                return <div className={`col-12 col-sm-6 ${Number(field.width)>=12?"col-md-12":""}`} key={field.key}>
-                                                    <div className="invoice-view-field">
-                                                        <div className="invoice-view-field-label">{field.label}</div>
-                                                        <div className="invoice-view-field-value">{displayValue}</div>
-                                                    </div>
-                                                </div>;
-                                            })}
-                                        </div>
-                                    </section>
+                                    {orderFormSections.map(section=>{
+                                        const fields=section.fields.filter(field=>getFieldState(field,{...viewingOrder,...(viewingOrder.customFields||{})}).visible);
+                                        if(!fields.length)return null;
+                                        return (
+                                            <section className="invoice-view-section" key={section.key}>
+                                                <h6>{section.label}</h6>
+                                                <div className="row g-3">
+                                                    {fields.map(field=>{
+                                                        const value=field.custom
+                                                            ?viewingOrder.customFields?.[field.key]??viewingOrder[field.key]
+                                                            :viewingOrder[field.key];
+                                                        const displayValue=Array.isArray(value)
+                                                            ?value.join(", ")
+                                                            :field.key==="orderDate"&&value
+                                                                ?new Date(value).toLocaleDateString("en-IN")
+                                                                :field.key==="paymentTerms"&&value&&value!=="Advance"
+                                                                    ?String(value)+" days"
+                                                                    :field.key==="discountRate"&&value!==undefined&&value!==null
+                                                                        ?String(value)+"%"
+                                                                        :value===null||value===undefined||value===""
+                                                                            ?"—"
+                                                                            :String(value);
+                                                        return <div className={`col-12 col-sm-6 ${Number(field.width)>=12?"col-md-12":""}`} key={field.key}>
+                                                            <div className="invoice-view-field">
+                                                                <div className="invoice-view-field-label">{field.label}</div>
+                                                                <div className="invoice-view-field-value">{displayValue}</div>
+                                                            </div>
+                                                        </div>;
+                                                    })}
+                                                </div>
+                                            </section>
+                                        );
+                                    })}
                                     <section className="invoice-view-section">
                                         <h6>Items on this invoice</h6>
                                         {(viewingOrder.subOrders||[]).length===0

@@ -1507,7 +1507,7 @@ const styles = {
                                                                             :item[field.key];
                                                                         if(value===undefined||value===null||value==="")return null;
                                                                         const displayValue=Array.isArray(value)?value.join(", "):String(value);
-                                                                        return <div className="col-6 col-md-4" key={field.key}>
+                                                                        return <div className={`col-12 col-md-${field.width||4}`} key={field.key}>
                                                                             <div className="invoice-view-field invoice-view-item-field">
                                                                                 <div className="invoice-view-field-label">{field.label}</div>
                                                                                 <div className="invoice-view-field-value">{displayValue}</div>

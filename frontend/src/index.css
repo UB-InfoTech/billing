@@ -4206,3 +4206,283 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
 .invoice-view-item-section{padding:9px 0 3px;border-top:1px solid #edf0f4}
 .invoice-view-item-section>.invoice-view-field-label{margin-bottom:8px;color:#63758a;font-size:10px;font-weight:800;letter-spacing:.05em}
 .invoice-view-item-section .invoice-view-field{min-height:48px}
+
+
+/* ---------- Full-screen workspace for the Order / Customer forms ---------- */
+/* The dialog fills the viewport; the white form sheet becomes the full working area. */
+@media screen{
+  .form-settings-overlay{
+    position:fixed!important;
+    inset:0!important;
+    z-index:1450!important;
+    display:flex!important;
+    justify-content:stretch!important;
+    align-items:stretch!important;
+    width:100vw!important;
+    height:100dvh!important;
+    padding:0!important;
+    overflow:hidden!important;
+    background:#f2f5f9!important;
+  }
+  .form-builder{
+    width:100vw!important;
+    max-width:none!important;
+    height:100dvh!important;
+    min-height:100dvh!important;
+    max-height:100dvh!important;
+    border:0!important;
+    border-radius:0!important;
+    box-shadow:none!important;
+    overflow:hidden!important;
+  }
+  .form-builder-header{
+    flex:0 0 auto;
+    padding:16px 24px 13px;
+  }
+  .form-builder-summary{flex:0 0 auto;padding:10px 24px}
+  .form-builder-body{
+    flex:1 1 auto;
+    min-height:0;
+    overflow:auto!important;
+    padding:16px 20px 24px!important;
+    grid-template-columns:minmax(190px,235px) minmax(440px,1fr) minmax(340px,420px)!important;
+    gap:18px!important;
+    align-items:start!important;
+  }
+  .form-builder-palette{grid-column:1!important;grid-row:1!important}
+  .form-builder-live-stage{
+    grid-column:2!important;
+    grid-row:1!important;
+    position:sticky!important;
+    top:0!important;
+    max-height:calc(100dvh - 205px)!important;
+    overflow:auto!important;
+  }
+  .form-builder-side-panel{grid-column:3!important;grid-row:1!important}
+  .form-builder-add{grid-column:1/-1!important;grid-row:2!important}
+  .form-builder-footer{flex:0 0 auto;padding:12px 24px}
+  
+  .customer-view-backdrop,
+  .invoice-view-backdrop,
+  .invoice-modal-backdrop{
+    position:fixed!important;
+    inset:0!important;
+    z-index:1400!important;
+    width:100vw!important;
+    height:100dvh!important;
+    padding:0!important;
+    overflow:hidden!important;
+    background:#eef2f6!important;
+  }
+  .customer-a4-dialog,
+  .invoice-a4-dialog,
+  .invoice-view-dialog{
+    display:flex!important;
+    align-items:stretch!important;
+    width:100vw!important;
+    max-width:none!important;
+    height:100dvh!important;
+    max-height:100dvh!important;
+    margin:0!important;
+    padding:0!important;
+  }
+  .customer-form-modal,
+  .customer-view-modal,
+  .invoice-create-modal,
+  .invoice-view-modal{
+    display:flex!important;
+    flex:1 1 auto!important;
+    flex-direction:column!important;
+    width:100%!important;
+    min-width:0!important;
+    height:100dvh!important;
+    min-height:100dvh!important;
+    max-height:100dvh!important;
+    margin:0!important;
+    border:0!important;
+    border-radius:0!important;
+    box-shadow:none!important;
+    overflow:hidden!important;
+  }
+  .customer-form-modal>.modal-header,
+  .customer-view-toolbar,
+  .invoice-create-header,
+  .invoice-view-toolbar{
+    position:relative;
+    z-index:3;
+    flex:0 0 auto!important;
+    padding:14px 24px!important;
+    border-bottom:1px solid #dce4ed!important;
+    background:#fff!important;
+  }
+  .customer-form-modal>form.customer-a4-sheet{
+    flex:1 1 auto!important;
+    width:100%!important;
+    max-width:none!important;
+    min-height:0!important;
+    height:auto!important;
+    margin:0!important;
+    padding:0!important;
+    border:0!important;
+    box-shadow:none!important;
+    overflow:hidden!important;
+    background:#fff!important;
+  }
+  .customer-form-modal .customer-a4-sheet-body{
+    flex:1 1 auto!important;
+    width:100%!important;
+    max-width:none!important;
+    min-height:0!important;
+    overflow:auto!important;
+    padding:24px clamp(22px,3vw,56px)!important;
+    background:#fff!important;
+  }
+  .customer-a4-sheet .customer-form-section{
+    max-width:none;
+    padding:20px 0;
+  }
+  .customer-a4-sheet .modal-footer{
+    position:relative!important;
+    z-index:3;
+    flex:0 0 auto!important;
+    margin:0!important;
+    padding:13px 24px!important;
+    border-top:1px solid #dce4ed!important;
+    box-shadow:0 -3px 12px rgba(33,51,74,.04);
+    background:#fff!important;
+  }
+  .customer-view-body,
+  .invoice-view-body{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    width:100%!important;
+    max-width:none!important;
+    overflow:auto!important;
+    padding:24px clamp(22px,3vw,56px)!important;
+    background:#eef2f6!important;
+  }
+  .customer-view-body .customer-a4-read-sheet,
+  .invoice-view-body .invoice-view-sheet{
+    width:100%!important;
+    max-width:none!important;
+    min-height:0!important;
+    margin:0 auto!important;
+    padding:28px clamp(22px,3vw,56px)!important;
+    border:1px solid #dbe3ec!important;
+    box-shadow:0 2px 8px rgba(28,44,63,.035)!important;
+    background:#fff!important;
+  }
+  .customer-view-toolbar,.customer-view-footer,
+  .invoice-view-toolbar,.invoice-view-footer{
+    flex:0 0 auto!important;
+  }
+  .invoice-create-modal .invoice-create-body{
+    flex:1 1 auto!important;
+    min-height:0!important;
+    overflow:auto!important;
+    padding:20px clamp(18px,2.5vw,40px)!important;
+    background:#eef2f6!important;
+  }
+  .invoice-create-body>.invoice-a4-sheet{
+    display:block!important;
+    width:100%!important;
+    max-width:none!important;
+    min-height:0!important;
+    margin:0!important;
+    padding:24px clamp(22px,3vw,56px)!important;
+    border:1px solid #dbe3ec!important;
+    box-shadow:0 2px 8px rgba(28,44,63,.035)!important;
+    background:#fff!important;
+  }
+  .invoice-create-body .invoice-save-footer{
+    position:sticky!important;
+    bottom:-24px;
+    z-index:4;
+    margin:24px calc(clamp(22px,3vw,56px) * -1) -24px!important;
+    padding:14px clamp(22px,3vw,56px)!important;
+    border-top:1px solid #dce4ed!important;
+    background:#fff!important;
+    box-shadow:0 -4px 14px rgba(33,51,74,.05);
+  }
+}
+@media screen and (max-width:1250px){
+  .form-builder-body{
+    grid-template-columns:minmax(170px,.7fr) minmax(0,1.3fr)!important;
+  }
+  .form-builder-palette{grid-column:1!important;grid-row:1!important}
+  .form-builder-live-stage{grid-column:2!important;grid-row:1!important}
+  .form-builder-side-panel{grid-column:1/-1!important;grid-row:2!important}
+  .form-builder-add{grid-row:3!important}
+}
+@media screen and (max-width:767.98px){
+  .form-builder-header{padding:13px 15px 10px}
+  .form-builder-summary{padding:10px 15px;gap:10px}
+  .form-builder-body{grid-template-columns:minmax(0,1fr)!important;padding:12px!important;gap:12px!important}
+  .form-builder-palette,.form-builder-live-stage,.form-builder-side-panel,.form-builder-add{
+    grid-column:1!important;
+    grid-row:auto!important;
+    position:static!important;
+    max-height:none!important;
+    overflow:visible!important;
+  }
+  .form-builder-palette-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  .form-builder-paper{min-height:0!important;padding:16px!important}
+  .form-builder-footer{padding:10px 12px;gap:8px}
+  .form-builder-footer .btn{font-size:12px}
+  .customer-form-modal>.modal-header,
+  .customer-view-toolbar,
+  .invoice-create-header,
+  .invoice-view-toolbar{padding:12px 15px!important}
+  .customer-form-modal .customer-a4-sheet-body,
+  .customer-view-body,
+  .invoice-view-body{padding:12px!important}
+  .customer-view-body .customer-a4-read-sheet,
+  .invoice-view-body .invoice-view-sheet{padding:18px!important}
+  .customer-a4-sheet .customer-form-section{padding:15px 0}
+  .invoice-create-modal .invoice-create-body{padding:10px!important}
+  .invoice-create-body>.invoice-a4-sheet{padding:16px!important}
+  .invoice-create-body .invoice-save-footer{
+    bottom:-16px;
+    margin:18px -16px -16px!important;
+    padding:12px 16px!important;
+  }
+  .invoice-save-footer>div{display:flex;gap:8px}
+}
+@media print{
+  .customer-view-modal,.customer-view-modal *,
+  .invoice-view-modal,.invoice-view-modal *{visibility:visible!important}
+  .customer-view-modal,.invoice-view-modal{
+    position:absolute!important;
+    inset:0!important;
+    width:210mm!important;
+    height:auto!important;
+    min-height:0!important;
+    max-height:none!important;
+    display:block!important;
+    overflow:visible!important;
+    border:0!important;
+    box-shadow:none!important;
+    background:#fff!important;
+  }
+  .customer-view-toolbar,.customer-view-footer,
+  .invoice-view-toolbar,.invoice-view-footer{display:none!important}
+  .customer-view-body,.invoice-view-body{
+    display:block!important;
+    width:210mm!important;
+    height:auto!important;
+    min-height:0!important;
+    overflow:visible!important;
+    padding:0!important;
+    background:#fff!important;
+  }
+  .customer-view-body .customer-a4-read-sheet,
+  .invoice-view-body .invoice-view-sheet{
+    width:210mm!important;
+    max-width:none!important;
+    min-height:0!important;
+    margin:0!important;
+    padding:12mm!important;
+    border:0!important;
+    box-shadow:none!important;
+  }
+}

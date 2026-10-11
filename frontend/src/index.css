@@ -4575,3 +4575,357 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
   .orders-payment-entry-row>.col-3,
   .orders-payment-entry-row>.col-5{width:100%!important}
 }
+
+
+/* ---------- Clear, everyday data-entry experience (screen only) ---------- */
+/* Use card sections and normal controls in working forms; print layouts remain unchanged. */
+@media screen {
+  html, body, #root { max-width: 100%; }
+  body { overflow-x: hidden; }
+  .customer-a4-dialog, .invoice-a4-dialog,
+  .customer-form-modal, .invoice-create-modal,
+  .customer-form-modal *, .invoice-create-modal * {
+    box-sizing: border-box;
+  }
+  .customer-form-modal, .invoice-create-modal,
+  .invoice-create-body, .customer-form-modal .customer-a4-sheet-body {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  .customer-form-modal > form.customer-a4-sheet,
+  .invoice-create-body > form.invoice-a4-sheet {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    aspect-ratio: auto !important;
+    margin: 0 !important;
+    padding: 22px clamp(16px, 3vw, 40px) 28px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #f5f7fa !important;
+  }
+  .customer-form-modal .customer-a4-sheet-body {
+    padding: 0 !important;
+    background: #f5f7fa !important;
+    overflow-x: hidden !important;
+  }
+  .customer-a4-sheet .customer-paper-intro {
+    margin: 0 0 16px !important;
+    padding: 13px 16px !important;
+    border: 1px solid #cfe1f5 !important;
+    border-radius: 12px !important;
+    background: #eef6ff !important;
+  }
+  .customer-paper-instruction {
+    color: #244e7d !important;
+    font-size: 14px !important;
+    line-height: 1.5;
+  }
+  .customer-a4-sheet .customer-form-section {
+    min-width: 0 !important;
+    margin: 0 0 16px !important;
+    padding: 18px !important;
+    border: 1px solid #e0e7ef !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    box-shadow: 0 2px 5px rgba(29, 47, 69, .035);
+  }
+  .customer-form-section-heading {
+    align-items: flex-start !important;
+    margin-bottom: 16px !important;
+  }
+  .customer-section-number {
+    border: 0 !important;
+    border-radius: 9px !important;
+    color: #fff !important;
+    background: #1769aa !important;
+  }
+  .customer-form-section-heading h6 {
+    font-size: 16px !important;
+    line-height: 1.35;
+  }
+  .customer-form-section-heading .small {
+    margin-top: 3px;
+    font-size: 12px !important;
+  }
+  .customer-a4-sheet .form-entry-label,
+  .invoice-a4-sheet .form-entry-label {
+    display: block;
+    margin-bottom: 7px !important;
+    color: #29394d !important;
+    font-size: 13px !important;
+    font-weight: 650 !important;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
+  .customer-a4-sheet .form-entry-control,
+  .invoice-a4-sheet .form-entry-control {
+    display: block;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    min-height: 46px !important;
+    height: auto;
+    padding: 10px 12px !important;
+    border: 1px solid #bfcbd8 !important;
+    border-radius: 9px !important;
+    background: #fff !important;
+    color: #1e293b !important;
+    box-shadow: none !important;
+    font-size: 15px !important;
+    line-height: 1.4;
+  }
+  .customer-a4-sheet textarea.form-entry-control,
+  .invoice-a4-sheet textarea.form-entry-control {
+    min-height: 92px !important;
+    resize: vertical;
+  }
+  .customer-a4-sheet .form-entry-control:focus,
+  .invoice-a4-sheet .form-entry-control:focus {
+    border-color: #2677c8 !important;
+    outline: 0 !important;
+    box-shadow: 0 0 0 3px rgba(38, 119, 200, .14) !important;
+  }
+  .customer-a4-sheet .form-entry-control:disabled,
+  .customer-a4-sheet .form-entry-control[readonly],
+  .invoice-a4-sheet .form-entry-control:disabled,
+  .invoice-a4-sheet .form-entry-control[readonly] {
+    border-color: #d8dfe7 !important;
+    background: #f1f4f7 !important;
+    color: #526174 !important;
+  }
+  .customer-a4-sheet .form-config-field,
+  .invoice-a4-sheet .form-config-field,
+  .customer-a4-sheet .row,
+  .invoice-a4-sheet .row,
+  .customer-a4-sheet [class*="col-"],
+  .invoice-a4-sheet [class*="col-"] {
+    min-width: 0 !important;
+  }
+  .customer-a4-sheet .form-config-field,
+  .invoice-a4-sheet .form-config-field {
+    width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .customer-a4-sheet .form-entry-required,
+  .invoice-a4-sheet .form-entry-required,
+  .customer-a4-sheet .form-entry-optional,
+  .invoice-a4-sheet .form-entry-optional {
+    vertical-align: middle;
+    margin-left: 4px !important;
+    white-space: normal;
+  }
+  .customer-a4-sheet .customer-paper-note {
+    padding: 0 2px 8px !important;
+    font-size: 13px !important;
+  }
+  .customer-form-modal .modal-footer {
+    margin: 0 !important;
+    padding: 13px clamp(16px, 3vw, 40px) !important;
+    gap: 10px;
+    background: #fff !important;
+  }
+  .customer-form-modal .modal-footer .btn,
+  .invoice-save-footer .btn {
+    min-height: 44px;
+    white-space: normal;
+  }
+
+  .invoice-create-modal,
+  .invoice-create-body {
+    background: #f5f7fa !important;
+  }
+  .invoice-create-modal .invoice-create-body {
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+    padding: 0 !important;
+  }
+  .invoice-create-body > form.invoice-a4-sheet {
+    padding: 22px clamp(16px, 3vw, 40px) 28px !important;
+  }
+  .invoice-configured-fields {
+    min-width: 0;
+    margin: 0 0 16px;
+    padding: 18px !important;
+    border: 1px solid #dfe6ee !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+  }
+  .invoice-configured-heading {
+    min-width: 0;
+    margin-bottom: 8px;
+    padding: 0 0 12px !important;
+    align-items: flex-start !important;
+  }
+  .invoice-configured-heading h6 {
+    font-size: 18px !important;
+    line-height: 1.35;
+  }
+  .invoice-configured-heading p {
+    font-size: 13px !important;
+    line-height: 1.5;
+  }
+  .invoice-form-section {
+    min-width: 0;
+    margin-top: 12px;
+    padding: 16px !important;
+    border: 1px solid #e3e9f0 !important;
+    border-radius: 12px !important;
+    background: #fbfcfe !important;
+  }
+  .invoice-form-section-heading {
+    flex-wrap: wrap;
+    margin-bottom: 14px !important;
+  }
+  .invoice-form-section-heading > span {
+    width: 26px !important;
+    height: 26px !important;
+    flex: 0 0 26px;
+    border: 0 !important;
+    border-radius: 8px !important;
+    color: #fff !important;
+    background: #1769aa !important;
+    font-size: 12px !important;
+  }
+  .invoice-form-section-heading h6 {
+    color: #28394d !important;
+    font-size: 14px !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+  }
+  .invoice-create-body .card {
+    min-width: 0 !important;
+    border: 1px solid #dfe6ee !important;
+    border-radius: 14px !important;
+    background: #fff !important;
+    box-shadow: 0 2px 5px rgba(29, 47, 69, .035) !important;
+    overflow: hidden;
+  }
+  .invoice-create-body .card-header {
+    padding: 16px !important;
+    border-bottom: 1px solid #e5ebf1 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+  }
+  .invoice-create-body .card-header h6 {
+    font-size: 16px !important;
+  }
+  .invoice-create-body .card-body {
+    min-width: 0 !important;
+    padding: 16px !important;
+  }
+  .invoice-create-body .order-config-item-row {
+    min-width: 0 !important;
+    padding: 16px !important;
+    border: 1px solid #dfe6ee !important;
+    border-radius: 12px !important;
+    background: #fbfcfe !important;
+  }
+  .invoice-create-body .invoice-item-section {
+    min-width: 0;
+    padding: 12px 0 2px;
+    border-top: 1px solid #e7ecf2;
+  }
+  .invoice-create-body .invoice-item-section-heading {
+    color: #30445a !important;
+    font-size: 12px !important;
+    letter-spacing: 0 !important;
+    text-transform: none !important;
+  }
+  .invoice-create-body .invoice-save-footer {
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 24px -16px -28px !important;
+    padding: 14px 16px !important;
+    border-top: 1px solid #dce4ed !important;
+    background: #fff !important;
+    box-shadow: 0 -4px 14px rgba(33, 51, 74, .05);
+  }
+  .invoice-save-footer > div {
+    min-width: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .invoice-create-body .row {
+    --bs-gutter-x: 1rem;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .invoice-create-body .row > *,
+  .customer-a4-sheet .row > * {
+    min-width: 0 !important;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+  .invoice-create-body input,
+  .invoice-create-body select,
+  .invoice-create-body textarea,
+  .customer-a4-sheet input,
+  .customer-a4-sheet select,
+  .customer-a4-sheet textarea {
+    max-width: 100% !important;
+  }
+  .invoice-create-body .invoice-more-options {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+  .invoice-create-header .d-flex,
+  .invoice-create-header > div {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+}
+@media screen and (max-width: 767.98px) {
+  .customer-form-modal .modal-header,
+  .invoice-create-modal .invoice-create-header {
+    gap: 10px;
+    padding: 12px 14px !important;
+  }
+  .customer-form-modal .customer-a4-sheet-body {
+    padding: 14px !important;
+  }
+  .customer-form-modal > form.customer-a4-sheet {
+    padding: 14px !important;
+  }
+  .customer-a4-sheet .customer-form-section,
+  .invoice-configured-fields,
+  .invoice-form-section {
+    padding: 14px !important;
+    border-radius: 11px !important;
+  }
+  .invoice-create-body > form.invoice-a4-sheet {
+    padding: 14px 12px 24px !important;
+  }
+  .invoice-create-body .card-header,
+  .invoice-create-body .card-body {
+    padding: 13px !important;
+  }
+  .invoice-create-body .order-config-item-row {
+    padding: 12px !important;
+  }
+  .invoice-create-body .invoice-save-footer {
+    margin: 20px -12px -24px !important;
+    padding: 12px !important;
+    align-items: stretch;
+  }
+  .invoice-save-footer > div {
+    width: 100%;
+  }
+  .invoice-save-footer > div .btn {
+    flex: 1 1 140px;
+  }
+  .customer-form-modal .modal-footer {
+    padding: 12px 14px !important;
+  }
+}

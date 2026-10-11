@@ -318,7 +318,6 @@ function Order2() {
     };
     const visibleOrderFields=orderFormConfig.fields.filter(field=>field.visible!==false);
     const orderFormSections=groupFieldsBySection(visibleOrderFields);
-    const orderFieldValues={...formData,...(formData.customFields||{})};
 
 
     // const addSubOrderRow = () => {

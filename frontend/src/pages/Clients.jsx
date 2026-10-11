@@ -663,7 +663,7 @@ function Clients() {
                   <form className="customer-a4-sheet" onSubmit={editingClient?handleUpdateClient:handleAddClient}>
                     <div className="modal-body p-3 customer-a4-sheet-body">
                       <div className="customer-paper-intro">
-                        <div className="customer-paper-instruction"><i className="bi bi-pencil-square me-2"></i>Fill in the fields like a paper form. Fields marked Required must be completed.</div>
+                        <div className="customer-paper-instruction"><i className="bi bi-info-circle me-2"></i>Complete fields marked Required. Optional fields can be left blank and added later.</div>
                       </div>
                       {clientFormSections.map((section,sectionIndex)=>{
                         const sectionFields=section.fields.filter(field=>getFieldState(field,{...newClient,...(newClient.customFields||{})}).visible);
@@ -672,7 +672,7 @@ function Clients() {
                           <section className="customer-form-section" key={section.key}>
                             <div className="customer-form-section-heading">
                               <span className="customer-section-number">{sectionIndex+1}</span>
-                              <div><h6>{section.label}</h6><div className="small text-secondary">Write or choose the details below</div></div>
+                              <div><h6>{section.label}</h6><div className="small text-secondary">Enter the details for this section</div></div>
                             </div>
                             <div className="row g-3">
                               {sectionFields.map(renderClientField)}

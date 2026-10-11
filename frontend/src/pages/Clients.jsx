@@ -106,7 +106,6 @@ function Clients() {
     });
   };
   const visibleClientFields=clientFormConfig.fields.filter(field=>field.visible!==false);
-  const clientFieldValues={...newClient,...(newClient.customFields||{})};
   const clientFormSections=groupFieldsBySection(visibleClientFields);
   const emptyClient=()=>buildConfiguredDefaults({name:"",email:"",phone:"",address:"",state:"",city:"",pinCode:"",stateCode:"",gstNumber:"",companyName:"",businessType:"",paymentTerms:"30",discountRate:0,accountStatus:"Active",notes:"",customFields:{}},clientFormConfig.fields);
   const renderClientField=field=>{

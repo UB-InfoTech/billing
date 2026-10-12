@@ -28,6 +28,33 @@ const upload=multer({
 const owner=req=>req.user.id;
 const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
 
+function referenceError(message){
+  const error=new Error(message);
+  error.status=400;
+  return error;
+}
+
+async function validateReferenceOwnership({clientId,orderId},createdBy){
+  const clientValue=String(clientId||"").trim();
+  if(clientValue){
+    if(!mongoose.isValidObjectId(clientValue)){
+      throw referenceError("Choose a valid customer for this expense.");
+    }
+    const client=await Client.findOne({_id:clientValue,createdBy}).select("_id").lean();
+    if(!client)throw referenceError("The selected customer does not belong to this business.");
+  }
+
+  const orderValue=String(orderId||"").trim();
+  if(orderValue){
+    if(!mongoose.isValidObjectId(orderValue)){
+      throw referenceError("Choose a valid invoice for this expense.");
+    }
+    const order=await Order.findOne({_id:orderValue,createdBy}).select("_id").lean();
+    if(!order)throw referenceError("The selected invoice does not belong to this business.");
+  }
+}
+
+
 function applyExpenseFilters(query,params={}){
   const search=String(params.search||"").trim();
   if(search){
@@ -87,13 +114,13 @@ router.get("/",auth,async(req,res)=>{
     const query=applyExpenseFilters({createdBy:owner(req)},req.query);
     if(req.query.clientId&&mongoose.isValidObjectId(req.query.clientId))query.clientId=req.query.clientId;
     if(req.query.orderId&&mongoose.isValidObjectId(req.query.orderId))query.orderId=req.query.orderId;
-    const [expenses,total]=await Promise.all([Expense.find(query).sort({[sortField]:sortDir}).skip((page-1)*limit).limit(limit).populate("clientId","name companyName").populate("orderId","orderNumber").lean(),Expense.countDocuments(query)]);
+    const [expenses,total]=await Promise.all([Expense.find(query).sort({[sortField]:sortDir}).skip((page-1)*limit).limit(limit).populate({path:"clientId",select:"name companyName",match:{createdBy:owner(req)}}).populate({path:"orderId",select:"orderNumber",match:{createdBy:owner(req)}}).lean(),Expense.countDocuments(query)]);
     res.json({expenses,total,page,limit,pages:Math.max(1,Math.ceil(total/limit))});
   }catch(error){res.status(error.status||500).json({message:error.message});}
 });
 
 router.get("/:id",auth,async(req,res)=>{
-  try{if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid expense ID."});const expense=await Expense.findOne({_id:req.params.id,createdBy:owner(req)}).populate("clientId","name companyName").populate("orderId","orderNumber").lean();if(!expense)return res.status(404).json({message:"Expense not found."});res.json(expense);}catch(error){res.status(500).json({message:error.message});}
+  try{if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid expense ID."});const expense=await Expense.findOne({_id:req.params.id,createdBy:owner(req)}).populate({path:"clientId",select:"name companyName",match:{createdBy:owner(req)}}).populate({path:"orderId",select:"orderNumber",match:{createdBy:owner(req)}}).lean();if(!expense)return res.status(404).json({message:"Expense not found."});res.json(expense);}catch(error){res.status(500).json({message:error.message});}
 });
 
 router.post("/",auth,async(req,res)=>{
@@ -101,6 +128,7 @@ router.post("/",auth,async(req,res)=>{
     const body=req.body||{},amount=Number(body.amount);
     if(!body.description||!String(body.description).trim())return res.status(400).json({message:"Description is required."});
     if(!Number.isFinite(amount)||amount<=0)return res.status(400).json({message:"Amount must be greater than zero."});
+    await validateReferenceOwnership(body,owner(req));
     const taxRate=Math.min(100,Math.max(0,Number(body.taxRate||0)));
     const expense=new Expense({...body,title:String(body.title||body.description||"").trim(),amount,taxRate,taxAmount:round2(amount*taxRate/100),createdBy:owner(req),updatedBy:owner(req),user:owner(req)});
     await applyWorkflows({resource:"expenses",event:"record_created",doc:expense,createdBy:owner(req)});
@@ -110,7 +138,7 @@ router.post("/",auth,async(req,res)=>{
 });
 
 router.put("/:id",auth,async(req,res)=>{
-  try{if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid expense ID."});const expense=await Expense.findOne({_id:req.params.id,createdBy:owner(req)});if(!expense)return res.status(404).json({message:"Expense not found."});const allowed=["title","description","amount","category","subCategory","tags","paymentMethod","currency","vendor","gstNo","taxDeductible","taxRate","clientId","orderId","date","isRecurring","recurringInterval","recurringEndDate","notes","attachments","receipt","customFields"];for(const key of allowed)if(req.body[key]!==undefined)expense[key]=req.body[key];expense.amount=Number(expense.amount||0);expense.taxRate=Math.min(100,Math.max(0,Number(expense.taxRate||0)));expense.taxAmount=round2(expense.amount*expense.taxRate/100);expense.updatedBy=owner(req);await applyWorkflows({resource:"expenses",event:"record_updated",doc:expense,createdBy:owner(req)});await expense.save();res.json(expense);}catch(error){res.status(400).json({message:error.message});}
+  try{if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid expense ID."});const expense=await Expense.findOne({_id:req.params.id,createdBy:owner(req)});if(!expense)return res.status(404).json({message:"Expense not found."});await validateReferenceOwnership({clientId:req.body?.clientId,orderId:req.body?.orderId},owner(req));const allowed=["title","description","amount","category","subCategory","tags","paymentMethod","currency","vendor","gstNo","taxDeductible","taxRate","clientId","orderId","date","isRecurring","recurringInterval","recurringEndDate","notes","attachments","receipt","customFields"];for(const key of allowed)if(req.body[key]!==undefined)expense[key]=req.body[key];expense.amount=Number(expense.amount||0);expense.taxRate=Math.min(100,Math.max(0,Number(expense.taxRate||0)));expense.taxAmount=round2(expense.amount*expense.taxRate/100);expense.updatedBy=owner(req);await applyWorkflows({resource:"expenses",event:"record_updated",doc:expense,createdBy:owner(req)});await expense.save();res.json(expense);}catch(error){res.status(400).json({message:error.message});}
 });
 
 router.post("/upload-receipt",auth,upload.single("receipt"),async(req,res)=>{try{if(!req.file)return res.status(400).json({message:"Receipt file is required."});res.status(201).json({receiptUrl:"/uploads/expenses/"+req.file.filename,filename:req.file.filename});}catch(error){res.status(400).json({message:error.message});}});

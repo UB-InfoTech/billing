@@ -23,8 +23,14 @@ const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
 function applyExpenseFilters(query,params={}){
   const search=String(params.search||"").trim();
   if(search){
-    const escaped=search.replace(/[.*+?^\\$()|[\\]\\\\]/g,"\\\\const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
-");
+    const specialCharacters=new Set([
+      ".", "*", "+", "?", "^", "$", "(", ")", "|", "[", "]", "{", "}",
+      String.fromCharCode(92)
+    ]);
+    const slash=String.fromCharCode(92);
+    const escaped=Array.from(search,character=>
+      specialCharacters.has(character)?slash+character:character
+    ).join("");
     const regex=new RegExp(escaped,"i");
     query.$or=[
       {description:regex},

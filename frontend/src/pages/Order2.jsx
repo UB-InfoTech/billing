@@ -600,15 +600,18 @@ function Order2() {
             return;
         }
 
-        const requiredItemFields=orderItemConfig.fields.filter(field=>field.required&&!field.formula);
-        const missingItem=requiredItemFields.length
-            ? subOrders.find(item=>requiredItemFields.some(field=>{
-                const state=getFieldState(field,{...item,...(item.customFields||{})});
-                return state.visible&&state.required&&String(configuredItemValue(item,field)??"").trim()==="";
-            }))
-            : null;
+        // A rule can make an otherwise optional item field required at runtime,
+        // so evaluate all non-calculated fields rather than filtering on the saved default.
+        const requiredItemFields=orderItemConfig.fields.filter(field=>!field.formula);
+        const missingItem=subOrders.find(item=>requiredItemFields.some(field=>{
+            const state=getFieldState(field,{...item,...(item.customFields||{})});
+            return state.visible&&state.required&&String(configuredItemValue(item,field)??"").trim()==="";
+        }));
         if(missingItem){
-            const missingField=requiredItemFields.find(field=>String(configuredItemValue(missingItem,field)??"").trim()==="");
+            const missingField=requiredItemFields.find(field=>{
+                const state=getFieldState(field,{...missingItem,...(missingItem.customFields||{})});
+                return state.visible&&state.required&&String(configuredItemValue(missingItem,field)??"").trim()==="";
+            });
             setInvoiceFormError(`Please complete “${missingField?.label||"the item details"}” for the item before saving.`);
             return;
         }
@@ -1037,17 +1040,19 @@ function Order2() {
 
         // OrderNumber (natural sort: SS-1, SS-2, ..., SS-100)
         if (sortKey === 'orderNumber') {
-            const numA = parseInt(aVal.match(/\d+/)?.[0] ?? 0, 10);
-            const numB = parseInt(bVal.match(/\d+/)?.[0] ?? 0, 10);
+            const orderNumberA = String(aVal ?? "");
+            const orderNumberB = String(bVal ?? "");
+            const numA = parseInt(orderNumberA.match(/\d+/)?.[0] ?? "0", 10);
+            const numB = parseInt(orderNumberB.match(/\d+/)?.[0] ?? "0", 10);
 
             if (numA !== numB) {
                 return sortOrder === 'asc' ? numA - numB : numB - numA;
             }
 
-            // if numbers are equal, fallback to string compare (handles SS-09 vs SS-9)
+            // Keep natural ordering while safely supporting older records without an invoice number.
             return sortOrder === 'asc'
-                ? aVal.localeCompare(bVal, undefined, { sensitivity: 'base' })
-                : bVal.localeCompare(aVal, undefined, { sensitivity: 'base' });
+                ? orderNumberA.localeCompare(orderNumberB, undefined, { sensitivity: 'base' })
+                : orderNumberB.localeCompare(orderNumberA, undefined, { sensitivity: 'base' });
         }
 
         // Date comparison

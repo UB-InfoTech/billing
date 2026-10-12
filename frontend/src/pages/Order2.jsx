@@ -718,22 +718,24 @@ function Order2() {
     };
 
     const handleStatusChange = async (orderId, newStatus) => {
-        const updatedOrder = orders.find(order => order._id === orderId);
+        if (!orders.some(order => String(order._id) === String(orderId))) return;
 
-        if (!updatedOrder) return;
-
-        // Ensure statusHistory is initialized
-        if (!updatedOrder.statusHistory) {
-            updatedOrder.statusHistory = [];
+        try {
+            // The backend validates the status and records exactly one history entry.
+            await axios.patch(
+                `${linkone}/api/order/orders/${orderId}/upd`,
+                { status: newStatus },
+                authConfig()
+            );
+            setOrdersMessage("Invoice status updated successfully.");
+            await fetchOrders();
+        } catch (error) {
+            setOrdersMessage(
+                error.response?.data?.message ||
+                error.message ||
+                "We could not update the invoice status. Please try again."
+            );
         }
-
-        updatedOrder.status = newStatus;
-        updatedOrder.statusHistory.push({ status: newStatus, timestamp: new Date().toISOString() });
-
-        await axios.patch(`${linkone}/api/order/orders/${orderId}/upd`, updatedOrder, authConfig());
-
-        alert("✅ Status change to " + newStatus);
-        fetchOrders();
     };
 
 
@@ -825,21 +827,26 @@ function Order2() {
         }
     };
 
-    const handleDeleteOrder = async (order) => {
-        const password = prompt("Enter password to delete:");
-        if (password === "123") {
+    const handleDeleteOrder = async (orderId) => {
+        const confirmed = window.confirm(
+            "Delete this invoice? This action cannot be undone. Invoices with a pending balance or posted credit notes cannot be deleted."
+        );
+        if (!confirmed) return;
 
-            try {
-                await axios.delete(`${linkone}/api/order/orders/${order}/delete`, authConfig());
-                fetchOrders();
-                alert("✅ Order Delete Sucessfully")
-            } catch (error) {
-                alert("❌ " + error.response.data.message || "Error deleting order");
-                // alert("dc " , error.response.data.message)
-                // console.error('Error deleting client', error);
-            }
-        } else {
-            alert("❌ Incorrect password");
+        setOrdersMessage("");
+        try {
+            await axios.delete(
+                `${linkone}/api/order/orders/${orderId}/delete`,
+                authConfig()
+            );
+            setOrdersMessage("Invoice deleted successfully.");
+            await fetchOrders();
+        } catch (error) {
+            setOrdersMessage(
+                error.response?.data?.message ||
+                error.message ||
+                "We could not delete this invoice. Please try again."
+            );
         }
     };
 

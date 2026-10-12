@@ -1,6 +1,7 @@
 import React,{useEffect,useState} from "react";
 import {useNavigate,useParams} from "react-router-dom";
 import ExpenseForm from "../components/ExpenseForm";
+import {formatDateInput} from "../utils/dateInput";
 import {getExpenseById,updateExpense} from "../services/api";
 
 export default function EditExpense(){
@@ -21,9 +22,9 @@ export default function EditExpense(){
           ...expense,
           clientId:expense.clientId?._id||expense.clientId||"",
           orderId:expense.orderId?._id||expense.orderId||"",
-          date:expense.date?new Date(expense.date).toISOString().slice(0,10):new Date().toISOString().slice(0,10),
+          date:expense.date?formatDateInput(expense.date):formatDateInput(new Date()),
           tags:Array.isArray(expense.tags)?expense.tags:[],
-          recurringEndDate:expense.recurringEndDate?new Date(expense.recurringEndDate).toISOString().slice(0,10):"",
+          recurringEndDate:formatDateInput(expense.recurringEndDate),
         });
       }catch(err){
         if(alive)setError(err.response?.data?.message||"Unable to load expense.");

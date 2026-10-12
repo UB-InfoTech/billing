@@ -43,3 +43,20 @@ test("manual adjustments reject invalid values and negative balances", () => {
   assert.throws(() => applyManualCreditAdjustment(10, [], -11), /cannot become negative/i);
   assert.equal(sumCustomerCredit([note(10), note(-5), note("bad")]), 10);
 });
+
+test("new posted customer credit is added without changing existing manual adjustment", () => {
+  const before = resolveClientCreditBalance(
+    { creditBalance: 35, creditBalanceAdjustment: 10 },
+    [note(25)]
+  );
+  assert.equal(before.creditBalance, 35);
+
+  // Creating a new Credit Note increases the stored balance and the posted
+  // Credit Note total by the same amount; the manual adjustment stays intact.
+  const after = resolveClientCreditBalance(
+    { creditBalance: 40, creditBalanceAdjustment: 10 },
+    [note(25), note(5)]
+  );
+  assert.equal(after.creditBalanceAdjustment, 10);
+  assert.equal(after.creditBalance, 40);
+});

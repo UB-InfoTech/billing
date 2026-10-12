@@ -26,6 +26,8 @@ jobs:
         run: |
           set -e
           while IFS= read -r -d "" file; do node --check "$file"; done < <(find . -type f -name "*.js" -not -path "./node_modules/*" -print0)
+      - name: Run backend regression tests
+        run: npm test
 
   frontend:
     name: Frontend checks

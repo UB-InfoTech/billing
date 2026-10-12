@@ -18,13 +18,19 @@ function dateRange(start,end){const r={};if(start){const d=new Date(String(start
 function period(req){const start=req.query.startDate||req.query.from;const end=req.query.endDate||req.query.to;return dateRange(start,end);}
 function invoiceRevenueExpression() {
   const rounded = { $ifNull: ["$roundOffFinalRevenue", 0] };
-  const final = { $ifNull: ["$finalRevenue", 0] };
   const total = { $ifNull: ["$totalAmount", 0] };
+  const final = { $ifNull: ["$finalRevenue", 0] };
   return {
     $cond: [
       { $gt: [rounded, 0] },
       rounded,
-      { $cond: [{ $gt: [final, 0] }, final, { $max: [total, 0] }] }
+      {
+        $cond: [
+          { $gt: [total, 0] },
+          total,
+          { $round: [{ $max: [final, 0] }, 0] }
+        ]
+      }
     ]
   };
 }

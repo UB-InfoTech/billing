@@ -28,7 +28,7 @@ function invoiceRevenueExpression() {
         $cond: [
           { $gt: [total, 0] },
           total,
-          { $round: [{ $max: [final, 0] }, 0] }
+          { $floor: { $add: [{ $max: [final, 0] }, 0.5] } }
         ]
       }
     ]

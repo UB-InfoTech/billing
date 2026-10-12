@@ -177,10 +177,12 @@ export default function ProductPage(){
     setError("");
 
     const values={...syncConfiguredCustomFields(form,configuredFields)};
-    const requiredFields=configuredFields.filter(field=>field.required&&!field.formula);
+    // Conditional rules may make optional-by-default fields required.
+    // Evaluate every non-calculated field using its current runtime state.
+    const requiredFields=configuredFields.filter(field=>!field.formula);
     const missing=requiredFields.find(field=>{
       const state=getFieldState(field,{...values,...(values.customFields||{})});
-      if(!state.visible||!state.required)return false;
+      if(!state.visible||!state.required||state.disabled)return false;
       const value=field.custom?values.customFields?.[field.key]??values[field.key]:values[field.key];
       return String(value??"").trim()==="";
     });

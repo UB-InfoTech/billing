@@ -548,6 +548,14 @@ npm install
 
 Create `.env` from the committed `backend/.env.example` and set the real values for MongoDB, JWT, TaxPro, and email services. Secrets are intentionally not stored in Git.
 
+**Existing installations — one-time product index migration:** back up the target database first. With the backend `.env` pointing to the intended database, run this once from the `backend` directory:
+
+```bash
+node scripts/migrate-product-identifiers-to-workspace-unique.js
+```
+
+This changes product-code and serial-number uniqueness from global to per-business-account. Verify the output and the target database before deploying; do not run it against an unintended database.
+
 Start backend:
 
 ```bash

@@ -188,10 +188,37 @@ function Order2() {
         setLoadingOrders(true);
         setOrdersError("");
         try {
-            const response = await axios.get(`${linkone}/api/order/orders`, {
-                headers: {'x-auth-token': token}
+            const endpoint = `${linkone}/api/order/orders`;
+            const headers = { "x-auth-token": token };
+            const pageSize = 200;
+            const firstResponse = await axios.get(endpoint, {
+                headers,
+                params: { page: 1, limit: pageSize }
             });
-            setOrders(Array.isArray(response.data?.orders)?response.data.orders:[]);
+            const allOrders = Array.isArray(firstResponse.data?.orders)
+                ? [...firstResponse.data.orders]
+                : [];
+            const pageCount = Math.max(1, Number(firstResponse.data?.pagination?.pages) || 1);
+
+            // The list filters, totals, export and print report operate on the
+            // full invoice set. The API is paginated, so fetch remaining pages
+            // in small batches instead of silently hiding invoices after page 1.
+            for (let firstPage = 2; firstPage <= pageCount; firstPage += 4) {
+                const pageNumbers = Array.from(
+                    { length: Math.min(4, pageCount - firstPage + 1) },
+                    (_, index) => firstPage + index
+                );
+                const pageResponses = await Promise.all(pageNumbers.map(page =>
+                    axios.get(endpoint, { headers, params: { page, limit: pageSize } })
+                ));
+                pageResponses.forEach(response => {
+                    if (Array.isArray(response.data?.orders)) {
+                        allOrders.push(...response.data.orders);
+                    }
+                });
+            }
+
+            setOrders(allOrders);
         } catch (error) {
             if (error.response?.data?.msg === "Token is not valid") {
                 localStorage.removeItem("token");
@@ -978,12 +1005,6 @@ function Order2() {
         });
     }, [sortedOrders, search, filters, clients]);
 
-    // Pagination
-    const indexOfLastItem = currentPage * itemsPerPage;
-    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentOrders = filteredOrders.slice(indexOfFirstItem, indexOfLastItem);
-    const totalPages = Math.ceil(filteredOrders.length / itemsPerPage);
-
     // // Handlers
     // const handleSort = (key) => {
     //     setSortConfig({
@@ -1075,6 +1096,16 @@ function Order2() {
             : strB.localeCompare(strA, undefined, { sensitivity: 'base' });
     });
 
+
+    const totalPages = Math.ceil(sortedData.length / itemsPerPage);
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentOrders = sortedData.slice(indexOfFirstItem, indexOfLastItem);
+    const pageWindowStart = Math.max(1, Math.min(currentPage - 3, totalPages - 6));
+    const visiblePageNumbers = Array.from(
+        { length: Math.min(7, totalPages) },
+        (_, index) => pageWindowStart + index
+    );
 
     const handleExportExcel = () => {
         // const exportData = filteredOrders.map(order => ({
@@ -1248,7 +1279,7 @@ const styles = {
                                 <div className="input-group">
                                     <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
                                     <input id="invoice-search" type="search" className="form-control" placeholder="Search by invoice number or customer name" value={search} onChange={event=>{setSearch(event.target.value);setCurrentPage(1);}}/>
-                                    {search&&<button type="button" className="btn btn-light border" onClick={()=>setSearch("")}>Clear</button>}
+                                    {search&&<button type="button" className="btn btn-light border" onClick={()=>{setSearch("");setCurrentPage(1);}}>Clear</button>}
                                 </div>
                             </div>
                             <div className="invoice-quick-filters" role="group" aria-label="Filter invoices by payment">
@@ -1281,11 +1312,11 @@ const styles = {
                                 </div>
                                 <div className="col-md-3">
                                     <label className="form-label small" htmlFor="invoice-date-from">From date</label>
-                                    <input id="invoice-date-from" type="date" className="form-control" value={filters.startDate||""} onChange={event=>setFilters(prev=>({...prev,startDate:event.target.value}))}/>
+                                    <input id="invoice-date-from" type="date" className="form-control" value={filters.startDate||""} onChange={event=>{setFilters(prev=>({...prev,startDate:event.target.value}));setCurrentPage(1);}}/>
                                 </div>
                                 <div className="col-md-3">
                                     <label className="form-label small" htmlFor="invoice-date-to">To date</label>
-                                    <input id="invoice-date-to" type="date" className="form-control" value={filters.endDate||""} onChange={event=>setFilters(prev=>({...prev,endDate:event.target.value}))}/>
+                                    <input id="invoice-date-to" type="date" className="form-control" value={filters.endDate||""} onChange={event=>{setFilters(prev=>({...prev,endDate:event.target.value}));setCurrentPage(1);}}/>
                                 </div>
                                 <div className="col-md-2">
                                     <button type="button" className="btn btn-light border w-100" onClick={()=>{setFilters(prev=>({...prev,status:"",startDate:"",endDate:"",dateRange:[]}));setCurrentPage(1);}}>Clear filters</button>
@@ -1309,7 +1340,7 @@ const styles = {
                     <DynamicTable
                         tableKey="orders.list"
                         autoOpenSettings={tableCustomizeRequested}
-                        rows={sortedData}
+                        rows={currentOrders}
                         loading={loadingOrders}
                         getRowKey={order=>order._id}
                         emptyText={hasActiveInvoiceFilters?"No invoices match these filters. Clear the filters to see all invoices.":"No invoices yet. Select New invoice to create your first invoice."}
@@ -1391,36 +1422,47 @@ const styles = {
                         }}
                     />
 
-                    {/* Pagination */}
-                    {/* <nav aria-label="Page navigation">
-                        <ul className="pagination justify-content-center mt-3">
-                            <li className="page-item">
-                                <button
-                                    className="page-link"
-                                    onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                    disabled={currentPage === 1}
-                                >
-                                    Previous
-                                </button>
-                            </li>
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                                <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
-                                    <button className="page-link" onClick={() => setCurrentPage(page)}>
-                                        {page}
+                    {totalPages > 1 && (
+                        <nav aria-label="Invoice pages" className="d-flex flex-wrap align-items-center justify-content-between gap-3 mt-3">
+                            <div className="small text-secondary">
+                                Showing {indexOfFirstItem + 1}–{Math.min(indexOfLastItem, sortedData.length)} of {sortedData.length} invoices
+                            </div>
+                            <ul className="pagination justify-content-center mb-0">
+                                <li className={`page-item ${currentPage === 1 ? "disabled" : ""}`}>
+                                    <button
+                                        type="button"
+                                        className="page-link"
+                                        onClick={() => setCurrentPage(page => Math.max(1, page - 1))}
+                                        disabled={currentPage === 1}
+                                    >
+                                        Previous
                                     </button>
                                 </li>
-                            ))}
-                            <li className="page-item">
-                                <button
-                                    className="page-link"
-                                    onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                    disabled={currentPage === totalPages}
-                                >
-                                    Next
-                                </button>
-                            </li>
-                        </ul>
-                    </nav> */}
+                                {visiblePageNumbers.map(page => (
+                                    <li key={page} className={`page-item ${currentPage === page ? "active" : ""}`}>
+                                        <button
+                                            type="button"
+                                            className="page-link"
+                                            aria-current={currentPage === page ? "page" : undefined}
+                                            onClick={() => setCurrentPage(page)}
+                                        >
+                                            {page}
+                                        </button>
+                                    </li>
+                                ))}
+                                <li className={`page-item ${currentPage === totalPages ? "disabled" : ""}`}>
+                                    <button
+                                        type="button"
+                                        className="page-link"
+                                        onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))}
+                                        disabled={currentPage === totalPages}
+                                    >
+                                        Next
+                                    </button>
+                                </li>
+                            </ul>
+                        </nav>
+                    )}
                 </div>
             </div>
 

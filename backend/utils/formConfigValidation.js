@@ -98,7 +98,10 @@ function validateFieldReferences(fields) {
   validateFormulaGraph(fields);
 }
 
+const FORM_CONDITION_ACTIONS=["show","hide","require","optional","readonly","enable","disable"];
+
 module.exports = {
+  FORM_CONDITION_ACTIONS,
   formulaReferences,
   findRemovedFieldDependency,
   validateFormulaGraph,

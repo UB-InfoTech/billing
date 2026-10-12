@@ -12,7 +12,7 @@ const CreditNote=require("../models/CreditNote");
 const InvoiceConfiguration=require("../models/InvoiceConfiguration");
 const PaymentLog=require("../models/PaymentLog2");
 const auth=require("../middleware/auth");
-const {syncClientDataSafely}=require("../utils/syncClientData");
+const {syncClientDataSafely,getInvoiceRevenue}=require("../utils/syncClientData");
 const router=express.Router();
 
 const STATUSES=["Pending","In Process","Completed","Cancelled","Dispatched"];
@@ -99,9 +99,9 @@ router.get("/sales-analytics",auth,async(req,res)=>{
             {$gt:[{$ifNull:["$roundOffFinalRevenue",0]},0]},
             "$roundOffFinalRevenue",
             {$cond:[
-              {$gt:[{$ifNull:["$finalRevenue",0]},0]},
-              "$finalRevenue",
-              {$ifNull:["$totalAmount",0]}
+              {$gt:[{$ifNull:["$totalAmount",0]},0]},
+              "$totalAmount",
+              {$round:[{$max:[{$ifNull:["$finalRevenue",0]},0]},0]}
             ]}
           ]}},
           orderCount:{$sum:1}
@@ -109,18 +109,10 @@ router.get("/sales-analytics",auth,async(req,res)=>{
         {$sort:{_id:1}}
       ])
     ]);
-    const orderTotal=order=>{
-      const rounded=Number(order.roundOffFinalRevenue);
-      if(Number.isFinite(rounded)&&rounded>0)return round2(rounded);
-      const final=Number(order.finalRevenue);
-      if(Number.isFinite(final)&&final>0)return round2(final);
-      const total=Number(order.totalAmount);
-      return Number.isFinite(total)&&total>0?round2(total):0;
-    };
     const shape=orders=>({
-      totalSales:round2(orders.reduce((sum,order)=>sum+orderTotal(order),0)),
+      totalSales:round2(orders.reduce((sum,order)=>sum+getInvoiceRevenue(order),0)),
       orderCount:orders.length,
-      orders:orders.map(order=>({...order,roundOffFinalRevenue:orderTotal(order)}))
+      orders:orders.map(order=>({...order,roundOffFinalRevenue:getInvoiceRevenue(order)}))
     });
     res.json({
       today:shape(today),yesterday:shape(yesterday),
@@ -134,7 +126,7 @@ router.get("/sales-analytics",auth,async(req,res)=>{
 router.get("/all-orders",auth,async(req,res)=>{
   try{
     const orders=await Order.find({createdBy:userId(req)}).select("orderNumber companyName finalRevenue roundOffFinalRevenue totalAmount orderDate status Address State City dueAmount paidAmount paymentStatus clientId").sort({orderDate:-1}).lean();
-    res.json(orders);
+    res.json(orders.map(order=>({...order,roundOffFinalRevenue:getInvoiceRevenue(order)})));
   }catch(error){res.status(500).json({message:error.message});}
 });
 
@@ -179,7 +171,8 @@ router.get("/orders",auth,async(req,res)=>{
     const sortField=["orderDate","orderNumber","companyName","dueAmount","finalRevenue","createdAt"].includes(req.query.sort)?req.query.sort:"orderDate";
     const sortDir=req.query.order==="asc"?1:-1;
     const [orders,total]=await Promise.all([Order.find(query).sort({[sortField]:sortDir}).skip((page-1)*limit).limit(limit).lean(),Order.countDocuments(query)]);
-    res.json({success:true,orders,pagination:{page,limit,total,pages:Math.max(1,Math.ceil(total/limit))}});
+    const normalizedOrders=orders.map(order=>({...order,roundOffFinalRevenue:getInvoiceRevenue(order)}));
+    res.json({success:true,orders:normalizedOrders,pagination:{page,limit,total,pages:Math.max(1,Math.ceil(total/limit))}});
   }catch(error){res.status(error.status||500).json({success:false,message:error.message});}
 });
 

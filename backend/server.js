@@ -71,7 +71,7 @@ app.use("/uploads",express.static(path.join(__dirname,"public/uploads"),{
     res.setHeader("X-Content-Type-Options","nosniff");
     // Public uploads should be images or PDFs. Never serve any other legacy
     // upload as HTML/script content; force it to download as inert bytes.
-    if(!/\\.(?:jpe?g|png|gif|webp|pdf)$/i.test(filePath)){
+    if(!/\.(?:jpe?g|png|gif|webp|pdf)$/i.test(filePath)){
       res.setHeader("Content-Type","application/octet-stream");
       res.setHeader("Content-Disposition","attachment");
       res.setHeader("Cache-Control","no-store");

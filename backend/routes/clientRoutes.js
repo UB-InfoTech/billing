@@ -151,7 +151,9 @@ router.delete("/:id",auth,async(req,res)=>{
   try{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid client ID."});
     const linked=await Order.exists({clientId:req.params.id,createdBy:owner(req)});
-    if(linked)return res.status(400).json({message:"Client cannot be deleted because invoices are linked to this client. Mark the client Inactive instead."});
+    if(linked)return res.status(409).json({message:"Customer cannot be deleted because invoices are linked to it. Mark the customer Inactive instead."});
+    const linkedCreditNote=await CreditNote.exists({clientId:req.params.id,createdBy:owner(req)});
+    if(linkedCreditNote)return res.status(409).json({message:"Customer cannot be deleted because Credit Notes are linked to it. Keep the record for accounting history and mark it Inactive instead."});
     const client=await Client.findOneAndDelete({_id:req.params.id,createdBy:owner(req)});
     if(!client)return res.status(404).json({message:"Client not found"});
     res.json({message:"Client deleted successfully"});

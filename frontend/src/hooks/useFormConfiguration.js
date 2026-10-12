@@ -219,6 +219,7 @@ export const getFieldState=(field,values)=>{
     const matches=fieldConditionMatches(condition,values);
     if(!matches)return;
     if(condition.action==="require")required=true;
+    if(condition.action==="optional")required=false;
     if(condition.action==="readonly")readOnly=true;
     if(condition.action==="enable")disabled=false;
     if(condition.action==="disable")disabled=true;

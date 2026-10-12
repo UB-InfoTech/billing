@@ -35,14 +35,7 @@ const cleanCustomFields=value=>{
 };
 const idOrNull=v=>v&&mongoose.isValidObjectId(v)?v:null;
 
-function dateRange(req){
-  const start=req.query.startDate||req.query.from;
-  const end=req.query.endDate||req.query.to;
-  const range={};
-  if(start)range.$gte=new Date(String(start)+"T00:00:00.000");
-  if(end)range.$lte=new Date(String(end)+"T23:59:59.999");
-  return Object.keys(range).length?range:null;
-}
+const { buildOrderDateRange } = require("../utils/orderDateRange");
 
 async function nextOrderNumber(uid){
   // Reserve the sequence in a single atomic database operation so concurrent
@@ -180,13 +173,13 @@ router.get("/orders",auth,async(req,res)=>{
     if(req.query.status&&STATUSES.includes(req.query.status))query.status=req.query.status;
     if(req.query.paymentStatus&&["Unpaid","Partial","Paid"].includes(req.query.paymentStatus))query.paymentStatus=req.query.paymentStatus;
     if(idOrNull(req.query.clientId))query.clientId=req.query.clientId;
-    const range=dateRange(req);if(range)query.orderDate=range;
+    const range=buildOrderDateRange(req.query);if(range)query.orderDate=range;
     const page=Math.max(parseInt(req.query.page,10)||1,1),limit=Math.min(Math.max(parseInt(req.query.limit,10)||100,1),200);
     const sortField=["orderDate","orderNumber","companyName","dueAmount","finalRevenue","createdAt"].includes(req.query.sort)?req.query.sort:"orderDate";
     const sortDir=req.query.order==="asc"?1:-1;
     const [orders,total]=await Promise.all([Order.find(query).sort({[sortField]:sortDir}).skip((page-1)*limit).limit(limit).lean(),Order.countDocuments(query)]);
     res.json({success:true,orders,pagination:{page,limit,total,pages:Math.max(1,Math.ceil(total/limit))}});
-  }catch(error){res.status(500).json({success:false,message:error.message});}
+  }catch(error){res.status(error.status||500).json({success:false,message:error.message});}
 });
 
 router.get("/orders/:id",auth,async(req,res)=>{

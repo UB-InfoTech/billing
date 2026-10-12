@@ -62,4 +62,21 @@ async function syncClientData(clientId) {
   }},{new:true}).lean();
 }
 
-module.exports={syncClientData};
+async function syncClientDataSafely(clientId, context = "a saved financial transaction") {
+  try {
+    return await syncClientData(clientId);
+  } catch (firstError) {
+    console.error(`Customer totals refresh failed after ${context}; retrying once.`, firstError);
+    try {
+      return await syncClientData(clientId);
+    } catch (retryError) {
+      // The invoice/payment/credit note was already saved. Do not turn a
+      // completed financial transaction into an apparent failure that users
+      // may retry and accidentally duplicate. A later transaction can resync.
+      console.error(`Customer totals refresh still failed after ${context}; totals may need a refresh.`, retryError);
+      return null;
+    }
+  }
+}
+
+module.exports={syncClientData,syncClientDataSafely};

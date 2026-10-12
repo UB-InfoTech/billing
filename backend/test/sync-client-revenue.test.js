@@ -43,3 +43,10 @@ test("rounds a legacy pre-rounding calculation to the billed total", () => {
     100
   );
 });
+
+test("matches invoice rounding for half-rupee legacy totals", () => {
+  assert.equal(
+    getInvoiceRevenue({ roundOffFinalRevenue: 0, finalRevenue: 100.5 }),
+    101
+  );
+});

@@ -134,18 +134,30 @@ const ProtectedRoute = ({ children }) => {
 
     checkAuth();
 
-    const interval = setInterval(() => {
+    // Check expiry once per minute. A 60ms interval causes constant decoding
+    // and unnecessary renders in every protected page.
+    const interval = window.setInterval(() => {
       const token = localStorage.getItem('token');
-      if (token) {
+      if (!token) {
+        setError('Your session has ended. Please sign in again.');
+        setIsAuthenticated(false);
+        return;
+      }
+
+      try {
         const decoded = jwtDecode(token);
         const currentTime = Date.now() / 1000;
-        if (decoded.exp < currentTime) {
+        if (!decoded.exp || decoded.exp <= currentTime) {
           localStorage.removeItem('token');
           setError('Session expired, please login again');
           setIsAuthenticated(false);
         }
+      } catch {
+        localStorage.removeItem('token');
+        setError('Your session is no longer valid. Please sign in again.');
+        setIsAuthenticated(false);
       }
-    }, 60);
+    }, 60_000);
 
     return () => clearInterval(interval);
   }, []);

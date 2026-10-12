@@ -148,6 +148,9 @@ router.post("/orders/create",auth,async(req,res)=>{
   try{
     const body={...(req.body||{})};
     body.customFields=cleanCustomFields(body.customFields);
+    if(!Array.isArray(body.subOrders)||!body.subOrders.some(item=>String(item?.orderName||"").trim())){
+      return res.status(400).json({success:false,message:"Add at least one product or service before saving the invoice."});
+    }
     if(body.clientId){
       const client=await Client.findOne({_id:body.clientId,createdBy:userId(req)}).lean();
       if(!client)return res.status(400).json({message:"Selected client was not found."});
@@ -200,6 +203,19 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid order ID."});
     const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)});if(!order)return res.status(404).json({message:"Order not found"});
     const oldClient=String(order.clientId||"");
+    if(req.body?.orderNumber!==undefined){
+      const requestedNumber=String(req.body.orderNumber||"").trim();
+      if(!requestedNumber)return res.status(400).json({message:"Invoice number cannot be blank."});
+      if(requestedNumber!==String(order.orderNumber||"")){
+        const duplicate=await Order.exists({
+          createdBy:userId(req),
+          orderNumber:requestedNumber,
+          _id:{$ne:order._id}
+        });
+        if(duplicate)return res.status(409).json({message:"That invoice number is already in use."});
+        order.orderNumber=requestedNumber;
+      }
+    }
     const clientIdWasProvided=Object.prototype.hasOwnProperty.call(req.body||{},"clientId");
     let selectedClient=null;
     if(clientIdWasProvided){

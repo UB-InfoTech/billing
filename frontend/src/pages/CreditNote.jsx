@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import axios from "axios";
 import "bootstrap/dist/css/bootstrap.min.css";
 import DynamicTable from "../components/DynamicTable";
+import {formatDateInput} from "../utils/dateInput";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
@@ -18,7 +19,7 @@ const REASONS = [
 const REFUND_METHODS = ["Cash", "Bank Transfer", "UPI", "Cheque"];
 const PAGE_SIZE = 10;
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => formatDateInput(new Date());
 const money = (value) => `₹${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const n = (value) => {
     const valueAsNumber = Number(value);
@@ -525,7 +526,7 @@ export default function CreditNote() {
                 ...emptyForm(),
                 creditNoteNumber: fullNote.creditNoteNumber || "",
                 creditNoteDate: fullNote.creditNoteDate
-                    ? new Date(fullNote.creditNoteDate).toISOString().slice(0, 10)
+                    ? formatDateInput(fullNote.creditNoteDate)
                     : today(),
                 reason: fullNote.reason || "Other",
                 originalOrderId: orderId || "",

@@ -17,6 +17,7 @@ import ConfiguredField from "../components/ConfiguredField";
 import ArithmeticInput from "../components/ArithmeticInput";
 import {useFormConfiguration,applyFormulas,hydrateConfiguredValues,applyAutoFill,getFieldState,syncConfiguredCustomFields,buildConfiguredDefaults,groupFieldsBySection} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
+import {formatDateInput,getDateRangeBoundary} from "../utils/dateInput";
 import * as XLSX from 'xlsx';
 import Report from '../components/Report';
 import { useReactToPrint } from "react-to-print";
@@ -97,7 +98,7 @@ function Order2() {
 
     const [payments, setPayments] = useState([]);
     const [editPayment, setEditPayment] = useState(null);
-    const [newPayment, setNewPayment] = useState({ amount: "", method: "Cash", amountReference: "", paymentDate: new Date().toISOString().slice(0, 10) });
+    const [newPayment, setNewPayment] = useState({ amount: "", method: "Cash", amountReference: "", paymentDate: formatDateInput(new Date()) });
     const authConfig = () => ({ headers: { "x-auth-token": localStorage.getItem("token") || "" } });
 
     // const date = new DateObject()
@@ -737,7 +738,7 @@ function Order2() {
             amount: "",
             method: "Cash",
             amountReference: "",
-            paymentDate: new Date().toISOString().slice(0, 10),
+            paymentDate: formatDateInput(new Date()),
         });
         setShowPaymentModal(true);
     };
@@ -803,13 +804,13 @@ function Order2() {
                 {
                     ...newPayment,
                     amount,
-                    paymentDate: newPayment.paymentDate || new Date().toISOString().slice(0, 10),
+                    paymentDate: newPayment.paymentDate || formatDateInput(new Date()),
                 },
                 authConfig()
             );
             await fetchPayments();
             setEditingOrder(response.data?.order || editingOrder);
-            setNewPayment({ amount: "", method: "Cash", amountReference: "", paymentDate: new Date().toISOString().slice(0, 10) });
+            setNewPayment({ amount: "", method: "Cash", amountReference: "", paymentDate: formatDateInput(new Date()) });
             await fetchOrders();
             alert("✅ Payment added successfully.");
         } catch (error) {
@@ -825,7 +826,7 @@ function Order2() {
                 {
                     ...editPayment,
                     amount: Number(editPayment.amount),
-                    paymentDate: editPayment.paymentDate || new Date().toISOString().slice(0, 10),
+                    paymentDate: editPayment.paymentDate || formatDateInput(new Date()),
                 },
                 authConfig()
             );
@@ -990,17 +991,29 @@ function Order2() {
 
     // Filtering
     const filteredOrders = useMemo(() => {
+        const selectedRangeStart = filters.dateRange.length
+            ? getDateRangeBoundary(filters.dateRange[0], false)
+            : null;
+        const selectedRangeEnd = filters.dateRange.length > 1
+            ? getDateRangeBoundary(filters.dateRange[1], true)
+            : null;
+        const fromDate = getDateRangeBoundary(filters.startDate, false);
+        const toDate = getDateRangeBoundary(filters.endDate, true);
+
         return sortedOrders.filter(order => {
             const clientName = clients.find(client => client._id === order.clientId)?.companyName || '';
+            const orderDate = new Date(order.orderDate);
+            const hasValidOrderDate = !Number.isNaN(orderDate.getTime());
             return (
                 (clientName.toLowerCase().includes(search.toLowerCase()) || String(order.orderNumber||"").toLowerCase().includes(search.toLowerCase())) &&
                 (filters.status === '' || order.status === filters.status) &&
                 (filters.paymentStatus === '' || (filters.paymentStatus === "Outstanding" ? Number(order.dueAmount||0)>0 : order.paymentStatus === filters.paymentStatus)) &&
-                (filters.dateRange.length === 0 || (new Date(order.orderDate) >= new Date(filters.dateRange[0]) && new Date(order.orderDate) <= new Date(filters.dateRange[1]))) &&
+                (!selectedRangeStart || (hasValidOrderDate && orderDate >= selectedRangeStart)) &&
+                (!selectedRangeEnd || (hasValidOrderDate && orderDate <= selectedRangeEnd)) &&
                 // (filters.minTotal === '' || order.totalCost >= parseInt(filters.minTotal)) &&
                 // (filters.maxTotal === '' || order.totalCost <= parseInt(filters.maxTotal)) &&
-                (filters.startDate === '' || new Date(order.orderDate) >= new Date(filters.startDate)) &&
-                (filters.endDate === '' || new Date(order.orderDate) <= new Date(filters.endDate))
+                (!fromDate || (hasValidOrderDate && orderDate >= fromDate)) &&
+                (!toDate || (hasValidOrderDate && orderDate <= toDate))
             );
         });
     }, [sortedOrders, search, filters, clients]);
@@ -1631,7 +1644,7 @@ const styles = {
                                                             const state=getFieldState(field,{...formData,...(formData.customFields||{})});
                                                             const source=field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[];
                                                             const value=field.key==="orderDate"
-                                                                ? (configuredOrderValue(field)?new Date(configuredOrderValue(field)).toISOString().slice(0,10):"")
+                                                                ? formatDateInput(configuredOrderValue(field))
                                                                 : configuredOrderValue(field);
                                                             return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
                                                                 <ConfiguredField
@@ -1975,7 +1988,7 @@ const styles = {
                                                 step="0.01"
                                                 placeholder="Payment amount"
                                             />
-                                            <input type="date" className="form-control mb-2" value={editPayment.paymentDate ? new Date(editPayment.paymentDate).toISOString().slice(0, 10) : ""} onChange={(e) => setEditPayment({ ...editPayment, paymentDate: e.target.value })} />
+                                            <input type="date" className="form-control mb-2" value={formatDateInput(editPayment.paymentDate)} onChange={(e) => setEditPayment({ ...editPayment, paymentDate: e.target.value })} />
                                             <select className="form-select mb-2" value={editPayment.method} onChange={(e) => setEditPayment({ ...editPayment, method: e.target.value })}>
                                                 <option>Cash</option>
                                                 <option>Bank Transfer</option>

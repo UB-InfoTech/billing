@@ -114,9 +114,13 @@ async function start(){
   console.log("MongoDB Connected");
   app.listen(PORT,()=>console.log("Server running on port "+PORT));
 }
-start().catch(error=>{
-  console.error("Server startup failed:",error);
-  process.exit(1);
-});
+// Importing the app for tests or tooling must not open a database connection
+// or terminate the importing process. Only start the HTTP server when run directly.
+if (require.main === module) {
+  start().catch(error => {
+    console.error("Server startup failed:", error);
+    process.exit(1);
+  });
+}
 
-module.exports=app;
+module.exports = app;

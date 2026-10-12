@@ -92,7 +92,7 @@ function Order2() {
         ...orderFormConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean),
         ...orderItemConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean)
     ])),[orderFormConfig.fields,orderItemConfig.fields]);
-    const {records:linkedRecords}=useNoCodeDataSources(linkedOrderSources);
+    const {records:linkedRecords,searchRecords:searchLinkedRecords}=useNoCodeDataSources(linkedOrderSources);
     const [editingOrder, setEditingOrder] = useState(null);
     const [viewingOrder,setViewingOrder]=useState(null);
 
@@ -1659,6 +1659,7 @@ const styles = {
                                                                     onChange={next=>{setInvoiceFormError("");handleConfiguredOrderValue(field.key,next,null,field);}}
                                                                     onRecordChange={record=>{setInvoiceFormError("");handleConfiguredOrderValue(field.key,record?.[field.dataSource?.valueField||"_id"]??"",record,field);}}
                                                                     lookupRecords={source}
+                                                                    onLookupSearch={searchLinkedRecords}
                                                                     options={field.options||[]}
                                                                     listId={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?"orderCompanyName":undefined}
                                                                     listOptions={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?clients.map(client=>client.companyName):[]}
@@ -1698,6 +1699,7 @@ const styles = {
                                                                     onChange={next=>handleSubOrderValueChange(index,field.key,next,null,field)}
                                                                     onRecordChange={record=>handleSubOrderValueChange(index,field.key,record?.[field.dataSource?.valueField||"_id"]??"",record,field)}
                                                                     lookupRecords={field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[]}
+                                                                    onLookupSearch={searchLinkedRecords}
                                                                     options={field.options||[]}
                                                                     listId={field.key==="orderName"&&!field.custom?"orderItemName":undefined}
                                                                     listOptions={field.key==="orderName"&&!field.custom?products.map(product=>product.productName):[]}

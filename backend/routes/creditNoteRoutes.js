@@ -5,7 +5,7 @@ const Order = require("../models/Order2");
 const CreditNote = require("../models/CreditNote");
 const CreditNoteCounter = require("../models/CreditNoteCounter");
 const auth = require('../middleware/auth');
-const { syncClientData } = require("../utils/syncClientData");
+const { syncClientDataSafely } = require("../utils/syncClientData");
 
 
 const router = express.Router();
@@ -1074,7 +1074,7 @@ router.post("/", auth, async (req, res) => {
       )
       .lean();
 
-    await syncClientData(noteDoc.clientId);
+    await syncClientDataSafely(noteDoc.clientId);
 
     return res.status(201).json({
       message: "Credit note created successfully.",
@@ -1461,7 +1461,7 @@ router.put("/:id", auth, async (req, res) => {
     await note.save(session ? { session } : undefined);
     if (session) await session.commitTransaction();
 
-    await syncClientData(order.clientId);
+    await syncClientDataSafely(order.clientId);
 
     const updated = await CreditNote.findById(note._id)
       .populate(
@@ -1596,7 +1596,7 @@ async function cancelCreditNote(req, res) {
 
     await note.save(session ? { session } : undefined);
     if (session) await session.commitTransaction();
-    await syncClientData(order.clientId);
+    await syncClientDataSafely(order.clientId);
 
     const cancelled = await CreditNote.findById(note._id)
       .populate(

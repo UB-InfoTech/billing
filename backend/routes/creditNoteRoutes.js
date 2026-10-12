@@ -1653,6 +1653,13 @@ async function cancelCreditNote(req, res) {
 
   const transactional = isReplicaSetAvailable();
   const session = transactional ? await mongoose.startSession() : null;
+  const changedStock = [];
+  const changedCustomerCredit = [];
+  let previousNote = null;
+  let previousOrderFinancials = null;
+  let previousOrderId = null;
+  let orderUpdated = false;
+  let noteSaved = false;
 
   try {
     if (session) session.startTransaction();
@@ -1661,9 +1668,15 @@ async function cancelCreditNote(req, res) {
     if (!note) throw new Error("Credit note not found.");
     if (note.status === "Cancelled") throw new Error("Credit note is already cancelled.");
     if (note.status !== "Posted") throw new Error("Only posted credit notes can be cancelled.");
+    previousNote = note.toObject();
 
     const order = await Order.findOne({ _id: note.originalOrderId, createdBy: userId }).session(session);
     if (!order) throw new Error("Original invoice no longer exists.");
+    previousOrderId = order._id;
+    previousOrderFinancials = {
+      creditAppliedAmount: Number(order.creditAppliedAmount || 0),
+      creditNoteCount: Number(order.creditNoteCount || 0),
+    };
 
     const adjustmentAmount = Number(note.settlement?.adjustmentAmount || 0);
     const currentCreditApplied = Number(order.creditAppliedAmount || 0);
@@ -1700,6 +1713,10 @@ async function cancelCreditNote(req, res) {
           { new: true, session }
         );
         if (!updated) throw new Error("A stock product no longer exists.");
+        changedStock.push({
+          productId: movement.productId,
+          delta: -Number(movement.quantity || 0),
+        });
         if (Number(updated.quantity || 0) < -EPSILON) {
           throw new Error(
             `Cancelling this credit note would make product stock negative for ${movement.productId}.`
@@ -1729,10 +1746,14 @@ async function cancelCreditNote(req, res) {
         { new: true, session }
       );
       if (!updatedClient) throw new Error("Customer for this Credit Note was not found in your account.");
+      changedCustomerCredit.push({
+        clientId: note.clientId,
+        delta: -Number(note.settlement.customerCreditAmount),
+      });
     }
 
-    await Order.findByIdAndUpdate(
-      order._id,
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: order._id, createdBy: userId },
       {
         $set: {
           creditAppliedAmount: nextCreditApplied,
@@ -1740,8 +1761,10 @@ async function cancelCreditNote(req, res) {
           creditNoteCount: Math.max(0, Number(order.creditNoteCount || 0) - 1),
         },
       },
-      { session }
+      { new: true, session }
     );
+    if (!updatedOrder) throw new Error("Original invoice could not be updated.");
+    orderUpdated = true;
 
     note.status = "Cancelled";
     note.settlementStatus = "Cancelled";
@@ -1750,25 +1773,79 @@ async function cancelCreditNote(req, res) {
     note.cancelledBy = userId;
 
     await note.save(session ? { session } : undefined);
-    if (session) await session.commitTransaction();
-    await syncClientDataSafely(order.clientId);
+    noteSaved = true;
 
-    const cancelled = await CreditNote.findById(note._id)
-      .populate(
-        "originalOrderId",
-        "orderNumber orderDate companyName gstNumber Address State City pinCode stateCode paymentTerms roundOffFinalRevenue finalRevenue dueAmount creditAppliedAmount"
-      )
-      .lean();
-
-    return res.json({
+    const orderForResponse = updatedOrder.toObject();
+    const cancelledNote = note.toObject();
+    const responseBody = {
       message: "Credit note cancelled successfully.",
-      creditNote: { ...cancelled, originalOrder: cancelled?.originalOrderId }
-    });
+      creditNote: {
+        ...cancelledNote,
+        originalOrderId: orderForResponse,
+        originalOrder: orderForResponse,
+      },
+    };
+
+    if (session) await session.commitTransaction();
+    await syncClientDataSafely(order.clientId, "a Credit Note cancellation");
+    return res.json(responseBody);
   } catch (error) {
     if (session) {
       try {
         if (session.inTransaction()) await session.abortTransaction();
       } catch {}
+    } else {
+      if (noteSaved && previousNote) {
+        try {
+          await CreditNote.findOneAndUpdate(
+            { _id: req.params.id, createdBy: userId },
+            { $set: {
+              status: previousNote.status,
+              settlementStatus: previousNote.settlementStatus,
+              cancellationReason: previousNote.cancellationReason,
+              cancelledAt: previousNote.cancelledAt,
+              cancelledBy: previousNote.cancelledBy,
+              inventoryStatus: previousNote.inventoryStatus,
+            } },
+            { new: true }
+          );
+        } catch (rollbackError) {
+          console.error("Credit Note cancellation rollback could not restore the note:", rollbackError);
+        }
+      }
+      if (orderUpdated && previousOrderFinancials && previousOrderId) {
+        try {
+          await Order.findOneAndUpdate(
+            { _id: previousOrderId, createdBy: userId },
+            { $set: previousOrderFinancials },
+            { new: true }
+          );
+        } catch (rollbackError) {
+          console.error("Credit Note cancellation rollback could not restore invoice balances:", rollbackError);
+        }
+      }
+      for (const change of changedStock.reverse()) {
+        try {
+          await require("../models/Product").findOneAndUpdate(
+            { _id: change.productId, createdBy: userId },
+            { $inc: { quantity: -Number(change.delta || 0) } },
+            { new: true }
+          );
+        } catch (rollbackError) {
+          console.error("Credit Note cancellation rollback could not restore stock:", rollbackError);
+        }
+      }
+      for (const change of changedCustomerCredit.reverse()) {
+        try {
+          await require("../models/Client").findOneAndUpdate(
+            { _id: change.clientId, createdBy: userId },
+            { $inc: { creditBalance: -Number(change.delta || 0) } },
+            { new: true }
+          );
+        } catch (rollbackError) {
+          console.error("Credit Note cancellation rollback could not restore customer credit:", rollbackError);
+        }
+      }
     }
     console.error("Credit note cancellation error:", error);
     return res.status(400).json({ message: error.message });

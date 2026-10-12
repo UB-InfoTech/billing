@@ -119,7 +119,7 @@ export default function Home(){
             <strong>Want help getting started?</strong>
             <div className="small text-muted">Your setup guide is optional. You can add business details whenever you're ready.</div>
           </div>
-          <button type="button" className="btn btn-outline-primary btn-sm" onClick={()=>{setSetupGuideDismissed(false);try{localStorage.removeItem(setupGuideStorageKey);}catch{}}}>Show setup guide</button>
+          <button type="button" className="btn btn-outline-primary btn-sm" onClick={()=>{setSetupGuideDismissed(false);try{localStorage.removeItem(setupGuideStorageKey);}catch(storageError){console.warn("Could not clear the setup guide preference.",storageError);}}}>Show setup guide</button>
         </div>
       ):(
       <section className="getting-started-card mb-4" aria-labelledby="getting-started-title">

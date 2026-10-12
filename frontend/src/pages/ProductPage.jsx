@@ -9,6 +9,8 @@ import DynamicTable from "../components/DynamicTable";
 import { PRODUCT_FORM_FIELDS } from "../config/noCodeCatalog";
 import { useFormConfiguration, applyFormulas, getFieldState, hydrateConfiguredValues, syncConfiguredCustomFields, buildConfiguredDefaults } from "../hooks/useFormConfiguration";
 
+const PRODUCT_PAGE_SIZE=100;
+
 const emptyBase={
   productName:"",
   productCode:"",
@@ -42,6 +44,13 @@ export default function ProductPage(){
   const [search,setSearch]=useState("");
   const [searchInput,setSearchInput]=useState("");
   const [lowStock,setLowStock]=useState(false);
+  const [currentPage,setCurrentPage]=useState(1);
+  const [pagination,setPagination]=useState({page:1,pages:1,total:0});
+  const visiblePageStart=Math.max(1,Math.min(currentPage-3,pagination.pages-6));
+  const visiblePageNumbers=Array.from(
+    {length:Math.min(7,pagination.pages)},
+    (_,index)=>visiblePageStart+index
+  );
 
   const configuredFields=productFormConfig.fields||[];
   const visibleFields=configuredFields.filter(field=>field.visible!==false);
@@ -80,19 +89,33 @@ export default function ProductPage(){
     try{
       setLoading(true);
       setError("");
-      const response=await fetchProducts({search:search.trim(),lowStock:lowStock?"true":"false",limit:100,sort:"productName",order:"asc"});
-      setProducts(response.data?.products||[]);
+      const response=await fetchProducts({
+        search:search.trim(),
+        lowStock:lowStock?"true":"false",
+        page:currentPage,
+        limit:PRODUCT_PAGE_SIZE,
+        sort:"productName",
+        order:"asc"
+      });
+      const pageCount=Math.max(1,Number(response.data?.pages)||1);
+      const total=Math.max(0,Number(response.data?.total)||0);
+      setPagination({page:Math.min(currentPage,pageCount),pages:pageCount,total});
+      if(currentPage>pageCount){
+        setCurrentPage(pageCount);
+        return;
+      }
+      setProducts(Array.isArray(response.data?.products)?response.data.products:[]);
     }catch(loadError){
       setError(loadError.response?.data?.message||"Unable to load products.");
     }finally{setLoading(false);}
   };
 
   useEffect(()=>{
-    const timer=window.setTimeout(()=>setSearch(searchInput.trim()),250);
+    const timer=window.setTimeout(()=>{setCurrentPage(1);setSearch(searchInput.trim());},250);
     return()=>window.clearTimeout(timer);
   },[searchInput]);
 
-  useEffect(()=>{loadProducts();},[search,lowStock]);
+  useEffect(()=>{loadProducts();},[search,lowStock,currentPage]);
 
   const handleEdit=useCallback(product=>{
     const hydrated=buildConfiguredDefaults(hydrateConfiguredValues(product,configuredFields),configuredFields);
@@ -324,14 +347,14 @@ export default function ProductPage(){
               <div className="input-group" style={{maxWidth:360}}>
                 <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
                 <input className="form-control" placeholder="Search products, codes or designs" value={searchInput} onChange={event=>setSearchInput(event.target.value)} aria-label="Search products"/>
-                {searchInput&&<button type="button" className="btn btn-light border" onClick={()=>{setSearchInput("");setSearch("");}} aria-label="Clear product search">Clear</button>}
+                {searchInput&&<button type="button" className="btn btn-light border" onClick={()=>{setSearchInput("");setSearch("");setCurrentPage(1);}} aria-label="Clear product search">Clear</button>}
               </div>
               <label className="form-check form-switch d-flex align-items-center gap-2 px-3 mb-0 border rounded">
-                <input className="form-check-input" type="checkbox" checked={lowStock} onChange={event=>setLowStock(event.target.checked)}/>
+                <input className="form-check-input" type="checkbox" checked={lowStock} onChange={event=>{setCurrentPage(1);setLowStock(event.target.checked);}}/>
                 <span className="small">Low stock only</span>
               </label>
             </div>
-            <span className="small text-muted">{products.length} products shown</span>
+            <span className="small text-muted">{pagination.total} product{pagination.total===1?"":"s"} found</span>
           </div>
 
           <DynamicTable
@@ -353,6 +376,26 @@ export default function ProductPage(){
               )
             }}
           />
+          {pagination.pages>1&&(
+            <nav aria-label="Product pages" className="d-flex flex-wrap align-items-center justify-content-between gap-3 mt-3">
+              <div className="small text-secondary">
+                Showing {(currentPage-1)*PRODUCT_PAGE_SIZE+1}–{Math.min(currentPage*PRODUCT_PAGE_SIZE,pagination.total)} of {pagination.total} products
+              </div>
+              <ul className="pagination mb-0">
+                <li className={`page-item ${currentPage===1?"disabled":""}`}>
+                  <button type="button" className="page-link" disabled={currentPage===1} onClick={()=>setCurrentPage(page=>Math.max(1,page-1))}>Previous</button>
+                </li>
+                {visiblePageNumbers.map(page=>(
+                  <li key={page} className={`page-item ${currentPage===page?"active":""}`}>
+                    <button type="button" className="page-link" aria-current={currentPage===page?"page":undefined} onClick={()=>setCurrentPage(page)}>{page}</button>
+                  </li>
+                ))}
+                <li className={`page-item ${currentPage===pagination.pages?"disabled":""}`}>
+                  <button type="button" className="page-link" disabled={currentPage===pagination.pages} onClick={()=>setCurrentPage(page=>Math.min(pagination.pages,page+1))}>Next</button>
+                </li>
+              </ul>
+            </nav>
+          )}
         </div>
       </div>
 

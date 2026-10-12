@@ -180,6 +180,40 @@ const createApiClient = () => {
 
 const apiClient = createApiClient();
 
+/**
+ * The invoice endpoint is paginated. Bulk payments must load every page, or
+ * bills after the first 100/200 will silently be unavailable for selection.
+ */
+const fetchAllInvoiceOrders = async (client, signal) => {
+  const limit = 200;
+  const firstResponse = await client.get(API_CONFIG.ENDPOINTS.ORDERS, {
+    signal,
+    params: { page: 1, limit }
+  });
+  const firstData = firstResponse.data || {};
+  const orders = Array.isArray(firstData.orders) ? [...firstData.orders] : [];
+  const pages = Math.max(1, Number(firstData.pagination?.pages) || 1);
+
+  for (let firstPage = 2; firstPage <= pages; firstPage += 4) {
+    const pageNumbers = Array.from(
+      { length: Math.min(4, pages - firstPage + 1) },
+      (_, index) => firstPage + index
+    );
+    const responses = await Promise.all(pageNumbers.map(page =>
+      client.get(API_CONFIG.ENDPOINTS.ORDERS, {
+        signal,
+        params: { page, limit }
+      })
+    ));
+
+    responses.forEach(response => {
+      if (Array.isArray(response.data?.orders)) orders.push(...response.data.orders);
+    });
+  }
+
+  return [...new Map(orders.map(order => [String(order._id), order])).values()];
+};
+
 // Sub-components
 const PaymentForm = React.memo(({
   form,
@@ -351,11 +385,14 @@ const OrdersTable = React.memo(({
     );
   }
 
-    const filteredOrders = orders.filter(order => {
+  const filteredOrders = orders.filter(order => {
+    const orderNumber = String(order.orderNumber || "");
+    const challanNumber = String(order.challanNumber || "");
+    const companyName = String(order.companyName || "");
     return (
-      order.orderNumber.includes(filters.billNo) &&
-      order.challanNumber.includes(filters.challanNumber) &&
-      order.companyName.toLowerCase().includes(filters.clientName.toLowerCase())
+      orderNumber.toLowerCase().includes(filters.billNo.toLowerCase()) &&
+      challanNumber.toLowerCase().includes(filters.challanNumber.toLowerCase()) &&
+      companyName.toLowerCase().includes(filters.clientName.toLowerCase())
     );
   });
 
@@ -365,17 +402,19 @@ const OrdersTable = React.memo(({
 
     // OrderNumber (natural sort: SS-1, SS-2, ..., SS-100)
     if (sortKey === 'orderNumber') {
-      const numA = parseInt(aVal.match(/\d+/)?.[0] ?? 0, 10);
-      const numB = parseInt(bVal.match(/\d+/)?.[0] ?? 0, 10);
+      const orderNumberA = String(aVal ?? "");
+      const orderNumberB = String(bVal ?? "");
+      const numA = parseInt(orderNumberA.match(/\d+/)?.[0] ?? "0", 10);
+      const numB = parseInt(orderNumberB.match(/\d+/)?.[0] ?? "0", 10);
 
       if (numA !== numB) {
         return sortOrder === 'asc' ? numA - numB : numB - numA;
       }
 
-      // if numbers are equal, fallback to string compare (handles SS-09 vs SS-9)
+      // Keep natural ordering while safely supporting records with no invoice number.
       return sortOrder === 'asc'
-        ? aVal.localeCompare(bVal, undefined, { sensitivity: 'base' })
-        : bVal.localeCompare(aVal, undefined, { sensitivity: 'base' });
+        ? orderNumberA.localeCompare(orderNumberB, undefined, { sensitivity: 'base' })
+        : orderNumberB.localeCompare(orderNumberA, undefined, { sensitivity: 'base' });
     }
 
     // Number comparison
@@ -590,10 +629,8 @@ export default function BulkPayment() {
     const fetchOrders = async () => {
       try {
         setLoading(true);
-        const response = await apiClient.get(API_CONFIG.ENDPOINTS.ORDERS, {
-          signal: controller.signal
-        });
-        const availableOrders = (response.data.orders || []).filter(
+        const allOrders = await fetchAllInvoiceOrders(apiClient, controller.signal);
+        const availableOrders = allOrders.filter(
           order => order.status !== 'Cancelled' && Number(order.dueAmount || 0) > 0
         );
         setOrders(availableOrders);
@@ -817,10 +854,8 @@ export default function BulkPayment() {
       setShowModal(false);
 
       // Refresh orders
-      const response = await apiClient.get(API_CONFIG.ENDPOINTS.ORDERS, {
-        signal: controller.signal
-      });
-      const availableOrders = (response.data.orders || []).filter(
+      const allOrders = await fetchAllInvoiceOrders(apiClient, controller.signal);
+      const availableOrders = allOrders.filter(
         order => order.status !== 'Cancelled' && Number(order.dueAmount || 0) > 0
       );
       setOrders(availableOrders);

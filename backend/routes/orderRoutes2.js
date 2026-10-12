@@ -248,7 +248,7 @@ router.patch("/orders/:id/upd",auth,async(req,res)=>{
   try{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid order ID."});
     if(!STATUSES.includes(req.body?.status))return res.status(400).json({message:"Invalid order status."});
-    const order=await Order.findOne({_id:req.params.id,createdBy:userId(req));
+    const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)});
     if(!order)return res.status(404).json({message:"Order not found"});
     // Making the same request twice is safe: don't create duplicate history rows.
     if(order.status===req.body.status){

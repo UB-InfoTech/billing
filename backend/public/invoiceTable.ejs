@@ -113,7 +113,10 @@
       <% for(let i=0;i<subOrders.length;i++){
         const item=subOrders[i];
         const unit=item.qtyUnit||"PCS";
-        const qty=unit==="MTR"?Number(item.MTR||0):Number(item.quantity||0);
+        const enteredQty=unit==="MTR"?Number(item.MTR||0):Number(item.quantity||0);
+        const shortQty=Math.max(0,Number(item.shortPcs||0));
+        // Use the exact billable quantity rule from the invoice financial model.
+        const qty=Math.max(0,enteredQty-shortQty);
         const amount=Number(qty||0)*Number(item.unitPrice||0);
         const taxable=amount*(1-Number(orderDisRate||0)/100);
       %>
@@ -125,10 +128,11 @@
               case "description": value=item.orderName||""; break;
               case "designNumber": value=item.designNumber||""; break;
               case "hsnCode": value=item.hsnCode||""; break;
-              case "quantity": value=item.quantity||0; break;
+              case "quantity": value=unit==="MTR"?(item.quantity||0):qty; break;
               case "qtyUnit": value=unit; break;
               case "cut": value=item.cut||0; break;
-              case "MTR": value=item.MTR||0; break;
+              case "MTR": value=unit==="MTR"?qty:(item.MTR||0); break;
+              case "shortPcs": value=shortQty; break;
               case "unitPrice": value=Number(item.unitPrice||0).toFixed(2); break;
               case "amount": value=Number(amount||0).toFixed(2); break;
               case "discount": value=Number(orderDisRate||0).toFixed(2)+"%"; break;

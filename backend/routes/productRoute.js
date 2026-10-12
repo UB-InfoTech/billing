@@ -6,6 +6,8 @@ const path=require("path");
 const bwipjs=require("bwip-js");
 const mongoose=require("mongoose");
 const Product=require("../models/Product");
+const Order=require("../models/Order2");
+const CreditNote=require("../models/CreditNote");
 const auth=require("../middleware/auth");
 const {getSafeUploadExtension,isAllowedUploadType}=require("../utils/uploadFileTypes");
 
@@ -158,9 +160,29 @@ router.patch("/:id/stock",auth,async(req,res)=>{
 router.delete("/:id",auth,async(req,res)=>{
   try{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid product ID."});
-    const product=await Product.findOneAndDelete({_id:req.params.id,createdBy:owner(req)});
+    const product=await Product.findOne({_id:req.params.id,createdBy:owner(req)});
     if(!product)return res.status(404).json({message:"Product not found."});
-    res.json({message:"Product deleted successfully."});
+
+    // Keep catalogue records that form part of invoice history or a posted
+    // stock-affecting Credit Note. Removing such a product can make future
+    // returns impossible to post or reverse safely.
+    const [invoiceReference,creditNoteReference]=await Promise.all([
+      Order.exists({createdBy:owner(req),"subOrders.productId":product._id}),
+      CreditNote.exists({
+        createdBy:owner(req),
+        status:"Posted",
+        stockAffecting:true,
+        "inventoryMovements.productId":product._id
+      })
+    ]);
+    if(invoiceReference||creditNoteReference){
+      return res.status(409).json({
+        message:"This product is linked to invoice history or a posted stock Credit Note, so it cannot be deleted. Set its stock to zero and keep the record for history."
+      });
+    }
+
+    await Product.deleteOne({_id:product._id,createdBy:owner(req)});
+    return res.json({message:"Product deleted successfully."});
   }catch(error){res.status(500).json({message:error.message});}
 });
 

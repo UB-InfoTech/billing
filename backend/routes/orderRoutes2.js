@@ -12,7 +12,7 @@ const CreditNote=require("../models/CreditNote");
 const InvoiceConfiguration=require("../models/InvoiceConfiguration");
 const PaymentLog=require("../models/PaymentLog2");
 const auth=require("../middleware/auth");
-const {syncClientData}=require("../utils/syncClientData");
+const {syncClientDataSafely}=require("../utils/syncClientData");
 const router=express.Router();
 
 const STATUSES=["Pending","In Process","Completed","Cancelled","Dispatched"];
@@ -167,7 +167,7 @@ router.post("/orders/create",auth,async(req,res)=>{
     const order=new Order(body);
     await applyWorkflows({resource:"orders",event:"record_created",doc:order,createdBy:userId(req)});
     await order.save();
-    await syncClientData(order.clientId);
+    await syncClientDataSafely(order.clientId);
     res.status(201).json({success:true,order});
   }catch(error){res.status(400).json({success:false,message:error.message});}
 });
@@ -246,7 +246,7 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
     await applyWorkflows({resource:"orders",event:"record_updated",doc:order,createdBy:userId(req)});
     await order.save();
     const newClient=String(order.clientId||"");
-    if(oldClient)await syncClientData(oldClient);if(newClient&&newClient!==oldClient)await syncClientData(newClient);
+    if(oldClient)await syncClientDataSafely(oldClient);if(newClient&&newClient!==oldClient)await syncClientDataSafely(newClient);
     res.json({success:true,message:"Order updated successfully",order});
   }catch(error){res.status(400).json({success:false,message:error.message});}
 });
@@ -257,7 +257,7 @@ router.patch("/orders/:id/upd",auth,async(req,res)=>{
     const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)});if(!order)return res.status(404).json({message:"Order not found"});
     order.status=req.body.status;order.statusHistory=Array.isArray(order.statusHistory)?order.statusHistory:[];order.statusHistory.push({status:req.body.status,timestamp:new Date()});
     await applyWorkflows({resource:"orders",event:"record_updated",doc:order,createdBy:userId(req)});
-    await order.save();await syncClientData(order.clientId);res.json({message:"Order status updated",order});
+    await order.save();await syncClientDataSafely(order.clientId);res.json({message:"Order status updated",order});
   }catch(error){res.status(400).json({message:error.message});}
 });
 
@@ -266,7 +266,7 @@ router.delete("/orders/:id/delete",auth,async(req,res)=>{
     const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)});if(!order)return res.status(404).json({success:false,message:"Order not found"});
     if(Number(order.dueAmount||0)>0)return res.status(400).json({success:false,message:"Cannot delete order with pending amount."});
     const postedCredits=await CreditNote.countDocuments({originalOrderId:order._id,status:"Posted"});if(postedCredits>0)return res.status(400).json({message:"Cancel posted Credit Notes before deleting this invoice."});
-    await Order.deleteOne({_id:order._id});await syncClientData(order.clientId);res.json({success:true,message:"Order deleted successfully"});
+    await Order.deleteOne({_id:order._id});await syncClientDataSafely(order.clientId);res.json({success:true,message:"Order deleted successfully"});
   }catch(error){res.status(500).json({success:false,message:error.message});}
 });
 
@@ -319,7 +319,7 @@ router.post("/orders/:id/pay",auth,async(req,res)=>{
     await order.save(session?{session}:undefined);
 
     if(session)await session.commitTransaction();
-    await syncClientData(order.clientId);
+    await syncClientDataSafely(order.clientId);
 
     return res.json({success:true,message:"Payment recorded successfully.",order});
   }catch(error){
@@ -393,7 +393,7 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
 
     await order.save(session?{session}:undefined);
     if(session)await session.commitTransaction();
-    await syncClientData(order.clientId);
+    await syncClientDataSafely(order.clientId);
 
     return res.json({success:true,message:"Payment updated successfully.",order});
   }catch(error){
@@ -426,7 +426,7 @@ router.delete("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
     await order.save(session?{session}:undefined);
 
     if(session)await session.commitTransaction();
-    await syncClientData(order.clientId);
+    await syncClientDataSafely(order.clientId);
 
     return res.json({success:true,message:"Payment deleted successfully.",order});
   }catch(error){

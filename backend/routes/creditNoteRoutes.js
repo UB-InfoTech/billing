@@ -1465,11 +1465,24 @@ router.put("/:id", auth, async (req, res) => {
         throw new Error("Client.creditBalance is required for this Credit Note.");
       }
       const updatedClient = await Client.findOneAndUpdate(
-        { _id: note.clientId, createdBy: userId },
+        {
+          _id: note.clientId,
+          createdBy: userId,
+          creditBalance: { $gte: oldCustomerCredit },
+        },
         { $inc: { creditBalance: -oldCustomerCredit } },
         { new: true, session }
       );
-      if (!updatedClient) throw new Error("Customer for this Credit Note no longer exists.");
+      if (!updatedClient) {
+        const clientExists = await Client.exists({
+          _id: note.clientId,
+          createdBy: userId,
+        }).session(session || null);
+        if (!clientExists) throw new Error("Customer for this Credit Note no longer exists.");
+        throw new Error(
+          "This Credit Note cannot be changed because some of its customer credit has already been used. Restore the customer's balance first."
+        );
+      }
       changedCustomerCredit.push({
         clientId: note.clientId,
         delta: -oldCustomerCredit,
@@ -1740,15 +1753,29 @@ async function cancelCreditNote(req, res) {
           "Client.creditBalance is required to reverse this customer credit."
         );
       }
+      const creditToReverse = Number(note.settlement.customerCreditAmount);
       const updatedClient = await Client.findOneAndUpdate(
-        { _id: note.clientId, createdBy: userId },
-        { $inc: { creditBalance: -Number(note.settlement.customerCreditAmount) } },
+        {
+          _id: note.clientId,
+          createdBy: userId,
+          creditBalance: { $gte: creditToReverse },
+        },
+        { $inc: { creditBalance: -creditToReverse } },
         { new: true, session }
       );
-      if (!updatedClient) throw new Error("Customer for this Credit Note was not found in your account.");
+      if (!updatedClient) {
+        const clientExists = await Client.exists({
+          _id: note.clientId,
+          createdBy: userId,
+        }).session(session || null);
+        if (!clientExists) throw new Error("Customer for this Credit Note was not found in your account.");
+        throw new Error(
+          "This Credit Note cannot be cancelled because some of its customer credit has already been used. Restore the customer's balance first."
+        );
+      }
       changedCustomerCredit.push({
         clientId: note.clientId,
-        delta: -Number(note.settlement.customerCreditAmount),
+        delta: -creditToReverse,
       });
     }
 

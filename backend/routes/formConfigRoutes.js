@@ -8,7 +8,7 @@ const router=express.Router();
 const FIELD_TYPES=["text","textarea","number","currency","date","datetime","select","multiselect","boolean","email","phone","url","reference"];
 const SOURCES=["none","clients","products","orders","expenses","suppliers","machines","users"];
 const OPERATORS=["equals","not_equals","contains","not_contains","greater_than","less_than","empty","not_empty"];
-const ACTIONS=["show","hide","require","readonly","enable","disable"];
+const ACTIONS=FORM_CONDITION_ACTIONS;
 const owner=req=>String(req.user.id);
 const cleanString=(value,max)=>String(value??"").trim().slice(0,max);
 
@@ -31,7 +31,7 @@ const normalizeOptions=options=>{
 };
 
 const {
-  formulaReferences,
+  FORM_CONDITION_ACTIONS,
   findRemovedFieldDependency,
   validateFieldReferences
 }=require("../utils/formConfigValidation");

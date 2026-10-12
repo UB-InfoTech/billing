@@ -170,9 +170,10 @@ router.delete("/:id",auth,async(req,res)=>{
       Order.exists({createdBy:owner(req),"subOrders.productId":product._id}),
       CreditNote.exists({
         createdBy:owner(req),
-        status:"Posted",
-        stockAffecting:true,
-        "inventoryMovements.productId":product._id
+        $or:[
+          {"items.productId":product._id},
+          {"inventoryMovements.productId":product._id}
+        ]
       })
     ]);
     if(invoiceReference||creditNoteReference){

@@ -168,11 +168,12 @@ function calculateSettlement(settlement, grandTotal, orderDue) {
   };
 }
 
-async function getPreviouslyCredited(orderId, session, excludeCreditNoteId = null) {
+async function getPreviouslyCredited(orderId, session, excludeCreditNoteId = null, createdBy = null) {
   const filter = {
     originalOrderId: orderId,
     status: { $ne: "Cancelled" },
   };
+  if (createdBy) filter.createdBy = createdBy;
 
   if (excludeCreditNoteId && mongoose.isValidObjectId(excludeCreditNoteId)) {
     filter._id = { $ne: excludeCreditNoteId };
@@ -732,7 +733,7 @@ router.post("/", auth, async (req, res) => {
     if (!order) throw new Error("Original invoice not found.");
 
     const { map: previousCredits, total: previousCreditTotal } =
-      await getPreviouslyCredited(originalOrderId, session);
+      await getPreviouslyCredited(originalOrderId, session, null, userId);
 
     const invoiceTotal = getOrderInvoiceTotal(order);
     const remainingCreditTotal = Math.max(
@@ -926,8 +927,8 @@ router.post("/", auth, async (req, res) => {
         const stockQty = item.qtyUnit === "MTR" ? Number(item.MTR || 0) : Number(item.quantity || 0);
         if (stockQty <= 0) continue;
 
-        const updatedProduct = await Product.findByIdAndUpdate(
-          item.productId,
+        const updatedProduct = await Product.findOneAndUpdate(
+          { _id: item.productId, createdBy: userId },
           { $inc: { quantity: stockQty } },
           { new: true, session }
         );
@@ -972,11 +973,12 @@ router.post("/", auth, async (req, res) => {
           "Add Client.creditBalance to your Client schema before using Customer Credit settlement."
         );
       }
-      await Client.findByIdAndUpdate(
-        order.clientId,
+      const updatedClient = await Client.findOneAndUpdate(
+        { _id: order.clientId, createdBy: userId },
         { $inc: { creditBalance: finalSettlement.customerCreditAmount } },
-        { session }
+        { new: true, session }
       );
+      if (!updatedClient) throw new Error("Customer for this Credit Note was not found in your account.");
     }
 
     if (finalSettlement.adjustmentAmount > 0) {
@@ -1118,7 +1120,7 @@ async function prepareCreditNoteUpdate({
   if (!order) throw new Error("Original invoice not found.");
 
   const { map: previousCredits, total: previousCreditTotal } =
-    await getPreviouslyCredited(order._id, session, excludeCreditNoteId);
+    await getPreviouslyCredited(order._id, session, excludeCreditNoteId, order.createdBy);
 
   const invoiceTotal = getOrderInvoiceTotal(order);
   const remainingCreditTotal = Math.max(0, round2(invoiceTotal - previousCreditTotal));
@@ -1216,7 +1218,7 @@ async function prepareCreditNoteUpdate({
   );
 
   const oldAdjustment = excludeCreditNoteId
-    ? Number((await CreditNote.findById(excludeCreditNoteId)
+    ? Number((await CreditNote.findOne({ _id: excludeCreditNoteId, createdBy: order.createdBy })
       .select("settlement.adjustmentAmount")
       .session(session || null)
       .lean())?.settlement?.adjustmentAmount || 0)
@@ -1248,7 +1250,7 @@ async function prepareCreditNoteUpdate({
       const stockQty = item.qtyUnit === "MTR" ? Number(item.MTR || 0) : Number(item.quantity || 0);
       if (stockQty <= 0) continue;
 
-      const product = await Product.findById(item.productId)
+      const product = await Product.findOne({ _id: item.productId, createdBy: order.createdBy })
         .select("_id quantity")
         .session(session || null)
         .lean();
@@ -1360,8 +1362,8 @@ router.put("/:id", auth, async (req, res) => {
     if (note.stockAffecting && note.inventoryMovements?.length) {
       const Product = require("../models/Product");
       for (const movement of note.inventoryMovements) {
-        const updated = await Product.findByIdAndUpdate(
-          movement.productId,
+        const updated = await Product.findOneAndUpdate(
+          { _id: movement.productId, createdBy: userId },
           { $inc: { quantity: -Number(movement.quantity || 0) } },
           { new: true, session }
         );
@@ -1377,8 +1379,8 @@ router.put("/:id", auth, async (req, res) => {
       if (!Client.schema.path("creditBalance")) {
         throw new Error("Client.creditBalance is required for this Credit Note.");
       }
-      const updatedClient = await Client.findByIdAndUpdate(
-        note.clientId,
+      const updatedClient = await Client.findOneAndUpdate(
+        { _id: note.clientId, createdBy: userId },
         { $inc: { creditBalance: -oldCustomerCredit } },
         { new: true, session }
       );
@@ -1396,8 +1398,8 @@ router.put("/:id", auth, async (req, res) => {
       if (!Client.schema.path("creditBalance")) {
         throw new Error("Client.creditBalance is required for customer credit settlement.");
       }
-      const updatedClient = await Client.findByIdAndUpdate(
-        order.clientId,
+      const updatedClient = await Client.findOneAndUpdate(
+        { _id: order.clientId, createdBy: userId },
         { $inc: { creditBalance: prepared.finalSettlement.customerCreditAmount } },
         { new: true, session }
       );
@@ -1412,8 +1414,8 @@ router.put("/:id", auth, async (req, res) => {
     if (prepared.inventoryMovements.length) {
       const Product = require("../models/Product");
       for (const movement of prepared.inventoryMovements) {
-        const updated = await Product.findByIdAndUpdate(
-          movement.productId,
+        const updated = await Product.findOneAndUpdate(
+          { _id: movement.productId, createdBy: userId },
           { $inc: { quantity: Number(movement.quantity || 0) } },
           { new: true, session }
         );
@@ -1500,12 +1502,12 @@ async function cancelCreditNote(req, res) {
   try {
     if (session) session.startTransaction();
 
-    const note = await CreditNote.findById(req.params.id).session(session);
+    const note = await CreditNote.findOne({ _id: req.params.id, createdBy: userId }).session(session);
     if (!note) throw new Error("Credit note not found.");
     if (note.status === "Cancelled") throw new Error("Credit note is already cancelled.");
     if (note.status !== "Posted") throw new Error("Only posted credit notes can be cancelled.");
 
-    const order = await Order.findById(note.originalOrderId).session(session);
+    const order = await Order.findOne({ _id: note.originalOrderId, createdBy: userId }).session(session);
     if (!order) throw new Error("Original invoice no longer exists.");
 
     const adjustmentAmount = Number(note.settlement?.adjustmentAmount || 0);
@@ -1537,8 +1539,8 @@ async function cancelCreditNote(req, res) {
       }
 
       for (const movement of note.inventoryMovements) {
-        const updated = await Product.findByIdAndUpdate(
-          movement.productId,
+        const updated = await Product.findOneAndUpdate(
+          { _id: movement.productId, createdBy: userId },
           { $inc: { quantity: -Number(movement.quantity || 0) } },
           { new: true, session }
         );
@@ -1566,11 +1568,12 @@ async function cancelCreditNote(req, res) {
           "Client.creditBalance is required to reverse this customer credit."
         );
       }
-      await Client.findByIdAndUpdate(
-        note.clientId,
+      const updatedClient = await Client.findOneAndUpdate(
+        { _id: note.clientId, createdBy: userId },
         { $inc: { creditBalance: -Number(note.settlement.customerCreditAmount) } },
-        { session }
+        { new: true, session }
       );
+      if (!updatedClient) throw new Error("Customer for this Credit Note was not found in your account.");
     }
 
     await Order.findByIdAndUpdate(

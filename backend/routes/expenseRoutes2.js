@@ -8,6 +8,7 @@ const {applyWorkflows}=require("../utils/workflowEngine");
 const Client=require("../models/Client");
 const Order=require("../models/Order2");
 const auth=require("../middleware/auth");
+const {buildExpenseDateRange}=require("../utils/expenseDateRange");
 const router=express.Router();
 const uploadDir=path.join(__dirname,"../public/uploads/expenses");
 fs.mkdirSync(uploadDir,{recursive:true});
@@ -19,10 +20,32 @@ const upload=multer({
 const owner=req=>req.user.id;
 const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
 
+function applyExpenseFilters(query,params={}){
+  const search=String(params.search||"").trim();
+  if(search){
+    const escaped=search.replace(/[.*+?^\\$()|[\\]\\\\]/g,"\\\\const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
+");
+    const regex=new RegExp(escaped,"i");
+    query.$or=[
+      {description:regex},
+      {vendor:regex},
+      {category:regex},
+      {gstNo:regex},
+      {title:regex}
+    ];
+  }
+  if(params.category)query.category=String(params.category).trim();
+  const range=buildExpenseDateRange(params);
+  if(range)query.date=range;
+  return query;
+}
+
 router.get("/summary",auth,async(req,res)=>{
   try{
-    const match={createdBy:new mongoose.Types.ObjectId(owner(req))};
-    if(req.query.startDate||req.query.endDate){match.date={};if(req.query.startDate)match.date.$gte=new Date(req.query.startDate+"T00:00:00.000");if(req.query.endDate)match.date.$lte=new Date(req.query.endDate+"T23:59:59.999");}
+    const match=applyExpenseFilters(
+      {createdBy:new mongoose.Types.ObjectId(owner(req))},
+      req.query
+    );
     const [summary,categories,vendors,top]=await Promise.all([
       Expense.aggregate([{$match:match},{$group:{_id:null,total:{$sum:"$amount"},count:{$sum:1},average:{$avg:"$amount"}}}]),
       Expense.aggregate([{$match:match},{$group:{_id:"$category",total:{$sum:"$amount"},count:{$sum:1}}},{$sort:{total:-1}}]),
@@ -30,7 +53,7 @@ router.get("/summary",auth,async(req,res)=>{
       Expense.find(match).sort({amount:-1}).limit(10).lean()
     ]);
     res.json({totalExpense:round2(summary[0]?.total),expenseCount:summary[0]?.count||0,averageExpense:round2(summary[0]?.average),categoryBreakdown:categories,vendorBreakdown:vendors,topExpenses:top});
-  }catch(error){res.status(500).json({message:error.message});}
+  }catch(error){res.status(error.status||500).json({message:error.message});}
 });
 
 router.get("/linked/options",auth,async(req,res)=>{
@@ -47,15 +70,12 @@ router.get("/",auth,async(req,res)=>{
   try{
     const page=Math.max(parseInt(req.query.page,10)||1,1),limit=Math.min(Math.max(parseInt(req.query.limit,10)||20,1),100);
     const sortField=["date","amount","category","vendor","createdAt"].includes(req.query.sortBy)?req.query.sortBy:"date",sortDir=req.query.sortDir==="asc"?1:-1;
-    const query={createdBy:owner(req)},search=String(req.query.search||"").trim();
-    if(search){const rx=new RegExp(search.replace(/[.*+?^$()|[\\]\\\\]/g,"\\\\$&"),"i");query.$or=[{description:rx},{vendor:rx},{category:rx},{gstNo:rx},{title:rx}];}
-    if(req.query.category)query.category=req.query.category;
+    const query=applyExpenseFilters({createdBy:owner(req)},req.query);
     if(req.query.clientId&&mongoose.isValidObjectId(req.query.clientId))query.clientId=req.query.clientId;
     if(req.query.orderId&&mongoose.isValidObjectId(req.query.orderId))query.orderId=req.query.orderId;
-    if(req.query.startDate||req.query.endDate){query.date={};if(req.query.startDate)query.date.$gte=new Date(req.query.startDate+"T00:00:00.000");if(req.query.endDate)query.date.$lte=new Date(req.query.endDate+"T23:59:59.999");}
     const [expenses,total]=await Promise.all([Expense.find(query).sort({[sortField]:sortDir}).skip((page-1)*limit).limit(limit).populate("clientId","name companyName").populate("orderId","orderNumber").lean(),Expense.countDocuments(query)]);
     res.json({expenses,total,page,limit,pages:Math.max(1,Math.ceil(total/limit))});
-  }catch(error){res.status(500).json({message:error.message});}
+  }catch(error){res.status(error.status||500).json({message:error.message});}
 });
 
 router.get("/:id",auth,async(req,res)=>{

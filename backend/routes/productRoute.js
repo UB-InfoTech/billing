@@ -92,10 +92,12 @@ router.post("/",auth,upload.array("images",5),async(req,res)=>{
     if(await Product.exists({createdBy:owner(req),productCode:code}))return res.status(409).json({message:"Product code already exists."});
     const barcode=String(req.body.barcode||"").trim()||code;
     if(await Product.exists({createdBy:owner(req),barcode}))return res.status(409).json({message:"Barcode already belongs to another product in this business."});
+    const serialNumber=String(req.body.serialNumber||"").trim();
+    if(serialNumber&&await Product.exists({createdBy:owner(req),serialNumber}))return res.status(409).json({message:"Serial number already belongs to another product in this business."});
     const product=new Product({
       productName:String(req.body.productName||"").trim(),productCode:code,
       description:String(req.body.description||"").trim(),rate:Number(req.body.rate||0),
-      quantity:Number(req.body.quantity||0),serialNumber:String(req.body.serialNumber||"").trim()||undefined,
+      quantity:Number(req.body.quantity||0),serialNumber:serialNumber||undefined,
       designNo:String(req.body.designNo||"").trim(),purchaseDate:req.body.purchaseDate||null,
       purchasePrice:Number(req.body.purchasePrice||0),barcode,
       minStock:Number(req.body.minStock||0),createdBy:owner(req),
@@ -140,7 +142,17 @@ router.put("/:id",auth,upload.array("images",5),async(req,res)=>{
       }
       product.barcode=barcode;
     }
-    if(req.body.serialNumber!==undefined)product.serialNumber=String(req.body.serialNumber).trim()||undefined;
+    if(req.body.serialNumber!==undefined){
+      const serialNumber=String(req.body.serialNumber||"").trim();
+      if(serialNumber&&serialNumber!==String(product.serialNumber||"")&&await Product.exists({
+        createdBy:owner(req),
+        serialNumber,
+        _id:{$ne:product._id}
+      })){
+        return res.status(409).json({message:"Serial number already belongs to another product in this business."});
+      }
+      product.serialNumber=serialNumber||undefined;
+    }
     if(req.body.purchaseDate!==undefined)product.purchaseDate=req.body.purchaseDate||null;
     if((req.files||[]).length)product.images=[...(product.images||[]),...(req.files||[]).map(file=>publicUrl(req,"/uploads/products/"+file.filename))];
     if(req.body.customFields!==undefined){

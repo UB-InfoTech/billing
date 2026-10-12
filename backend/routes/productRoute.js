@@ -7,6 +7,7 @@ const bwipjs=require("bwip-js");
 const mongoose=require("mongoose");
 const Product=require("../models/Product");
 const auth=require("../middleware/auth");
+const {getSafeUploadExtension,isAllowedUploadType}=require("../utils/uploadFileTypes");
 
 const router=express.Router();
 const uploadDir=path.join(__dirname,"../public/uploads/products");
@@ -15,13 +16,13 @@ fs.mkdirSync(uploadDir,{recursive:true});
 const storage=multer.diskStorage({
   destination:(_,__,cb)=>cb(null,uploadDir),
   filename:(_,file,cb)=>{
-    const ext=path.extname(file.originalname||"").toLowerCase();
+    const ext=getSafeUploadExtension(file.mimetype);
+    if(!ext||ext===".pdf")return cb(new Error("Only supported image files are allowed."));
     cb(null,Date.now()+"-"+Math.random().toString(36).slice(2,10)+ext);
   }
 });
 const upload=multer({storage,limits:{files:5,fileSize:5*1024*1024},fileFilter:(_,file,cb)=>{
-  if(new RegExp("^image/(jpeg|png|webp|gif)$","i").test(file.mimetype))return cb(null,true);
-  cb(new Error("Only image files are allowed."));
+  cb(null,isAllowedUploadType(file.mimetype,false));
 }});
 
 function owner(req){return req.user?.id;}

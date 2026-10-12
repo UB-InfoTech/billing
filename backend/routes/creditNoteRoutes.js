@@ -104,14 +104,14 @@ function getOrderInvoiceTotal(order) {
   const rounded = Number(order?.roundOffFinalRevenue);
   if (Number.isFinite(rounded) && rounded > EPSILON) return round2(rounded);
 
-  const finalRevenue = Number(order?.finalRevenue);
-  if (Number.isFinite(finalRevenue) && finalRevenue > EPSILON) {
-    return Math.round(finalRevenue);
-  }
-
   const totalAmount = Number(order?.totalAmount);
   if (Number.isFinite(totalAmount) && totalAmount > EPSILON) {
     return Math.round(totalAmount);
+  }
+
+  const finalRevenue = Number(order?.finalRevenue);
+  if (Number.isFinite(finalRevenue) && finalRevenue > EPSILON) {
+    return Math.round(finalRevenue);
   }
 
   return 0;

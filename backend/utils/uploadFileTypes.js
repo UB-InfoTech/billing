@@ -11,7 +11,7 @@ function getSafeUploadExtension(mimeType){
 }
 
 function isSafePublicUploadPath(filePath){
-  return /\\.(?:jpe?g|png|gif|webp|pdf)$/i.test(String(filePath||""));
+  return /\.(?:jpe?g|png|gif|webp|pdf)$/i.test(String(filePath||""));
 }
 
 function isAllowedUploadType(mimeType,allowPdf=false){

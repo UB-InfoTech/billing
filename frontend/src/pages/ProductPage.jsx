@@ -7,6 +7,7 @@ import FormConfigurator from "../components/FormConfigurator";
 import ConfiguredField from "../components/ConfiguredField";
 import DynamicTable from "../components/DynamicTable";
 import { PRODUCT_FORM_FIELDS } from "../config/noCodeCatalog";
+import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import { useFormConfiguration, applyFormulas, getFieldState, hydrateConfiguredValues, syncConfiguredCustomFields, buildConfiguredDefaults } from "../hooks/useFormConfiguration";
 import {formatDateInput} from "../utils/dateInput";
 
@@ -30,6 +31,8 @@ const emptyBase={
 export default function ProductPage(){
   const [searchParams,setSearchParams]=useSearchParams();
   const productFormConfig=useFormConfiguration("products.form",PRODUCT_FORM_FIELDS);
+  const linkedProductSources=useMemo(()=>Array.from(new Set(productFormConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean))),[productFormConfig.fields]);
+  const {records:linkedRecords,searchRecords:searchLinkedRecords}=useNoCodeDataSources(linkedProductSources);
   const [products,setProducts]=useState([]);
   const [form,setForm]=useState(emptyBase);
   const [images,setImages]=useState([]);
@@ -239,6 +242,8 @@ export default function ProductPage(){
       field:{...field,...state},
       value:productValue(field),
       onChange:value=>updateField(field,value),
+      lookupRecords:field.dataSource?.resource?(linkedRecords[field.dataSource.resource]||[]):[],
+      onLookupSearch:searchLinkedRecords,
       required:state.required,
       disabled:state.disabled,
       readOnly:state.readOnly

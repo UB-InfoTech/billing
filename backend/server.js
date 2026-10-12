@@ -65,7 +65,19 @@ const sanitizeMongoRequest=(req,res,next)=>{
 app.use(sanitizeMongoRequest);
 app.use("/api",apiLimiter);
 
-app.use("/uploads",express.static(path.join(__dirname,"public/uploads"),{maxAge:"7d"}));
+app.use("/uploads",express.static(path.join(__dirname,"public/uploads"),{
+  maxAge:"7d",
+  setHeaders:(res,filePath)=>{
+    res.setHeader("X-Content-Type-Options","nosniff");
+    // Public uploads should be images or PDFs. Never serve any other legacy
+    // upload as HTML/script content; force it to download as inert bytes.
+    if(!/\\.(?:jpe?g|png|gif|webp|pdf)$/i.test(filePath)){
+      res.setHeader("Content-Type","application/octet-stream");
+      res.setHeader("Content-Disposition","attachment");
+      res.setHeader("Cache-Control","no-store");
+    }
+  }
+}));
 
 app.get("/api/health",(req,res)=>{
   res.json({

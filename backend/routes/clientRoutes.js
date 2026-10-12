@@ -5,6 +5,7 @@ const Client=require("../models/Client");
 const Order=require("../models/Order2");
 const CreditNote=require("../models/CreditNote");
 const {applyManualCreditAdjustment}=require("../utils/clientCreditBalance");
+const {getInvoiceRevenue}=require("../utils/syncClientData");
 const auth=require("../middleware/auth");
 
 const router=express.Router();
@@ -139,7 +140,7 @@ router.get("/:id/transactions",auth,async(req,res)=>{
     const orders=await Order.find({clientId:client._id,createdBy:owner(req)}).sort({orderDate:-1}).lean();
     const transactions=[];
     for(const order of orders){
-      transactions.push({type:"Invoice",orderId:order._id,orderNumber:order.orderNumber,date:order.orderDate,amount:Number(order.roundOffFinalRevenue||0),paid:Number(order.paidAmount||0),due:Number(order.dueAmount||0),status:order.paymentStatus});
+      transactions.push({type:"Invoice",orderId:order._id,orderNumber:order.orderNumber,date:order.orderDate,amount:getInvoiceRevenue(order),paid:Number(order.paidAmount||0),due:Number(order.dueAmount||0),status:order.paymentStatus});
       for(const payment of order.payments||[])transactions.push({type:"Payment",orderId:order._id,orderNumber:order.orderNumber,paymentId:payment._id,date:payment.paymentDate||payment.createdAt,amount:Number(payment.amount||0),method:payment.method,reference:payment.amountReference});
     }
     res.json(transactions.sort((a,b)=>new Date(b.date)-new Date(a.date)));

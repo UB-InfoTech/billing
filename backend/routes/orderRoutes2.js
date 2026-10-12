@@ -14,6 +14,7 @@ const InvoiceConfiguration=require("../models/InvoiceConfiguration");
 const PaymentLog=require("../models/PaymentLog2");
 const auth=require("../middleware/auth");
 const {syncClientDataSafely,getInvoiceRevenue}=require("../utils/syncClientData");
+const {sanitizeOrderCreateInput,cleanCustomFields}=require("../utils/orderInput");
 const {numberToWords}=require("../utils/numberToWords");
 const router=express.Router();
 
@@ -31,49 +32,7 @@ const isReplicaSetAvailable=()=>{
 
 const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
 const userId=req=>req.user.id;
-const cleanCustomFields=value=>{
-  if(!value||typeof value!=="object"||Array.isArray(value))return {};
-  return Object.fromEntries(Object.entries(value).slice(0,100).map(([key,val])=>[String(key).slice(0,100),val]));
-};
 const idOrNull=v=>v&&mongoose.isValidObjectId(v)?v:null;
-
-const ORDER_CREATE_FIELDS=[
-  "challanNumber","lrNo","orderDate","subOrders","clientId","Address","State",
-  "City","pinCode","stateCode","gstNumber","companyName","status",
-  "paymentTerms","taxPercentage","discountRate","note","customFields"
-];
-const SUB_ORDER_INPUT_FIELDS=[
-  "productId","designNumber","orderName","hsnCode","qtyUnit",
-  "quantity","cut","MTR","unitPrice","shortPcs","customFields"
-];
-
-function sanitizeSubOrderInputs(items){
-  return (Array.isArray(items)?items:[]).map(item=>{
-    const source=item&&typeof item==="object"&&!Array.isArray(item)?item:{};
-    const clean={};
-    SUB_ORDER_INPUT_FIELDS.forEach(key=>{
-      if(source[key]!==undefined){
-        clean[key]=key==="customFields"?cleanCustomFields(source[key]):source[key];
-      }
-    });
-    clean.customFields=cleanCustomFields(clean.customFields);
-    return clean;
-  });
-}
-
-function sanitizeOrderCreateInput(input){
-  const source=input&&typeof input==="object"&&!Array.isArray(input)?input:{};
-  const clean={};
-  ORDER_CREATE_FIELDS.forEach(key=>{
-    if(source[key]!==undefined){
-      if(key==="customFields")clean.customFields=cleanCustomFields(source.customFields);
-      else if(key==="subOrders")clean.subOrders=sanitizeSubOrderInputs(source.subOrders);
-      else clean[key]=source[key];
-    }
-  });
-  clean.customFields=cleanCustomFields(clean.customFields);
-  return clean;
-}
 
 async function validateProductReferences(items,createdBy){
   const productIds=[...new Set((Array.isArray(items)?items:[])

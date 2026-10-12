@@ -1352,6 +1352,13 @@ router.put("/:id", auth, async (req, res) => {
 
   const transactional = isReplicaSetAvailable();
   const session = transactional ? await mongoose.startSession() : null;
+  const changedStock = [];
+  const changedCustomerCredit = [];
+  let previousOrderFinancials = null;
+  let previousOrderId = null;
+  let previousNote = null;
+  let orderSaved = false;
+  let noteSaved = false;
 
   try {
     if (session) session.startTransaction();
@@ -1372,6 +1379,12 @@ router.put("/:id", auth, async (req, res) => {
       createdBy: userId,
     }).session(session);
     if (!order) throw new Error("Original invoice no longer exists.");
+    previousNote = note.toObject();
+    previousOrderId = order._id;
+    previousOrderFinancials = {
+      creditAppliedAmount: Number(order.creditAppliedAmount || 0),
+      creditNoteCount: Number(order.creditNoteCount || 0),
+    };
 
     const dateValue = req.body?.creditNoteDate !== undefined
       ? new Date(req.body.creditNoteDate)
@@ -1436,6 +1449,10 @@ router.put("/:id", auth, async (req, res) => {
           { new: true, session }
         );
         if (!updated) throw new Error("A stock product no longer exists.");
+        changedStock.push({
+          productId: movement.productId,
+          delta: -Number(movement.quantity || 0),
+        });
         if (Number(updated.quantity || 0) < -EPSILON) {
           throw new Error("Editing this Credit Note would make stock negative.");
         }
@@ -1453,6 +1470,10 @@ router.put("/:id", auth, async (req, res) => {
         { new: true, session }
       );
       if (!updatedClient) throw new Error("Customer for this Credit Note no longer exists.");
+      changedCustomerCredit.push({
+        clientId: note.clientId,
+        delta: -oldCustomerCredit,
+      });
     }
 
     order.creditAppliedAmount = Math.max(
@@ -1472,6 +1493,10 @@ router.put("/:id", auth, async (req, res) => {
         { new: true, session }
       );
       if (!updatedClient) throw new Error("Customer for this Credit Note no longer exists.");
+      changedCustomerCredit.push({
+        clientId: order.clientId,
+        delta: Number(prepared.finalSettlement.customerCreditAmount),
+      });
     }
 
     order.creditAppliedAmount = round2(
@@ -1488,10 +1513,15 @@ router.put("/:id", auth, async (req, res) => {
           { new: true, session }
         );
         if (!updated) throw new Error("A stock product no longer exists.");
+        changedStock.push({
+          productId: movement.productId,
+          delta: Number(movement.quantity || 0),
+        });
       }
     }
 
     await order.save(session ? { session } : undefined);
+    orderSaved = true;
 
     note.creditNoteNumber = number;
     note.creditNoteDate = dateValue;
@@ -1527,24 +1557,81 @@ router.put("/:id", auth, async (req, res) => {
     note.note = String(req.body?.note ?? note.note ?? "").trim().slice(0, 1000);
 
     await note.save(session ? { session } : undefined);
-    if (session) await session.commitTransaction();
+    noteSaved = true;
 
-    await syncClientDataSafely(order.clientId);
-
-    const updated = await CreditNote.findById(note._id)
-      .populate(
-        "originalOrderId",
-        "orderNumber orderDate companyName gstNumber Address State City pinCode stateCode paymentTerms roundOffFinalRevenue finalRevenue dueAmount creditAppliedAmount"
-      )
-      .lean();
-
-    return res.json({
+    // Shape the response before committing. A later read failure must not make
+    // a successfully saved financial change look like a failed request.
+    const originalOrder = order.toObject();
+    const updatedNote = note.toObject();
+    const responseBody = {
       message: "Credit Note updated successfully.",
-      creditNote: { ...updated, originalOrder: updated?.originalOrderId },
-    });
+      creditNote: {
+        ...updatedNote,
+        originalOrderId: originalOrder,
+        originalOrder,
+      },
+    };
+
+    if (session) await session.commitTransaction();
+    await syncClientDataSafely(order.clientId, "a Credit Note edit");
+    return res.json(responseBody);
   } catch (error) {
     if (session) {
       try { if (session.inTransaction()) await session.abortTransaction(); } catch {}
+    } else {
+      // Standalone MongoDB has no multi-document rollback. Best-effort inverse
+      // writes restore only the effects this request had already applied.
+      if (noteSaved && previousNote) {
+        try {
+          const restoreNoteFields = {};
+          [
+            "creditNoteNumber", "creditNoteDate", "reason", "creditMode",
+            "stockAffecting", "inventoryStatus", "inventoryMovements",
+            "settlement", "items", "totals", "originalInvoiceTotal",
+            "manualCredit", "settlementStatus", "note"
+          ].forEach(key => { restoreNoteFields[key] = previousNote[key]; });
+          await CreditNote.findOneAndUpdate(
+            { _id: req.params.id, createdBy: userId },
+            { $set: restoreNoteFields },
+            { new: true }
+          );
+        } catch (rollbackError) {
+          console.error("Credit Note edit rollback could not restore the note:", rollbackError);
+        }
+      }
+      if (orderSaved && previousOrderFinancials && previousOrderId) {
+        try {
+          await Order.findOneAndUpdate(
+            { _id: previousOrderId, createdBy: userId },
+            { $set: previousOrderFinancials },
+            { new: true }
+          );
+        } catch (rollbackError) {
+          console.error("Credit Note edit rollback could not restore invoice balances:", rollbackError);
+        }
+      }
+      for (const change of changedStock.reverse()) {
+        try {
+          await require("../models/Product").findOneAndUpdate(
+            { _id: change.productId, createdBy: userId },
+            { $inc: { quantity: -Number(change.delta || 0) } },
+            { new: true }
+          );
+        } catch (rollbackError) {
+          console.error("Credit Note edit rollback could not restore stock:", rollbackError);
+        }
+      }
+      for (const change of changedCustomerCredit.reverse()) {
+        try {
+          await require("../models/Client").findOneAndUpdate(
+            { _id: change.clientId, createdBy: userId },
+            { $inc: { creditBalance: -Number(change.delta || 0) } },
+            { new: true }
+          );
+        } catch (rollbackError) {
+          console.error("Credit Note edit rollback could not restore customer credit:", rollbackError);
+        }
+      }
     }
     console.error("Credit note update error:", error);
     return res.status(400).json({ message: error.message || "Unable to update Credit Note." });

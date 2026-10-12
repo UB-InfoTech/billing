@@ -186,7 +186,9 @@ const SalesAnalytics = () => {
           period,
           filteredSales[period].totalSales,
           filteredSales[period].orderCount,
-          order.orderName,
+          (Array.isArray(order.subOrders)
+          ? order.subOrders.map(item => item.orderName || item.designNumber).filter(Boolean).join(", ")
+          : order.orderName || ""),
           order.roundOffFinalRevenue,
           new Date(order.orderDate).toLocaleDateString(),
         ];
@@ -475,14 +477,25 @@ const SalesAnalytics = () => {
 
   // Enhanced Filtering Logic
   const filteredOrders = allOrders
-    .filter(order =>
-      (statusFilter === '' || order.status === statusFilter) &&
-      (orderNameFilter === '' || order.orderName.toLowerCase().includes(orderNameFilter.toLowerCase())) &&
-      (orderNumberFilter === '' || order.orderNumber.toLowerCase().includes(orderNumberFilter.toLowerCase())) &&
-      (addressFilter === '' || (order.Address && order.Address.toLowerCase().includes(addressFilter.toLowerCase()))) &&
-      (stateFilter === '' || (order.State && order.State.toLowerCase().includes(stateFilter.toLowerCase()))) &&
-      (cityFilter === '' || (order.City && order.City.toLowerCase().includes(cityFilter.toLowerCase())))
-    )
+    .filter(order => {
+      // Invoice rows contain their names/design numbers under subOrders.
+      // Older invoices may also lack a top-level name or invoice number.
+      const searchableItems = [
+        order.orderName,
+        ...(Array.isArray(order.subOrders)
+          ? order.subOrders.flatMap(item => [item.orderName, item.designNumber])
+          : [])
+      ].filter(Boolean).join(" ").toLowerCase();
+      const invoiceNumber = String(order.orderNumber || "").toLowerCase();
+      return (
+        (statusFilter === '' || order.status === statusFilter) &&
+        (orderNameFilter === '' || searchableItems.includes(orderNameFilter.toLowerCase())) &&
+        (orderNumberFilter === '' || invoiceNumber.includes(orderNumberFilter.toLowerCase())) &&
+        (addressFilter === '' || String(order.Address || "").toLowerCase().includes(addressFilter.toLowerCase())) &&
+        (stateFilter === '' || String(order.State || "").toLowerCase().includes(stateFilter.toLowerCase())) &&
+        (cityFilter === '' || String(order.City || "").toLowerCase().includes(cityFilter.toLowerCase()))
+      );
+    })
     .sort((a, b) => {
       const aValue = a[sortField] || '';
       const bValue = b[sortField] || '';

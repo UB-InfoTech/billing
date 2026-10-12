@@ -853,12 +853,20 @@ export default function BulkPayment() {
       setValidationErrors({});
       setShowModal(false);
 
-      // Refresh orders
-      const allOrders = await fetchAllInvoiceOrders(apiClient, controller.signal);
-      const availableOrders = allOrders.filter(
-        order => order.status !== 'Cancelled' && Number(order.dueAmount || 0) > 0
-      );
-      setOrders(availableOrders);
+      // A successful payment must not be reported as failed just because a
+      // follow-up list refresh has a network problem.
+      try {
+        const allOrders = await fetchAllInvoiceOrders(apiClient, controller.signal);
+        const availableOrders = allOrders.filter(
+          order => order.status !== 'Cancelled' && Number(order.dueAmount || 0) > 0
+        );
+        setOrders(availableOrders);
+      } catch (refreshError) {
+        if (!controller.signal.aborted) {
+          console.error('Bulk payment was saved, but invoice refresh failed:', refreshError);
+          toast.warning('Payment was recorded successfully, but the invoice list could not refresh. Reload the page to see updated balances.');
+        }
+      }
 
     } catch (error) {
       if (!controller.signal.aborted) {

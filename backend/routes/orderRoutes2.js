@@ -344,6 +344,9 @@ router.post("/orders/:id/pay",auth,async(req,res)=>{
     if(session)findOrder.session(session);
     const order=await findOrder;
     if(!order)throw new Error("Order not found.");
+    if(order.status==="Cancelled"){
+      throw new Error("This invoice is cancelled. Change its status before recording another payment.");
+    }
 
     if(Math.round(amount*100)>Math.round(Number(order.dueAmount||0)*100)){
       throw new Error(`Payment amount exceeds the current due balance of ₹${Number(order.dueAmount||0).toFixed(2)}.`);

@@ -8,7 +8,7 @@ import ConfiguredField from "../components/ConfiguredField";
 import DynamicTable from "../components/DynamicTable";
 import { PRODUCT_FORM_FIELDS } from "../config/noCodeCatalog";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
-import { useFormConfiguration, applyFormulas, getFieldState, hydrateConfiguredValues, syncConfiguredCustomFields, buildConfiguredDefaults } from "../hooks/useFormConfiguration";
+import { useFormConfiguration, applyFormulas, applyAutoFill, getFieldState, hydrateConfiguredValues, syncConfiguredCustomFields, buildConfiguredDefaults } from "../hooks/useFormConfiguration";
 import {formatDateInput} from "../utils/dateInput";
 
 const PRODUCT_PAGE_SIZE=100;
@@ -163,11 +163,12 @@ export default function ProductPage(){
     return raw;
   };
 
-  const updateField=(field,value)=>{
+  const updateField=(field,value,record=null)=>{
     setForm(prev=>{
       let next=field.custom
         ? {...prev,[field.key]:value,customFields:{...(prev.customFields||{}),[field.key]:value}}
         : {...prev,[field.key]:value};
+      if(field?.dataSource?.autoFill?.length)next=applyAutoFill(field,record,next);
       next=syncConfiguredCustomFields(next,configuredFields);
       return applyFormulas(configuredFields,next);
     });
@@ -241,7 +242,8 @@ export default function ProductPage(){
     const common={
       field:{...field,...state},
       value:productValue(field),
-      onChange:value=>updateField(field,value),
+      onChange:value=>updateField(field,value,null),
+      onRecordChange:record=>updateField(field,record?.[field.dataSource?.valueField||"_id"]??"",record),
       lookupRecords:field.dataSource?.resource?(linkedRecords[field.dataSource.resource]||[]):[],
       onLookupSearch:searchLinkedRecords,
       required:state.required,

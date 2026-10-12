@@ -227,7 +227,7 @@ async function searchInvoiceRows(search, limit = 25, createdBy) {
     ],
   })
     .select(
-      "orderNumber orderDate companyName gstNumber clientId Address State City pinCode stateCode status paymentStatus payments paidAmount dueAmount finalRevenue roundOffFinalRevenue discountRate taxPercentage subOrders"
+      "orderNumber orderDate companyName gstNumber clientId Address State City pinCode stateCode status paymentStatus payments paidAmount dueAmount finalRevenue roundOffFinalRevenue totalAmount discountRate taxPercentage subOrders"
     )
     .sort({ orderDate: -1, createdAt: -1 })
     .limit(limit)
@@ -675,7 +675,7 @@ router.get("/:id", auth, async (req, res) => {
     const note = await CreditNote.findOne({ _id: req.params.id, createdBy: req.user.id })
       .populate(
         "originalOrderId",
-        "orderNumber orderDate companyName gstNumber Address State City pinCode stateCode payments paidAmount dueAmount roundOffFinalRevenue finalRevenue"
+        "orderNumber orderDate companyName gstNumber Address State City pinCode stateCode payments paidAmount dueAmount roundOffFinalRevenue finalRevenue totalAmount"
       )
       .lean();
 
@@ -1009,7 +1009,7 @@ router.post("/", auth, async (req, res) => {
             dueAmount: Math.max(
               0,
               round2(
-                Number(order.roundOffFinalRevenue || 0) -
+                getOrderInvoiceTotal(order) -
                   paymentTotal -
                   nextCreditApplied
               )

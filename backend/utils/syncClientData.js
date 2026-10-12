@@ -10,15 +10,25 @@ function round2(value) {
 async function syncClientData(clientId) {
   if (!clientId || !mongoose.isValidObjectId(clientId)) return null;
 
-  const orders = await Order.find({ clientId, status: { $ne: "Cancelled" } })
-    .select("orderDate createdAt roundOffFinalRevenue finalRevenue paidAmount dueAmount subOrders payments")
-    .lean();
+  const client = await Client.findById(clientId).select("_id createdBy").lean();
+  if (!client) return null;
+
+  const [orders, creditRows] = await Promise.all([
+    Order.find({ clientId: client._id, createdBy: client.createdBy, status: { $ne: "Cancelled" } })
+      .select("orderDate createdAt roundOffFinalRevenue finalRevenue totalAmount paidAmount dueAmount subOrders payments")
+      .lean(),
+    CreditNote.find({ clientId: client._id, createdBy: client.createdBy, status: "Posted" })
+      .select("settlement.customerCreditAmount")
+      .lean()
+  ]);
+  const creditBalance = round2(creditRows.reduce((sum, note) => sum + Number(note.settlement?.customerCreditAmount || 0), 0));
 
   if (!orders.length) {
-    return Client.findByIdAndUpdate(clientId, { $set: {
+    return Client.findOneAndUpdate({ _id: client._id, createdBy: client.createdBy }, { $set: {
       orderCount: 0, totalRevenue: 0, lastOrderDate: null, totalPaid: 0,
       pendingPayments: 0, outstanding_balance: 0, averageOrderValue: 0,
-      preferredProducts: [], orderFrequency: "Occasional", payments: [], paymentHistory: []
+      preferredProducts: [], orderFrequency: "Occasional", payments: [], paymentHistory: [],
+      creditBalance
     }}, { new: true }).lean();
   }
 
@@ -44,10 +54,7 @@ async function syncClientData(clientId) {
   const paymentHistory=orders.flatMap(o=>(o.payments||[]).map(p=>p._id));
   const lastOrderDate=orders.reduce((latest,o)=>{const d=new Date(o.orderDate||o.createdAt);return !latest||d>latest?d:latest;},null);
 
-  const creditRows=await CreditNote.find({clientId,status:"Posted"}).select("settlement.customerCreditAmount").lean();
-  const creditBalance=round2(creditRows.reduce((s,n)=>s+Number(n.settlement?.customerCreditAmount||0),0));
-
-  return Client.findByIdAndUpdate(clientId, {$set:{
+  return Client.findOneAndUpdate({_id:client._id,createdBy:client.createdBy}, {$set:{
     orderCount:orders.length,totalRevenue,lastOrderDate,totalPaid,
     pendingPayments:outstanding,outstanding_balance:outstanding,
     averageOrderValue:round2(totalRevenue/orders.length),preferredProducts,

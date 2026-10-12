@@ -9,13 +9,21 @@ const Client=require("../models/Client");
 const Order=require("../models/Order2");
 const auth=require("../middleware/auth");
 const {buildExpenseDateRange}=require("../utils/expenseDateRange");
+const {getSafeUploadExtension,isAllowedUploadType}=require("../utils/uploadFileTypes");
 const router=express.Router();
 const uploadDir=path.join(__dirname,"../public/uploads/expenses");
 fs.mkdirSync(uploadDir,{recursive:true});
 const upload=multer({
-  storage:multer.diskStorage({destination:(_,__,cb)=>cb(null,uploadDir),filename:(_,file,cb)=>cb(null,Date.now()+"-"+Math.random().toString(36).slice(2,9)+path.extname(file.originalname||"").toLowerCase())}),
+  storage:multer.diskStorage({
+    destination:(_,__,cb)=>cb(null,uploadDir),
+    filename:(_,file,cb)=>{
+      const ext=getSafeUploadExtension(file.mimetype);
+      if(!ext)return cb(new Error("Only JPG, PNG, GIF, WebP or PDF receipts are supported."));
+      cb(null,Date.now()+"-"+Math.random().toString(36).slice(2,9)+ext);
+    }
+  }),
   limits:{fileSize:10*1024*1024},
-  fileFilter:(_,file,cb)=>cb(null,/^image\/(jpeg|png|webp|gif)$/i.test(file.mimetype)||file.mimetype==="application/pdf")
+  fileFilter:(_,file,cb)=>cb(null,isAllowedUploadType(file.mimetype,true))
 });
 const owner=req=>req.user.id;
 const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;

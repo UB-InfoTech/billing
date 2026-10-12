@@ -122,7 +122,7 @@ const validateCustomSplits = (customSplits, selectedOrders, selectedOrdersData, 
 
     if (amount < 0) {
       errors[orderId] = 'Amount cannot be negative';
-    } else if (amount > due + 0.01) {
+    } else if (Math.round(amount * 100) > Math.round(due * 100)) {
       errors[orderId] = `Amount cannot exceed invoice due (₹${due.toFixed(2)})`;
     }
 
@@ -133,7 +133,7 @@ const validateCustomSplits = (customSplits, selectedOrders, selectedOrdersData, 
   const payment = parseDecimal(totalAmount);
   const difference = Math.abs(parseDecimal(totalAllocated - payment));
 
-  if (difference > 0.01) {
+  if (difference > 0) {
     errors._total = `Total allocated (₹${totalAllocated.toFixed(2)}) must equal payment amount (₹${payment.toFixed(2)})`;
   }
 
@@ -705,7 +705,7 @@ export default function BulkPayment() {
       await paymentValidationSchema.validate(form, { abortEarly: false });
 
       const paymentAmount = parseDecimal(form.amount);
-      if (paymentAmount > totalDue + 0.01) {
+      if (Math.round(paymentAmount * 100) > Math.round(totalDue * 100)) {
         setValidationErrors({
           _total: `Payment amount cannot exceed selected invoice dues of ₹${totalDue.toFixed(2)}`
         });

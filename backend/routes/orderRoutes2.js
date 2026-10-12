@@ -101,7 +101,7 @@ router.get("/sales-analytics",auth,async(req,res)=>{
             {$cond:[
               {$gt:[{$ifNull:["$totalAmount",0]},0]},
               "$totalAmount",
-              {$round:[{$max:[{$ifNull:["$finalRevenue",0]},0]},0]}
+              {$floor:{$add:[{$max:[{$ifNull:["$finalRevenue",0]},0]},0.5]}}
             ]}
           ]}},
           orderCount:{$sum:1}

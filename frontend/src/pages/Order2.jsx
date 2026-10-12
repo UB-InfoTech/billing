@@ -231,24 +231,6 @@ function Order2() {
     // const OrderBillNo = profile.billNoPrefix + profile.billNoSequence + profile.billNoSuffix;
     const OrderBillNo = (profile.billNoPrefix || '') + profile.billNoSequence + (profile.billNoSuffix || '');
 
-    const incrementBillNoSequence = async () => {
-        try {
-            // await axios.put(`${linkone}/api/profile/updateBillNoSequence`, {
-            await axios.patch(`${linkone}/api/profile/billNoSequence`, {
-                billNoSequence: profile.billNoSequence + 1
-            }, {
-                headers: {
-                    'x-auth-token': token
-                }
-            });
-            setProfile(prev => ({
-                ...prev,
-                billNoSequence: prev.billNoSequence + 1
-            }));
-        } catch (error) {
-            console.error("Error updating billNoSequence", error);
-        }
-    };
     const fetchClients = async () => {
         const response = await axios.get(`${linkone}/api/clients`, {
             headers: {
@@ -651,7 +633,7 @@ function Order2() {
             hsnCode: item.hsnCode === "" ? 0 : Number(item.hsnCode || 0),
         }));
 
-        if (!String(formData.orderNumber || "").trim()) {
+        if (editingOrder && !String(formData.orderNumber || "").trim()) {
             setInvoiceFormError("Invoice number is missing. Check the invoice number field.");
             return;
         }
@@ -677,6 +659,8 @@ function Order2() {
             };
 
             const wasEditing=Boolean(editingOrder);
+            // New invoice numbers are reserved atomically by the backend.
+            if(!wasEditing)delete payload.orderNumber;
             if (wasEditing) {
                 await axios.put(
                     `${linkone}/api/order/orders/${editingOrder._id}/update`,
@@ -689,7 +673,7 @@ function Order2() {
                     payload,
                     authConfig()
                 );
-                await incrementBillNoSequence();
+                await fetchProfile();
             }
 
             setShowModal(false);

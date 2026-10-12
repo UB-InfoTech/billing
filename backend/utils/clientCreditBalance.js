@@ -2,10 +2,11 @@ const round2 = value =>
   Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 
 function sumCustomerCredit(notes = []) {
-  return round2((Array.isArray(notes) ? notes : []).reduce(
-    (sum, note) => sum + Math.max(0, Number(note?.settlement?.customerCreditAmount || 0)),
-    0
-  ));
+  const total = (Array.isArray(notes) ? notes : []).reduce((sum, note) => {
+    const amount = Number(note?.settlement?.customerCreditAmount ?? 0);
+    return sum + (Number.isFinite(amount) ? Math.max(0, amount) : 0);
+  }, 0);
+  return round2(total);
 }
 
 /**

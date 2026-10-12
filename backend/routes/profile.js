@@ -8,27 +8,55 @@ router.get('/', auth, async (req, res) => {
   try {
     let profile = await Profile.findOne({ createdBy: req.user.id });
     if (!profile) {
-      // Create a default profile if none exists
+      // New accounts start with blank company details so demo information is
+      // never accidentally printed on a real customer's invoice.
       profile = await Profile.create({
-        headerTitle: 'Default Company Profile',
-        companyName: 'Demo Company',
-        companyAddress: 'demo address',
-        phoneNumber1: '1234567890',
-        phoneNumber2: '9876543210',
-        gstin: 'ssdcd',
-        pan: 'sdsdc',
-        bankName: 'zc',
-        accountNo: 'zxc',
-        branchName: 'zsc',
-        ifsc: '64',
-        pinCode: 0,
-        stateCode: 24,
-        billNoPrefix: '',
+        headerTitle: '',
+        companyName: '',
+        companyAddress: '',
+        phoneNumber1: '',
+        phoneNumber2: '',
+        gstin: '',
+        pan: '',
+        bankName: '',
+        accountNo: '',
+        branchName: '',
+        ifsc: '',
+        pinCode: null,
+        stateCode: null,
+        billNoPrefix: 'INV-',
         billNoSequence: 1,
         billNoSuffix: '',
-        createdBy: req.user.id, // Assuming req.user is set by auth middleware
+        createdBy: req.user.id,
       });
     }
+
+    // Clean up the exact demo profile previously created by older versions.
+    const isLegacyDemoProfile = profile.companyName === 'Demo Company'
+      && profile.gstin === 'ssdcd'
+      && profile.pan === 'sdsdc'
+      && profile.bankName === 'zc'
+      && profile.accountNo === 'zxc';
+    if (isLegacyDemoProfile) {
+      profile.headerTitle = '';
+      profile.companyName = '';
+      profile.companyAddress = '';
+      profile.phoneNumber1 = '';
+      profile.phoneNumber2 = '';
+      profile.gstin = '';
+      profile.pan = '';
+      profile.bankName = '';
+      profile.accountNo = '';
+      profile.branchName = '';
+      profile.ifsc = '';
+      profile.pinCode = null;
+      profile.stateCode = null;
+      profile.billNoPrefix = 'INV-';
+      profile.billNoSequence = 1;
+      profile.billNoSuffix = '';
+      await profile.save();
+    }
+
     res.json(profile);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -38,7 +66,22 @@ router.get('/', auth, async (req, res) => {
 // Update profile
 router.put('/', auth, async (req, res) => {
   try {
-    const nextBody={...(req.body||{})};
+    const allowedFields=[
+      "headerTitle","companyName","companyAddress","phoneNumber1","phoneNumber2",
+      "gstin","pan","bankName","accountNo","branchName","ifsc","pinCode","stateCode",
+      "billNoPrefix","billNoSequence","billNoSuffix","eWayUserName","eWayPassword","customFields"
+    ];
+    const nextBody={};
+    for(const key of allowedFields){
+      if(req.body?.[key]!==undefined)nextBody[key]=req.body[key];
+    }
+    if(nextBody.billNoSequence!==undefined){
+      const sequence=Number(nextBody.billNoSequence);
+      if(!Number.isSafeInteger(sequence)||sequence<0){
+        return res.status(400).json({message:"Invoice number sequence must be a whole number of zero or more."});
+      }
+      nextBody.billNoSequence=sequence;
+    }
     if(nextBody.customFields&&typeof nextBody.customFields==="object"&&!Array.isArray(nextBody.customFields)){
       nextBody.customFields=Object.fromEntries(
         Object.entries(nextBody.customFields).slice(0,100).map(([key,value])=>[String(key).slice(0,100),value])

@@ -908,7 +908,7 @@ export default function FormConfigurator({
                                 <select className="form-select" value={condition.action} onChange={event=>{
                                   const conditions=[...(field.conditions||[])];conditions[conditionIndex]={...condition,action:event.target.value};update(field.key,{conditions});
                                 }}>
-                                  <option value="show">Show</option><option value="hide">Hide</option><option value="require">Require</option><option value="readonly">Read only</option><option value="enable">Enable</option><option value="disable">Disable</option>
+                                  <option value="show">Show</option><option value="hide">Hide</option><option value="require">Require</option><option value="optional">Make optional</option><option value="readonly">Read only</option><option value="enable">Enable</option><option value="disable">Disable</option>
                                 </select>
                               </div>
                               <div className="col-md-3">

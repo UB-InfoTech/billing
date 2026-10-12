@@ -8,6 +8,7 @@ const {syncClientDataSafely}=require("../utils/syncClientData");
 const router=express.Router();
 const METHODS=["Cash","Bank Transfer","UPI","Cheque","Bank"];
 const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
+const {normalizePaymentUpdates}=require("../utils/bulkPaymentAllocations");
 
 const isReplicaSetAvailable=()=>{
   const client=mongoose.connection.getClient?.();
@@ -23,17 +24,7 @@ const validReference=value=>{
   return reference.length>0&&reference.length<=100;
 };
 
-const normalizeUpdates=updates=>{
-  const byId=new Map();
-  for(const raw of updates){
-    const orderId=String(typeof raw==="string"?raw:raw?.orderId||"");
-    if(!mongoose.isValidObjectId(orderId))continue;
-    const amount=round2(typeof raw==="string"?0:raw?.amount);
-    const previous=byId.get(orderId);
-    byId.set(orderId,{orderId,amount:round2((previous?.amount||0)+amount)});
-  }
-  return [...byId.values()];
-};
+
 
 router.put("/orders/payments/bulk",auth,async(req,res)=>{
   const transactional=isReplicaSetAvailable();
@@ -53,8 +44,10 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
     if(!Array.isArray(updates)||!updates.length)throw new Error("updates[] is required.");
     if(!paymentDate||Number.isNaN(parsedDate.getTime()))throw new Error("Valid payment date is required.");
 
-    const normalized=normalizeUpdates(updates);
-    if(!normalized.length)throw new Error("No valid invoices were selected.");
+    const normalized=normalizePaymentUpdates(
+      updates,
+      value=>mongoose.isValidObjectId(value)
+    );
 
     if(session)session.startTransaction({writeConcern:{w:"majority",j:true}});
 
@@ -104,7 +97,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
       const customById=new Map(normalized.map(x=>[x.orderId,x.amount]));
       allocations=active.map(order=>{
         const applied=round2(customById.get(String(order._id))||0);
-        if(applied>Number(order.dueAmount||0)+0.01){
+        if(Math.round(applied*100)>Math.round(Number(order.dueAmount||0)*100)){
           throw new Error(`Custom allocation exceeds due for invoice ${order.orderNumber||order._id}.`);
         }
         return{order,appliedAmount:applied};

@@ -90,7 +90,7 @@ function Clients() {
   },[searchParams,setSearchParams]);
   const clientFormConfig=useFormConfiguration("clients.form",CLIENT_FORM_FIELDS);
   const linkedClientSources=useMemo(()=>Array.from(new Set(clientFormConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean))),[clientFormConfig.fields]);
-  const {records:linkedRecords}=useNoCodeDataSources(linkedClientSources);
+  const {records:linkedRecords,searchRecords:searchLinkedRecords}=useNoCodeDataSources(linkedClientSources);
   const clientValue=field=>field.custom
     ? newClient.customFields?.[field.key]??newClient[field.key]??field.defaultValue??""
     : newClient[field.key]??field.defaultValue??"";
@@ -117,7 +117,8 @@ function Clients() {
       value:clientValue(field),
       onChange:value=>updateClientField(field,value,null),
       onRecordChange:record=>updateClientField(field,record?.[field.dataSource?.valueField||"_id"]??"",record),
-      lookupRecords:source
+      lookupRecords:source,
+      onLookupSearch:searchLinkedRecords
     };
     if(field.key==="state"&&!field.dataSource?.resource){
       return <div key={field.key} className={`col-12 col-md-${field.width||6}`}><ConfiguredField {...common} options={indianStates}/></div>;

@@ -46,7 +46,7 @@ export default function ExpenseForm({onSubmit,initialData={}}){
   const fields=expenseFormConfig.fields||[];
   const visibleFields=fields.filter(field=>field.visible!==false);
   const linkedSources=useMemo(()=>Array.from(new Set(fields.map(field=>field.dataSource?.resource).filter(Boolean))),[fields]);
-  const {records:linkedRecords}=useNoCodeDataSources(linkedSources);
+  const {records:linkedRecords,searchRecords:searchLinkedRecords}=useNoCodeDataSources(linkedSources);
 
   useEffect(()=>{
     if(searchParams.get("customize")==="form"){
@@ -156,6 +156,7 @@ export default function ExpenseForm({onSubmit,initialData={}}){
           value={valueFor(field)}
           onChange={value=>updateField(field,value)}
           lookupRecords={lookupRecords}
+          onLookupSearch={searchLinkedRecords}
           options={field.options}
           required={state.required}
           disabled={state.disabled}

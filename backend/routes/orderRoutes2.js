@@ -246,12 +246,22 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
 
 router.patch("/orders/:id/upd",auth,async(req,res)=>{
   try{
+    if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid order ID."});
     if(!STATUSES.includes(req.body?.status))return res.status(400).json({message:"Invalid order status."});
-    const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)});if(!order)return res.status(404).json({message:"Order not found"});
-    order.status=req.body.status;order.statusHistory=Array.isArray(order.statusHistory)?order.statusHistory:[];order.statusHistory.push({status:req.body.status,timestamp:new Date()});
+    const order=await Order.findOne({_id:req.params.id,createdBy:userId(req));
+    if(!order)return res.status(404).json({message:"Order not found"});
+    // Making the same request twice is safe: don't create duplicate history rows.
+    if(order.status===req.body.status){
+      return res.json({message:"Order status is already up to date.",order});
+    }
+    order.status=req.body.status;
+    order.statusHistory=Array.isArray(order.statusHistory)?order.statusHistory:[];
+    order.statusHistory.push({status:req.body.status,timestamp:new Date()});
     await applyWorkflows({resource:"orders",event:"record_updated",doc:order,createdBy:userId(req)});
-    await order.save();await syncClientDataSafely(order.clientId);res.json({message:"Order status updated",order});
-  }catch(error){res.status(400).json({message:error.message});}
+    await order.save();
+    await syncClientDataSafely(order.clientId,"an invoice status update");
+    return res.json({message:"Order status updated",order});
+  }catch(error){res.status(error.status||400).json({message:error.message});}
 });
 
 router.delete("/orders/:id/delete",auth,async(req,res)=>{

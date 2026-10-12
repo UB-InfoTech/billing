@@ -26,10 +26,10 @@ const upload=multer({storage,limits:{files:5,fileSize:5*1024*1024},fileFilter:(_
 
 function owner(req){return req.user?.id;}
 function publicUrl(req,filePath){return req.protocol+"://"+req.get("host")+filePath;}
-async function nextProductCode(){
+async function nextProductCode(createdBy){
   for(let i=0;i<10;i++){
     const code="P"+Date.now().toString().slice(-7)+Math.floor(Math.random()*10);
-    if(!(await Product.exists({productCode:code})))return code;
+    if(!(await Product.exists({createdBy,productCode:code})))return code;
   }
   throw new Error("Unable to generate a unique product code.");
 }
@@ -85,7 +85,7 @@ router.get("/:id",auth,async(req,res)=>{
 
 router.post("/",auth,upload.array("images",5),async(req,res)=>{
   try{
-    const code=String(req.body.productCode||"").trim().toUpperCase()||await nextProductCode();
+    const code=String(req.body.productCode||"").trim().toUpperCase()||await nextProductCode(owner(req));
     if(await Product.exists({createdBy:owner(req),productCode:code}))return res.status(409).json({message:"Product code already exists."});
     const product=new Product({
       productName:String(req.body.productName||"").trim(),productCode:code,

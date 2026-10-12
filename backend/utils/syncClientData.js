@@ -8,6 +8,28 @@ function round2(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 }
 
+/**
+ * Resolve invoice sales using the same precedence as the sales-analytics
+ * endpoint. Legacy orders may have roundOffFinalRevenue persisted as 0 even
+ * when finalRevenue or totalAmount contains the real total.
+ */
+function getInvoiceRevenue(order = {}) {
+  const roundedRevenue = Number(order.roundOffFinalRevenue);
+  if (Number.isFinite(roundedRevenue) && roundedRevenue > 0) {
+    return round2(roundedRevenue);
+  }
+
+  const finalRevenue = Number(order.finalRevenue);
+  if (Number.isFinite(finalRevenue) && finalRevenue > 0) {
+    return round2(finalRevenue);
+  }
+
+  const totalAmount = Number(order.totalAmount);
+  return Number.isFinite(totalAmount) && totalAmount > 0
+    ? round2(totalAmount)
+    : 0;
+}
+
 async function syncClientData(clientId) {
   if (!clientId || !mongoose.isValidObjectId(clientId)) return null;
 
@@ -36,7 +58,7 @@ async function syncClientData(clientId) {
     }}, { new: true }).lean();
   }
 
-  const totalRevenue = round2(orders.reduce((s,o)=>s+Number(o.roundOffFinalRevenue ?? o.finalRevenue ?? 0),0));
+  const totalRevenue = round2(orders.reduce((sum, order) => sum + getInvoiceRevenue(order), 0));
   const totalPaid = round2(orders.reduce((s,o)=>s+Number(o.paidAmount||0),0));
   const outstanding = round2(orders.reduce((s,o)=>s+Math.max(0,Number(o.dueAmount||0)),0));
 
@@ -83,4 +105,4 @@ async function syncClientDataSafely(clientId, context = "a saved financial trans
   }
 }
 
-module.exports={syncClientData,syncClientDataSafely};
+module.exports={syncClientData,syncClientDataSafely,getInvoiceRevenue};

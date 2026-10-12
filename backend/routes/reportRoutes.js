@@ -64,8 +64,40 @@ router.get("/client-revenue",auth,async(req,res)=>{
 
 router.get("/top-selling-sarees",auth,async(req,res)=>{
   try{
-    const rows=await Order.aggregate([{$match:{createdBy:new mongoose.Types.ObjectId(owner(req)),status:{$ne:"Cancelled"}}},{$unwind:"$subOrders"},{$group:{_id:{name:"$subOrders.orderName",design:"$subOrders.designNumber"},quantity:{$sum:{$subtract:[{$ifNull:["$subOrders.quantity",0]},{$ifNull:["$subOrders.shortPcs",0]}]}},revenue:{$sum:{$multiply:[{$subtract:[{$ifNull:["$subOrders.quantity",0]},{$ifNull:["$subOrders.shortPcs",0]}]},{$ifNull:["$subOrders.unitPrice",0]}]}}}},{$sort:{revenue:-1,quantity:-1}},{$limit:20}]);
-    res.json(rows.map(x=>({name:x._id?.name||"Unnamed",designNumber:x._id?.design||"",quantity:round2(Math.max(0,x.quantity)),revenue:round2(Math.max(0,x.revenue))})));
+    // Keep this calculation in sync with the invoice model: MTR lines bill
+    // MTR minus short pieces, while PCS lines bill quantity minus short pieces.
+    const rawQuantity={
+      $cond:[
+        {$eq:[{$ifNull:["$subOrders.qtyUnit","PCS"]},"MTR"]},
+        {$ifNull:["$subOrders.MTR",0]},
+        {$ifNull:["$subOrders.quantity",0]}
+      ]
+    };
+    const billableQuantity={
+      $max:[{$subtract:[rawQuantity,{$ifNull:["$subOrders.shortPcs",0]}]},0]
+    };
+    const rows=await Order.aggregate([
+      {$match:{createdBy:new mongoose.Types.ObjectId(owner(req)),status:{$ne:"Cancelled"}}},
+      {$unwind:"$subOrders"},
+      {$group:{
+        _id:{
+          name:"$subOrders.orderName",
+          design:"$subOrders.designNumber",
+          unit:{$ifNull:["$subOrders.qtyUnit","PCS"]}
+        },
+        quantity:{$sum:billableQuantity},
+        revenue:{$sum:{$multiply:[billableQuantity,{$ifNull:["$subOrders.unitPrice",0]}]}}
+      }},
+      {$sort:{revenue:-1,quantity:-1}},
+      {$limit:20}
+    ]);
+    res.json(rows.map(x=>({
+      name:x._id?.name||"Unnamed",
+      designNumber:x._id?.design||"",
+      qtyUnit:x._id?.unit||"PCS",
+      quantity:round2(Math.max(0,x.quantity)),
+      revenue:round2(Math.max(0,x.revenue))
+    })));
   }catch(error){res.status(error.status||500).json({message:error.message});}
 });
 

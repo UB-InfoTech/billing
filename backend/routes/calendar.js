@@ -3,6 +3,7 @@ const mongoose=require("mongoose");
 const Event=require("../models/Calendar");
 const auth=require("../middleware/auth");
 const {applyWorkflows}=require("../utils/workflowEngine");
+const {buildCalendarOverlapQuery}=require("../utils/calendarDateRange");
 
 const router=express.Router();
 const owner=req=>req.user.id;
@@ -17,14 +18,8 @@ const validDate=value=>{
 
 router.get("/",auth,async(req,res)=>{
   try{
-    const query={createdBy:owner(req)};
-    const start=validDate(req.query.start);
-    const end=validDate(req.query.end);
-    if(start||end){
-      query.start={};
-      if(start)query.start.$gte=start;
-      if(end)query.start.$lte=end;
-    }
+    const range=buildCalendarOverlapQuery(req.query);
+    const query={createdBy:owner(req),...range};
     res.json(await Event.find(query).sort({start:1}).lean());
   }catch(error){res.status(500).json({message:error.message});}
 });

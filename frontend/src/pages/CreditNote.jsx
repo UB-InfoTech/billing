@@ -31,8 +31,8 @@ const invoiceTotal = (order) => {
     const candidates = [
         order.invoiceTotal,
         order.roundOffFinalRevenue,
-        order.finalRevenue,
         order.totalAmount,
+        n(order.finalRevenue) > 0 ? Math.round(n(order.finalRevenue)) : 0,
     ];
     const positive = candidates.map(n).find(value => value > 0);
     return positive ?? 0;
@@ -1079,12 +1079,12 @@ function CreditNotePrint({ note, profile }) {
         note?.State || original?.State,
         note?.pinCode || original?.pinCode,
     ].filter(Boolean).join(", ");
-    const invoiceTotal = n(
-        note?.originalInvoiceTotal ??
-        original?.roundOffFinalRevenue ??
-        original?.finalRevenue ??
-        original?.totalAmount
-    );
+    const billedInvoiceTotal = invoiceTotal({
+        invoiceTotal: note?.originalInvoiceTotal,
+        roundOffFinalRevenue: original?.roundOffFinalRevenue,
+        totalAmount: original?.totalAmount,
+        finalRevenue: original?.finalRevenue,
+    });
 
     const amountInWords = (value) => {
         const ones = ["Zero","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
@@ -1166,7 +1166,7 @@ function CreditNotePrint({ note, profile }) {
                     <div className="cn-section-label">Original Invoice</div>
                     <div><span className="cn-muted">Invoice No.:</span> <strong>{note?.originalInvoiceNumber || original?.orderNumber || "-"}</strong></div>
                     <div><span className="cn-muted">Invoice Date:</span> {formatDate(note?.originalInvoiceDate || original?.orderDate)}</div>
-                    <div><span className="cn-muted">Invoice Total:</span> {money(invoiceTotal)}</div>
+                    <div><span className="cn-muted">Invoice Total:</span> {money(billedInvoiceTotal)}</div>
                     {original?.paymentTerms && <div><span className="cn-muted">Payment Terms:</span> {original.paymentTerms}</div>}
                 </div>
             </div>

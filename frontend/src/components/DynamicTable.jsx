@@ -264,16 +264,22 @@ export default function DynamicTable({
     const loadValues=async()=>{
       try{
         setLoadingValues(true);
-        const response=await axios.get(
-          `${apiBase}/api/table-config/${encodeURIComponent(tableKey)}/values`,
-          {...authConfig(),params:{rowKeys:rowKeys.join(",")}}
-        );
-        if(cancelled)return;
         const next={};
-        (response.data?.values||[]).forEach(item=>{
-          next[`${item.rowKey}::${item.fieldKey}`]=item.value;
-        });
-        setCustomValues(next);
+        // Keep each request below the backend's 500-row cap and avoid a very
+        // long URL when customer/product lists contain many records.
+        const batchSize=100;
+        for(let start=0;start<rowKeys.length;start+=batchSize){
+          const batch=rowKeys.slice(start,start+batchSize);
+          const response=await axios.get(
+            `${apiBase}/api/table-config/${encodeURIComponent(tableKey)}/values`,
+            {...authConfig(),params:{rowKeys:batch.join(",")}}
+          );
+          if(cancelled)return;
+          (response.data?.values||[]).forEach(item=>{
+            next[`${item.rowKey}::${item.fieldKey}`]=item.value;
+          });
+        }
+        if(!cancelled)setCustomValues(next);
       }catch(loadError){
         if(!cancelled)setError(loadError.response?.data?.message||"Unable to load custom field values.");
       }finally{

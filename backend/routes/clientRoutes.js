@@ -4,7 +4,7 @@ const mongoose=require("mongoose");
 const Client=require("../models/Client");
 const Order=require("../models/Order2");
 const CreditNote=require("../models/CreditNote");
-const {applyManualCreditAdjustment,sumCustomerCredit}=require("../utils/clientCreditBalance");
+const {applyManualCreditAdjustment}=require("../utils/clientCreditBalance");
 const auth=require("../middleware/auth");
 
 const router=express.Router();

@@ -344,9 +344,10 @@ export default function DynamicTable({
   };
 
   const startEdit=(rowKey,column,value)=>{
-    if(loadingValues)return;
+    const stateKey=customValueKey(rowKey,column.key);
+    if(loadingValues||commitsInProgressRef.current.has(stateKey))return;
     cancelledEditRef.current=null;
-    setEditingCell(customValueKey(rowKey,column.key));
+    setEditingCell(stateKey);
     setEditingValue(value??"");
   };
 
@@ -608,10 +609,16 @@ export default function DynamicTable({
   };
 
   const resetSettings=async()=>{
+    const customFieldCount=draft.filter(column=>column.kind==="custom").length;
+    const warning=customFieldCount
+      ? `Reset this list to its original columns? This will remove ${customFieldCount} custom column${customFieldCount===1?"":"s"} and permanently delete their saved values. Invoice, customer, product and other original records will not be deleted.`
+      : "Reset this list's columns and visibility to the original defaults?";
+    if(!window.confirm(warning))return;
+
     try{
       setSaving(true);
       await axios.delete(`${apiBase}/api/table-config/${encodeURIComponent(tableKey)}`,authConfig());
-      setDraft(cloneColumns(columns));
+      setDraft(cloneColumns(columnsRef.current));
       setCustomValues({});
       setError("");
       setShowSettings(false);

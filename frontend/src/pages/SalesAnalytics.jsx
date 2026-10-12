@@ -175,10 +175,21 @@ const SalesAnalytics = () => {
     setFilteredSales(filtered);
   };
 
+  // Quote CSV cells and neutralize spreadsheet formulas in user-controlled text.
+  const csvCell = (value) => {
+    const text = value == null ? "" : String(value);
+    const safeText = typeof value === "string" && /^[\\t\\r ]*[=+\\-@]/.test(text)
+      ? "'" + text
+      : text;
+    return /[",\\r\\n]/.test(safeText)
+      ? '"' + safeText.replace(/"/g, '""') + '"'
+      : safeText;
+  };
+
   const exportToCSV = () => {
     const csvRows = [];
     const headers = ['Period', 'Total Sales', 'Order Count', 'Order Name', 'Revenue', 'Date'];
-    csvRows.push(headers.join(','));
+    csvRows.push(headers.map(csvCell).join(','));
 
     Object.keys(filteredSales).forEach(period => {
       filteredSales[period].orders.forEach(order => {
@@ -192,7 +203,7 @@ const SalesAnalytics = () => {
           order.roundOffFinalRevenue,
           new Date(order.orderDate).toLocaleDateString(),
         ];
-        csvRows.push(row.join(','));
+        csvRows.push(row.map(csvCell).join(','));
       });
     });
 
@@ -547,20 +558,22 @@ const SalesAnalytics = () => {
   const exportFilteredToCSV = () => {
     const csvRows = [];
     const headers = ['Date', 'Order Number', 'Order Name', 'Status', 'Revenue', 'Address', 'State', 'City'];
-    csvRows.push(headers.join(','));
+    csvRows.push(headers.map(csvCell).join(','));
 
     filteredOrders.forEach(order => {
       const row = [
         new Date(order.orderDate).toLocaleDateString(),
         order.orderNumber,
-        order.orderName,
+        (Array.isArray(order.subOrders)
+          ? order.subOrders.map(item => item.orderName || item.designNumber).filter(Boolean).join(", ")
+          : order.orderName || ""),
         order.status,
         order.roundOffFinalRevenue || 0,
         order.Address || 'N/A',
         order.State || 'N/A',
         order.City || 'N/A',
       ];
-      csvRows.push(row.join(','));
+      csvRows.push(row.map(csvCell).join(','));
     });
 
     const csvString = csvRows.join('\n');

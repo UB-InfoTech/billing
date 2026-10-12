@@ -13,6 +13,7 @@ const InvoiceConfiguration=require("../models/InvoiceConfiguration");
 const PaymentLog=require("../models/PaymentLog2");
 const auth=require("../middleware/auth");
 const {syncClientDataSafely,getInvoiceRevenue}=require("../utils/syncClientData");
+const {numberToWords}=require("../utils/numberToWords");
 const router=express.Router();
 
 const STATUSES=["Pending","In Process","Completed","Cancelled","Dispatched"];
@@ -621,14 +622,6 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
 
 function referenceAllowed(value){const x=String(value||"").trim();return x.length>0&&x.length<=100;}
 
-function numberToWords(amount){
-  const ones=["","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"],tens=["","","Twenty","Thirty","Forty","Fifty","Sixty","Seventy","Eighty","Ninety"];
-  let n=Math.floor(Number(amount||0));if(n===0)return"Zero Rupees Only";
-  const two=(x)=>x<20?ones[x]:tens[Math.floor(x/10)]+(x%10?" "+ones[x%10]:"");const parts=[];
-  const crore=Math.floor(n/10000000);if(crore)parts.push(two(crore),"Crore");n%=10000000;const lakh=Math.floor(n/100000);if(lakh)parts.push(two(lakh),"Lakh");n%=100000;const thousand=Math.floor(n/1000);if(thousand)parts.push(two(thousand),"Thousand");n%=1000;const hundred=Math.floor(n/100);if(hundred)parts.push(ones[hundred],"Hundred");n%=100;if(n)parts.push(two(n));
-  return parts.join(" ")+" Rupees Only";
-}
-
 function invoiceEscape(value){
   return String(value ?? "")
     .replace(/&/g,"&amp;")
@@ -643,16 +636,22 @@ function renderSimpleInvoiceHtml({order,profile,client}){
   const terms=Number(order.paymentTerms);
   if(Number.isFinite(terms))dueDate.setDate(dueDate.getDate()+terms);
 
+  const invoiceTotal=getInvoiceRevenue(order);
+  const calculatedFinalRevenue=Number(order.finalRevenue);
+  const roundOff=Number.isFinite(calculatedFinalRevenue)&&calculatedFinalRevenue>0
+    ?round2(invoiceTotal-calculatedFinalRevenue)
+    :Number(order.roundOff||0);
   const rows=(order.subOrders||[]).map((item,index)=>{
     const qtyUnit=item.qtyUnit||"PCS";
-    const qty=qtyUnit==="MTR"?Number(item.MTR||0):Number(item.quantity||0);
-    const amount=round2(qty*Number(item.unitPrice||0));
+    const enteredQty=qtyUnit==="MTR"?Number(item.MTR||0):Number(item.quantity||0);
+    const billableQty=Math.max(0,enteredQty-Math.max(0,Number(item.shortPcs||0)));
+    const amount=round2(billableQty*Number(item.unitPrice||0));
     return `<tr>
       <td>${index+1}</td>
       <td>${invoiceEscape(item.orderName||"")}</td>
       <td>${invoiceEscape(item.designNumber||"")}</td>
       <td>${invoiceEscape(item.hsnCode??"")}</td>
-      <td>${qty.toFixed(2)} ${invoiceEscape(qtyUnit)}</td>
+      <td>${billableQty.toFixed(2)} ${invoiceEscape(qtyUnit)}</td>
       <td>${Number(item.unitPrice||0).toFixed(2)}</td>
       <td>${amount.toFixed(2)}</td>
     </tr>`;
@@ -675,7 +674,7 @@ function renderSimpleInvoiceHtml({order,profile,client}){
   <div><h2>Invoice</h2><div><b>No.:</b> ${invoiceEscape(order.orderNumber||"")}</div><div><b>Date:</b> ${invoiceEscape(new Date(order.orderDate||new Date()).toLocaleDateString("en-IN"))}</div><div><b>Due:</b> ${invoiceEscape(dueDate.toLocaleDateString("en-IN"))}</div></div></div>
   <div style="margin-top:18px"><h3>Bill To</h3><div><b>${invoiceEscape(order.companyName||client?.companyName||client?.name||"Customer")}</b></div><div>${invoiceEscape(order.Address||client?.address||"")}</div><div>${invoiceEscape(order.City||client?.city||"")}, ${invoiceEscape(order.State||client?.state||"")}</div><div>GSTIN: ${invoiceEscape(order.gstNumber||client?.gstNumber||"")}</div></div>
   <table><thead><tr><th>#</th><th>Description</th><th>Design</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${rows||'<tr><td colspan="7">No line items.</td></tr>'}</tbody></table>
-  <div class="summary"><div><span>Taxable</span><span>₹${Number(order.totalCost||0).toFixed(2)}</span></div><div><span>Tax</span><span>₹${Number(order.taxAmount||0).toFixed(2)}</span></div><div><span>Round Off</span><span>₹${round2(Number(order.roundOffFinalRevenue||0)-Number(order.finalRevenue||0)).toFixed(2)}</span></div><div style="border-top:2px solid #111;font-weight:700"><span>Invoice Total</span><span>₹${Number(order.roundOffFinalRevenue||0).toFixed(2)}</span></div></div>
+  <div class="summary"><div><span>Subtotal</span><span>₹${round2(Number(order.totalCost||0)+Number(order.discountAmount||0)).toFixed(2)}</span></div><div><span>Discount</span><span>-₹${Number(order.discountAmount||0).toFixed(2)}</span></div><div><span>Taxable</span><span>₹${Number(order.totalCost||0).toFixed(2)}</span></div><div><span>Tax</span><span>₹${Number(order.taxAmount||0).toFixed(2)}</span></div><div><span>Round Off</span><span>₹${roundOff.toFixed(2)}</span></div><div style="border-top:2px solid #111;font-weight:700"><span>Invoice Total</span><span>₹${invoiceTotal.toFixed(2)}</span></div></div>
   <div style="margin-top:28px;border-top:1px solid #999;padding-top:10px;font-size:12px">Payment Status: ${invoiceEscape(order.paymentStatus||"Unpaid")} &nbsp; | &nbsp; Paid: ₹${Number(order.paidAmount||0).toFixed(2)} &nbsp; | &nbsp; Due: ₹${Number(order.dueAmount||0).toFixed(2)}</div>
   </div></body></html>`;
 }
@@ -711,7 +710,7 @@ async function renderInvoice(order,res){
       invoiceConfig,
       profileHeaderTitle:profile.headerTitle||"Invoice",profileCompanyName:profile.companyName||"Company",profileCompanyAddress:profile.companyAddress||"",profilePhoneNumber1:profile.phoneNumber1||"",profilePhoneNumber2:profile.phoneNumber2||"",profileGstNumber:profile.gstin||"",profilePanNumber:profile.pan||"",profileBankName:profile.bankName||"",profileAccountNo:profile.accountNo||"",profileBranchName:profile.branchName||"",profileIfsc:profile.ifsc||"",
       clientChallanNumber:order.challanNumber||"",clientCompanyName:order.companyName||"",clientAddress:order.Address||"",clientPhoneNumber:client?.phone||"",clientGstNumber:order.gstNumber||"",clientState:client?.state||order.State||"",
-      orderNumber:order.orderNumber||"",createdAt:new Date(order.orderDate).toLocaleDateString("en-IN"),dueDate:dueDate.toLocaleDateString("en-IN"),paymentTerm:order.paymentTerms||"",ewayBillNo:order.ewbDetails?.ewbNo||"N/A",subOrders:order.subOrders||[],orderTotalCost:order.totalCost||0,orderSubTotal:round2(Number(order.totalCost||0)+Number(order.discountAmount||0)),orderDisRate:order.discountRate||0,orderDiscountAmount:order.discountAmount||0,orderTax:round2(Number(order.taxPercentage||0)/2),orderTaxAmount:round2(Number(order.taxAmount||0)/2),orderIgstTax:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxPercentage||0):0,orderIgstTaxAmount:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxAmount||0):0,orderFinalRevenue:order.finalRevenue||0,orderFinalRevenueRoundOff:round2(Number(order.roundOffFinalRevenue||0)-Number(order.finalRevenue||0)),orderFinalRevenueAfterRoundOff:order.roundOffFinalRevenue||0,orderFinalRevenueInWords:numberToWords(order.roundOffFinalRevenue||0),paymentStatus:order.paymentStatus,dueAmount:order.dueAmount||0,creditAppliedAmount:order.creditAppliedAmount||0,payments:order.payments||[]
+      orderNumber:order.orderNumber||"",createdAt:new Date(order.orderDate).toLocaleDateString("en-IN"),dueDate:dueDate.toLocaleDateString("en-IN"),paymentTerm:order.paymentTerms||"",ewayBillNo:order.ewbDetails?.ewbNo||"N/A",subOrders:order.subOrders||[],orderTotalCost:order.totalCost||0,orderSubTotal:round2(Number(order.totalCost||0)+Number(order.discountAmount||0)),orderDisRate:order.discountRate||0,orderDiscountAmount:order.discountAmount||0,orderTax:round2(Number(order.taxPercentage||0)/2),orderTaxAmount:round2(Number(order.taxAmount||0)/2),orderIgstTax:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxPercentage||0):0,orderIgstTaxAmount:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxAmount||0):0,orderFinalRevenue:order.finalRevenue||0,orderFinalRevenueRoundOff:round2(getInvoiceRevenue(order)-Number(order.finalRevenue||0)),orderFinalRevenueAfterRoundOff:getInvoiceRevenue(order),orderFinalRevenueInWords:numberToWords(getInvoiceRevenue(order)),paymentStatus:order.paymentStatus,dueAmount:order.dueAmount||0,creditAppliedAmount:order.creditAppliedAmount||0,payments:order.payments||[]
     });
     return res.type("html").send(html);
   }catch(error){
@@ -737,10 +736,18 @@ router.get("/:orderId/payments/:paymentId/invoice",auth,async(req,res)=>{
       : null;
 
     const paymentAmount=Number(payment.amount||0);
-    const invoiceTotal=Number(order.roundOffFinalRevenue||order.finalRevenue||order.totalAmount||0);
-    const previousDue=Math.max(0,round2(Number(order.dueAmount||0)+paymentAmount));
+    const invoiceTotal=getInvoiceRevenue(order);
+    const paymentTimeline=(order.payments||[]).map((entry,index)=>{
+      const parsedDate=new Date(entry.paymentDate||entry.createdAt||0).getTime();
+      return {entry,index,time:Number.isFinite(parsedDate)?parsedDate:Number.MAX_SAFE_INTEGER};
+    }).sort((left,right)=>left.time-right.time||left.index-right.index);
+    const paymentPosition=paymentTimeline.findIndex(item=>String(item.entry._id)===String(payment._id));
+    const paidBefore=paymentTimeline
+      .slice(0,Math.max(0,paymentPosition))
+      .reduce((sum,item)=>sum+Math.max(0,Number(item.entry.amount||0)),0);
+    const creditApplied=Math.max(0,Number(order.creditAppliedAmount||0));
+    const previousDue=Math.max(0,round2(invoiceTotal-paidBefore-creditApplied));
     const balanceAfter=Math.max(0,round2(previousDue-paymentAmount));
-
     const paymentDate=new Date(payment.paymentDate||payment.createdAt||new Date());
     const receiptDate=paymentDate.toLocaleString("en-IN");
     const invoiceDate=new Date(order.orderDate||new Date()).toLocaleDateString("en-IN");

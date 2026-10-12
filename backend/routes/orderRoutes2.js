@@ -8,6 +8,7 @@ const nodemailer=require("nodemailer");
 const Order=require("../models/Order2");
 const Profile=require("../models/Profile");
 const Client=require("../models/Client");
+const Product=require("../models/Product");
 const CreditNote=require("../models/CreditNote");
 const InvoiceConfiguration=require("../models/InvoiceConfiguration");
 const PaymentLog=require("../models/PaymentLog2");
@@ -35,6 +36,68 @@ const cleanCustomFields=value=>{
   return Object.fromEntries(Object.entries(value).slice(0,100).map(([key,val])=>[String(key).slice(0,100),val]));
 };
 const idOrNull=v=>v&&mongoose.isValidObjectId(v)?v:null;
+
+const ORDER_CREATE_FIELDS=[
+  "challanNumber","lrNo","orderDate","subOrders","clientId","Address","State",
+  "City","pinCode","stateCode","gstNumber","companyName","status",
+  "paymentTerms","taxPercentage","discountRate","note","customFields"
+];
+const SUB_ORDER_INPUT_FIELDS=[
+  "productId","designNumber","orderName","hsnCode","qtyUnit",
+  "quantity","cut","MTR","unitPrice","shortPcs","customFields"
+];
+
+function sanitizeSubOrderInputs(items){
+  return (Array.isArray(items)?items:[]).map(item=>{
+    const source=item&&typeof item==="object"&&!Array.isArray(item)?item:{};
+    const clean={};
+    SUB_ORDER_INPUT_FIELDS.forEach(key=>{
+      if(source[key]!==undefined){
+        clean[key]=key==="customFields"?cleanCustomFields(source[key]):source[key];
+      }
+    });
+    clean.customFields=cleanCustomFields(clean.customFields);
+    return clean;
+  });
+}
+
+function sanitizeOrderCreateInput(input){
+  const source=input&&typeof input==="object"&&!Array.isArray(input)?input:{};
+  const clean={};
+  ORDER_CREATE_FIELDS.forEach(key=>{
+    if(source[key]!==undefined){
+      if(key==="customFields")clean.customFields=cleanCustomFields(source.customFields);
+      else if(key==="subOrders")clean.subOrders=sanitizeSubOrderInputs(source.subOrders);
+      else clean[key]=source[key];
+    }
+  });
+  clean.customFields=cleanCustomFields(clean.customFields);
+  return clean;
+}
+
+async function validateProductReferences(items,createdBy){
+  const productIds=[...new Set((Array.isArray(items)?items:[])
+    .map(item=>String(item?.productId||"").trim())
+    .filter(Boolean))];
+
+  if(!productIds.length)return;
+  if(productIds.some(id=>!mongoose.isValidObjectId(id))){
+    const error=new Error("One of the selected products is invalid. Choose the product again.");
+    error.status=400;
+    throw error;
+  }
+
+  const products=await Product.find({
+    _id:{$in:productIds},
+    createdBy
+  }).select("_id").lean();
+
+  if(products.length!==productIds.length){
+    const error=new Error("One of the selected products is unavailable in this business account. Remove it from the invoice or choose another product.");
+    error.status=400;
+    throw error;
+  }
+}
 
 const { buildOrderDateRange } = require("../utils/orderDateRange");
 const { normalizePaymentUpdates } = require("../utils/bulkPaymentAllocations");
@@ -133,11 +196,13 @@ router.get("/all-orders",auth,async(req,res)=>{
 
 router.post("/orders/create",auth,async(req,res)=>{
   try{
-    const body={...(req.body||{})};
-    body.customFields=cleanCustomFields(body.customFields);
+    // Do not accept payments, credit applications, stored totals, ownership,
+    // or other system-maintained fields from the normal invoice form.
+    const body=sanitizeOrderCreateInput(req.body);
     if(!Array.isArray(body.subOrders)||!body.subOrders.some(item=>String(item?.orderName||"").trim())){
       return res.status(400).json({success:false,message:"Add at least one product or service before saving the invoice."});
     }
+    await validateProductReferences(body.subOrders,userId(req));
     if(body.clientId){
       const client=await Client.findOne({_id:body.clientId,createdBy:userId(req)}).lean();
       if(!client)return res.status(400).json({message:"Selected client was not found."});
@@ -198,6 +263,9 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
     if(req.body?.subOrders!==undefined&&(!Array.isArray(req.body.subOrders)||!req.body.subOrders.some(item=>String(item?.orderName||"").trim()))){
       return res.status(400).json({message:"Add at least one product or service before saving the invoice."});
     }
+    if(req.body?.subOrders!==undefined){
+      await validateProductReferences(req.body.subOrders,userId(req));
+    }
     if(req.body?.orderNumber!==undefined){
       const requestedNumber=String(req.body.orderNumber||"").trim();
       if(!requestedNumber)return res.status(400).json({message:"Invoice number cannot be blank."});
@@ -221,7 +289,7 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
         if(!selectedClient)return res.status(400).json({message:"Selected customer was not found in your account."});
       }
     }
-    const allowed=["challanNumber","lrNo","orderDate","subOrders","Address","State","City","pinCode","stateCode","gstNumber","companyName","status","paymentTerms","taxPercentage","discountRate","note","netProfit","customFields"];
+    const allowed=["challanNumber","lrNo","orderDate","subOrders","Address","State","City","pinCode","stateCode","gstNumber","companyName","status","paymentTerms","taxPercentage","discountRate","note","customFields"];
     for(const key of allowed)if(req.body?.[key]!==undefined)order[key]=key==="customFields"?cleanCustomFields(req.body[key]):req.body[key];
     if(clientIdWasProvided){
       order.clientId=selectedClient?selectedClient._id:null;

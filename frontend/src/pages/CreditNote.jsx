@@ -25,6 +25,17 @@ const n = (value) => {
     return Number.isFinite(valueAsNumber) ? valueAsNumber : 0;
 };
 const r2 = (value) => Math.round((n(value) + Number.EPSILON) * 100) / 100;
+const invoiceTotal = (order) => {
+    if (!order) return 0;
+    const candidates = [
+        order.invoiceTotal,
+        order.roundOffFinalRevenue,
+        order.finalRevenue,
+        order.totalAmount,
+    ];
+    const positive = candidates.map(n).find(value => value > 0);
+    return positive ?? 0;
+};
 
 function getErrorMessage(error) {
     return (
@@ -149,14 +160,9 @@ export default function CreditNote() {
         if (selectedOrder.remainingCreditTotal !== undefined) {
             return Math.max(0, r2(selectedOrder.remainingCreditTotal));
         }
-        const invoiceTotal = n(
-            selectedOrder.invoiceTotal ??
-            selectedOrder.roundOffFinalRevenue ??
-            selectedOrder.finalRevenue ??
-            selectedOrder.totalAmount
-        );
+        const orderTotal = invoiceTotal(selectedOrder);
         const alreadyCredited = n(selectedOrder.alreadyCreditedAmount);
-        return Math.max(0, r2(invoiceTotal - alreadyCredited));
+        return Math.max(0, r2(orderTotal - alreadyCredited));
     }, [selectedOrder]);
 
     const invoiceDueAvailableForAdjustment = useMemo(() => {
@@ -879,7 +885,7 @@ export default function CreditNote() {
                                                                 <button type="button" key={order._id} className="dropdown-item p-3 border-bottom text-start" onClick={() => loadOrder(order._id)}>
                                                                     <div className="fw-semibold">{order.orderNumber}</div>
                                                                     <div className="small">{order.companyName || "-"} {order.gstNumber ? `• ${order.gstNumber}` : ""}</div>
-                                                                    <div className="small text-muted">{formatDate(order.orderDate)} • {money(order.roundOffFinalRevenue)}</div>
+                                                                    <div className="small text-muted">{formatDate(order.orderDate)} • {money(invoiceTotal(order))}</div>
                                                                 </button>
                                                             ))}
                                                 </div>
@@ -898,7 +904,7 @@ export default function CreditNote() {
                                                 <div className="col-lg-3"><div className="small text-muted">Invoice Date</div><div>{formatDate(selectedOrder.orderDate)}</div></div>
                                                 <div className="col-lg-3"><div className="small text-muted">Client</div><div className="fw-semibold">{selectedOrder.companyName || "-"}</div></div>
                                                 <div className="col-lg-3"><div className="small text-muted">GSTIN</div><div>{selectedOrder.gstNumber || "-"}</div></div>
-                                                <div className="col-lg-3"><div className="small text-muted">Invoice Total</div><div className="fw-semibold">{money(selectedOrder.invoiceTotal ?? selectedOrder.roundOffFinalRevenue)}</div></div>
+                                                <div className="col-lg-3"><div className="small text-muted">Invoice Total</div><div className="fw-semibold">{money(invoiceTotal(selectedOrder))}</div></div>
                                                 <div className="col-lg-3"><div className="small text-muted">Paid</div><div>{money(selectedOrder.paidAmount)}</div></div>
                                                 <div className="col-lg-3"><div className="small text-muted">Current Due</div><div className="text-danger fw-semibold">{money(selectedOrder.dueAmount)}</div></div>
                                                 <div className="col-lg-3"><div className="small text-muted">Remaining Creditable</div><div className="text-success fw-semibold">{money(invoiceRemainingCredit)}</div></div>

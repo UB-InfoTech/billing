@@ -182,9 +182,6 @@ function Order2() {
     }, []);
 
     const token = localStorage.getItem('token');
-    if (!token) {
-        throw new Error('No token found');
-    }
 
     const fetchOrders = async () => {
         setLoadingOrders(true);
@@ -261,17 +258,31 @@ function Order2() {
     const OrderBillNo = (profile.billNoPrefix || '') + profile.billNoSequence + (profile.billNoSuffix || '');
 
     const fetchClients = async () => {
-        const response = await axios.get(`${linkone}/api/clients`, {
-            headers: {
-                'x-auth-token': token
-            }
-        });
-        setClients(response.data);
+        try {
+            const response = await axios.get(`${linkone}/api/clients`, {
+                headers: { 'x-auth-token': token || '' }
+            });
+            setClients(Array.isArray(response.data) ? response.data : []);
+        } catch (error) {
+            setOrdersMessage(
+                error.response?.data?.message ||
+                'Customer records could not be loaded. Refresh the page and try again.'
+            );
+            console.error('Error fetching invoice customers', error);
+        }
     };
 
     const fetchProducts = async () => {
-        const response = await fetchAllProducts();
-        setProducts(Array.isArray(response.data?.products) ? response.data.products : []);
+        try {
+            const response = await fetchAllProducts();
+            setProducts(Array.isArray(response.data?.products) ? response.data.products : []);
+        } catch (error) {
+            setOrdersMessage(
+                error.response?.data?.message ||
+                'Product records could not be loaded. Refresh the page and try again.'
+            );
+            console.error('Error fetching invoice products', error);
+        }
     };
 
     const handleSubOrderChange = (index, e) => {

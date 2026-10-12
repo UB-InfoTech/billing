@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from "react";
+import React,{useEffect,useMemo,useRef,useState} from "react";
 import axios from "axios";
 
 const apiBase=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
@@ -195,6 +195,12 @@ export default function DynamicTable({
     ()=>JSON.stringify(columns.map(column=>({key:column.key,label:column.label,locked:column.locked,kind:column.kind}))),
     [columns]
   );
+  // Keep the latest definitions without reloading settings whenever a page
+  // re-renders with a new inline columns array.
+  const columnsRef=useRef(columns);
+  columnsRef.current=columns;
+  const commitsInProgressRef=useRef(new Set());
+  const cancelledEditRef=useRef(null);
 
   const customColumns=useMemo(()=>draft.filter(column=>column.kind==="custom"),[draft]);
   const mergeSources=useMemo(()=>draft.filter(column=>column.kind!=="merged"),[draft]);
@@ -231,10 +237,10 @@ export default function DynamicTable({
           authConfig()
         );
         if(cancelled)return;
-        setDraft(mergeSavedColumns(columns,response.data?.columns));
+        setDraft(mergeSavedColumns(columnsRef.current,response.data?.columns));
       }catch(loadError){
         if(!cancelled){
-          setDraft(cloneColumns(columns));
+          setDraft(cloneColumns(columnsRef.current));
           setError(loadError.response?.data?.message||"Unable to load table settings.");
         }
       }finally{
@@ -243,7 +249,7 @@ export default function DynamicTable({
     };
     load();
     return()=>{cancelled=true;};
-  },[tableKey,baseColumnSignature,columns]);
+  },[tableKey,baseColumnSignature]);
 
   useEffect(()=>{
     if(loadingConfig)return;
@@ -339,13 +345,26 @@ export default function DynamicTable({
 
   const startEdit=(rowKey,column,value)=>{
     if(loadingValues)return;
+    cancelledEditRef.current=null;
     setEditingCell(customValueKey(rowKey,column.key));
     setEditingValue(value??"");
   };
 
   const commitEditing=(rowKey,column)=>{
-    if(editingCell!==customValueKey(rowKey,column.key))return;
-    saveCustomValue(rowKey,column.key,editingValue);
+    const stateKey=customValueKey(rowKey,column.key);
+    if(editingCell!==stateKey)return;
+    if(cancelledEditRef.current===stateKey){
+      cancelledEditRef.current=null;
+      return;
+    }
+    if(commitsInProgressRef.current.has(stateKey))return;
+
+    // Enter and blur often fire back-to-back; prevent duplicate writes for the
+    // same cell while the first save is in flight.
+    commitsInProgressRef.current.add(stateKey);
+    saveCustomValue(rowKey,column.key,editingValue).finally(()=>{
+      commitsInProgressRef.current.delete(stateKey);
+    });
   };
 
   const renderCustomEditor=(rowKey,column)=>{
@@ -361,7 +380,7 @@ export default function DynamicTable({
           event.preventDefault();
           commit();
         }
-        if(event.key==="Escape")setEditingCell(null);
+        if(event.key==="Escape"){cancelledEditRef.current=customValueKey(rowKey,column.key);setEditingCell(null);}
       },
     };
 
@@ -378,7 +397,7 @@ export default function DynamicTable({
               setEditingValue(Array.from(event.target.selectedOptions).map(option=>option.value));
               return;
             }
-            saveCustomValue(rowKey,column.key,event.target.value);
+            setEditingValue(event.target.value);
           }}
           onBlur={multiple?commit:common.onBlur}
           style={multiple?{minHeight:90}:undefined}

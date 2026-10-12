@@ -4,7 +4,7 @@ import {getExpenseOptions,uploadReceipt} from "../services/api";
 import FormConfigurator from "./FormConfigurator";
 import ConfiguredField from "./ConfiguredField";
 import {EXPENSE_FORM_FIELDS} from "../config/noCodeCatalog";
-import {useFormConfiguration,applyFormulas,getFieldState,hydrateConfiguredValues,syncConfiguredCustomFields,buildConfiguredDefaults} from "../hooks/useFormConfiguration";
+import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,hydrateConfiguredValues,syncConfiguredCustomFields,buildConfiguredDefaults} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import {formatDateInput} from "../utils/dateInput";
 
@@ -81,11 +81,12 @@ export default function ExpenseForm({onSubmit,initialData={}}){
     return raw;
   };
 
-  const updateField=(field,value)=>{
+  const updateField=(field,value,record=null)=>{
     setForm(prev=>{
       let next=field.custom
         ? {...prev,[field.key]:value,customFields:{...(prev.customFields||{}),[field.key]:value}}
         : {...prev,[field.key]:value};
+      if(field?.dataSource?.autoFill?.length)next=applyAutoFill(field,record,next);
       next=syncConfiguredCustomFields(next,fields);
       return applyFormulas(fields,next);
     });
@@ -154,7 +155,8 @@ export default function ExpenseForm({onSubmit,initialData={}}){
         <ConfiguredField
           field={{...field,...state}}
           value={valueFor(field)}
-          onChange={value=>updateField(field,value)}
+          onChange={value=>updateField(field,value,null)}
+          onRecordChange={record=>updateField(field,record?.[field.dataSource?.valueField||"_id"]??"",record)}
           lookupRecords={lookupRecords}
           onLookupSearch={searchLinkedRecords}
           options={field.options}

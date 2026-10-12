@@ -3,6 +3,8 @@ const {applyWorkflows}=require("../utils/workflowEngine");
 const mongoose=require("mongoose");
 const Client=require("../models/Client");
 const Order=require("../models/Order2");
+const CreditNote=require("../models/CreditNote");
+const {applyManualCreditAdjustment,sumCustomerCredit}=require("../utils/clientCreditBalance");
 const auth=require("../middleware/auth");
 
 const router=express.Router();
@@ -93,12 +95,39 @@ router.put("/:id/credit",auth,async(req,res)=>{
   try{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid client ID."});
     const amount=Number(req.body?.amount);
-    if(!Number.isFinite(amount)||amount===0)return res.status(400).json({message:"A non-zero credit adjustment is required."});
+    if(!Number.isFinite(amount)||amount===0||Math.abs(amount)>100000000){
+      return res.status(400).json({message:"Enter a valid non-zero credit adjustment."});
+    }
     const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)});
     if(!client)return res.status(404).json({message:"Client not found"});
-    const next=Number(client.creditBalance||0)+amount;
-    if(next<0)return res.status(400).json({message:"Credit balance cannot become negative."});
-    client.creditBalance=next;await client.save();res.json(client);
+
+    const postedCredits=await CreditNote.find({
+      clientId:client._id,
+      createdBy:owner(req),
+      status:"Posted"
+    }).select("settlement.customerCreditAmount").lean();
+    let adjustment;
+    try{
+      adjustment=applyManualCreditAdjustment(
+        Number(client.creditBalance||0),
+        postedCredits,
+        amount
+      );
+    }catch(error){
+      return res.status(400).json({message:error.message});
+    }
+
+    // Optimistic matching prevents two simultaneous adjustments from overwriting
+    // each other; a fresh balance is required if another request wins the race.
+    const updated=await Client.findOneAndUpdate(
+      {_id:client._id,createdBy:owner(req),creditBalance:Number(client.creditBalance||0)},
+      {$set:adjustment},
+      {new:true,runValidators:true}
+    );
+    if(!updated){
+      return res.status(409).json({message:"The customer balance changed. Refresh the customer and try again."});
+    }
+    return res.json(updated);
   }catch(error){res.status(400).json({message:error.message});}
 });
 

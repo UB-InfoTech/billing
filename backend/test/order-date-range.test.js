@@ -31,3 +31,11 @@ test("rejects a start date later than the end date", () => {
     error => error.status === 400 && /start date/i.test(error.message)
   );
 });
+
+test("accepts a valid leap-day date", () => {
+  const date = parseDateOnly("2024-02-29", "start");
+  assert.ok(date instanceof Date);
+  assert.equal(date.getFullYear(), 2024);
+  assert.equal(date.getMonth(), 1);
+  assert.equal(date.getDate(), 29);
+});

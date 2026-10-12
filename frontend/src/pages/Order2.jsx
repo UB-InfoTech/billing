@@ -17,6 +17,7 @@ import ConfiguredField from "../components/ConfiguredField";
 import ArithmeticInput from "../components/ArithmeticInput";
 import {useFormConfiguration,applyFormulas,hydrateConfiguredValues,applyAutoFill,getFieldState,syncConfiguredCustomFields,buildConfiguredDefaults,groupFieldsBySection} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
+import {fetchAllProducts} from "../services/productService";
 import {formatDateInput,getDateRangeBoundary} from "../utils/dateInput";
 import * as XLSX from 'xlsx';
 import Report from '../components/Report';
@@ -269,8 +270,8 @@ function Order2() {
     };
 
     const fetchProducts = async () => {
-        const response = await axios.get(`${linkone}/api/products`, authConfig());
-        setProducts(response.data.products);
+        const response = await fetchAllProducts();
+        setProducts(Array.isArray(response.data?.products) ? response.data.products : []);
     };
 
     const handleSubOrderChange = (index, e) => {

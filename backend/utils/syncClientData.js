@@ -19,14 +19,16 @@ function getInvoiceRevenue(order = {}) {
     return round2(roundedRevenue);
   }
 
-  const finalRevenue = Number(order.finalRevenue);
-  if (Number.isFinite(finalRevenue) && finalRevenue > 0) {
-    return round2(finalRevenue);
+  // totalAmount is the persisted rounded invoice total in this schema.
+  // Prefer it to finalRevenue, which is the pre-rounding calculation.
+  const totalAmount = Number(order.totalAmount);
+  if (Number.isFinite(totalAmount) && totalAmount > 0) {
+    return round2(totalAmount);
   }
 
-  const totalAmount = Number(order.totalAmount);
-  return Number.isFinite(totalAmount) && totalAmount > 0
-    ? round2(totalAmount)
+  const finalRevenue = Number(order.finalRevenue);
+  return Number.isFinite(finalRevenue) && finalRevenue > 0
+    ? Math.round(finalRevenue)
     : 0;
 }
 

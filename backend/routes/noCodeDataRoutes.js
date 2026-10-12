@@ -7,6 +7,7 @@ const Expense=require("../models/Expense");
 const Supplier=require("../models/Supplier");
 const Machine=require("../models/Machine");
 const User=require("../models/User");
+const {isNoCodeSourceSafe,buildNoCodeSourceQuery,getNoCodeSourceProjection}=require("../utils/noCodeSourcePolicy");
 
 const router=express.Router();
 const owner=req=>req.user.id;
@@ -76,7 +77,7 @@ const cleanString=(value,max=120)=>String(value??"").trim().slice(0,max);
 
 router.get("/sources",auth,(req,res)=>{
   res.json({
-    sources:Object.entries(SOURCES).map(([key,source])=>({
+    sources:Object.entries(SOURCES).filter(([,source])=>isNoCodeSourceSafe(source.model,User)).map(([key,source])=>({
       key,
       label:source.label,
       fields:source.fields.map(([value,label])=>({value,label}))
@@ -92,17 +93,22 @@ router.get("/:source",auth,async(req,res)=>{
 
     const q=cleanString(req.query.q,100);
     const limit=Math.min(Math.max(Number(req.query.limit)||100,1),200);
-    const query={};
-    if(source.model.schema.path("createdBy"))query.createdBy=owner(req);
+    const query=buildNoCodeSourceQuery(source.model,owner(req),User);
+    if(!query){
+      return res.status(409).json({
+        message:"This linked list is not available yet because it is not separated by business account."
+      });
+    }
+    const visibleFields=getNoCodeSourceProjection(source,source.model);
 
     if(q){
       const escaped=q.replace(/[.*+?^$()|[\]\\]/g,"\\$&");
       const regex=new RegExp(escaped,"i");
-      query.$or=source.searchFields.filter(field=>source.model.schema.path(field)).map(field=>({[field]:regex}));
+      query.$or=source.searchFields.filter(field=>visibleFields.includes(field)).map(field=>({[field]:regex}));
     }
 
-    let cursor=source.model.find(query).limit(limit);
-    const sortField=source.searchFields.find(field=>source.model.schema.path(field)&&source.model.schema.path(field).instance==="String");
+    let cursor=source.model.find(query).select(visibleFields.join(" ")).limit(limit);
+    const sortField=source.searchFields.find(field=>visibleFields.includes(field)&&source.model.schema.path(field)?.instance==="String");
     if(sortField)cursor=cursor.sort({[sortField]:1});
 
     const records=await cursor.lean();

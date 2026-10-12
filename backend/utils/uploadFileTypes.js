@@ -10,9 +10,13 @@ function getSafeUploadExtension(mimeType){
   return EXTENSIONS_BY_MIME[String(mimeType||"").toLowerCase()]||null;
 }
 
+function isSafePublicUploadPath(filePath){
+  return /\\.(?:jpe?g|png|gif|webp|pdf)$/i.test(String(filePath||""));
+}
+
 function isAllowedUploadType(mimeType,allowPdf=false){
   const extension=getSafeUploadExtension(mimeType);
   return Boolean(extension)&&(allowPdf||extension!==".pdf");
 }
 
-module.exports={getSafeUploadExtension,isAllowedUploadType};
+module.exports={getSafeUploadExtension,isAllowedUploadType,isSafePublicUploadPath};

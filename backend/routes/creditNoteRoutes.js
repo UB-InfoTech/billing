@@ -706,6 +706,14 @@ router.post("/", auth, async (req, res) => {
   // MongoDB instances use a sequential fallback so development is not blocked.
   const transactional = isReplicaSetAvailable();
   const session = transactional ? await mongoose.startSession() : null;
+  const appliedStockChanges = [];
+  let customerCreditAdded = 0;
+  let customerCreditClientId = null;
+  let orderForRollback = null;
+  let originalCreditApplied = 0;
+  let originalCreditNoteCount = 0;
+  let orderUpdated = false;
+  let noteSavedId = null;
 
   try {
     if (session) session.startTransaction();
@@ -731,6 +739,9 @@ router.post("/", auth, async (req, res) => {
 
     const order = await Order.findOne({ _id: originalOrderId, createdBy: userId }).session(session);
     if (!order) throw new Error("Original invoice not found.");
+    orderForRollback = order;
+    originalCreditApplied = Number(order.creditAppliedAmount || 0);
+    originalCreditNoteCount = Number(order.creditNoteCount || 0);
 
     const { map: previousCredits, total: previousCreditTotal } =
       await getPreviouslyCredited(originalOrderId, session, null, userId);
@@ -937,6 +948,7 @@ router.post("/", auth, async (req, res) => {
           throw new Error(`Product not found for ${item.orderName || item.designNumber || "item"}.`);
         }
 
+        appliedStockChanges.push({ productId: item.productId, quantity: stockQty });
         inventoryMovements.push({
           productId: item.productId,
           unit: item.qtyUnit,
@@ -979,6 +991,8 @@ router.post("/", auth, async (req, res) => {
         { new: true, session }
       );
       if (!updatedClient) throw new Error("Customer for this Credit Note was not found in your account.");
+      customerCreditAdded = Number(finalSettlement.customerCreditAmount);
+      customerCreditClientId = order.clientId;
     }
 
     if (finalSettlement.adjustmentAmount > 0) {
@@ -1012,6 +1026,7 @@ router.post("/", auth, async (req, res) => {
         { session }
       );
     }
+    orderUpdated = true;
 
     const settled = round2(
       finalSettlement.adjustmentAmount +
@@ -1065,15 +1080,19 @@ router.post("/", auth, async (req, res) => {
     });
 
     await noteDoc.save(session ? { session } : undefined);
-    if (session) await session.commitTransaction();
+    noteSavedId = noteDoc._id;
 
+    // Resolve the response before committing so a response-shaping query cannot
+    // make a successfully committed credit note look like a failed operation.
     const saved = await CreditNote.findById(noteDoc._id)
       .populate(
         "originalOrderId",
         "orderNumber orderDate companyName gstNumber Address State City pinCode stateCode paymentTerms roundOffFinalRevenue finalRevenue dueAmount creditAppliedAmount"
       )
+      .session(session || null)
       .lean();
 
+    if (session) await session.commitTransaction();
     await syncClientDataSafely(noteDoc.clientId);
 
     return res.status(201).json({
@@ -1089,6 +1108,55 @@ router.post("/", auth, async (req, res) => {
         if (session.inTransaction()) await session.abortTransaction();
       } catch {
         // Transaction may already be closed.
+      }
+    }
+
+    if (!session) {
+      // Standalone MongoDB does not support multi-document transactions. Undo
+      // only the changes made by this request if a later write fails.
+      if (noteSavedId) {
+        try {
+          await CreditNote.deleteOne({ _id: noteSavedId, createdBy: userId });
+        } catch (rollbackError) {
+          console.error("Credit note rollback could not remove the note:", rollbackError);
+        }
+      }
+      if (orderUpdated && orderForRollback) {
+        try {
+          await Order.findOneAndUpdate(
+            { _id: orderForRollback._id, createdBy: userId },
+            { $set: { creditAppliedAmount: originalCreditApplied, creditNoteCount: originalCreditNoteCount } },
+            { new: true }
+          );
+        } catch (rollbackError) {
+          console.error("Credit note rollback could not restore invoice balances:", rollbackError);
+        }
+      }
+      if (customerCreditAdded > 0 && customerCreditClientId) {
+        try {
+          const Client = require("../models/Client");
+          await Client.findOneAndUpdate(
+            { _id: customerCreditClientId, createdBy: userId },
+            { $inc: { creditBalance: -customerCreditAdded } },
+            { new: true }
+          );
+        } catch (rollbackError) {
+          console.error("Credit note rollback could not restore customer credit:", rollbackError);
+        }
+      }
+      if (appliedStockChanges.length) {
+        try {
+          const Product = require("../models/Product");
+          for (const movement of appliedStockChanges.reverse()) {
+            await Product.findOneAndUpdate(
+              { _id: movement.productId, createdBy: userId },
+              { $inc: { quantity: -Number(movement.quantity || 0) } },
+              { new: true }
+            );
+          }
+        } catch (rollbackError) {
+          console.error("Credit note rollback could not restore stock:", rollbackError);
+        }
       }
     }
 

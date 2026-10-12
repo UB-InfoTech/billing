@@ -38,5 +38,6 @@ test("supports plain objects returned by lean database queries", () => {
   assert.equal(result._id, "profile-id");
   assert.equal(result.createdBy, "owner-id");
   assert.equal(result.hasEWayPassword, true);
-  assert.equal("secret" in result, false);
+  assert.equal(result.eWayPassword, "");
+  assert.equal(JSON.stringify(result).includes("secret"), false);
 });

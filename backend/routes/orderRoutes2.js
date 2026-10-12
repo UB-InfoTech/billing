@@ -126,7 +126,7 @@ router.get("/sales-analytics",auth,async(req,res)=>{
 
 router.get("/all-orders",auth,async(req,res)=>{
   try{
-    const orders=await Order.find({createdBy:userId(req)}).select("orderNumber companyName finalRevenue roundOffFinalRevenue totalAmount orderDate status Address State City dueAmount paidAmount paymentStatus clientId").sort({orderDate:-1}).lean();
+    const orders=await Order.find({createdBy:userId(req)}).select("orderNumber companyName finalRevenue roundOffFinalRevenue totalAmount orderDate status Address State City dueAmount paidAmount paymentStatus clientId subOrders").sort({orderDate:-1}).lean();
     res.json(orders.map(order=>({...order,roundOffFinalRevenue:getInvoiceRevenue(order)})));
   }catch(error){res.status(500).json({message:error.message});}
 });

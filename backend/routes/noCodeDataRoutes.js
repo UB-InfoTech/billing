@@ -1,4 +1,5 @@
 const express=require("express");
+const mongoose=require("mongoose");
 const auth=require("../middleware/auth");
 const Client=require("../models/Client");
 const Product=require("../models/Product");
@@ -100,11 +101,36 @@ router.get("/:source",auth,async(req,res)=>{
       });
     }
     const visibleFields=getNoCodeSourceProjection(source,source.model);
+    const rawIds=String(req.query.ids||"").trim();
+    const selectedIds=rawIds
+      ? [...new Set(rawIds.split(",").map(value=>value.trim()).filter(value=>mongoose.isValidObjectId(value)))].slice(0,50)
+      : [];
+
+    if(rawIds&&!selectedIds.length){
+      return res.json({source:key,label:source.label,fields:source.fields.map(([value,label])=>({value,label})),records:[]});
+    }
+    if(selectedIds.length){
+      // User records are restricted to the current user's login record.
+      if(source.model===User){
+        if(!selectedIds.includes(String(owner(req)))){
+          return res.json({source:key,label:source.label,fields:source.fields.map(([value,label])=>({value,label})),records:[]});
+        }
+      }else{
+        query._id={$in:selectedIds};
+      }
+    }
 
     if(q){
-      const escaped=q.replace(/[.*+?^$()|[\]\\]/g,"\\$&");
+      const escaped=q.replace(/[.*+?^$()|[\\]\\\\]/g,"\\\\$&");
       const regex=new RegExp(escaped,"i");
-      query.$or=source.searchFields.filter(field=>visibleFields.includes(field)).map(field=>({[field]:regex}));
+      const requestedSearchField=cleanString(req.query.searchField,80);
+      const allowedSearchFields=new Set(source.fields.map(([field])=>field));
+      const searchFields=[...new Set([
+        ...(requestedSearchField&&allowedSearchFields.has(requestedSearchField)?[requestedSearchField]:[]),
+        ...source.searchFields
+      ])].filter(field=>visibleFields.includes(field)&&source.model.schema.path(field)?.instance==="String");
+      if(searchFields.length)query.$or=searchFields.map(field=>({[field]:regex}));
+      else query.$or=[{_id:{$exists:false}}];
     }
 
     let cursor=source.model.find(query).select(visibleFields.join(" ")).limit(limit);

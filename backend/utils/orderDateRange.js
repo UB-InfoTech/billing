@@ -1,5 +1,5 @@
 function invalidDateError(label) {
-  const error = new Error(\`Invalid \${label} date. Use YYYY-MM-DD.\`);
+  const error = new Error("Invalid " + label + " date. Use YYYY-MM-DD.");
   error.status = 400;
   return error;
 }

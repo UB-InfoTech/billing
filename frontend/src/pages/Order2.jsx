@@ -621,7 +621,7 @@ function Order2() {
         const orderValues={...formData,...(formData.customFields||{})};
         const requiredOrderFields=orderFormConfig.fields.filter(field=>{
             const state=getFieldState(field,orderValues);
-            return state.visible&&state.required&&!field.formula;
+            return state.visible&&state.required&&!state.disabled&&!field.formula;
         });
         const missingOrderField=requiredOrderFields.find(field=>String(configuredOrderValue(field)??"").trim()==="");
         if(missingOrderField){
@@ -634,12 +634,12 @@ function Order2() {
         const requiredItemFields=orderItemConfig.fields.filter(field=>!field.formula);
         const missingItem=subOrders.find(item=>requiredItemFields.some(field=>{
             const state=getFieldState(field,{...item,...(item.customFields||{})});
-            return state.visible&&state.required&&String(configuredItemValue(item,field)??"").trim()==="";
+            return state.visible&&state.required&&!state.disabled&&String(configuredItemValue(item,field)??"").trim()==="";
         }));
         if(missingItem){
             const missingField=requiredItemFields.find(field=>{
                 const state=getFieldState(field,{...missingItem,...(missingItem.customFields||{})});
-                return state.visible&&state.required&&String(configuredItemValue(missingItem,field)??"").trim()==="";
+                return state.visible&&state.required&&!state.disabled&&String(configuredItemValue(missingItem,field)??"").trim()==="";
             });
             setInvoiceFormError(`Please complete “${missingField?.label||"the item details"}” for the item before saving.`);
             return;

@@ -16,6 +16,7 @@ const auth=require("../middleware/auth");
 const {syncClientDataSafely,getInvoiceRevenue}=require("../utils/syncClientData");
 const {sanitizeOrderCreateInput,cleanCustomFields}=require("../utils/orderInput");
 const {numberToWords}=require("../utils/numberToWords");
+const {appendStatusTransition}=require("../utils/statusHistory");
 const router=express.Router();
 
 const STATUSES=["Pending","In Process","Completed","Cancelled","Dispatched"];
@@ -267,11 +268,13 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
     }
     await applyWorkflows({resource:"orders",event:"record_updated",doc:order,createdBy:userId(req)});
     if(String(order.status||"")!==String(oldStatus||"")){
-      order.statusHistory=Array.isArray(order.statusHistory)?order.statusHistory:[];
-      if(!order.statusHistory.length&&oldStatus){
-        order.statusHistory.push({status:oldStatus,timestamp:order.createdAt||order.orderDate||new Date()});
-      }
-      order.statusHistory.push({status:order.status,timestamp:new Date()});
+      order.statusHistory=appendStatusTransition(
+        order.statusHistory,
+        oldStatus,
+        order.status,
+        order.createdAt||order.orderDate||new Date(),
+        new Date()
+      );
     }
     await order.save();
     const newClient=String(order.clientId||"");

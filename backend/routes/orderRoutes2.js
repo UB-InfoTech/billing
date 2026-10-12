@@ -190,6 +190,13 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid order ID."});
     const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)});if(!order)return res.status(404).json({message:"Order not found"});
     const oldClient=String(order.clientId||"");
+    const oldStatus=order.status;
+    if(req.body?.status!==undefined&&!STATUSES.includes(req.body.status)){
+      return res.status(400).json({message:"Invalid invoice status."});
+    }
+    if(req.body?.subOrders!==undefined&&(!Array.isArray(req.body.subOrders)||!req.body.subOrders.some(item=>String(item?.orderName||"").trim()))){
+      return res.status(400).json({message:"Add at least one product or service before saving the invoice."});
+    }
     if(req.body?.orderNumber!==undefined){
       const requestedNumber=String(req.body.orderNumber||"").trim();
       if(!requestedNumber)return res.status(400).json({message:"Invoice number cannot be blank."});
@@ -231,6 +238,13 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
       }
     }
     await applyWorkflows({resource:"orders",event:"record_updated",doc:order,createdBy:userId(req)});
+    if(String(order.status||"")!==String(oldStatus||"")){
+      order.statusHistory=Array.isArray(order.statusHistory)?order.statusHistory:[];
+      if(!order.statusHistory.length&&oldStatus){
+        order.statusHistory.push({status:oldStatus,timestamp:order.createdAt||order.orderDate||new Date()});
+      }
+      order.statusHistory.push({status:order.status,timestamp:new Date()});
+    }
     await order.save();
     const newClient=String(order.clientId||"");
     if(oldClient)await syncClientDataSafely(oldClient);if(newClient&&newClient!==oldClient)await syncClientDataSafely(newClient);
@@ -261,9 +275,18 @@ router.patch("/orders/:id/upd",auth,async(req,res)=>{
 router.delete("/orders/:id/delete",auth,async(req,res)=>{
   try{
     const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)});if(!order)return res.status(404).json({success:false,message:"Order not found"});
-    if(Number(order.dueAmount||0)>0)return res.status(400).json({success:false,message:"Cannot delete order with pending amount."});
-    const postedCredits=await CreditNote.countDocuments({originalOrderId:order._id,status:"Posted"});if(postedCredits>0)return res.status(400).json({message:"Cancel posted Credit Notes before deleting this invoice."});
-    await Order.deleteOne({_id:order._id});await syncClientDataSafely(order.clientId);res.json({success:true,message:"Order deleted successfully"});
+    if(Number(order.dueAmount||0)>0)return res.status(409).json({success:false,message:"This invoice still has an outstanding balance. Settle it or mark it cancelled instead."});
+    if((order.payments||[]).length>0||Number(order.paidAmount||0)>0){
+      return res.status(409).json({success:false,message:"This invoice has payment history and cannot be permanently deleted. Keep it for your records and change its status instead."});
+    }
+    if(Number(order.creditAppliedAmount||0)>0||Number(order.creditNoteCount||0)>0){
+      return res.status(409).json({success:false,message:"This invoice has credit history and cannot be permanently deleted. Cancel or reconcile its Credit Notes first."});
+    }
+    const postedCredits=await CreditNote.countDocuments({originalOrderId:order._id,createdBy:userId(req),status:"Posted"});
+    if(postedCredits>0)return res.status(409).json({message:"Cancel or reconcile posted Credit Notes before deleting this invoice."});
+    await Order.deleteOne({_id:order._id,createdBy:userId(req)});
+    await syncClientDataSafely(order.clientId);
+    res.json({success:true,message:"Invoice deleted successfully"});
   }catch(error){res.status(500).json({success:false,message:error.message});}
 });
 

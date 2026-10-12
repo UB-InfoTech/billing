@@ -136,14 +136,99 @@ router.get("/dashboard-summary",auth,async(req,res)=>{
   }catch(error){res.status(error.status||500).json({message:error.message});}
 });
 
-function buildReportHtml(data,timeframe){const rows=(data.salesData||[]).map(x=>"<tr><td>"+x._id+"</td><td>"+x.orderCount+"</td><td>₹"+Number(x.totalRevenue||0).toFixed(2)+"</td><td>₹"+Number(x.paid||0).toFixed(2)+"</td><td>₹"+Number(x.due||0).toFixed(2)+"</td></tr>").join("");return "<!doctype html><html><head><meta charset=\"utf-8\"><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:right}th:first-child,td:first-child{text-align:left}</style></head><body><h1>Sales Report</h1><p>Period: "+String(timeframe||"all")+"</p><table><thead><tr><th>Date</th><th>Orders</th><th>Revenue</th><th>Paid</th><th>Due</th></tr></thead><tbody>"+rows+"</tbody></table></body></html>";}
+function escapeReportHtml(value){
+  return String(value??"")
+    .replace(/&/g,"&amp;")
+    .replace(/</g,"&lt;")
+    .replace(/>/g,"&gt;")
+    .replace(/"/g,"&quot;")
+    .replace(/'/g,"&#39;");
+}
+
+function buildReportHtml(data,timeframe){
+  const rows=(data.salesData||[]).map(row=>
+    "<tr><td>"+escapeReportHtml(row._id)+"</td><td>"+Number(row.orderCount||0)+
+    "</td><td>₹"+Number(row.totalRevenue||0).toFixed(2)+
+    "</td><td>₹"+Number(row.paid||0).toFixed(2)+
+    "</td><td>₹"+Number(row.due||0).toFixed(2)+"</td></tr>"
+  ).join("");
+  return "<!doctype html><html><head><meta charset=\"utf-8\"><style>body{font-family:Arial;padding:24px}table{width:100%;border-collapse:collapse}th,td{border:1px solid #ccc;padding:8px;text-align:right}th:first-child,td:first-child{text-align:left}</style></head><body><h1>Sales Report</h1><p>Period: "+
+    escapeReportHtml(timeframe||"all")+
+    "</p><table><thead><tr><th>Date</th><th>Orders</th><th>Revenue</th><th>Paid</th><th>Due</th></tr></thead><tbody>"+
+    rows+"</tbody></table></body></html>";
+}
+
+function renderPdfBuffer(html){
+  return new Promise((resolve,reject)=>{
+    htmlPdf.create(html).toBuffer((error,buffer)=>{
+      if(error)return reject(error);
+      return resolve(buffer);
+    });
+  });
+}
 
 router.post("/generate-report",auth,async(req,res)=>{
-  try{const range=dateRange(req.body?.startDate,req.body?.endDate),match={createdBy:new mongoose.Types.ObjectId(owner(req)),status:{$ne:"Cancelled"}};if(range)match.orderDate=range;const salesData=await Order.aggregate([{$match:match},{$group:{_id:{$dateToString:{format:"%Y-%m-%d",date:"$orderDate"}},totalRevenue:{$sum:invoiceRevenueExpression()},orderCount:{$sum:1},paid:{$sum:"$paidAmount"},due:{$sum:"$dueAmount"}}},{$sort:{_id:1}}]);const html=buildReportHtml({salesData},req.body?.timeframe);htmlPdf.create(html).toBuffer((err,buffer)=>{if(err)return res.status(500).json({message:err.message});res.set("Content-Type","application/pdf");res.set("Content-Disposition","attachment; filename=sales-report.pdf");res.send(buffer);});}catch(error){res.status(error.status||500).json({message:error.message});}
+  try{
+    const range=dateRange(req.body?.startDate,req.body?.endDate);
+    const match={createdBy:new mongoose.Types.ObjectId(owner(req)),status:{$ne:"Cancelled"}};
+    if(range)match.orderDate=range;
+    const salesData=await Order.aggregate([
+      {$match:match},
+      {$group:{
+        _id:{$dateToString:{format:"%Y-%m-%d",date:"$orderDate"}},
+        totalRevenue:{$sum:invoiceRevenueExpression()},
+        orderCount:{$sum:1},
+        paid:{$sum:"$paidAmount"},
+        due:{$sum:"$dueAmount"}
+      }},
+      {$sort:{_id:1}}
+    ]);
+    const buffer=await renderPdfBuffer(buildReportHtml({salesData},req.body?.timeframe));
+    res.set("Content-Type","application/pdf");
+    res.set("Content-Disposition","attachment; filename=sales-report.pdf");
+    return res.send(buffer);
+  }catch(error){
+    return res.status(error.status||500).json({message:error.message||"Unable to generate the report."});
+  }
 });
 
 router.post("/send-reports",auth,async(req,res)=>{
-  try{if(!process.env.EMAIL_USER||!process.env.EMAIL_PASS)return res.status(503).json({message:"Email credentials are not configured."});const sales=await Order.aggregate([{$match:{createdBy:new mongoose.Types.ObjectId(owner(req)),status:{$ne:"Cancelled"}}},{$group:{_id:{$dateToString:{format:"%Y-%m-%d",date:"$orderDate"}},totalRevenue:{$sum:invoiceRevenueExpression()},orderCount:{$sum:1}}},{$sort:{_id:1}},{$limit:100}]);const html=buildReportHtml({salesData:sales},"all");htmlPdf.create(html).toBuffer(async(err,buffer)=>{if(err)return res.status(500).json({message:err.message});const transporter=nodemailer.createTransport({service:"gmail",auth:{user:process.env.EMAIL_USER,pass:process.env.EMAIL_PASS}});await transporter.sendMail({from:process.env.EMAIL_USER,to:req.body?.email,subject:"Sales Report",text:"Please find the sales report attached.",attachments:[{filename:"sales-report.pdf",content:buffer}]});res.json({message:"Report sent successfully."});});}catch(error){res.status(error.status||500).json({message:error.message});}
+  try{
+    if(!process.env.EMAIL_USER||!process.env.EMAIL_PASS){
+      return res.status(503).json({message:"Email credentials are not configured."});
+    }
+    const recipient=String(req.body?.email||"").trim();
+    if(!/^\S+@\S+\.\S+$/.test(recipient)){
+      return res.status(400).json({message:"Enter a valid recipient email address."});
+    }
+    const sales=await Order.aggregate([
+      {$match:{createdBy:new mongoose.Types.ObjectId(owner(req)),status:{$ne:"Cancelled"}}},
+      {$group:{
+        _id:{$dateToString:{format:"%Y-%m-%d",date:"$orderDate"}},
+        totalRevenue:{$sum:invoiceRevenueExpression()},
+        orderCount:{$sum:1},
+        paid:{$sum:"$paidAmount"},
+        due:{$sum:"$dueAmount"}
+      }},
+      {$sort:{_id:1}},
+      {$limit:100}
+    ]);
+    const buffer=await renderPdfBuffer(buildReportHtml({salesData:sales},"all"));
+    const transporter=nodemailer.createTransport({
+      service:"gmail",
+      auth:{user:process.env.EMAIL_USER,pass:process.env.EMAIL_PASS}
+    });
+    await transporter.sendMail({
+      from:process.env.EMAIL_USER,
+      to:recipient,
+      subject:"Sales Report",
+      text:"Please find the sales report attached.",
+      attachments:[{filename:"sales-report.pdf",content:buffer}]
+    });
+    return res.json({message:"Report sent successfully."});
+  }catch(error){
+    console.error("Send reports failed:",error);
+    return res.status(error.status||500).json({message:error.message||"Unable to send the report."});
+  }
 });
-
 module.exports=router;

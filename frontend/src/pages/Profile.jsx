@@ -62,8 +62,17 @@ export default function Profile(){
     return(
       <div className={`col-md-${Math.min(12,Math.max(1,Number(field.width)||6))}`} key={field.key}>
         <ConfiguredField
-          field={{...field,...state}}
+          field={{
+            ...field,
+            ...state,
+            ...(field.key==="eWayPassword"?{
+              helpText:profile.hasEWayPassword
+                ?"A password is saved on the server. Leave blank to keep it unchanged, or enter a new password to replace it."
+                :"Enter the E-Way Bill password. It will not be returned to the browser after saving."
+            }:{})
+          }}
           value={profile[field.key]??profile.customFields?.[field.key]??field.defaultValue??""}
+          placeholder={field.key==="eWayPassword"&&profile.hasEWayPassword?"Leave blank to keep the saved password":undefined}
           onChange={value=>{setSuccessMessage("");updateValue(field.key,value);}}
           required={state.required}
           readOnly={state.readOnly}

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Profile = require('../models/Profile');
 const auth = require('../middleware/auth');
+const {toPublicProfile}=require('../utils/publicProfile');
 
 // Get profile
 router.get('/', auth, async (req, res) => {
@@ -57,7 +58,7 @@ router.get('/', auth, async (req, res) => {
       await profile.save();
     }
 
-    res.json(profile);
+    res.json(toPublicProfile(profile));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -73,7 +74,11 @@ router.put('/', auth, async (req, res) => {
     ];
     const nextBody={};
     for(const key of allowedFields){
-      if(req.body?.[key]!==undefined)nextBody[key]=req.body[key];
+      if(req.body?.[key]===undefined)continue;
+      // An empty password means "leave the saved integration password alone".
+      // The password itself is never sent back in profile API responses.
+      if(key==="eWayPassword"&&(req.body[key]===null||String(req.body[key])===""))continue;
+      nextBody[key]=req.body[key];
     }
     if(nextBody.billNoSequence!==undefined){
       const sequence=Number(nextBody.billNoSequence);
@@ -95,7 +100,7 @@ router.put('/', auth, async (req, res) => {
       {$set:nextBody},
       {new:true,upsert:true,setDefaultsOnInsert:true,runValidators:true}
     ).lean();
-    res.json(profile);
+    res.json(toPublicProfile(profile));
   } catch (err) {
     res.status(400).json({ message: err.message });
   }
@@ -121,7 +126,7 @@ router.patch('/billNoSequence', auth, async (req, res) => {
     if (!profile) {
       return res.status(404).json({ message: 'Profile not found' });
     }
-    res.json(profile);
+    res.json(toPublicProfile(profile));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -141,7 +146,7 @@ router.patch('/updateBillNoSequence', auth, async (req, res) => {
       { $set: { billNoSequence: Number(billNoSequence) } },
       { new: true, upsert: true }
     ).lean();
-    res.json(profile);
+    res.json(toPublicProfile(profile));
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

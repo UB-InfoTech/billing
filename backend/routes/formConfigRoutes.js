@@ -164,10 +164,8 @@ router.put("/:formKey",auth,async(req,res)=>{
         const removedField=removed.find(field=>field.key===dependency.removedKey);
         const usage=dependency.kind==="rule"?"a rule":dependency.kind==="auto-fill"?"an auto-fill mapping":"a calculation";
         throw new Error(
-          "\\""+(removedField?.label||dependency.removedKey)+"\\" is still used by \\""+
-          dependency.field.label+"\\" in "+usage+". Remove that dependency first."
-        );
-      }
+          `"${removedField?.label||dependency.removedKey}" is still used by "${dependency.field.label}" in ${usage}. Remove that dependency first.`
+        );      }
     }
 
     // Keep stale references intact until the removal check completes. This

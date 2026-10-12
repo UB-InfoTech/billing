@@ -2,12 +2,12 @@ const mongoose=require("mongoose");
 
 const ProductSchema=new mongoose.Schema({
   productName:{type:String,required:true,trim:true},
-  productCode:{type:String,required:true,unique:true,uppercase:true,trim:true,index:true},
+  productCode:{type:String,required:true,uppercase:true,trim:true,index:true},
   description:{type:String,trim:true,default:""},
   rate:{type:Number,required:true,min:0},
   quantity:{type:Number,default:0,min:0},
   minStock:{type:Number,default:0,min:0},
-  serialNumber:{type:String,unique:true,sparse:true,trim:true},
+  serialNumber:{type:String,sparse:true,trim:true},
   designNo:{type:String,sparse:true,trim:true},
   purchaseDate:{type:Date,default:null},
   purchasePrice:{type:Number,default:0,min:0},
@@ -20,5 +20,8 @@ const ProductSchema=new mongoose.Schema({
 ProductSchema.index({createdBy:1,productName:1});
 ProductSchema.index({createdBy:1,designNo:1});
 ProductSchema.index({createdBy:1,quantity:1});
+// Product identifiers are unique within a business account, not globally.
+ProductSchema.index({createdBy:1,productCode:1},{unique:true,name:"createdBy_1_productCode_1"});
+ProductSchema.index({createdBy:1,serialNumber:1},{unique:true,partialFilterExpression:{serialNumber:{$type:"string"}},name:"createdBy_1_serialNumber_1"});
 
 module.exports=mongoose.model("Product",ProductSchema);

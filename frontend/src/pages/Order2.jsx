@@ -794,8 +794,11 @@ function Order2() {
             alert("❌ Enter a valid payment amount.");
             return;
         }
-        if (amount > due + 0.01) {
-            alert(`❌ Payment cannot exceed the current due balance of ₹${due.toFixed(2)}.`);
+        // Match the API's exact currency-cent validation. A one-paise
+        // tolerance here would only let the user submit a payment the server
+        // must reject.
+        if (Math.round(amount * 100) > Math.round(due * 100)) {
+            alert(`Payment cannot exceed the current due balance of ₹${due.toFixed(2)}.`);
             return;
         }
 

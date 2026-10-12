@@ -1,6 +1,6 @@
 import React,{useEffect,useMemo,useState} from "react";
 import {useSearchParams} from "react-router-dom";
-import {getExpenseOptions,uploadReceipt} from "../services/api";
+import {getExpenseOptions,uploadReceipt,getApiBase} from "../services/api";
 import FormConfigurator from "./FormConfigurator";
 import ConfiguredField from "./ConfiguredField";
 import {EXPENSE_FORM_FIELDS} from "../config/noCodeCatalog";
@@ -9,6 +9,12 @@ import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import {formatDateInput} from "../utils/dateInput";
 
 const today=()=>formatDateInput(new Date());
+const resolveReceiptUrl=value=>{
+  const path=String(value||"").trim();
+  if(!path)return "";
+  if(/^https?:\/\//i.test(path))return path;
+  return getApiBase()+"/"+path.replace(/^\/+/, "");
+};
 const EMPTY={
   title:"",
   description:"",
@@ -222,7 +228,7 @@ export default function ExpenseForm({onSubmit,initialData={}}){
                     <div className="small text-muted mb-2">Optional. Add an image or PDF receipt for your records.</div>
                     <input type="file" accept="image/*,.pdf" className="form-control" onChange={receiptUpload} disabled={uploading||saving}/>
                     {uploading&&<div className="small text-muted mt-1">Uploading receipt...</div>}
-                    {form.receipt&&<a className="d-inline-block mt-2" target="_blank" rel="noreferrer" href={form.receipt}>View uploaded receipt</a>}
+                    {form.receipt&&<a className="d-inline-block mt-2" target="_blank" rel="noreferrer" href={resolveReceiptUrl(form.receipt)}>View uploaded receipt</a>}
                   </div>
                 </div>
               </details>

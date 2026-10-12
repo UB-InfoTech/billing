@@ -156,9 +156,6 @@ function Clients() {
 
   const token = localStorage.getItem('token');
   const authConfig = { headers: { "x-auth-token": token || "" } };
-  if (!token) {
-    throw new Error('No token found');
-  }
   const fetchClients = async () => {
     setLoading(true);
     try {

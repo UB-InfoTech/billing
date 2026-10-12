@@ -13,8 +13,9 @@ const {getInvoiceRevenue}=require("../utils/syncClientData");
 const router=express.Router();
 const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
 const owner=req=>req.user.id;
+const {buildOrderDateRange}=require("../utils/orderDateRange");
 
-function dateRange(start,end){const r={};if(start){const d=new Date(String(start)+"T00:00:00.000");if(!Number.isNaN(d.getTime()))r.$gte=d;}if(end){const d=new Date(String(end)+"T23:59:59.999");if(!Number.isNaN(d.getTime()))r.$lte=d;}return Object.keys(r).length?r:null;}
+function dateRange(start,end){return buildOrderDateRange({startDate:start,endDate:end});}
 function period(req){const start=req.query.startDate||req.query.from;const end=req.query.endDate||req.query.to;return dateRange(start,end);}
 function invoiceRevenueExpression() {
   const rounded = { $ifNull: ["$roundOffFinalRevenue", 0] };
@@ -41,7 +42,7 @@ router.get("/sales-summary",auth,async(req,res)=>{
     const groupDate=req.query.timeframe==="monthly"?{$dateToString:{format:"%Y-%m",date:"$orderDate"}}:req.query.timeframe==="yearly"?{$dateToString:{format:"%Y",date:"$orderDate"}}:{$dateToString:{format:"%Y-%m-%d",date:"$orderDate"}};
     const data=await Order.aggregate([{$match:match},{$group:{_id:groupDate,revenue:{$sum:invoiceRevenueExpression()},orders:{$sum:1},paid:{$sum:"$paidAmount"},due:{$sum:"$dueAmount"}}},{$sort:{_id:1}}]);
     res.json(data.map(x=>({...x,totalRevenue:round2(x.revenue),revenue:round2(x.revenue),paid:round2(x.paid),due:round2(x.due)})));
-  }catch(error){res.status(500).json({message:error.message});}
+  }catch(error){res.status(error.status||500).json({message:error.message});}
 });
 
 router.get("/sales-report",auth,async(req,res)=>{
@@ -50,7 +51,7 @@ router.get("/sales-report",auth,async(req,res)=>{
     const salesData=await Order.aggregate([{$match:match},{$group:{_id:{$dateToString:{format:"%Y-%m-%d",date:"$orderDate"}},totalRevenue:{$sum:invoiceRevenueExpression()},orderCount:{$sum:1},paid:{$sum:"$paidAmount"},due:{$sum:"$dueAmount"}}},{$sort:{_id:1}}]);
     const total=salesData.reduce((s,x)=>s+Number(x.totalRevenue||0),0),orders=salesData.reduce((s,x)=>s+Number(x.orderCount||0),0);
     res.json({success:true,salesData:salesData.map(x=>({...x,totalRevenue:round2(x.totalRevenue),paid:round2(x.paid),due:round2(x.due)})),summary:{totalRevenue:round2(total),orderCount:orders,averageOrderValue:orders?round2(total/orders):0}});
-  }catch(error){res.status(500).json({success:false,message:error.message});}
+  }catch(error){res.status(error.status||500).json({success:false,message:error.message});}
 });
 
 router.get("/client-revenue",auth,async(req,res)=>{

@@ -202,7 +202,8 @@ export default function ConfiguredField({
       placeholder={placeholder||label}
     />;
   }else{
-    const htmlType=field.fieldType==="date"?"date"
+    const htmlType=field.key==="eWayPassword"?"password"
+      :field.fieldType==="date"?"date"
       :field.fieldType==="datetime"?"datetime-local"
       :field.fieldType==="email"?"email"
       :field.fieldType==="phone"?"tel"

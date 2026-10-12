@@ -36,6 +36,7 @@ const cleanCustomFields=value=>{
 const idOrNull=v=>v&&mongoose.isValidObjectId(v)?v:null;
 
 const { buildOrderDateRange } = require("../utils/orderDateRange");
+const { normalizePaymentUpdates } = require("../utils/bulkPaymentAllocations");
 
 async function nextOrderNumber(uid){
   // Reserve the sequence in a single atomic database operation so concurrent
@@ -461,16 +462,12 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
     if(!Array.isArray(updates)||!updates.length)throw new Error("updates[] is required.");
     if(!paymentDate||Number.isNaN(parsedDate.getTime()))throw new Error("Valid paymentDate is required.");
 
-    const byId=new Map();
-    for(const raw of updates){
-      const oid=String(typeof raw==="string"?raw:raw?.orderId||"");
-      if(!mongoose.isValidObjectId(oid))continue;
-      const customAmount=round2(typeof raw==="string"?0:raw?.amount);
-      const current=byId.get(oid)||0;
-      byId.set(oid,round2(current+customAmount));
-    }
-    const ids=[...byId.keys()];
-    if(!ids.length)throw new Error("No valid order IDs supplied.");
+    const normalized=normalizePaymentUpdates(
+      updates,
+      value=>mongoose.isValidObjectId(value)
+    );
+    const byId=new Map(normalized.map(item=>[item.orderId,item.amount]));
+    const ids=normalized.map(item=>item.orderId);
 
     if(session)session.startTransaction({writeConcern:{w:"majority",j:true}});
 
@@ -518,8 +515,8 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
     }else{
       allocations=active.map(order=>{
         const applied=round2(byId.get(String(order._id))||0);
-        if(applied>Number(order.dueAmount||0)+0.01){
-          throw new Error(`Custom allocation exceeds invoice due for \${order.orderNumber||order._id}.`);
+        if(Math.round(applied*100)>Math.round(Number(order.dueAmount||0)*100)){
+          throw new Error(`Custom allocation exceeds invoice due for ${order.orderNumber||order._id}.`);
         }
         return{order,appliedAmount:applied};
       }).filter(item=>item.appliedAmount>0);

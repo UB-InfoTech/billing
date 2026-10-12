@@ -98,3 +98,9 @@ test("accepts a valid calculation graph with existing field dependencies", () =>
     { key: "amount", label: "Amount", formula: "quantity * rate" }
   ]));
 });
+
+test("supports an optional action for fields made required by other rules", () => {
+  const { FORM_CONDITION_ACTIONS } = require("../utils/formConfigValidation");
+  assert.ok(FORM_CONDITION_ACTIONS.includes("require"));
+  assert.ok(FORM_CONDITION_ACTIONS.includes("optional"));
+});

@@ -559,7 +559,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
     if(session)await session.commitTransaction();
 
     const clientIds=[...new Set(allocations.map(item=>String(item.order.clientId||"")).filter(Boolean))];
-    await Promise.allSettled(clientIds.map(clientId=>syncClientData(clientId)));
+    await Promise.allSettled(clientIds.map(clientId=>syncClientDataSafely(clientId,"a bulk payment")));
 
     return res.json({
       success:true,

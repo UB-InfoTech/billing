@@ -5,6 +5,7 @@ const Expense=require("../models/Expense");
 const Product=require("../models/Product");
 const ReportConfiguration=require("../models/ReportConfiguration");
 const auth=require("../middleware/auth");
+const {getInvoiceRevenue}=require("../utils/syncClientData");
 
 const router=express.Router();
 const owner=req=>req.user.id;
@@ -31,7 +32,7 @@ router.get("/",auth,async(req,res)=>{
     const expenseMatch={createdBy:uid};
     if(range){orderMatch.orderDate=range;expenseMatch.date=range;}
     const [orders,expenses,products,config]=await Promise.all([
-      Order.find(orderMatch).select("subOrders totalCost discountAmount taxAmount roundOffFinalRevenue finalRevenue paidAmount dueAmount").lean(),
+      Order.find(orderMatch).select("subOrders totalCost discountAmount taxAmount roundOffFinalRevenue finalRevenue totalAmount paidAmount dueAmount").lean(),
       Expense.find(expenseMatch).select("amount taxAmount").lean(),
       Product.find({createdBy:uid}).select("_id purchasePrice").lean(),
       ReportConfiguration.findOne({createdBy:uid}).lean()
@@ -45,7 +46,7 @@ router.get("/",auth,async(req,res)=>{
       discounts+=num(order.discountAmount);
       netSales+=num(order.totalCost);
       outputTax+=num(order.taxAmount);
-      billedTotal+=num(order.roundOffFinalRevenue||order.finalRevenue);
+      billedTotal+=getInvoiceRevenue(order);
       paid+=num(order.paidAmount);
       due+=num(order.dueAmount);
       (order.subOrders||[]).forEach(item=>{

@@ -90,12 +90,14 @@ router.post("/",auth,upload.array("images",5),async(req,res)=>{
   try{
     const code=String(req.body.productCode||"").trim().toUpperCase()||await nextProductCode(owner(req));
     if(await Product.exists({createdBy:owner(req),productCode:code}))return res.status(409).json({message:"Product code already exists."});
+    const barcode=String(req.body.barcode||"").trim()||code;
+    if(await Product.exists({createdBy:owner(req),barcode}))return res.status(409).json({message:"Barcode already belongs to another product in this business."});
     const product=new Product({
       productName:String(req.body.productName||"").trim(),productCode:code,
       description:String(req.body.description||"").trim(),rate:Number(req.body.rate||0),
       quantity:Number(req.body.quantity||0),serialNumber:String(req.body.serialNumber||"").trim()||undefined,
       designNo:String(req.body.designNo||"").trim(),purchaseDate:req.body.purchaseDate||null,
-      purchasePrice:Number(req.body.purchasePrice||0),barcode:String(req.body.barcode||code).trim(),
+      purchasePrice:Number(req.body.purchasePrice||0),barcode,
       minStock:Number(req.body.minStock||0),createdBy:owner(req),
       images:(req.files||[]).map(file=>publicUrl(req,"/uploads/products/"+file.filename)),
       customFields:{}
@@ -120,12 +122,23 @@ router.put("/:id",auth,upload.array("images",5),async(req,res)=>{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid product ID."});
     const product=await Product.findOne({_id:req.params.id,createdBy:owner(req)});
     if(!product)return res.status(404).json({message:"Product not found."});
-    for(const field of ["productName","description","designNo","barcode"])if(req.body[field]!==undefined)product[field]=String(req.body[field]).trim();
+    for(const field of ["productName","description","designNo"])if(req.body[field]!==undefined)product[field]=String(req.body[field]).trim();
     for(const field of ["rate","quantity","purchasePrice","minStock"])if(req.body[field]!==undefined)product[field]=Number(req.body[field]);
     if(req.body.productCode && String(req.body.productCode).trim().toUpperCase()!==product.productCode){
       const code=String(req.body.productCode).trim().toUpperCase();
       if(await Product.exists({createdBy:owner(req),productCode:code,_id:{$ne:product._id}}))return res.status(409).json({message:"Product code already exists."});
       product.productCode=code;
+    }
+    if(req.body.barcode!==undefined){
+      const barcode=String(req.body.barcode||"").trim()||product.productCode;
+      if(barcode!==String(product.barcode||"").trim()&&await Product.exists({
+        createdBy:owner(req),
+        barcode,
+        _id:{$ne:product._id}
+      })){
+        return res.status(409).json({message:"Barcode already belongs to another product in this business."});
+      }
+      product.barcode=barcode;
     }
     if(req.body.serialNumber!==undefined)product.serialNumber=String(req.body.serialNumber).trim()||undefined;
     if(req.body.purchaseDate!==undefined)product.purchaseDate=req.body.purchaseDate||null;

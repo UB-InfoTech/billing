@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Client = require("../models/Client");
 const Order = require("../models/Order2");
 const CreditNote = require("../models/CreditNote");
+const { resolveClientCreditBalance } = require("./clientCreditBalance");
 
 function round2(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
@@ -10,7 +11,9 @@ function round2(value) {
 async function syncClientData(clientId) {
   if (!clientId || !mongoose.isValidObjectId(clientId)) return null;
 
-  const client = await Client.findById(clientId).select("_id createdBy").lean();
+  const client = await Client.findById(clientId)
+    .select("_id createdBy creditBalance creditBalanceAdjustment")
+    .lean();
   if (!client) return null;
 
   const [orders, creditRows] = await Promise.all([
@@ -21,14 +24,15 @@ async function syncClientData(clientId) {
       .select("settlement.customerCreditAmount")
       .lean()
   ]);
-  const creditBalance = round2(creditRows.reduce((sum, note) => sum + Number(note.settlement?.customerCreditAmount || 0), 0));
+  const creditState = resolveClientCreditBalance(client, creditRows);
+  const { creditBalance, creditBalanceAdjustment } = creditState;
 
   if (!orders.length) {
     return Client.findOneAndUpdate({ _id: client._id, createdBy: client.createdBy }, { $set: {
       orderCount: 0, totalRevenue: 0, lastOrderDate: null, totalPaid: 0,
       pendingPayments: 0, outstanding_balance: 0, averageOrderValue: 0,
       preferredProducts: [], orderFrequency: "Occasional", payments: [], paymentHistory: [],
-      creditBalance
+      creditBalance, creditBalanceAdjustment
     }}, { new: true }).lean();
   }
 
@@ -58,7 +62,7 @@ async function syncClientData(clientId) {
     orderCount:orders.length,totalRevenue,lastOrderDate,totalPaid,
     pendingPayments:outstanding,outstanding_balance:outstanding,
     averageOrderValue:round2(totalRevenue/orders.length),preferredProducts,
-    orderFrequency,payments:orders.map(o=>o._id),paymentHistory,creditBalance
+    orderFrequency,payments:orders.map(o=>o._id),paymentHistory,creditBalance,creditBalanceAdjustment
   }},{new:true}).lean();
 }
 

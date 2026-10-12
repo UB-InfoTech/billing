@@ -6,8 +6,9 @@ import ConfiguredField from "./ConfiguredField";
 import {EXPENSE_FORM_FIELDS} from "../config/noCodeCatalog";
 import {useFormConfiguration,applyFormulas,getFieldState,hydrateConfiguredValues,syncConfiguredCustomFields,buildConfiguredDefaults} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
+import {formatDateInput} from "../utils/dateInput";
 
-const today=()=>new Date().toISOString().slice(0,10);
+const today=()=>formatDateInput(new Date());
 const EMPTY={
   title:"",
   description:"",
@@ -75,8 +76,7 @@ export default function ExpenseForm({onSubmit,initialData={}}){
       ? form.customFields?.[field.key]??form[field.key]??field.defaultValue??""
       : form[field.key]??field.defaultValue??"";
     if(field.fieldType==="date"&&raw){
-      const date=new Date(raw);
-      return Number.isNaN(date.getTime())?String(raw):date.toISOString().slice(0,10);
+      return formatDateInput(raw)||String(raw);
     }
     return raw;
   };
@@ -95,10 +95,11 @@ export default function ExpenseForm({onSubmit,initialData={}}){
     event.preventDefault();
     setError("");
     const values=syncConfiguredCustomFields(form,fields);
-    const requiredFields=fields.filter(field=>field.required&&!field.formula);
+    // Rules can make an otherwise optional field required at runtime.
+    const requiredFields=fields.filter(field=>!field.formula);
     const missing=requiredFields.find(field=>{
       const state=getFieldState(field,{...values,...(values.customFields||{})});
-      if(!state.visible||!state.required)return false;
+      if(!state.visible||!state.required||state.disabled)return false;
       const value=field.custom?values.customFields?.[field.key]??values[field.key]:values[field.key];
       return String(value??"").trim()==="";
     });

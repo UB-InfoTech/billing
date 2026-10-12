@@ -198,7 +198,7 @@ router.get("/",auth,async(req,res)=>{
       metric("retainedEarnings","Retained Earnings (period)","Shareholders",pat!==null&&dividends!==null?pat-dividends:null,"₹","PAT - dividends",["PAT","Dividends"])
     ];
     res.json({period:{start:req.query.startDate||req.query.from||null,end:req.query.endDate||req.query.to||null,days},coverage:{orders:orders.length,expenseEntries:expenses.length,cogsLines,costLines},inputs,metrics});
-  }catch(error){res.status(500).json({message:error.message||"Unable to calculate financial metrics."});}
+  }catch(error){res.status(error.status||500).json({message:error.message||"Unable to calculate financial metrics."});}
 });
 
 module.exports=router;

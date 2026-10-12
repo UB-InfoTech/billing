@@ -9,10 +9,17 @@ test("prefers the rounded invoice total when it exists", () => {
   );
 });
 
-test("falls back to finalRevenue when a legacy rounded total is zero", () => {
+test("uses the persisted rounded total before the pre-rounding calculation", () => {
   assert.equal(
     getInvoiceRevenue({ roundOffFinalRevenue: 0, finalRevenue: 849.6, totalAmount: 850 }),
-    849.6
+    850
+  );
+});
+
+test("rounds finalRevenue when legacy records have no stored invoice total", () => {
+  assert.equal(
+    getInvoiceRevenue({ roundOffFinalRevenue: 0, finalRevenue: 849.6 }),
+    850
   );
 });
 
@@ -30,9 +37,9 @@ test("returns zero rather than propagating invalid or negative revenue", () => {
   );
 });
 
-test("rounds fallback invoice totals to currency precision", () => {
+test("rounds a legacy pre-rounding calculation to the billed total", () => {
   assert.equal(
     getInvoiceRevenue({ roundOffFinalRevenue: 0, finalRevenue: 100.105 }),
-    100.11
+    100
   );
 });

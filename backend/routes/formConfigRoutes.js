@@ -30,39 +30,11 @@ const normalizeOptions=options=>{
   });
 };
 
-const formulaReferences=formula=>[...new Set(String(formula||"").match(/[A-Za-z_][A-Za-z0-9_]*/g)||[])];
-
-const validateFormulaGraph=fields=>{
-  const byKey=new Map(fields.map(field=>[field.key,field]));
-  const graph=new Map();
-
-  fields.forEach(field=>{
-    if(!field.formula)return;
-    const refs=formulaReferences(field.formula);
-    refs.forEach(ref=>{
-      if(!byKey.has(ref)){
-        throw new Error("The calculation for \""+field.label+"\" refers to a field that is no longer available.");
-      }
-    });
-    graph.set(field.key,refs.filter(ref=>byKey.get(ref)?.formula));
-  });
-
-  const visiting=new Set();
-  const visited=new Set();
-  const walk=key=>{
-    if(visiting.has(key)){
-      const field=byKey.get(key);
-      throw new Error("The calculation for \""+(field?.label||"this field")+"\" creates a circular calculation. Choose a different field.");
-    }
-    if(visited.has(key))return;
-    visiting.add(key);
-    (graph.get(key)||[]).forEach(walk);
-    visiting.delete(key);
-    visited.add(key);
-  };
-
-  graph.forEach((_,key)=>walk(key));
-};
+const {
+  formulaReferences,
+  findRemovedFieldDependency,
+  validateFieldReferences
+}=require("../utils/formConfigValidation");
 
 const sanitizeFields=fields=>{
   if(!Array.isArray(fields))throw new Error("Please provide a valid field list.");
@@ -148,12 +120,6 @@ const sanitizeFields=fields=>{
     };
   });
 
-  const byKey=new Map(result.map(field=>[field.key,field]));
-  result.forEach(field=>{
-    field.conditions=field.conditions.filter(condition=>byKey.has(condition.fieldKey));
-    field.dataSource.autoFill=field.dataSource.autoFill.filter(mapping=>byKey.has(mapping.targetKey));
-  });
-
   result.forEach(field=>{
     const min=field.validation?.min;
     const max=field.validation?.max;
@@ -166,7 +132,6 @@ const sanitizeFields=fields=>{
     }
   });
 
-  validateFormulaGraph(result);
   return result;
 };
 
@@ -193,21 +158,21 @@ router.put("/:formKey",auth,async(req,res)=>{
     if(existing){
       const nextKeys=new Set(fields.map(field=>field.key));
       const removed=(existing.fields||[]).filter(field=>!nextKeys.has(field.key));
+      const dependency=findRemovedFieldDependency(fields,removed.map(field=>field.key));
 
-      for(const removedField of removed){
-        const dependent=fields.find(field=>{
-          const formulaRefs=formulaReferences(field.formula);
-          const conditionRefs=(field.conditions||[]).map(condition=>condition.fieldKey);
-          const autoFillTargets=(field.dataSource?.autoFill||[]).map(mapping=>mapping.targetKey);
-          return formulaRefs.includes(removedField.key)
-            ||conditionRefs.includes(removedField.key)
-            ||autoFillTargets.includes(removedField.key);
-        });
-        if(dependent){
-          throw new Error("\""+removedField.label+"\" is still used by \""+dependent.label+"\". Remove that rule or calculation first.");
-        }
+      if(dependency){
+        const removedField=removed.find(field=>field.key===dependency.removedKey);
+        const usage=dependency.kind==="rule"?"a rule":dependency.kind==="auto-fill"?"an auto-fill mapping":"a calculation";
+        throw new Error(
+          "\\""+(removedField?.label||dependency.removedKey)+"\\" is still used by \\""+
+          dependency.field.label+"\\" in "+usage+". Remove that dependency first."
+        );
       }
     }
+
+    // Keep stale references intact until the removal check completes. This
+    // prevents saving a configuration that silently loses a rule or mapping.
+    validateFieldReferences(fields);
 
     const config=await FormConfiguration.findOneAndUpdate(
       {createdBy:ownerId,formKey},

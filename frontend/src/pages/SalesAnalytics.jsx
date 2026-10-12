@@ -21,6 +21,7 @@ import 'react-date-picker/dist/DatePicker.css';
 import 'react-calendar/dist/Calendar.css';
 import infoSVG from '../assets/info.svg';
 import DynamicTable from "../components/DynamicTable";
+import {getDateRangeBoundary} from "../utils/dateInput";
 import FinancialMetrics from "../components/FinancialMetrics";
 
 // Register Chart.js components
@@ -157,9 +158,13 @@ const SalesAnalytics = () => {
     if (!salesData || !startDate || !endDate) return;
     const filtered = {};
     Object.keys(salesData).forEach(period => {
+      const startBoundary = getDateRangeBoundary(startDate, false);
+      const endBoundary = getDateRangeBoundary(endDate, true);
       const filteredOrders = salesData[period].orders.filter(order => {
         const orderDate = new Date(order.orderDate);
-        return orderDate >= startDate && orderDate <= endDate;
+        return !Number.isNaN(orderDate.getTime()) &&
+          (!startBoundary || orderDate >= startBoundary) &&
+          (!endBoundary || orderDate <= endBoundary);
       });
       filtered[period] = {
         totalSales: filteredOrders.reduce((sum, order) => sum + order.roundOffFinalRevenue, 0),

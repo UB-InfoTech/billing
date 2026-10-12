@@ -4,6 +4,7 @@ const mongoose=require("mongoose");
 const Client=require("../models/Client");
 const Order=require("../models/Order2");
 const CreditNote=require("../models/CreditNote");
+const Expense=require("../models/Expense");
 const {applyManualCreditAdjustment}=require("../utils/clientCreditBalance");
 const {getInvoiceRevenue}=require("../utils/syncClientData");
 const auth=require("../middleware/auth");
@@ -67,7 +68,19 @@ router.get("/:id",auth,async(req,res)=>{
 
 router.post("/",auth,async(req,res)=>{
   try{
-    const body={...(req.body||{})};
+    const input=req.body||{};
+    // Only accept details a person may enter on the customer form. Financial
+    // balances, payment history, order counts and ownership are maintained by
+    // billing workflows and must never be set by a normal form request.
+    const allowed=[
+      "name","email","phone","address","state","city","pinCode","stateCode",
+      "gstNumber","companyName","businessType","paymentTerms","discountRate",
+      "accountStatus","notes","customFields"
+    ];
+    const body={};
+    allowed.forEach(key=>{
+      if(input[key]!==undefined)body[key]=input[key];
+    });
     body.createdBy=owner(req);
     body.customFields=cleanCustomFields(body.customFields);
     if(body.gstNumber)body.gstNumber=String(body.gstNumber).trim().toUpperCase();
@@ -154,6 +167,8 @@ router.delete("/:id",auth,async(req,res)=>{
     if(linked)return res.status(409).json({message:"Customer cannot be deleted because invoices are linked to it. Mark the customer Inactive instead."});
     const linkedCreditNote=await CreditNote.exists({clientId:req.params.id,createdBy:owner(req)});
     if(linkedCreditNote)return res.status(409).json({message:"Customer cannot be deleted because Credit Notes are linked to it. Keep the record for accounting history and mark it Inactive instead."});
+    const linkedExpense=await Expense.exists({clientId:req.params.id,createdBy:owner(req)});
+    if(linkedExpense)return res.status(409).json({message:"Customer cannot be deleted because expenses are linked to it. Keep the customer record for history and mark it Inactive instead."});
     const client=await Client.findOneAndDelete({_id:req.params.id,createdBy:owner(req)});
     if(!client)return res.status(404).json({message:"Client not found"});
     res.json({message:"Client deleted successfully"});

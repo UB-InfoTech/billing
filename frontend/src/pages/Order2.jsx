@@ -803,6 +803,11 @@ function Order2() {
         const amount = Number(newPayment.amount);
         const due = Number(editingOrder?.dueAmount || 0);
 
+        if(editingOrder?.status==="Cancelled"){
+            alert("This invoice is cancelled. Change its status before recording another payment.");
+            return;
+        }
+
         if (!Number.isFinite(amount) || amount <= 0) {
             alert("❌ Enter a valid payment amount.");
             return;
@@ -1939,6 +1944,7 @@ const styles = {
                                                 min="0.01"
                                                 max={Number(editingOrder?.dueAmount || 0)}
                                                 step="0.01"
+                                                disabled={editingOrder?.status==="Cancelled"||Number(editingOrder?.dueAmount||0)<=0}
                                                 required
                                             />
                                             <div className="small text-muted mt-1">Due: ₹{Number(editingOrder?.dueAmount || 0).toFixed(2)}</div>
@@ -1957,7 +1963,10 @@ const styles = {
                                         </div>
                                         {/* // <button className="btn btn-success" onClick={addPayment}>Add Payment</button> */}
                                     </div>
-                                    <button className="btn btn-primary" disabled={Number(editingOrder?.dueAmount || 0) <= 0 || !newPayment.amount} onClick={() => addPayment(editingOrder._id)}>Add Payment</button>
+                                    <button className="btn btn-primary" disabled={editingOrder?.status==="Cancelled"||Number(editingOrder?.dueAmount || 0) <= 0 || !newPayment.amount} onClick={() => addPayment(editingOrder._id)}>Add Payment</button>
+                                    {editingOrder?.status==="Cancelled"&&(
+                                        <div className="small text-danger mt-2">This invoice is cancelled. Change its status before recording another payment.</div>
+                                    )}
 
 
                                                                         <DynamicTable

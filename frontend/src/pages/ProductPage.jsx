@@ -8,6 +8,7 @@ import ConfiguredField from "../components/ConfiguredField";
 import DynamicTable from "../components/DynamicTable";
 import { PRODUCT_FORM_FIELDS } from "../config/noCodeCatalog";
 import { useFormConfiguration, applyFormulas, getFieldState, hydrateConfiguredValues, syncConfiguredCustomFields, buildConfiguredDefaults } from "../hooks/useFormConfiguration";
+import {formatDateInput} from "../utils/dateInput";
 
 const PRODUCT_PAGE_SIZE=100;
 
@@ -152,8 +153,9 @@ export default function ProductPage(){
       ? form.customFields?.[field.key]??form[field.key]??field.defaultValue??""
       : form[field.key]??field.defaultValue??"";
     if(field.fieldType==="date"&&raw){
-      const date=new Date(raw);
-      return Number.isNaN(date.getTime())?String(raw):date.toISOString().slice(0,10);
+      // Preserve calendar dates as written instead of converting through UTC,
+      // which can move the displayed date back or forward in some time zones.
+      return formatDateInput(raw)||String(raw);
     }
     return raw;
   };

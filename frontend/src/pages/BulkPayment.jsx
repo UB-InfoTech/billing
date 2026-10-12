@@ -305,7 +305,7 @@ const PaymentForm = React.memo(({
 
       <div className="col-md-2">
         <label className="form-label mb-0">Allocated</label>
-        <span className={`form-control-plaintext fw-bold mt-0 pt-0 ${Math.abs(parseDecimal(form.amount || 0) - totalAllocated) <= 0.01 ? 'text-success' : 'text-danger'}`}>
+        <span className={`form-control-plaintext fw-bold mt-0 pt-0 ${Math.round(parseDecimal(form.amount || 0) * 100) === Math.round(totalAllocated * 100) ? 'text-success' : 'text-danger'}`}>
           ₹{totalAllocated.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </span>
       </div>
@@ -473,7 +473,7 @@ const AllocationPreview = React.memo(({
   paymentDate
 }) => {
   const paymentAmountNum = parseDecimal(paymentAmount || 0);
-  const isAmountMismatch = Math.abs(parseDecimal(paymentAmountNum - totalAllocated)) > 0.01;
+  const isAmountMismatch = Math.round(paymentAmountNum * 100) !== Math.round(totalAllocated * 100);
 
   return (
     <div className="card my-3 p-3 shadow-sm">

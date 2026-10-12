@@ -210,8 +210,7 @@ router.post("/send-reports",auth,async(req,res)=>{
         paid:{$sum:"$paidAmount"},
         due:{$sum:"$dueAmount"}
       }},
-      {$sort:{_id:1}},
-      {$limit:100}
+      {$sort:{_id:1}}
     ]);
     const buffer=await renderPdfBuffer(buildReportHtml({salesData:sales},"all"));
     const transporter=nodemailer.createTransport({

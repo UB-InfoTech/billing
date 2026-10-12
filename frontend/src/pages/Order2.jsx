@@ -782,7 +782,9 @@ function Order2() {
             const response = await axios.get(`${linkone}/api/order/orders/${editingOrder._id}/payments`, authConfig());
             setPayments(response.data);
         } catch (error) {
-            console.error("Error fetching payments" + error.response.data.message);
+            const message = error.response?.data?.message || error.message || "Unable to load payment history.";
+            setOrdersMessage(message);
+            console.error("Error fetching payments:", message);
         }
     };
 

@@ -1,27 +1,25 @@
-// no use 
-import React from 'react';
-import axios from 'axios';
+import axios from "axios";
 
-const instance = axios.create({
-  baseURL: 'http://localhost:5000'
-});
+const configuredBaseURL = String(import.meta.env.VITE_API_URL || "").trim();
+const fallbackBaseURL = import.meta.env.DEV ? "http://localhost:5000" : "";
+const baseURL = (configuredBaseURL || fallbackBaseURL).replace(/\/+$/, "");
+
+const instance = axios.create({ baseURL });
 
 instance.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('token');
-   if (token) {
-      config.headers['x-auth-token'] = token;
-      console.log('Axios Interceptor - Set x-auth-token header:', config.headers['x-auth-token']); // Debug log
-    } else {
-      console.log('Axios Interceptor - No token found in localStorage'); // Debug log
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers = config.headers || {};
+      if (typeof config.headers.set === "function") {
+        config.headers.set("x-auth-token", token);
+      } else {
+        config.headers["x-auth-token"] = token;
+      }
     }
-    console.log('Axios Interceptor - Full headers:', JSON.stringify(config.headers, null, 2)); // Debug log
     return config;
   },
-  error => {
-    console.error('Axios Interceptor - Request error:', error.message); // Debug log
-    return Promise.reject(error);
-  }
+  error => Promise.reject(error)
 );
 
 export default instance;

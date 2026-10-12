@@ -107,17 +107,25 @@ export default function Calendar(){
   };
 
   const save=async()=>{
-    const state={};
-    for(const field of eventFields)state[field.key]=getFieldState(field,modal.values);
-    const titleState=state.title||{visible:true,required:true};
-    if(titleState.visible&&titleState.required&&!String(modal.values.title||"").trim()){
-      setError("Event title is required.");return;
-    }
-    if(!modal.values.start){
-      setError("Start date/time is required.");return;
+    const values=syncConfiguredCustomFields(modal.values,eventFields);
+    const validationValues={...values,...(values.customFields||{})};
+
+    // Validate every configured required field, including fields made required
+    // by a conditional rule. Calendar validation previously checked only title
+    // and start time, so other required custom fields could be silently skipped.
+    const missing=eventFields.filter(field=>!field.formula).find(field=>{
+      const state=getFieldState(field,validationValues);
+      if(!state.visible||!state.required||state.disabled)return false;
+      const value=field.custom
+        ? values.customFields?.[field.key]??values[field.key]
+        : values[field.key];
+      return String(value??"").trim()==="";
+    });
+    if(missing){
+      setError("Please complete “"+missing.label+"” before saving.");
+      return;
     }
 
-    const values=syncConfiguredCustomFields(modal.values,eventFields);
     const start=isoFromInput(values.start);
     const end=isoFromInput(values.end||values.start);
     if(!start||!end){

@@ -1,6 +1,6 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const {getSafeUploadExtension,isAllowedUploadType}=require("../utils/uploadFileTypes");
+const {getSafeUploadExtension,isAllowedUploadType,isSafePublicUploadPath}=require("../utils/uploadFileTypes");
 
 test("only allow known image and PDF MIME types",()=>{
   assert.equal(isAllowedUploadType("image/jpeg"),true);
@@ -18,4 +18,11 @@ test("stored file extensions come from validated MIME type, not the supplied fil
   assert.equal(getSafeUploadExtension("image/png"),".png");
   assert.equal(getSafeUploadExtension("application/pdf"),".pdf");
   assert.equal(getSafeUploadExtension("text/html"),null);
+});
+
+test("public uploads serve only image and PDF extensions inline",()=>{
+  assert.equal(isSafePublicUploadPath("/uploads/products/item.png"),true);
+  assert.equal(isSafePublicUploadPath("/uploads/expenses/receipt.PDF"),true);
+  assert.equal(isSafePublicUploadPath("/uploads/malicious.html"),false);
+  assert.equal(isSafePublicUploadPath("/uploads/script.js"),false);
 });

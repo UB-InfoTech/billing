@@ -178,10 +178,15 @@ const SalesAnalytics = () => {
   // Quote CSV cells and neutralize spreadsheet formulas in user-controlled text.
   const csvCell = (value) => {
     const text = value == null ? "" : String(value);
-    const safeText = typeof value === "string" && /^[\\t\\r ]*[=+\\-@]/.test(text)
-      ? "'" + text
-      : text;
-    return /[",\\r\\n]/.test(safeText)
+    const firstCharacter = text.trimStart().charAt(0);
+    const beginsWithFormula = typeof value === "string" &&
+      ["=", "+", "-", "@"].includes(firstCharacter);
+    const safeText = beginsWithFormula ? "'" + text : text;
+    const needsQuotes = safeText.includes(",") ||
+      safeText.includes('"') ||
+      safeText.includes("\r") ||
+      safeText.includes("\n");
+    return needsQuotes
       ? '"' + safeText.replace(/"/g, '""') + '"'
       : safeText;
   };

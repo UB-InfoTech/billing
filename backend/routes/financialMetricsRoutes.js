@@ -9,11 +9,12 @@ const {getInvoiceRevenue}=require("../utils/syncClientData");
 
 const router=express.Router();
 const owner=req=>req.user.id;
+const {buildOrderDateRange}=require("../utils/orderDateRange");
 const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
 const ratio=(a,b)=>b?round2(Number(a||0)/Number(b)):null;
 const pct=(a,b)=>b?round2(Number(a||0)*100/Number(b)):null;
 const num=v=>Number.isFinite(Number(v))?Number(v):0;
-const dateRange=(start,end)=>{const r={};if(start){const d=new Date(String(start)+"T00:00:00.000");if(!Number.isNaN(d.getTime()))r.$gte=d;}if(end){const d=new Date(String(end)+"T23:59:59.999");if(!Number.isNaN(d.getTime()))r.$lte=d;}return Object.keys(r).length?r:null;};
+const dateRange=(start,end)=>buildOrderDateRange({startDate:start,endDate:end});
 
 const inputKeys=["depreciation","amortization","interestExpense","incomeTax","otherIncome","otherExpenses","equity","averageEquity","totalAssets","averageAssets","currentAssets","currentLiabilities","cash","accountsReceivable","averageReceivables","inventory","averageInventory","accountsPayable","averagePayables","debt","principalRepayments","weightedAverageShares","sharesOutstanding","marketPricePerShare","dividends","capitalExpenditure","operatingCashFlow","investingCashFlow","financingCashFlow","variableCosts","fixedOperatingCosts","rAndD","sellingExpenses","administrativeExpenses","wacc","taxRate"];
 

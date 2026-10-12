@@ -70,7 +70,7 @@ router.get("/top-selling-sarees",auth,async(req,res)=>{
 });
 
 router.get("/machine-performance",auth,async(req,res)=>{try{res.json(await Machine.find({createdBy:owner(req)}).sort({totalRevenueGenerated:-1}).lean());}catch(error){res.status(error.status||500).json({message:error.message});}});
-router.get("/supplier-performance",auth,async(req,res)=>{try{res.json({success:true,supplierData:await Supplier.find({createdBy:owner(req)}).sort({name:1}).lean()});}catch(error){res.status(500).json({success:false,message:error.message});}});
+router.get("/supplier-performance",auth,async(req,res)=>{try{res.json({success:true,supplierData:await Supplier.find({createdBy:owner(req)}).sort({name:1}).lean()});}catch(error){res.status(error.status||500).json({success:false,message:error.message});}});
 
 router.get("/profit-analysis",auth,async(req,res)=>{
   try{

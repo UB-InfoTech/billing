@@ -45,14 +45,31 @@ function dateRange(req){
 }
 
 async function nextOrderNumber(uid){
-  const profile=await Profile.findOneAndUpdate(
-    {createdBy:String(uid)},
-    {$setOnInsert:{billNoPrefix:"INV-",billNoSequence:0,billNoSuffix:"",createdBy:String(uid)}},
-    {new:true,upsert:true,returnDocument:"after"}
-  );
-  const next=Number(profile.billNoSequence||0)+1;
-  await Profile.updateOne({_id:profile._id},{$set:{billNoSequence:next}});
-  return String(profile.billNoPrefix||"INV-")+String(next).padStart(5,"0")+String(profile.billNoSuffix||"");
+  // Reserve the sequence in a single atomic database operation so concurrent
+  // invoice requests cannot read and reuse the same next number.
+  for(let attempt=0;attempt<100;attempt+=1){
+    const profile=await Profile.findOneAndUpdate(
+      {createdBy:String(uid)},
+      [{
+        $set:{
+          billNoSequence:{
+            $add:[
+              {$max:[{$ifNull:["$billNoSequence",0]},1]},
+              1
+            ]
+          },
+          billNoPrefix:{$ifNull:["$billNoPrefix","INV-"]},
+          billNoSuffix:{$ifNull:["$billNoSuffix",""]},
+          createdBy:String(uid)
+        }
+      }],
+      {new:true,upsert:true,returnDocument:"after"}
+    );
+    const sequence=Math.max(1,Number(profile.billNoSequence||2)-1);
+    const number=String(profile.billNoPrefix||"INV-")+String(sequence).padStart(5,"0")+String(profile.billNoSuffix||"");
+    if(!(await Order.exists({createdBy:uid,orderNumber:number})))return number;
+  }
+  throw new Error("Unable to reserve a unique invoice number. Check the bill numbering settings.");
 }
 
 router.get("/sales-analytics",auth,async(req,res)=>{
@@ -61,18 +78,62 @@ router.get("/sales-analytics",auth,async(req,res)=>{
     const now=new Date();
     const startToday=new Date(now);startToday.setHours(0,0,0,0);
     const startTomorrow=new Date(startToday);startTomorrow.setDate(startTomorrow.getDate()+1);
+    const startYesterday=new Date(startToday);startYesterday.setDate(startYesterday.getDate()-1);
     const startWeek=new Date(startToday);startWeek.setDate(startWeek.getDate()-startWeek.getDay());
+    const startNextWeek=new Date(startWeek);startNextWeek.setDate(startNextWeek.getDate()+7);
+    const startLastWeek=new Date(startWeek);startLastWeek.setDate(startLastWeek.getDate()-7);
     const startMonth=new Date(now.getFullYear(),now.getMonth(),1);
+    const startNextMonth=new Date(now.getFullYear(),now.getMonth()+1,1);
+    const startLastMonth=new Date(now.getFullYear(),now.getMonth()-1,1);
     const startYear=new Date(now.getFullYear(),0,1);
-    const [today,thisWeek,thisMonth,thisYear,byDay]=await Promise.all([
-      Order.find({createdBy:uid,orderDate:{$gte:startToday,$lt:startTomorrow},status:{$ne:"Cancelled"}}).lean(),
-      Order.find({createdBy:uid,orderDate:{$gte:startWeek},status:{$ne:"Cancelled"}}).lean(),
-      Order.find({createdBy:uid,orderDate:{$gte:startMonth},status:{$ne:"Cancelled"}}).lean(),
-      Order.find({createdBy:uid,orderDate:{$gte:startYear},status:{$ne:"Cancelled"}}).lean(),
-      Order.aggregate([{ $match:{createdBy:uid,status:{$ne:"Cancelled"} } },{ $group:{_id:{$dateToString:{format:"%Y-%m-%d",date:"$orderDate"}},totalSales:{$sum:{$ifNull:["$roundOffFinalRevenue","$finalRevenue"]}},orderCount:{$sum:1}}},{$sort:{_id:1}}])
+    const startNextYear=new Date(now.getFullYear()+1,0,1);
+    const baseFilter={createdBy:uid,status:{$ne:"Cancelled"}};
+    const inRange=(start,end)=>Order.find({...baseFilter,orderDate:{$gte:start,$lt:end}}).lean();
+    const [today,thisWeek,thisMonth,thisYear,yesterday,lastWeek,lastMonth,byDay]=await Promise.all([
+      inRange(startToday,startTomorrow),
+      inRange(startWeek,startNextWeek),
+      inRange(startMonth,startNextMonth),
+      inRange(startYear,startNextYear),
+      inRange(startYesterday,startToday),
+      inRange(startLastWeek,startWeek),
+      inRange(startLastMonth,startMonth),
+      Order.aggregate([
+        {$match:baseFilter},
+        {$group:{
+          _id:{$dateToString:{format:"%Y-%m-%d",date:"$orderDate"}},
+          totalSales:{$sum:{$cond:[
+            {$gt:[{$ifNull:["$roundOffFinalRevenue",0]},0]},
+            "$roundOffFinalRevenue",
+            {$cond:[
+              {$gt:[{$ifNull:["$finalRevenue",0]},0]},
+              "$finalRevenue",
+              {$ifNull:["$totalAmount",0]}
+            ]}
+          ]}},
+          orderCount:{$sum:1}
+        }},
+        {$sort:{_id:1}}
+      ])
     ]);
-    const shape=orders=>({totalSales:round2(orders.reduce((s,o)=>s+Number(o.roundOffFinalRevenue??o.finalRevenue??0),0)),orderCount:orders.length,orders});
-    res.json({today:shape(today),thisWeek:shape(thisWeek),thisMonth:shape(thisMonth),thisYear:shape(thisYear),yesterday:{totalSales:0,orderCount:0,orders:[]},lastWeek:{totalSales:0,orderCount:0,orders:[]},lastMonth:{totalSales:0,orderCount:0,orders:[]},dailyTrend:byDay});
+    const orderTotal=order=>{
+      const rounded=Number(order.roundOffFinalRevenue);
+      if(Number.isFinite(rounded)&&rounded>0)return round2(rounded);
+      const final=Number(order.finalRevenue);
+      if(Number.isFinite(final)&&final>0)return round2(final);
+      const total=Number(order.totalAmount);
+      return Number.isFinite(total)&&total>0?round2(total):0;
+    };
+    const shape=orders=>({
+      totalSales:round2(orders.reduce((sum,order)=>sum+orderTotal(order),0)),
+      orderCount:orders.length,
+      orders
+    });
+    res.json({
+      today:shape(today),yesterday:shape(yesterday),
+      thisWeek:shape(thisWeek),lastWeek:shape(lastWeek),
+      thisMonth:shape(thisMonth),lastMonth:shape(lastMonth),
+      thisYear:shape(thisYear),dailyTrend:byDay
+    });
   }catch(error){res.status(500).json({message:error.message});}
 });
 
@@ -98,7 +159,7 @@ router.post("/orders/create",auth,async(req,res)=>{
       body.pinCode=body.pinCode||client.pinCode||"";
       body.stateCode=body.stateCode||client.stateCode||"";
     }
-    if(!body.orderNumber)body.orderNumber=await nextOrderNumber(userId(req));
+    body.orderNumber=await nextOrderNumber(userId(req));
     body.createdBy=userId(req);
     const order=new Order(body);
     await applyWorkflows({resource:"orders",event:"record_created",doc:order,createdBy:userId(req)});
@@ -139,8 +200,33 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid order ID."});
     const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)});if(!order)return res.status(404).json({message:"Order not found"});
     const oldClient=String(order.clientId||"");
-    const allowed=["orderNumber","challanNumber","lrNo","orderDate","subOrders","Address","State","City","pinCode","stateCode","clientId","gstNumber","companyName","status","paymentTerms","taxPercentage","discountRate","note","netProfit","customFields"];
+    const clientIdWasProvided=Object.prototype.hasOwnProperty.call(req.body||{},"clientId");
+    let selectedClient=null;
+    if(clientIdWasProvided){
+      const requestedClientId=String(req.body.clientId||"").trim();
+      if(requestedClientId){
+        if(!mongoose.isValidObjectId(requestedClientId))return res.status(400).json({message:"Invalid customer selected."});
+        selectedClient=await Client.findOne({_id:requestedClientId,createdBy:userId(req)}).lean();
+        if(!selectedClient)return res.status(400).json({message:"Selected customer was not found in your account."});
+      }
+    }
+    const allowed=["challanNumber","lrNo","orderDate","subOrders","Address","State","City","pinCode","stateCode","gstNumber","companyName","status","paymentTerms","taxPercentage","discountRate","note","netProfit","customFields"];
     for(const key of allowed)if(req.body?.[key]!==undefined)order[key]=key==="customFields"?cleanCustomFields(req.body[key]):req.body[key];
+    if(clientIdWasProvided){
+      order.clientId=selectedClient?selectedClient._id:null;
+      if(selectedClient&&String(selectedClient._id)!==oldClient){
+        // Keep the invoice snapshot aligned when a different customer is linked.
+        order.companyName=selectedClient.companyName||selectedClient.name||"";
+        order.gstNumber=selectedClient.gstNumber||"";
+        order.Address=selectedClient.address||"";
+        order.State=selectedClient.state||"";
+        order.City=selectedClient.city||"";
+        order.pinCode=selectedClient.pinCode||"";
+        order.stateCode=selectedClient.stateCode||"";
+        order.paymentTerms=selectedClient.paymentTerms||order.paymentTerms||"30";
+        order.discountRate=Number(selectedClient.discountRate??order.discountRate??0);
+      }
+    }
     await applyWorkflows({resource:"orders",event:"record_updated",doc:order,createdBy:userId(req)});
     await order.save();
     const newClient=String(order.clientId||"");
@@ -180,7 +266,7 @@ router.post("/orders/:id/pay",auth,async(req,res)=>{
     const paymentDate=new Date(req.body?.paymentDate||new Date());
 
     if(!uid)return res.status(401).json({message:"Authentication required."});
-    if(amount<=0)return res.status(400).json({message:"Payment amount must be greater than zero."});
+    if(!Number.isFinite(amount)||amount<=0)return res.status(400).json({message:"Payment amount must be a valid number greater than zero."});
     if(!METHODS.includes(method))return res.status(400).json({message:"Invalid payment method."});
     if(Number.isNaN(paymentDate.getTime()))return res.status(400).json({message:"Invalid payment date."});
     if(reference.length>100)return res.status(400).json({message:"Payment reference must be at most 100 characters."});
@@ -192,7 +278,7 @@ router.post("/orders/:id/pay",auth,async(req,res)=>{
     const order=await findOrder;
     if(!order)throw new Error("Order not found.");
 
-    if(amount>Number(order.dueAmount||0)+0.01){
+    if(Math.round(amount*100)>Math.round(Number(order.dueAmount||0)*100)){
       throw new Error(`Payment amount exceeds the current due balance of ₹${Number(order.dueAmount||0).toFixed(2)}.`);
     }
 
@@ -252,7 +338,7 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
     const reference=String(req.body?.amountReference||"").trim();
     const paymentDate=new Date(req.body?.paymentDate||new Date());
 
-    if(amount<=0)return res.status(400).json({message:"Payment amount must be greater than zero."});
+    if(!Number.isFinite(amount)||amount<=0)return res.status(400).json({message:"Payment amount must be a valid number greater than zero."});
     if(!METHODS.includes(method))return res.status(400).json({message:"Invalid payment method."});
     if(Number.isNaN(paymentDate.getTime()))return res.status(400).json({message:"Invalid payment date."});
     if(reference.length>100)return res.status(400).json({message:"Payment reference must be at most 100 characters."});
@@ -268,13 +354,16 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
     if(!payment)throw new Error("Payment not found.");
 
     const available=Number(order.dueAmount||0)+Number(payment.amount||0);
-    if(amount>available+0.01)throw new Error("Payment amount exceeds the available invoice balance.");
+    if(Math.round(amount*100)>Math.round(available*100))throw new Error("Payment amount exceeds the available invoice balance.");
 
     if(reference&&reference!==payment.amountReference){
       const duplicateQuery=Order.exists({
-        "payments.amountReference":reference,
         createdBy:uid,
-        _id:{$ne:order._id}
+        "payments.amountReference":reference,
+        $or:[
+          {_id:{$ne:order._id}},
+          {_id:order._id,payments:{$elemMatch:{_id:{$ne:payment._id},amountReference:reference}}}
+        ]
       });
       if(session)duplicateQuery.session(session);
       const duplicate=await duplicateQuery;

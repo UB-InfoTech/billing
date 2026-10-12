@@ -26,8 +26,8 @@ function buildCalendarOverlapQuery(params={}){
   }
 
   const query={};
-  if(start)query.end={$gte:start};
-  if(end)query.start={$lte:end};
+  if(start)query.end={$gt:start};
+  if(end)query.start={$lt:end};
   return query;
 }
 

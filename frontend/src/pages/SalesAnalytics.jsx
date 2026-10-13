@@ -44,6 +44,15 @@ import { ComposableMap, Geographies, Geography, ZoomableGroup } from 'react-simp
 // Use a public GeoJSON URL instead of local file
 const geoUrl = 'https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/raw/india_states.geojson';
 
+const normalizeInvoiceRevenue = (order = {}) => {
+  const total = [
+    order.roundOffFinalRevenue,
+    order.finalRevenue,
+    order.totalAmount,
+  ].map(Number).find(value => Number.isFinite(value) && value > 0);
+  return { ...order, roundOffFinalRevenue: total ?? 0 };
+};
+
 const DEFAULT_REPORT_WIDGETS=[
   {key:"financialMetrics",title:"Financial metrics",visible:true,order:0},
   {key:"summary",title:"Sales snapshot",visible:true,order:1},
@@ -135,7 +144,7 @@ const SalesAnalytics = () => {
         },
       });
 
-      setAllOrders(allOrdersResponse.data);
+      setAllOrders((Array.isArray(allOrdersResponse.data) ? allOrdersResponse.data : []).map(normalizeInvoiceRevenue));
       setLoading(false);
     } catch (error) {
       alert("❌ No Internet or Login again");

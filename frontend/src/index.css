@@ -5505,3 +5505,35 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
   min-width: 0;
   line-height: 1.4;
 }
+
+
+/* Bulk payment selections should scroll within tables, never widen the page. */
+.bulk-payment-page {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0 !important;
+  overflow-x: clip;
+}
+
+.bulk-payment-page > *,
+.bulk-payment-page .card,
+.bulk-payment-page .card-body,
+.bulk-payment-page .row,
+.bulk-payment-page .input-group {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.bulk-payment-page .table-responsive {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.bulk-payment-page .form-control,
+.bulk-payment-page .form-select {
+  max-width: 100%;
+  min-width: 0;
+}

@@ -1,5 +1,7 @@
 function round2(v){return Math.round((Number(v||0)+Number.EPSILON)*100)/100;}
 
+const {getInvoiceRevenue}=require("../../utils/syncClientData");
+
 function buildEwaybillPayload(order,body,profile){
   if(!profile?.gstin)throw new Error("Company GSTIN is required for E-Way Bill.");
   if(!order?.gstNumber)throw new Error("Customer GSTIN is required for E-Way Bill.");
@@ -68,7 +70,7 @@ function buildEwaybillPayload(order,body,profile){
     igstValue,
     cessValue:0,
     cessNonAdvolValue:0,
-    totInvValue:Number(order.roundOffFinalRevenue||order.finalRevenue||0),
+    totInvValue:getInvoiceRevenue(order),
     transporterId:body.transporterId||"",
     transporterName:body.transporterName||"",
     transDocNo:body.transDocNo||"",

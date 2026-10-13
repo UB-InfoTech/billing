@@ -13,7 +13,7 @@ function AddExpense() {
 
   return (
     <div className="container py-4">
-      <ExpenseForm onSubmit={handleSubmit} />
+      <ExpenseForm onSubmit={handleSubmit} onCancel={()=>navigate("/expense")} />
     </div>
   );
 }

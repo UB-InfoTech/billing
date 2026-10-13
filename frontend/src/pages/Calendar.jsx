@@ -10,12 +10,15 @@ import FormConfigurator from "../components/FormConfigurator";
 import ConfiguredField from "../components/ConfiguredField";
 import {CALENDAR_EVENT_FIELDS} from "../config/noCodeCatalog";
 import {
+  applyAutoFill,
+  applyFormulas,
   buildConfiguredDefaults,
   getFieldState,
   hydrateConfiguredValues,
   syncConfiguredCustomFields,
   useFormConfiguration
 } from "../hooks/useFormConfiguration";
+import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "./CalendarPage.css";
 
@@ -61,6 +64,11 @@ export default function Calendar(){
 
   const isFormBuilderOpen=searchParams.get("customize")==="form";
   const eventFields=useMemo(()=>fields||CALENDAR_EVENT_FIELDS,[fields]);
+  const linkedEventSources=useMemo(
+    ()=>Array.from(new Set(eventFields.map(field=>field.dataSource?.resource).filter(Boolean))),
+    [eventFields]
+  );
+  const {records:linkedRecords,searchRecords:searchLinkedRecords}=useNoCodeDataSources(linkedEventSources);
 
   const load=async()=>{
     try{
@@ -102,12 +110,24 @@ export default function Calendar(){
     });
   };
 
-  const updateValue=(key,value)=>{
-    setModal(previous=>({...previous,values:{...previous.values,[key]:value}}));
+  const updateValue=(field,value,record=null)=>{
+    setError("");
+    setModal(previous=>{
+      let next={
+        ...previous.values,
+        [field.key]:value,
+        customFields:{...(previous.values.customFields||{})}
+      };
+      if(field.custom)next.customFields[field.key]=value;
+      if(field?.dataSource?.autoFill?.length)next=applyAutoFill(field,record,next);
+      next=applyFormulas(eventFields,next);
+      next=syncConfiguredCustomFields(next,eventFields);
+      return {...previous,values:next};
+    });
   };
 
   const save=async()=>{
-    const values=syncConfiguredCustomFields(modal.values,eventFields);
+    const values=syncConfiguredCustomFields(applyFormulas(eventFields,modal.values),eventFields);
     const validationValues={...values,...(values.customFields||{})};
 
     // Validate every configured required field, including fields made required
@@ -262,8 +282,15 @@ export default function Calendar(){
       </div>
 
       {modal.open&&(
-        <div className="modal fade show d-block" tabIndex="-1" role="dialog" aria-modal="true">
-          <div className="modal-dialog modal-lg modal-dialog-scrollable"><div className="modal-content">
+        <div
+          className="modal fade show d-block calendar-event-modal"
+          tabIndex="-1"
+          role="dialog"
+          aria-modal="true"
+          aria-label={modal.id?"Edit event":"Create event"}
+          onMouseDown={event=>{if(event.target===event.currentTarget)close();}}
+        >
+          <div className="modal-dialog modal-dialog-scrollable calendar-event-dialog"><div className="modal-content">
             <div className="modal-header">
               <h5 className="modal-title">{modal.id?"Edit Event":"Create Event"}</h5>
               <button className="btn-close" onClick={close}></button>
@@ -281,7 +308,15 @@ export default function Calendar(){
                           <ConfiguredField
                             field={field}
                             value={modal.values[field.key]}
-                            onChange={value=>updateValue(field.key,value)}
+                            onChange={value=>updateValue(field,value)}
+                            onRecordChange={record=>updateValue(
+                              field,
+                              record?.[field.dataSource?.valueField||"_id"]??"",
+                              record
+                            )}
+                            lookupRecords={field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[]}
+                            onLookupSearch={searchLinkedRecords}
+                            options={field.options||[]}
                             required={state.required}
                             readOnly={state.readOnly}
                             disabled={state.disabled}
@@ -297,7 +332,7 @@ export default function Calendar(){
               <button className="btn btn-primary" onClick={save} disabled={formLoading}>{formLoading?"Loading...":"Save"}</button>
             </div>
           </div></div>
-          <div className="modal-backdrop fade show" onClick={close}></div>
+          
         </div>
       )}
 

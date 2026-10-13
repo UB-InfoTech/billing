@@ -6,6 +6,7 @@ const CreditNote = require("../models/CreditNote");
 const CreditNoteCounter = require("../models/CreditNoteCounter");
 const auth = require('../middleware/auth');
 const { syncClientDataSafely } = require("../utils/syncClientData");
+const { exceedsCurrencyLimit, meetsCurrencyTarget } = require("../utils/currencyValidation");
 
 
 const router = express.Router();
@@ -129,7 +130,7 @@ function calculateSettlement(settlement, grandTotal, orderDue) {
     throw new Error("Settlement amounts cannot be negative.");
   }
 
-  if (totalAllocated > grandTotal + EPSILON) {
+  if (exceedsCurrencyLimit(totalAllocated, grandTotal)) {
     throw new Error("Settlement amounts cannot exceed the credit note total.");
   }
 
@@ -141,7 +142,7 @@ function calculateSettlement(settlement, grandTotal, orderDue) {
     );
   }
 
-  if (adjustmentAmount > round2(orderDue) + EPSILON) {
+  if (exceedsCurrencyLimit(adjustmentAmount, round2(orderDue))) {
     throw new Error(
       `Outstanding adjustment cannot exceed the current invoice due amount of ₹ ${round2(
         orderDue
@@ -876,7 +877,7 @@ router.post("/", auth, async (req, res) => {
     let roundOff = round2(grandTotal - beforeRound);
 
     if (grandTotal <= 0) throw new Error("Credit note total must be greater than zero.");
-    if (grandTotal > remainingCreditTotal + EPSILON) {
+    if (exceedsCurrencyLimit(grandTotal, remainingCreditTotal)) {
       throw new Error(
         `Credit note amount cannot exceed the remaining invoice credit limit of ₹ ${remainingCreditTotal}.`
       );
@@ -1074,7 +1075,7 @@ router.post("/", auth, async (req, res) => {
       },
       status: "Posted",
       settlementStatus:
-        settled >= grandTotal - EPSILON ? "Settled" : "Partially Settled",
+        meetsCurrencyTarget(settled, grandTotal) ? "Settled" : "Partially Settled",
       note: String(note || "").trim(),
       createdBy: userId,
     });
@@ -1276,7 +1277,7 @@ async function prepareCreditNoteUpdate({
   const roundOff = round2(grandTotal - beforeRound);
 
   if (grandTotal <= 0) throw new Error("Credit note total must be greater than zero.");
-  if (grandTotal > remainingCreditTotal + EPSILON) {
+  if (exceedsCurrencyLimit(grandTotal, remainingCreditTotal)) {
     throw new Error(`Credit note amount cannot exceed the remaining invoice credit limit of ₹ ${remainingCreditTotal}.`);
   }
 
@@ -1566,7 +1567,7 @@ router.put("/:id", auth, async (req, res) => {
           taxAmount: 0,
         };
     note.settlementStatus =
-      prepared.settled >= prepared.grandTotal - EPSILON ? "Settled" : "Partially Settled";
+      meetsCurrencyTarget(prepared.settled, prepared.grandTotal) ? "Settled" : "Partially Settled";
     note.note = String(req.body?.note ?? note.note ?? "").trim().slice(0, 1000);
 
     await note.save(session ? { session } : undefined);

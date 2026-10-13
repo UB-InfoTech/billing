@@ -21,7 +21,7 @@ router.get("/",auth,async(req,res)=>{
     const range=buildCalendarOverlapQuery(req.query);
     const query={createdBy:owner(req),...range};
     res.json(await Event.find(query).sort({start:1}).lean());
-  }catch(error){res.status(500).json({message:error.message});}
+  }catch(error){res.status(error.status||500).json({message:error.message});}
 });
 
 router.post("/",auth,async(req,res)=>{

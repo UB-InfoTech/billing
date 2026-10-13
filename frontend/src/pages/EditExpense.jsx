@@ -48,6 +48,6 @@ export default function EditExpense(){
       <h2 className="mb-0">Edit Expense</h2>
       <button className="btn btn-outline-secondary" onClick={()=>navigate("/expense")}>Back</button>
     </div>
-    {initialData&&<ExpenseForm onSubmit={handleSubmit} initialData={initialData}/>}
+    {initialData&&<ExpenseForm onSubmit={handleSubmit} onCancel={()=>navigate("/expense")} initialData={initialData}/>}
   </div>;
 }

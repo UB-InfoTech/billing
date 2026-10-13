@@ -45,12 +45,23 @@ import { ComposableMap, Geographies, Geography, ZoomableGroup } from 'react-simp
 const geoUrl = 'https://gist.githubusercontent.com/jbrobst/56c13bbbf9d97d187fea01ca62ea5112/raw/india_states.geojson';
 
 const normalizeInvoiceRevenue = (order = {}) => {
-  const total = [
-    order.roundOffFinalRevenue,
-    order.finalRevenue,
-    order.totalAmount,
-  ].map(Number).find(value => Number.isFinite(value) && value > 0);
-  return { ...order, roundOffFinalRevenue: total ?? 0 };
+  const roundedRevenue = Number(order.roundOffFinalRevenue);
+  if (Number.isFinite(roundedRevenue) && roundedRevenue > 0) {
+    return { ...order, roundOffFinalRevenue: roundedRevenue };
+  }
+
+  const totalAmount = Number(order.totalAmount);
+  if (Number.isFinite(totalAmount) && totalAmount > 0) {
+    return { ...order, roundOffFinalRevenue: totalAmount };
+  }
+
+  const finalRevenue = Number(order.finalRevenue);
+  return {
+    ...order,
+    roundOffFinalRevenue: Number.isFinite(finalRevenue) && finalRevenue > 0
+      ? Math.round(finalRevenue)
+      : 0,
+  };
 };
 
 const DEFAULT_REPORT_WIDGETS=[

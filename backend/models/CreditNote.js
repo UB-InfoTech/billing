@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { exceedsCurrencyLimit } = require("../utils/currencyValidation");
 
 const creditNoteItemSchema = new mongoose.Schema(
   {
@@ -185,7 +186,7 @@ creditNoteSchema.pre("validate", function (next) {
   const customerCredit = Number(this.settlement?.customerCreditAmount || 0);
 
   if (total < 0) return next(new Error("Credit note total cannot be negative."));
-  if (adjustment + refund + customerCredit > total + 0.01) {
+  if (exceedsCurrencyLimit(adjustment + refund + customerCredit, total)) {
     return next(
       new Error("Settlement amounts cannot exceed the credit note total.")
     );

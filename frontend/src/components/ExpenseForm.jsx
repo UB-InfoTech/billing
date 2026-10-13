@@ -40,7 +40,7 @@ const EMPTY={
   customFields:{}
 };
 
-export default function ExpenseForm({onSubmit,initialData={}}){
+export default function ExpenseForm({onSubmit,onCancel,initialData={}}){
   const [searchParams,setSearchParams]=useSearchParams();
   const expenseFormConfig=useFormConfiguration("expenses.form",EXPENSE_FORM_FIELDS);
   const [form,setForm]=useState(EMPTY);
@@ -176,24 +176,28 @@ export default function ExpenseForm({onSubmit,initialData={}}){
 
   return(
     <>
-      <form onSubmit={submit} className="card p-4 bg-white shadow-sm border-0">
-        <div className="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+      <form onSubmit={submit} className="card p-4 bg-white shadow-sm border-0 expense-form-fullscreen">
+        <div className="expense-form-header d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
           <div>
             <h3 className="mb-1">{initialData?._id?"Edit expense":"Add an expense"}</h3>
             <div className="small text-muted">Enter what you spent and what it was for. Other details are optional.</div>
           </div>
-          <details className="expense-form-options">
-            <summary><i className="bi bi-three-dots me-1"></i>More options</summary>
-            <div className="expense-form-options-panel">
-              <button type="button" className="btn btn-sm btn-light border" onClick={()=>setFormSettingsOpen(true)}>
-                <i className="bi bi-sliders2 me-1"></i>Customize fields
-              </button>
-            </div>
-          </details>
+          <div className="d-flex flex-wrap align-items-center gap-2">
+            <details className="expense-form-options">
+              <summary><i className="bi bi-three-dots me-1"></i>More options</summary>
+              <div className="expense-form-options-panel">
+                <button type="button" className="btn btn-sm btn-light border" onClick={()=>setFormSettingsOpen(true)}>
+                  <i className="bi bi-sliders2 me-1"></i>Customize fields
+                </button>
+              </div>
+            </details>
+            {onCancel&&<button type="button" className="btn btn-light border" onClick={onCancel}>Cancel</button>}
+          </div>
         </div>
 
         {error&&<div className="alert alert-danger" role="alert">{error}</div>}
 
+        <div className="expense-form-content">
         {expenseFormConfig.loading?(
           <div className="text-center py-5"><span className="spinner-border spinner-border-sm me-2"></span>Loading expense details...</div>
         ):(
@@ -235,7 +239,9 @@ export default function ExpenseForm({onSubmit,initialData={}}){
             )}
           </>
         )}
-<div className="d-flex justify-content-end mt-4">
+        </div>
+        <div className="expense-form-footer d-flex justify-content-end flex-wrap gap-2 mt-4">
+          {onCancel&&<button className="btn btn-light border px-4" type="button" onClick={onCancel} disabled={saving||uploading}>Cancel</button>}
           <button className="btn btn-primary px-4" type="submit" disabled={saving||uploading||expenseFormConfig.loading}>
             {saving?<><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>:"Save expense"}
           </button>

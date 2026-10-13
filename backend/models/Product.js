@@ -23,5 +23,6 @@ ProductSchema.index({createdBy:1,quantity:1});
 // Product identifiers are unique within a business account, not globally.
 ProductSchema.index({createdBy:1,productCode:1},{unique:true,name:"createdBy_1_productCode_1"});
 ProductSchema.index({createdBy:1,serialNumber:1},{unique:true,partialFilterExpression:{serialNumber:{$type:"string"}},name:"createdBy_1_serialNumber_1"});
+ProductSchema.index({createdBy:1,barcode:1},{unique:true,partialFilterExpression:{createdBy:{$type:"objectId"},barcode:{$type:"string",$gt:""}},name:"createdBy_1_barcode_1"});
 
 module.exports=mongoose.model("Product",ProductSchema);

@@ -8,7 +8,8 @@ import {
   WORKFLOW_RESOURCES,
   WORKFLOW_EVENTS,
   WORKFLOW_OPERATORS,
-  workflowFieldsFor
+  workflowFieldsFor,
+  workflowActionFieldsFor
 } from "../config/noCodeCatalog";
 import {useSoftwareConfiguration} from "../hooks/useSoftwareConfiguration";
 
@@ -449,6 +450,7 @@ export default function Settings(){
   };
 
   const workflowFields=workflowFieldsFor(workflow.trigger.resource);
+  const workflowActionFields=workflowActionFieldsFor(workflow.trigger.resource);
 
   if(loading){
     return <div className="settings-page d-flex align-items-center justify-content-center min-vh-100"><div className="text-center text-secondary"><span className="spinner-border spinner-border-sm me-2"></span>Loading settings...</div></div>;
@@ -956,18 +958,27 @@ export default function Settings(){
                         <div className="row g-2 align-items-end mb-2" key={index}>
                           <div className="col-md-3">
                             <label className="form-label">Action</label>
-                            <select className="form-select" value={action.type} onChange={event=>updateAction(index,{type:event.target.value})}>
+                            <select className="form-select" value={action.type} onChange={event=>updateAction(index,{type:event.target.value,fieldKey:event.target.value==="change_status"?"":action.fieldKey,value:event.target.value==="change_status"?"":action.value})}>
                               <option value="set_value">Set a field</option>
-                              <option value="change_status">Change status</option>
+                              <option value="change_status" disabled={workflow.trigger.resource!=="orders"}>Change status (invoices only)</option>
                             </select>
                           </div>
                           <div className="col-md-4">
+                            {action.type==="change_status" ? (
+                              <>
+                                <label className="form-label">Status</label>
+                                <div className="form-control bg-light">Invoice status</div>
+                              </>
+                            ) : (
+                              <>
                                 <label className="form-label">Field</label>
                                 <select className="form-select" value={action.fieldKey||""} onChange={event=>updateAction(index,{fieldKey:event.target.value})}>
                                   <option value="">Choose a field</option>
-                                  {workflowFields.map(field=><option key={field.value} value={field.value}>{field.label}</option>)}
+                                  {workflowActionFields.map(field=><option key={field.value} value={field.value}>{field.label}</option>)}
                                 </select>
-                              </div>
+                              </>
+                            )}
+                          </div>
                               <div className="col-md-4">
                                 <label className="form-label">New value</label>
                                 {action.type==="change_status" ? (

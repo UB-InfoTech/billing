@@ -21,6 +21,14 @@ import {fetchAllProducts} from "../services/productService";
 import {formatDateInput,getDateRangeBoundary} from "../utils/dateInput";
 import * as XLSX from 'xlsx';
 import Report from '../components/Report';
+
+const getInvoiceTotal = (order = {}) => {
+    for (const candidate of [order.roundOffFinalRevenue, order.finalRevenue, order.totalAmount]) {
+        const value = Number(candidate);
+        if (Number.isFinite(value) && value > 0) return value;
+    }
+    return 0;
+};
 import { useReactToPrint } from "react-to-print";
 
 function Order2() {
@@ -1299,7 +1307,7 @@ const styles = {
                 </div>
                 <div className="invoice-overview-card">
                     <span className="invoice-overview-icon sales"><i className="bi bi-graph-up-arrow"></i></span>
-                    <div><span className="invoice-overview-label">Total invoiced</span><strong>₹{orders.reduce((sum,order)=>sum+Number(order.roundOffFinalRevenue||0),0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2})}</strong><small>Total value of your invoices</small></div>
+                    <div><span className="invoice-overview-label">Total invoiced</span><strong>₹{orders.reduce((sum,order)=>sum+getInvoiceTotal(order),0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2})}</strong><small>Total value of your invoices</small></div>
                 </div>
                 <div className="invoice-overview-card">
                     <span className="invoice-overview-icon due"><i className="bi bi-hourglass-split"></i></span>
@@ -1403,7 +1411,7 @@ const styles = {
                             {key:"quantity",label:"Qty",visible:false,render:order=>(order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.quantity)||0),0).toFixed(2)},
                             {key:"cut",label:"Cut",visible:false,render:order=>(order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.cut)||0),0).toFixed(2)},
                             {key:"unitPrice",label:"Unit Price",visible:false,render:order=>(order.subOrders||[]).length?((order.subOrders||[]).reduce((sum,item)=>sum+(Number(item.unitPrice)||0),0)/(order.subOrders||[]).length).toFixed(2):"0.00"},
-                            {key:"roundOffFinalRevenue",label:"Invoice total",render:order=>`₹${Number(order.roundOffFinalRevenue||0).toFixed(2)}`},
+                            {key:"roundOffFinalRevenue",label:"Invoice total",render:order=>`₹${getInvoiceTotal(order).toFixed(2)}`},
                             {key:"paidAmount",label:"Paid Amount",render:order=>`₹${Number(order.paidAmount||0).toFixed(2)}`},
                             {key:"dueAmount",label:"Due Amount",render:order=>`₹${Number(order.dueAmount||0).toFixed(2)}`},
                         ]}
@@ -1441,7 +1449,7 @@ const styles = {
                         }}
                         footer={({visibleColumns,hasActions})=>{
                             const totals={
-                                roundOffFinalRevenue:sortedData.reduce((sum,item)=>sum+Number(item.roundOffFinalRevenue||0),0).toFixed(2),
+                                roundOffFinalRevenue:sortedData.reduce((sum,item)=>sum+getInvoiceTotal(item),0).toFixed(2),
                                 paidAmount:sortedData.reduce((sum,item)=>sum+Number(item.paidAmount||0),0).toFixed(2),
                                 dueAmount:sortedData.reduce((sum,item)=>sum+Number(item.dueAmount||0),0).toFixed(2)
                             };
@@ -1597,7 +1605,7 @@ const styles = {
                                         }
                                     </section>
                                     <section className="invoice-view-summary">
-                                        <div><span>Invoice total</span><strong>₹{Number(viewingOrder.roundOffFinalRevenue??viewingOrder.totalAmount??0).toFixed(2)}</strong></div>
+                                        <div><span>Invoice total</span><strong>₹{getInvoiceTotal(viewingOrder).toFixed(2)}</strong></div>
                                         <div><span>Paid</span><strong>₹{Number(viewingOrder.paidAmount??0).toFixed(2)}</strong></div>
                                         <div><span>Due</span><strong>₹{Number(viewingOrder.dueAmount??0).toFixed(2)}</strong></div>
                                     </section>

@@ -1,4 +1,5 @@
 const WorkflowDefinition=require("../models/WorkflowDefinition");
+const {isProtectedWorkflowField,ORDER_STATUSES}=require("./workflowPolicy");
 
 const readValue=(doc,key)=>{
   if(!doc||!key)return "";
@@ -27,7 +28,7 @@ const matches=(condition,doc)=>{
 };
 
 const setValue=(doc,key,value)=>{
-  if(!key)return false;
+  if(isProtectedWorkflowField(key))return false;
   const custom=doc.customFields instanceof Map
     ?doc.customFields.has(key)
     :Boolean(doc.customFields&&Object.prototype.hasOwnProperty.call(doc.customFields,key));
@@ -66,7 +67,7 @@ async function applyWorkflows({resource,event,doc,createdBy}){
         changed=setValue(doc,action.fieldKey,action.value)||changed;
       }
 
-      if(action.type==="change_status"&&resource==="orders"&&action.value){
+      if(action.type==="change_status"&&resource==="orders"&&ORDER_STATUSES.includes(String(action.value??""))){
         if(doc.status!==action.value){
           doc.status=action.value;
           doc.statusHistory=Array.isArray(doc.statusHistory)?doc.statusHistory:[];

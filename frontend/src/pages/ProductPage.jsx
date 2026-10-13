@@ -180,7 +180,7 @@ export default function ProductPage(){
     event.preventDefault();
     setError("");
 
-    const values={...syncConfiguredCustomFields(form,configuredFields)};
+    const values={...applyFormulas(configuredFields,syncConfiguredCustomFields(form,configuredFields))};
     // Conditional rules may make optional-by-default fields required.
     // Evaluate every non-calculated field using its current runtime state.
     const requiredFields=configuredFields.filter(field=>!field.formula);

@@ -822,7 +822,7 @@ export default function CreditNote() {
                 {(view === "create" || view === "edit") && (
                     <div className="card border-0 shadow-sm credit-note-create">
                         <div className="card-body">
-                            <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                            <div className="credit-note-form-header d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
                                 <div>
                                     <h5 className="fw-bold mb-1">{view === "edit" ? "Edit Credit Note" : "Create Credit Note"}</h5>
                                     <div className="text-muted small">

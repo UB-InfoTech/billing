@@ -4,6 +4,7 @@ const Event=require("../models/Calendar");
 const auth=require("../middleware/auth");
 const {applyWorkflows}=require("../utils/workflowEngine");
 const {buildCalendarOverlapQuery}=require("../utils/calendarDateRange");
+const {normalizeCalendarEventInput}=require("../utils/calendarEventInput");
 
 const router=express.Router();
 const owner=req=>req.user.id;
@@ -26,22 +27,20 @@ router.get("/",auth,async(req,res)=>{
 
 router.post("/",auth,async(req,res)=>{
   try{
-    const title=String(req.body?.title||"").trim();
-    const start=validDate(req.body?.start);
-    const end=validDate(req.body?.end)||start;
-    if(!title)return res.status(400).json({message:"Event title is required."});
-    if(!start||!end)return res.status(400).json({message:"Valid event dates are required."});
-    if(end<start)return res.status(400).json({message:"Event end cannot be before start."});
+    const normalized=normalizeCalendarEventInput({
+      title:req.body?.title,
+      start:validDate(req.body?.start),
+      end:validDate(req.body?.end)||validDate(req.body?.start)
+    });
 
     const event=new Event({
-      title,
-      start,
-      end,
+      ...normalized,
       color:String(req.body?.color||"#3788d8").slice(0,20),
       customFields:cleanCustomFields(req.body?.customFields),
       createdBy:owner(req)
     });
     await applyWorkflows({resource:"calendar",event:"record_created",doc:event,createdBy:owner(req)});
+    Object.assign(event,normalizeCalendarEventInput(event));
     await event.save();
     res.status(201).json(event);
   }catch(error){res.status(400).json({message:error.message});}
@@ -70,6 +69,9 @@ router.put("/:id",auth,async(req,res)=>{
     if(event.end<event.start)return res.status(400).json({message:"Event end cannot be before start."});
 
     await applyWorkflows({resource:"calendar",event:"record_updated",doc:event,createdBy:owner(req)});
+    // A workflow may change the event title or dates after request validation;
+    // re-check the final values so automation cannot create an invalid event.
+    Object.assign(event,normalizeCalendarEventInput(event));
     await event.save();
     res.json(event);
   }catch(error){res.status(400).json({message:error.message});}

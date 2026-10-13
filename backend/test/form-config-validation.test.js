@@ -104,3 +104,24 @@ test("supports an optional action for fields made required by other rules", () =
   assert.ok(FORM_CONDITION_ACTIONS.includes("require"));
   assert.ok(FORM_CONDITION_ACTIONS.includes("optional"));
 });
+
+test("persists optional condition actions without a schema validation error", async () => {
+  const mongoose = require("mongoose");
+  const FormConfiguration = require("../models/FormConfiguration");
+  const config = new FormConfiguration({
+    createdBy: new mongoose.Types.ObjectId(),
+    formKey: "clients.form",
+    fields: [{
+      key: "gstNumber",
+      label: "GST Number",
+      conditions: [{
+        action: "optional",
+        fieldKey: "customerType",
+        operator: "equals",
+        value: "Individual"
+      }]
+    }]
+  });
+
+  await assert.doesNotReject(config.validate());
+});

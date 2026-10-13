@@ -101,7 +101,7 @@ export default function ExpenseForm({onSubmit,onCancel,initialData={}}){
   const submit=async(event)=>{
     event.preventDefault();
     setError("");
-    const values=syncConfiguredCustomFields(form,fields);
+    const values=applyFormulas(fields,syncConfiguredCustomFields(form,fields));
     // Rules can make an otherwise optional field required at runtime.
     const requiredFields=fields.filter(field=>!field.formula);
     const missing=requiredFields.find(field=>{

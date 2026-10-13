@@ -888,7 +888,7 @@ export default function BulkPayment() {
 
   if (loading) {
     return (
-      <div className="w-100 mx-3 mt-3 text-center">
+      <div className="container-fluid bulk-payment-page px-3 py-3 text-center">
         <div className="spinner-border" role="status">
           <span className="visually-hidden">Loading orders...</span>
         </div>
@@ -899,7 +899,7 @@ export default function BulkPayment() {
 
   return (
     <ErrorBoundary>
-      <div className="w-100 mx-3 mt-3">
+      <div className="container-fluid bulk-payment-page px-3 py-3">
         <ToastContainer
           position="top-right"
           autoClose={5000}

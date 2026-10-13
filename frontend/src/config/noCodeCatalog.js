@@ -216,3 +216,16 @@ export const workflowFieldsFor=resource=>{
   const fields=workflowSourceLabels[resource]||{};
   return Object.entries(fields).map(([value,label])=>({value,label}));
 };
+
+const WORKFLOW_PROTECTED_ACTION_FIELDS=new Set([
+  "orderNumber","clientId","status","statusHistory","paymentStatus",
+  "payments","paidAmount","dueAmount","discountAmount","taxAmount",
+  "totalCost","totalAmount","finalRevenue","roundOffFinalRevenue",
+  "roundOff","creditAppliedAmount","creditNoteCount","createdBy",
+  "creditBalance","creditBalanceAdjustment","outstanding_balance",
+  "pendingPayments","totalPaid","totalRevenue","orderCount","lastOrderDate",
+  "averageOrderValue","preferredProducts","orderFrequency"
+]);
+
+export const workflowActionFieldsFor=resource=>
+  workflowFieldsFor(resource).filter(field=>!WORKFLOW_PROTECTED_ACTION_FIELDS.has(field.value));

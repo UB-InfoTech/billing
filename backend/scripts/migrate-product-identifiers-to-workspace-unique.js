@@ -19,6 +19,24 @@ async function migrateProductIndexes(){
   const collection=Product.collection;
   const existing=await collection.indexes();
 
+  // Barcodes were previously protected only by an application-level lookup.
+  // Refuse to create the unique index when legacy duplicates exist; never
+  // silently edit or delete products as part of an index migration.
+  const duplicateBarcodes=await collection.aggregate([
+    {$match:{createdBy:{$type:"objectId"},barcode:{$type:"string",$gt:""}}},
+    {$group:{_id:{createdBy:"$createdBy",barcode:"$barcode"},count:{$sum:1},productIds:{$push:"$_id"}}},
+    {$match:{count:{$gt:1}}},
+    {$limit:10}
+  ]).toArray();
+  if(duplicateBarcodes.length){
+    const examples=duplicateBarcodes.map(row=>
+      `business ${row._id.createdBy}, barcode "${row._id.barcode}" (${row.count} products)`
+    ).join("; ");
+    throw new Error(
+      "Cannot enforce business-unique barcodes until duplicates are reviewed and corrected. Examples: "+examples
+    );
+  }
+
   // Build account-scoped unique indexes first. The existing global indexes are
   // retained until the replacements exist, so uniqueness is never left open.
   await collection.createIndex(
@@ -31,6 +49,14 @@ async function migrateProductIndexes(){
       unique:true,
       partialFilterExpression:{serialNumber:{$type:"string"}},
       name:"createdBy_1_serialNumber_1"
+    }
+  );
+  await collection.createIndex(
+    {createdBy:1,barcode:1},
+    {
+      unique:true,
+      partialFilterExpression:{createdBy:{$type:"objectId"},barcode:{$type:"string",$gt:""}},
+      name:"createdBy_1_barcode_1"
     }
   );
 
@@ -52,7 +78,7 @@ async function migrateProductIndexes(){
     );
   }
 
-  console.log("Product code and serial number uniqueness is now scoped by business account.");
+  console.log("Product code, serial number, and non-empty barcode uniqueness is now scoped by business account.");
 }
 
 migrateProductIndexes()

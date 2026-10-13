@@ -5474,3 +5474,34 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
     padding: 10px 14px;
   }
 }
+
+
+/* Multiple-choice fields are easy to use without Ctrl/Command-click. */
+.no-code-multiselect {
+  min-width: 0;
+  margin: 0;
+  background: #fbfcfe;
+}
+
+.no-code-multiselect-option {
+  max-width: 100%;
+  min-height: 42px;
+  margin: 0;
+  background: #fff;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.no-code-multiselect-option.is-selected {
+  border-color: #8db9f1 !important;
+  background: #edf5ff;
+}
+
+.no-code-multiselect-option .form-check-input {
+  flex: 0 0 auto;
+}
+
+.no-code-multiselect-option span {
+  min-width: 0;
+  line-height: 1.4;
+}

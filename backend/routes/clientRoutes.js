@@ -6,6 +6,7 @@ const Order=require("../models/Order2");
 const CreditNote=require("../models/CreditNote");
 const Expense=require("../models/Expense");
 const {applyManualCreditAdjustment}=require("../utils/clientCreditBalance");
+const {assertClientIdentity,hasClientIdentity}=require("../utils/clientIdentity");
 const {getInvoiceRevenue}=require("../utils/syncClientData");
 const auth=require("../middleware/auth");
 
@@ -86,6 +87,7 @@ router.post("/",auth,async(req,res)=>{
     if(body.gstNumber)body.gstNumber=String(body.gstNumber).trim().toUpperCase();
     const client=new Client(body);
     await applyWorkflows({resource:"clients",event:"record_created",doc:client,createdBy:owner(req)});
+    assertClientIdentity(client);
     await client.save();
     res.status(201).json(client);
   }catch(error){res.status(400).json({message:error.message});}
@@ -96,10 +98,14 @@ router.patch("/:id",auth,async(req,res)=>{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid client ID."});
     const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)});
     if(!client)return res.status(404).json({message:"Client not found"});
+    const hadClientIdentity=hasClientIdentity(client);
     const allowed=["name","email","phone","address","state","city","pinCode","stateCode","gstNumber","companyName","businessType","paymentTerms","loyaltyPoints","discountRate","accountStatus","notes","customFields"];
     for(const key of allowed)if(req.body?.[key]!==undefined)client[key]=key==="customFields"?cleanCustomFields(req.body[key]):req.body[key];
     if(client.gstNumber)client.gstNumber=String(client.gstNumber).trim().toUpperCase();
     await applyWorkflows({resource:"clients",event:"record_updated",doc:client,createdBy:owner(req)});
+    if(hadClientIdentity||req.body?.name!==undefined||req.body?.companyName!==undefined){
+      assertClientIdentity(client);
+    }
     await client.save();
     res.json(client);
   }catch(error){res.status(400).json({message:error.message});}

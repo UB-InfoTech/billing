@@ -172,12 +172,24 @@ router.patch("/:id/stock",auth,async(req,res)=>{
   try{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid product ID."});
     const delta=Number(req.body.quantity);
-    if(!Number.isFinite(delta)||delta===0)return res.status(400).json({message:"quantity delta is required."});
-    const product=await Product.findOne({_id:req.params.id,createdBy:owner(req)});
-    if(!product)return res.status(404).json({message:"Product not found."});
-    const next=Number(product.quantity||0)+delta;
-    if(next<0)return res.status(400).json({message:"Insufficient stock."});
-    product.quantity=next;await product.save();
+    if(!Number.isFinite(delta)||delta===0)return res.status(400).json({message:"Enter a non-zero stock adjustment."});
+
+    // Apply stock changes atomically. Reading the quantity and saving a new
+    // total separately lets simultaneous adjustments overwrite one another.
+    const filter={_id:req.params.id,createdBy:owner(req)};
+    if(delta<0)filter.quantity={$gte:Math.abs(delta)};
+    const product=await Product.findOneAndUpdate(
+      filter,
+      {$inc:{quantity:delta}},
+      {new:true,runValidators:true}
+    );
+
+    if(!product){
+      const exists=await Product.exists({_id:req.params.id,createdBy:owner(req)});
+      if(!exists)return res.status(404).json({message:"Product not found."});
+      return res.status(400).json({message:"Insufficient stock."});
+    }
+
     res.json({message:"Stock updated successfully.",product});
   }catch(error){res.status(400).json({message:error.message});}
 });

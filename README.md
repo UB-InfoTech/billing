@@ -554,7 +554,7 @@ Create `.env` from the committed `backend/.env.example` and set the real values 
 node scripts/migrate-product-identifiers-to-workspace-unique.js
 ```
 
-This changes product-code and serial-number uniqueness from global to per-business-account. Verify the output and the target database before deploying; do not run it against an unintended database.
+This enforces business-scoped uniqueness for product codes, serial numbers, and non-empty barcodes. The migration stops before creating indexes if it finds existing duplicate barcodes, and it does not change or delete those products. Review and resolve the examples first, then rerun the migration. Verify the output and the target database before deploying; do not run it against an unintended database.
 
 Start backend:
 

@@ -23,11 +23,16 @@ import * as XLSX from 'xlsx';
 import Report from '../components/Report';
 
 const getInvoiceTotal = (order = {}) => {
-    for (const candidate of [order.roundOffFinalRevenue, order.finalRevenue, order.totalAmount]) {
-        const value = Number(candidate);
-        if (Number.isFinite(value) && value > 0) return value;
-    }
-    return 0;
+    const roundedRevenue = Number(order.roundOffFinalRevenue);
+    if (Number.isFinite(roundedRevenue) && roundedRevenue > 0) return roundedRevenue;
+
+    const totalAmount = Number(order.totalAmount);
+    if (Number.isFinite(totalAmount) && totalAmount > 0) return totalAmount;
+
+    const finalRevenue = Number(order.finalRevenue);
+    return Number.isFinite(finalRevenue) && finalRevenue > 0
+        ? Math.round(finalRevenue)
+        : 0;
 };
 import { useReactToPrint } from "react-to-print";
 

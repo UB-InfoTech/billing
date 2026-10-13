@@ -1048,7 +1048,7 @@ export default function CreditNote() {
                                 </>
                             )}
 
-                            <div className="d-flex justify-content-end gap-2 mt-3 no-print">
+                            <div className="credit-note-save-actions d-flex justify-content-end gap-2 mt-3 no-print">
                                 <button className="btn btn-outline-secondary" onClick={() => { setView("list"); setEditingNote(null); }}>Cancel</button>
                                 <button className="btn btn-primary" disabled={saving || !selectedOrder} onClick={view === "edit" ? updateNote : save}>
                                     {saving ? <><span className="spinner-border spinner-border-sm me-2" />Saving...</> : (view === "edit" ? "Update Credit Note" : "Post Credit Note")}

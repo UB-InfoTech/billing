@@ -1,15 +1,22 @@
+function parseEventDate(value) {
+  if (value === undefined || value === null || value === "") return null;
+  const date = value instanceof Date
+    ? new Date(value.getTime())
+    : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 function normalizeCalendarEventInput(input = {}) {
   const title = String(input.title ?? "").trim();
-  const start = input.start instanceof Date ? new Date(input.start.getTime()) : new Date(input.start);
-  const endValue = input.end ?? input.start;
-  const end = endValue instanceof Date ? new Date(endValue.getTime()) : new Date(endValue);
+  const start = parseEventDate(input.start);
+  const end = parseEventDate(input.end ?? input.start);
 
   if (!title) {
     const error = new Error("Event title is required.");
     error.status = 400;
     throw error;
   }
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+  if (!start || !end) {
     const error = new Error("Valid event dates are required.");
     error.status = 400;
     throw error;

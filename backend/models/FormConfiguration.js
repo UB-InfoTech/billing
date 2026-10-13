@@ -14,7 +14,7 @@ const dataSourceSchema=new mongoose.Schema({
 },{_id:false});
 
 const conditionSchema=new mongoose.Schema({
-  action:{type:String,enum:["show","hide","require","readonly","enable","disable"],default:"show"},
+  action:{type:String,enum:["show","hide","require","optional","readonly","enable","disable"],default:"show"},
   fieldKey:{type:String,trim:true,maxlength:100},
   operator:{type:String,enum:["equals","not_equals","contains","not_contains","greater_than","less_than","empty","not_empty"],default:"equals"},
   value:{type:String,default:"",maxlength:300}

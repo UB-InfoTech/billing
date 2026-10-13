@@ -184,6 +184,45 @@ export default function ConfiguredField({
         :<option key={option.value} value={option.value}>{option.label}</option>
       )}
     </select>;
+  }else if(field.fieldType==="multiselect"){
+    const selected=new Set(Array.isArray(value)?value.map(String):value===null||value===undefined||value===""?[]:[String(value)]);
+    control=(
+      <fieldset className="no-code-multiselect border rounded p-3" disabled={effectiveDisabled||effectiveReadOnly}>
+        <legend className="visually-hidden">{label} choices</legend>
+        {Array.isArray(options)&&options.length?(
+          <div className="d-flex flex-wrap gap-2">
+            {options.map(option=>{
+              const optionValue=String(typeof option==="string"?option:option?.value??option?.label??"");
+              const optionLabel=String(typeof option==="string"?option:option?.label??option?.value??"");
+              if(!optionValue)return null;
+              const checked=selected.has(optionValue);
+              return(
+                <label
+                  key={optionValue}
+                  className={`no-code-multiselect-option d-inline-flex align-items-center gap-2 border rounded px-3 py-2 ${checked?"is-selected":""}`}
+                >
+                  <input
+                    type="checkbox"
+                    className="form-check-input m-0"
+                    checked={checked}
+                    disabled={effectiveDisabled||effectiveReadOnly}
+                    onChange={event=>{
+                      const next=new Set(selected);
+                      if(event.target.checked)next.add(optionValue);
+                      else next.delete(optionValue);
+                      handleValue([...next]);
+                    }}
+                  />
+                  <span>{optionLabel}</span>
+                </label>
+              );
+            })}
+          </div>
+        ):(
+          <div className="small text-muted">No choices have been added yet. Open Customize form to add the available choices.</div>
+        )}
+      </fieldset>
+    );
   }else if(field.fieldType==="boolean"){
     control=<div className="form-check form-switch pt-2">
       <input className="form-check-input" type="checkbox" checked={Boolean(value)} onChange={event=>handleValue(event.target.checked)} disabled={effectiveDisabled||effectiveReadOnly}/>

@@ -5259,3 +5259,218 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
   }
 }
 
+
+
+/* Remaining data-entry screens use the same full-screen workspace behaviour. */
+@media screen {
+  .product-edit-form {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 1425 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100vw !important;
+    max-width: none !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #f7f9fc !important;
+    box-shadow: none !important;
+  }
+
+  .product-edit-form > .card-header {
+    flex: 0 0 auto;
+    gap: 12px;
+    padding: 14px clamp(14px, 2.5vw, 32px) !important;
+    border-bottom: 1px solid var(--workspace-border) !important;
+  }
+
+  .product-edit-form > .card-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: clamp(14px, 2.5vw, 28px) !important;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background: #f7f9fc;
+  }
+
+  .product-edit-form > .card-body > section,
+  .product-edit-form .product-additional-details {
+    width: 100%;
+    max-width: 1500px;
+    margin-right: auto;
+    margin-left: auto;
+  }
+
+  .product-edit-form > .card-footer {
+    flex: 0 0 auto;
+    padding: 12px clamp(14px, 2.5vw, 32px) !important;
+    border-top: 1px solid var(--workspace-border) !important;
+  }
+
+  .expense-form-fullscreen {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 1425 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100vw !important;
+    max-width: none !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #f7f9fc !important;
+    box-shadow: none !important;
+  }
+
+  .expense-form-header {
+    flex: 0 0 auto;
+    align-items: center !important;
+    margin: 0 !important;
+    padding: 14px clamp(14px, 2.5vw, 32px);
+    border-bottom: 1px solid var(--workspace-border);
+    background: #fff;
+  }
+
+  .expense-form-header > div:first-child {
+    min-width: 0;
+    flex: 1 1 320px;
+  }
+
+  .expense-form-content {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    padding: clamp(14px, 2.5vw, 28px);
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .expense-form-content > .expense-quick-fields,
+  .expense-form-content > .expense-additional-details {
+    width: 100%;
+    max-width: 1500px;
+    margin-right: auto;
+    margin-left: auto;
+  }
+
+  .expense-form-content .form-entry-control {
+    min-height: 44px;
+  }
+
+  .expense-form-footer {
+    flex: 0 0 auto;
+    margin: 0 !important;
+    padding: 12px clamp(14px, 2.5vw, 32px);
+    border-top: 1px solid var(--workspace-border);
+    background: #fff;
+  }
+
+  .expense-form-footer .btn {
+    min-height: 42px;
+  }
+
+  .credit-note-create {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 1425 !important;
+    display: block !important;
+    width: 100vw !important;
+    max-width: none !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #f7f9fc !important;
+    box-shadow: none !important;
+  }
+
+  .credit-note-create > .card-body {
+    min-width: 0;
+    padding: clamp(14px, 2.5vw, 28px) !important;
+    overflow: visible !important;
+  }
+
+  .credit-note-form-header {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    margin: calc(-1 * clamp(14px, 2.5vw, 28px)) calc(-1 * clamp(14px, 2.5vw, 28px)) 16px !important;
+    padding: 14px clamp(14px, 2.5vw, 32px) !important;
+    border-bottom: 1px solid var(--workspace-border);
+    background: rgba(255, 255, 255, .97);
+    backdrop-filter: blur(10px);
+  }
+
+  .credit-note-save-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 15;
+    flex-wrap: wrap;
+    margin: 22px calc(-1 * clamp(14px, 2.5vw, 28px)) calc(-1 * clamp(14px, 2.5vw, 28px)) !important;
+    padding: 12px clamp(14px, 2.5vw, 32px);
+    border-top: 1px solid var(--workspace-border);
+    background: rgba(255, 255, 255, .97);
+    backdrop-filter: blur(10px);
+  }
+
+  .credit-note-create .table-responsive {
+    max-width: 100%;
+    overflow-x: auto !important;
+  }
+}
+
+@media screen and (max-width: 767.98px) {
+  .product-edit-form > .card-header,
+  .product-edit-form > .card-footer {
+    padding: 12px 14px !important;
+  }
+
+  .product-edit-form > .card-body {
+    padding: 12px !important;
+  }
+
+  .expense-form-header {
+    padding: 12px 14px;
+  }
+
+  .expense-form-content {
+    padding: 12px;
+  }
+
+  .expense-form-footer {
+    padding: 10px 14px;
+  }
+
+  .credit-note-create > .card-body {
+    padding: 12px !important;
+  }
+
+  .credit-note-form-header {
+    margin: -12px -12px 12px !important;
+    padding: 12px 14px !important;
+  }
+
+  .credit-note-save-actions {
+    margin: 18px -12px -12px !important;
+    padding: 10px 14px;
+  }
+}

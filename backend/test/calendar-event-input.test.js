@@ -30,6 +30,14 @@ test("rejects missing event title or invalid dates", () => {
     () => normalizeCalendarEventInput({ title: "Reminder", start: "bad-date", end: "2026-10-13" }),
     error => error.status === 400 && /valid event dates/i.test(error.message)
   );
+  assert.throws(
+    () => normalizeCalendarEventInput({ title: "Reminder", start: null, end: null }),
+    error => error.status === 400 && /valid event dates/i.test(error.message)
+  );
+  assert.throws(
+    () => normalizeCalendarEventInput({ title: "Reminder" }),
+    error => error.status === 400 && /valid event dates/i.test(error.message)
+  );
 });
 
 test("rejects an event end before its start", () => {

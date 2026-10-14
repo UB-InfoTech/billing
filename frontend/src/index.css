@@ -5642,3 +5642,80 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
   }
 }
 
+/* ---------- Product entry: full-screen workspace ---------- */
+@media screen {
+  .product-edit-form {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 1425 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100vw !important;
+    max-width: none !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #f7f9fc !important;
+    box-shadow: none !important;
+  }
+
+  .product-edit-form > .card-header {
+    flex: 0 0 auto;
+    padding: 14px clamp(14px, 2.5vw, 32px) !important;
+    border-bottom: 1px solid #e3e9f0 !important;
+  }
+
+  .product-edit-form > .card-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 18px clamp(14px, 2.5vw, 32px) !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    background: #f7f9fc;
+  }
+
+  .product-edit-form > .card-footer {
+    position: relative !important;
+    bottom: auto !important;
+    z-index: 2;
+    flex: 0 0 auto;
+    padding: 12px clamp(14px, 2.5vw, 32px) !important;
+    border-top: 1px solid #e3e9f0 !important;
+  }
+
+  .product-edit-form .row,
+  .product-edit-form .form-control,
+  .product-edit-form .form-select,
+  .product-edit-form .configured-field,
+  .product-edit-form .product-additional-details,
+  .product-edit-form .product-additional-details-body {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+@media screen and (max-width: 767.98px) {
+  .product-edit-form > .card-header {
+    padding: 12px 14px !important;
+  }
+
+  .product-edit-form > .card-body {
+    padding: 12px 14px !important;
+  }
+
+  .product-edit-form > .card-footer {
+    padding: 10px 14px !important;
+  }
+
+  .product-edit-form > .card-footer .btn {
+    flex: 1 1 auto;
+  }
+}

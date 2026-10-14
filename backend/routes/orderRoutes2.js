@@ -17,6 +17,7 @@ const {syncClientDataSafely,getInvoiceRevenue}=require("../utils/syncClientData"
 const {sanitizeOrderCreateInput,cleanCustomFields}=require("../utils/orderInput");
 const {numberToWords}=require("../utils/numberToWords");
 const {appendStatusTransition}=require("../utils/statusHistory");
+const {hasInvoiceSensitiveChanges,wouldReduceTotalBelowApplied}=require("../utils/orderEditPolicy");
 const router=express.Router();
 
 const STATUSES=["Pending","In Process","Completed","Cancelled","Dispatched"];
@@ -215,6 +216,7 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
   try{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid order ID."});
     const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)});if(!order)return res.status(404).json({message:"Order not found"});
+    const originalOrder=order.toObject({depopulate:true});
     const oldClient=String(order.clientId||"");
     const oldStatus=order.status;
     if(req.body?.status!==undefined&&!STATUSES.includes(req.body.status)){
@@ -276,6 +278,32 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
         new Date()
       );
     }
+    const proposedOrder=order.toObject({depopulate:true});
+    const invoiceSensitiveChanged=hasInvoiceSensitiveChanges(originalOrder,proposedOrder);
+
+    if(invoiceSensitiveChanged){
+      const hasPostedCreditNote=await CreditNote.exists({
+        originalOrderId:order._id,
+        createdBy:userId(req),
+        status:"Posted"
+      });
+      if(hasPostedCreditNote){
+        return res.status(409).json({
+          success:false,
+          message:"This invoice has a posted Credit Note. Its customer, invoice number, bill date, items, discount, tax and billing details cannot be changed. Cancel or reconcile the Credit Note first."
+        });
+      }
+
+      const nextFinancials=Order.calculateFinancials(proposedOrder);
+      const previousInvoiceTotal=getInvoiceRevenue(originalOrder);
+      if(wouldReduceTotalBelowApplied(nextFinancials.roundOffFinalRevenue,previousInvoiceTotal,proposedOrder)){
+        return res.status(409).json({
+          success:false,
+          message:"The revised invoice total cannot be lower than payments already received plus customer credit already applied. Keep the current total or record a separate refund/credit adjustment."
+        });
+      }
+    }
+
     await order.save();
     const newClient=String(order.clientId||"");
     if(oldClient)await syncClientDataSafely(oldClient);if(newClient&&newClient!==oldClient)await syncClientDataSafely(newClient);

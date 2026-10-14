@@ -396,6 +396,13 @@ function Clients() {
   const indexOfLastItem=currentPage*itemsPerPage;
   const indexOfFirstItem=indexOfLastItem-itemsPerPage;
 
+  // If a delete or refreshed filter removes the last page, move to the last
+  // available page instead of showing an empty list while other customers exist.
+  useEffect(()=>{
+    const lastAvailablePage=Math.max(1,totalPages);
+    if(currentPage>lastAvailablePage)setCurrentPage(lastAvailablePage);
+  },[currentPage,totalPages]);
+
   const handleSort = (key) => {
     if (sortKey === key) {
       setSortClient(sortClient === 'asc' ? 'desc' : 'asc');
@@ -482,7 +489,7 @@ function Clients() {
                   <option value="">All customer types</option>
                   <option value="Retail">Retail</option>
                   <option value="Wholesale">Wholesale</option>
-                  <option value="Service">Service</option>
+                  <option value="Other">Other</option>
                   <option value="Manufacturer">Manufacturer</option>
                   <option value="Trader">Trader</option>
                   <option value="Supplier">Supplier</option>

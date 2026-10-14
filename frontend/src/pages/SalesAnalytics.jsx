@@ -280,30 +280,68 @@ const SalesAnalytics = () => {
   // ----------
 
   const normalizeStateName = (name) => {
+    const value = String(name || "").trim();
+    if (!value) return "";
+    const normalized = value.toLowerCase().replace(/\s+/g, " ");
     const stateMap = {
-      'MH': 'Maharashtra',
-      'KA': 'Karnataka',
-      'DL': 'Delhi',
-      'TN': 'Tamil Nadu',
-      'AP': 'Andhra Pradesh',
-      'UP': 'Uttar Pradesh',
-      // Add more mappings as needed
+      AP: "Andhra Pradesh",
+      AR: "Arunachal Pradesh",
+      AS: "Assam",
+      BR: "Bihar",
+      CG: "Chhattisgarh",
+      CH: "Chandigarh",
+      DD: "Dadra and Nagar Haveli and Daman and Diu",
+      DN: "Dadra and Nagar Haveli and Daman and Diu",
+      DL: "Delhi",
+      GA: "Goa",
+      GJ: "Gujarat",
+      HR: "Haryana",
+      HP: "Himachal Pradesh",
+      JK: "Jammu and Kashmir",
+      JH: "Jharkhand",
+      KA: "Karnataka",
+      KL: "Kerala",
+      LA: "Ladakh",
+      LD: "Lakshadweep",
+      MP: "Madhya Pradesh",
+      MH: "Maharashtra",
+      MN: "Manipur",
+      ML: "Meghalaya",
+      MZ: "Mizoram",
+      NL: "Nagaland",
+      OD: "Odisha",
+      OR: "Odisha",
+      PB: "Punjab",
+      PY: "Puducherry",
+      RJ: "Rajasthan",
+      SK: "Sikkim",
+      TN: "Tamil Nadu",
+      TS: "Telangana",
+      TR: "Tripura",
+      UP: "Uttar Pradesh",
+      UK: "Uttarakhand",
+      UA: "Uttarakhand",
+      WB: "West Bengal",
+      AN: "Andaman and Nicobar Islands",
     };
-    return stateMap[name] || name;
+    const upper = value.toUpperCase();
+    if (stateMap[upper]) return stateMap[upper];
+    return Object.values(stateMap).find(state => state.toLowerCase() === normalized) || value;
   };
 
-  const stateData = allOrders.reduce((acc, order) => {
-    if (order.State) {
-      const normalizedState = normalizeStateName(order.State);
-      acc[normalizedState] = {
-        orderCount: (acc[normalizedState]?.orderCount || 0) + 1,
-        totalSales: (acc[normalizedState]?.totalSales || 0) + (order.roundOffFinalRevenue || 0),
-        cities: {
-          ...(acc[normalizedState]?.cities || {}),
-          [order.City]: (acc[normalizedState]?.cities?.[order.City] || 0) + 1,
-        },
-      };
-    }
+  // Keep canceled invoices visible in the order list, but do not count them as
+  // sales in the geographic report.
+  const billableOrders = allOrders.filter(order => order.status !== "Cancelled");
+  const stateData = billableOrders.reduce((acc, order) => {
+    const normalizedState = normalizeStateName(order.State);
+    if (!normalizedState) return acc;
+
+    const city = String(order.City || "").trim() || "Unknown";
+    const current = acc[normalizedState] || { orderCount: 0, totalSales: 0, cities: {} };
+    current.orderCount += 1;
+    current.totalSales += Number(order.roundOffFinalRevenue || 0);
+    current.cities[city] = (current.cities[city] || 0) + 1;
+    acc[normalizedState] = current;
     return acc;
   }, {});
 
@@ -800,7 +838,7 @@ const SalesAnalytics = () => {
                           rows={Object.entries(stateData[selectedState].cities || {}).map(([city,count])=>({
                             city:city||"Unknown",
                             orderCount:count,
-                            totalSales:allOrders.filter(o=>o.State===selectedState&&o.City===city).reduce((sum,o)=>sum+Number(o.roundOffFinalRevenue||0),0)
+                            totalSales:billableOrders.filter(order=>normalizeStateName(order.State)===selectedState&&(String(order.City||"").trim()||"Unknown")===city).reduce((sum,order)=>sum+Number(order.roundOffFinalRevenue||0),0)
                           }))}
                           getRowKey={row=>row.city}
                           columns={[

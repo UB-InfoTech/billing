@@ -3,6 +3,7 @@ const router = express.Router();
 const Profile = require('../models/Profile');
 const auth = require('../middleware/auth');
 const {toPublicProfile}=require('../utils/publicProfile');
+const {normalizeInvoiceSequence}=require("../utils/invoiceSequence");
 
 // Get profile
 router.get('/', auth, async (req, res) => {
@@ -81,11 +82,7 @@ router.put('/', auth, async (req, res) => {
       nextBody[key]=req.body[key];
     }
     if(nextBody.billNoSequence!==undefined){
-      const sequence=Number(nextBody.billNoSequence);
-      if(!Number.isSafeInteger(sequence)||sequence<0){
-        return res.status(400).json({message:"Invoice number sequence must be a whole number of zero or more."});
-      }
-      nextBody.billNoSequence=sequence;
+      nextBody.billNoSequence=normalizeInvoiceSequence(nextBody.billNoSequence);
     }
     if(nextBody.customFields&&typeof nextBody.customFields==="object"&&!Array.isArray(nextBody.customFields)){
       nextBody.customFields=Object.fromEntries(
@@ -109,17 +106,15 @@ router.put('/', auth, async (req, res) => {
 //update profile sequence number from order 
 router.patch('/billNoSequence', auth, async (req, res) => {
   try {
-    const { billNoSequence } = req.body;
-    if (typeof billNoSequence !== 'number' || billNoSequence < 0) {
-      return res.status(400).json({ message: 'billNoSequence must be a non-negative number' });
-    }
+    const { billNoSequence } = req.body || {};
+    const sequence = normalizeInvoiceSequence(billNoSequence);
     // const profile = await Profile.findOneAndUpdate(
     //   { createdBy: req.user.id },
     //   { billNoSequence }
     // );
     const profile = await Profile.findOneAndUpdate(
       { createdBy: req.user.id },
-      { $set: { billNoSequence } },
+      { $set: { billNoSequence: sequence } },
       { new: true }
     ).lean();
 
@@ -137,13 +132,16 @@ router.patch('/billNoSequence', auth, async (req, res) => {
 router.patch('/updateBillNoSequence', auth, async (req, res) => {
   req.url = '/billNoSequence';
   const { billNoSequence } = req.body || {};
-  if (!Number.isFinite(Number(billNoSequence)) || Number(billNoSequence) < 0) {
-    return res.status(400).json({ message: 'billNoSequence must be a non-negative number' });
+  let sequence;
+  try {
+    sequence = normalizeInvoiceSequence(billNoSequence);
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
   }
   try {
     const profile = await Profile.findOneAndUpdate(
       { createdBy: String(req.user.id) },
-      { $set: { billNoSequence: Number(billNoSequence) } },
+      { $set: { billNoSequence: sequence } },
       { new: true, upsert: true }
     ).lean();
     res.json(toPublicProfile(profile));

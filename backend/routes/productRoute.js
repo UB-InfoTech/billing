@@ -10,6 +10,7 @@ const Order=require("../models/Order2");
 const CreditNote=require("../models/CreditNote");
 const auth=require("../middleware/auth");
 const {getSafeUploadExtension,isAllowedUploadType}=require("../utils/uploadFileTypes");
+const {escapeRegex}=require("../utils/escapeRegex");
 
 const router=express.Router();
 const uploadDir=path.join(__dirname,"../public/uploads/products");
@@ -88,7 +89,7 @@ router.get("/",auth,async(req,res)=>{
     const sortDir=String(req.query.order||"desc")==="asc"?1:-1;
     const query={createdBy:owner(req)};
     if(search){
-      const rx=new RegExp(search.replace(/[.*+?^${}()|[\\]\\\\]/g,"\\\\$&"),"i");
+      const rx=new RegExp(escapeRegex(search),"i");
       query.$or=[{productName:rx},{productCode:rx},{designNo:rx},{serialNumber:rx}];
     }
     if(req.query.lowStock==="true")query.$expr={$lte:["$quantity","$minStock"]};

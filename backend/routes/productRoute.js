@@ -36,6 +36,20 @@ async function discardUploadedFiles(files=[]){
   ));
 }
 
+const receiveProductImages=(req,res,next)=>{
+  upload.array("images",5)(req,res,async error=>{
+    if(!error)return next();
+    await discardUploadedFiles(req.files);
+    const status=error.code==="LIMIT_FILE_SIZE"?413:400;
+    const message=error.code==="LIMIT_FILE_SIZE"
+      ?"Each product image must be 5 MB or smaller."
+      :error.code==="LIMIT_FILE_COUNT"||error.code==="LIMIT_UNEXPECTED_FILE"
+        ?"Upload no more than 5 product images at a time."
+        :error.message||"Unable to upload product images.";
+    return res.status(status).json({message});
+  });
+};
+
 function owner(req){return req.user?.id;}
 function publicUrl(req,filePath){return req.protocol+"://"+req.get("host")+filePath;}
 async function nextProductCode(createdBy){
@@ -95,7 +109,7 @@ router.get("/:id",auth,async(req,res)=>{
   }catch(error){res.status(500).json({message:error.message});}
 });
 
-router.post("/",auth,upload.array("images",5),async(req,res)=>{
+router.post("/",auth,receiveProductImages,async(req,res)=>{
   let uploadedFilesPersisted=false;
   try{
     const code=String(req.body.productCode||"").trim().toUpperCase()||await nextProductCode(owner(req));
@@ -134,7 +148,7 @@ router.post("/",auth,upload.array("images",5),async(req,res)=>{
   }
 });
 
-router.put("/:id",auth,upload.array("images",5),async(req,res)=>{
+router.put("/:id",auth,receiveProductImages,async(req,res)=>{
   let uploadedFilesPersisted=false;
   try{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid product ID."});

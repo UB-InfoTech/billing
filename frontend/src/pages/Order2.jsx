@@ -948,25 +948,73 @@ function Order2() {
             .replace(/"/g, "&quot;");
 
         const buildFallbackInvoice = () => {
-            const rows = (order.subOrders || []).map((item, index) => {
+            const roundMoney = value => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
+            const invoiceItems = (order.subOrders || []).map((item, index) => {
                 const unit = item.qtyUnit || "PCS";
-                const enteredQty = unit === "MTR" ? Number(item.MTR || 0) : Number(item.quantity || 0);
-                const qty = Math.max(0, enteredQty - Math.max(0, Number(item.shortPcs || 0)));
-                const amount = qty * Number(item.unitPrice || 0);
-                return `<tr><td>${index + 1}</td><td>${esc(item.orderName)}</td><td>${esc(item.designNumber)}</td><td>${esc(item.hsnCode)}</td><td>${qty.toFixed(2)} ${esc(unit)}</td><td>${Number(item.unitPrice || 0).toFixed(2)}</td><td>${amount.toFixed(2)}</td></tr>`;
-            }).join("");
+                const enteredQty = Math.max(0, Number(unit === "MTR" ? item.MTR || 0 : item.quantity || 0));
+                const shortQty = Math.max(0, Number(item.shortPcs || 0));
+                const billableQty = Math.max(0, enteredQty - shortQty);
+                const rate = Math.max(0, Number(item.unitPrice || 0));
+                return {
+                    index: index + 1,
+                    item,
+                    unit,
+                    enteredQty,
+                    shortQty,
+                    billableQty,
+                    rate,
+                    amount: roundMoney(billableQty * rate),
+                };
+            });
+            const rows = invoiceItems.map(line =>
+                `<tr><td>${line.index}</td><td>${esc(line.item.orderName)}</td><td>${esc(line.item.designNumber)}</td><td>${esc(line.item.hsnCode)}</td><td>${line.enteredQty.toFixed(2)} ${esc(line.unit)}</td><td>${line.shortQty.toFixed(2)}</td><td>${line.billableQty.toFixed(2)} ${esc(line.unit)}</td><td>${line.rate.toFixed(2)}</td><td>${line.amount.toFixed(2)}</td></tr>`
+            ).join("");
+
+            const subtotal = roundMoney(invoiceItems.reduce((sum, line) => sum + line.amount, 0));
+            const discountRate = Math.min(100, Math.max(0, Number(order.discountRate || 0)));
+            const storedDiscount = Number(order.discountAmount || 0);
+            const discount = discountRate > 0 && storedDiscount <= 0
+                ? roundMoney(subtotal * discountRate / 100)
+                : roundMoney(Math.max(0, storedDiscount));
+            const computedTaxable = roundMoney(Math.max(0, subtotal - discount));
+            const storedTaxable = Number(order.totalCost);
+            const taxable = Number.isFinite(storedTaxable) && (storedTaxable > 0 || computedTaxable === 0)
+                ? roundMoney(storedTaxable)
+                : computedTaxable;
+            const taxRate = Math.min(100, Math.max(0, Number(order.taxPercentage || 0)));
+            const storedTax = Number(order.taxAmount || 0);
+            const tax = taxRate > 0 && storedTax <= 0 && taxable > 0
+                ? roundMoney(taxable * taxRate / 100)
+                : roundMoney(Math.max(0, storedTax));
+            const finalRevenue = Number(order.finalRevenue) > 0
+                ? roundMoney(order.finalRevenue)
+                : roundMoney(taxable + tax);
+            const grandTotal = getInvoiceTotal(order) || Math.round(finalRevenue);
+            const roundOff = Math.abs(grandTotal - finalRevenue) > 0.0001
+                ? roundMoney(grandTotal - finalRevenue)
+                : roundMoney(order.roundOff || 0);
 
             return `<!doctype html><html><head><meta charset="utf-8"><title>Invoice ${esc(order.orderNumber)}</title><style>
             body{font-family:Arial,sans-serif;padding:24px;color:#111} .wrap{max-width:1100px;margin:auto}
             .head{display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:14px}
-            table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #222;padding:7px;font-size:13px}
-            th{background:#f2f2f2}.right{text-align:right}@media print{body{padding:0}}
+            table{width:100%;border-collapse:collapse;margin-top:18px}th,td{border:1px solid #222;padding:7px;font-size:12px}
+            th{background:#f2f2f2}.right{text-align:right}.totals{display:inline-block;min-width:280px}.totals div{display:flex;justify-content:space-between;gap:24px;padding:3px 0}
+            @media print{body{padding:0}}
             </style></head><body><div class="wrap"><div class="head">
             <div><h2>${esc(profile.companyName || "Company")}</h2><div>${esc(profile.companyAddress || "")}</div><div>GSTIN: ${esc(profile.gstin || "")}</div></div>
             <div><h2>INVOICE</h2><div>Invoice: <b>${esc(order.orderNumber)}</b></div><div>Date: ${new Date(order.orderDate).toLocaleDateString("en-IN")}</div></div>
             </div><p><b>Bill To:</b> ${esc(order.companyName || "Customer")}</p><p>${esc(order.Address || "")}</p>
-            <table><thead><tr><th>#</th><th>Item</th><th>Design</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${rows || '<tr><td colspan="7">No items</td></tr>'}</tbody></table>
-            <div class="right" style="margin-top:18px"><div>Taxable: ₹${Number(order.totalCost || 0).toFixed(2)}</div><div>Tax: ₹${Number(order.taxAmount || 0).toFixed(2)}</div><h3>Total: ₹${Number(order.roundOffFinalRevenue > 0 ? order.roundOffFinalRevenue : order.totalAmount > 0 ? order.totalAmount : Math.round(Number(order.finalRevenue || 0))).toFixed(2)}</h3><div>Paid: ₹${Number(order.paidAmount || 0).toFixed(2)} | Due: ₹${Number(order.dueAmount || 0).toFixed(2)}</div></div>
+            <table><thead><tr><th>#</th><th>Item</th><th>Design</th><th>HSN</th><th>Entered Qty</th><th>Short</th><th>Billable Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${rows || '<tr><td colspan="9">No items</td></tr>'}</tbody></table>
+            <div class="right" style="margin-top:18px"><div class="totals">
+            <div><span>Subtotal</span><span>₹${subtotal.toFixed(2)}</span></div>
+            <div><span>Discount (${discountRate.toFixed(2)}%)</span><span>- ₹${discount.toFixed(2)}</span></div>
+            <div><span>Taxable amount</span><span>₹${taxable.toFixed(2)}</span></div>
+            <div><span>Tax (${taxRate.toFixed(2)}%)</span><span>₹${tax.toFixed(2)}</span></div>
+            <div><span>Round off</span><span>₹${roundOff.toFixed(2)}</span></div>
+            <h3>Grand Total: ₹${grandTotal.toFixed(2)}</h3>
+            <div><span>Paid</span><span>₹${Number(order.paidAmount || 0).toFixed(2)}</span></div>
+            <div><span>Due</span><span>₹${Number(order.dueAmount || 0).toFixed(2)}</span></div>
+            </div></div>
             </div></body></html>`;
         };
 

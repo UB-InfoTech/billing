@@ -15,6 +15,7 @@ test("payment append rechecks invoice ownership, status, and due balance atomica
     orderId: "invoice-1",
     createdBy: "business-1",
     amount: 125.5,
+    expectedDueAmount: 200,
     payment,
     paymentDate
   });
@@ -23,7 +24,7 @@ test("payment append rechecks invoice ownership, status, and due balance atomica
     _id: "invoice-1",
     createdBy: "business-1",
     status: { $ne: "Cancelled" },
-    dueAmount: { $gte: 125.5 }
+    dueAmount: 200
   });
   assert.deepEqual(operation.update, {
     $push: { payments: payment },
@@ -37,12 +38,14 @@ test("payment append rejects invalid amounts and mismatched payment records", ()
     orderId: "invoice-1",
     createdBy: "business-1",
     amount: 50,
+    expectedDueAmount: 75,
     payment: { amount: 50 },
     paymentDate: new Date("2026-10-14T10:30:00.000Z")
   };
 
   assert.throws(() => buildPaymentAppendOperation({ ...base, amount: 0 }), /greater than zero/);
   assert.throws(() => buildPaymentAppendOperation({ ...base, amount: Infinity }), /finite number/);
+  assert.throws(() => buildPaymentAppendOperation({ ...base, amount: 76 }), /exceeds the expected invoice balance/);
   assert.throws(
     () => buildPaymentAppendOperation({ ...base, payment: { amount: 49.99 } }),
     /must match the allocation amount/

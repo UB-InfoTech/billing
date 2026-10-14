@@ -81,7 +81,7 @@ const sanitizeColumns=(columns)=>{
         multiple:Boolean(raw.dataSource.multiple)
       }:null,
       sourceKeys:kind==="merged"?sourceKeys:[],
-      separator:kind==="merged"?cleanString(raw?.separator??" ",40):" ",
+      separator:kind==="merged"?String(raw?.separator??" ").replace(/[\r\n\t]/g," ").slice(0,40):" ",
       order:Number.isFinite(Number(raw?.order))?Math.max(0,Number(raw.order)):index,
       width:Math.min(12,Math.max(0,Number(raw?.width)||0))
     };
@@ -178,3 +178,4 @@ router.put("/:tableKey/values",auth,async(req,res)=>{
 });
 
 module.exports=router;
+module.exports.sanitizeColumns=sanitizeColumns;

@@ -1,12 +1,12 @@
 import BusinessPageHeader from "../components/BusinessPageHeader";
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {useSearchParams} from "react-router-dom";
 import {CLIENT_FORM_FIELDS} from "../config/noCodeCatalog";
 import axios from 'axios';
 import DynamicTable from '../components/DynamicTable';
 import FormConfigurator from '../components/FormConfigurator';
 import ConfiguredField from '../components/ConfiguredField';
-import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,syncConfiguredCustomFields,buildConfiguredDefaults,groupFieldsBySection} from "../hooks/useFormConfiguration";
+import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,syncConfiguredCustomFields,buildConfiguredDefaults,buildNewRecordDefaults,groupFieldsBySection} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
 
@@ -91,6 +91,18 @@ function Clients() {
   const clientFormConfig=useFormConfiguration("clients.form",CLIENT_FORM_FIELDS);
   const linkedClientSources=useMemo(()=>Array.from(new Set(clientFormConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean))),[clientFormConfig.fields]);
   const {records:linkedRecords,searchRecords:searchLinkedRecords}=useNoCodeDataSources(linkedClientSources);
+
+  const clientDefaultsAppliedRef=useRef(false);
+  useEffect(()=>{
+    if(clientFormConfig.loading||clientDefaultsAppliedRef.current)return;
+    clientDefaultsAppliedRef.current=true;
+    if(showModal&&!editingClient){
+      setNewClient(previous=>applyFormulas(
+        clientFormConfig.fields,
+        buildNewRecordDefaults(previous,clientFormConfig.fields)
+      ));
+    }
+  },[clientFormConfig.loading,clientFormConfig.fields,showModal,editingClient]);
   const clientValue=field=>field.custom
     ? newClient.customFields?.[field.key]??newClient[field.key]??field.defaultValue??""
     : newClient[field.key]??field.defaultValue??"";
@@ -107,13 +119,16 @@ function Clients() {
   };
   const visibleClientFields=clientFormConfig.fields.filter(field=>field.visible!==false);
   const clientFormSections=groupFieldsBySection(visibleClientFields);
-  const emptyClient=()=>buildConfiguredDefaults({name:"",email:"",phone:"",address:"",state:"",city:"",pinCode:"",stateCode:"",gstNumber:"",companyName:"",businessType:"",paymentTerms:"30",discountRate:0,accountStatus:"Active",notes:"",customFields:{}},clientFormConfig.fields);
+  const emptyClient=()=>applyFormulas(
+    clientFormConfig.fields,
+    buildNewRecordDefaults({name:"",email:"",phone:"",address:"",state:"",city:"",pinCode:"",stateCode:"",gstNumber:"",companyName:"",businessType:"",paymentTerms:"30",discountRate:0,accountStatus:"Active",notes:"",customFields:{}},clientFormConfig.fields)
+  );
   const renderClientField=field=>{
     const state=getFieldState(field,{...newClient,...(newClient.customFields||{})});
     if(!state.visible)return null;
     const source=field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[];
     const common={
-      field:{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled},
+      field:{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled||clientFormConfig.loading},
       value:clientValue(field),
       onChange:value=>updateClientField(field,value,null),
       onRecordChange:record=>updateClientField(field,record?.[field.dataSource?.valueField||"_id"]??"",record),
@@ -453,7 +468,7 @@ function Clients() {
           className="mb-3"
         >
           <button type="button" className="btn btn-light border" onClick={handleExportExcel}><i className="bi bi-download me-2"></i>Export Excel</button>
-          <button type="button" className="btn btn-primary" onClick={() => { setEditingClient(null); setNewClient(emptyClient()); setFormError(""); setPageMessage(""); setShowModal(true); }}><i className="bi bi-person-plus me-2"></i>Add customer</button>
+          <button type="button" className="btn btn-primary" onClick={() => { setEditingClient(null); setNewClient(emptyClient()); setFormError(""); setPageMessage(""); setShowModal(true); }} disabled={clientFormConfig.loading}><i className="bi bi-person-plus me-2"></i>Add customer</button>
         </BusinessPageHeader>
 
         {pageMessage&&<div className="alert alert-info" role="status">{pageMessage}</div>}
@@ -689,7 +704,7 @@ function Clients() {
                     </div>
                     <div className="modal-footer bg-white p-3 border-top sticky-bottom">
                       <button type="button" className="btn btn-light border" onClick={()=>{setShowModal(false);setFormError("");}}>Cancel</button>
-                      <button type="submit" className="btn btn-primary px-4" disabled={formSaving}>
+                      <button type="submit" className="btn btn-primary px-4" disabled={formSaving||clientFormConfig.loading}>
                         {formSaving?<><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving...</>:(editingClient?"Save changes":"Add customer")}
                       </button>
                     </div>

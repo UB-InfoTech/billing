@@ -34,3 +34,37 @@ test("limits separator length to a safe display width", () => {
   const [column] = sanitizeColumns([mergedColumn("x".repeat(100))]);
   assert.equal(column.separator.length, 40);
 });
+
+test("keeps the linked-record source and search field for reference columns", () => {
+  const [column] = sanitizeColumns([{
+    key: "custom_customer_link",
+    label: "Customer link",
+    kind: "custom",
+    fieldType: "reference",
+    dataSource: {
+      type: "lookup",
+      resource: "clients",
+      valueField: "_id",
+      labelField: "companyName",
+      searchField: "companyName"
+    }
+  }]);
+
+  assert.equal(column.dataSource.type, "lookup");
+  assert.equal(column.dataSource.resource, "clients");
+  assert.equal(column.dataSource.labelField, "companyName");
+  assert.equal(column.dataSource.searchField, "companyName");
+});
+
+test("rejects reference columns that do not point to an available list", () => {
+  assert.throws(
+    () => sanitizeColumns([{
+      key: "custom_unknown_link",
+      label: "Unknown link",
+      kind: "custom",
+      fieldType: "reference",
+      dataSource: { type: "lookup", resource: "unknown" }
+    }]),
+    /choose whether this column links/i
+  );
+});

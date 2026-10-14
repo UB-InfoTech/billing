@@ -44,10 +44,22 @@ export const openExpenseReceipt=async(value)=>{
     pathname=parsed.pathname;
   }
 
-  const cleanPath=pathname.split(/[?#]/,1)[0].replace(/\\/g,"/");
-  const match=cleanPath.match(/(?:^|\\/)uploads\\/expenses\\/([^/]+)$/i);
-  const filename=match?.[1]||(!cleanPath.includes("/")&&!cleanPath.includes(":")?cleanPath:"");
-  if(!/^[A-Za-z0-9_-]+\\.(?:jpe?g|png|gif|webp|pdf)$/i.test(filename)){
+  const cleanPath=pathname.split(/[?#]/,1)[0].split(String.fromCharCode(92)).join("/");
+  const uploadMarker="/uploads/expenses/";
+  const markerIndex=cleanPath.toLowerCase().lastIndexOf(uploadMarker);
+  let filename="";
+  if(markerIndex>=0){
+    const candidate=cleanPath.slice(markerIndex+uploadMarker.length);
+    if(!candidate.includes("/"))filename=candidate;
+  }else if(!cleanPath.includes("/")&&!cleanPath.includes(":")){
+    filename=cleanPath;
+  }
+
+  const dotIndex=filename.lastIndexOf(".");
+  const stem=dotIndex>0?filename.slice(0,dotIndex):"";
+  const extension=dotIndex>0?filename.slice(dotIndex+1).toLowerCase():"";
+  const allowedExtensions=["jpg","jpeg","png","gif","webp","pdf"];
+  if(!/^[A-Za-z0-9_-]+$/.test(stem)||!allowedExtensions.includes(extension)){
     throw new Error("This receipt file path is invalid.");
   }
 

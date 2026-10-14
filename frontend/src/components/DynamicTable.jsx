@@ -1,5 +1,6 @@
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import axios from "axios";
+import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 
 const apiBase=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const authConfig=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
@@ -15,6 +16,20 @@ const FIELD_TYPES=[
   {value:"multiselect",label:"Multiple choices",icon:"bi-check2-square",help:"Choose more than one option"},
   {value:"reference",label:"Existing record",icon:"bi-database",help:"Choose an existing record"},
 ];
+
+const REFERENCE_RESOURCES={
+  clients:{label:"Customers",labelField:"companyName",searchField:"companyName"},
+  products:{label:"Products",labelField:"productName",searchField:"productName"},
+  orders:{label:"Invoices",labelField:"orderNumber",searchField:"orderNumber"},
+  expenses:{label:"Expenses",labelField:"title",searchField:"title"}
+};
+
+const referenceRecordLabel=(resource,record,labelField)=>{
+  if(!record)return "";
+  const preferred=record?.[labelField||REFERENCE_RESOURCES[resource]?.labelField||"_id"];
+  const fallback=record?.name||record?.productName||record?.orderNumber||record?.title||record?._id;
+  return String(preferred||fallback||"");
+};
 
 const getValue=(row,path)=>{
   if(row==null||!path)return "";
@@ -187,7 +202,10 @@ export default function DynamicTable({
     defaultValue:"",
     optionsText:"",
     editable:true,
+    referenceResource:"clients",
   });
+  const [referenceSearchQueries,setReferenceSearchQueries]=useState({});
+  const [referenceSearchLoading,setReferenceSearchLoading]=useState({});
 
   const [mergeForm,setMergeForm]=useState({
     label:"",
@@ -208,6 +226,12 @@ export default function DynamicTable({
 
   const customColumns=useMemo(()=>draft.filter(column=>column.kind==="custom"),[draft]);
   const mergeSources=useMemo(()=>draft.filter(column=>column.kind!=="merged"),[draft]);
+  const referenceResources=useMemo(()=>Array.from(new Set(
+    customColumns
+      .filter(column=>column.fieldType==="reference"&&REFERENCE_RESOURCES[column.dataSource?.resource])
+      .map(column=>column.dataSource.resource)
+  )),[customColumns]);
+  const {records:referenceRecords,searchRecords:searchReferenceRecords}=useNoCodeDataSources(referenceResources);
   const rowKeyList=useMemo(
     ()=>rows.map((row,index)=>String(getRowKey(row,index))).filter(Boolean),
     [rows,getRowKey]
@@ -224,11 +248,77 @@ export default function DynamicTable({
     return draft.filter(column=>column.label.toLowerCase().includes(query));
   },[draft,searchTerm]);
 
-  const resetCustomForm=()=>setCustomForm({label:"",fieldType:"text",defaultValue:"",optionsText:"",editable:true});
+  const resetCustomForm=()=>setCustomForm({
+    label:"",
+    fieldType:"text",
+    defaultValue:"",
+    optionsText:"",
+    editable:true,
+    referenceResource:"clients",
+  });
 
   useEffect(()=>{
     if(autoOpenSettings)setShowSettings(true);
   },[autoOpenSettings]);
+
+  // Search linked records only while editing an Existing record column. The
+  // lookup hook merges results by record ID so fast typing never loses a match.
+  useEffect(()=>{
+    const activeColumn=customColumns.find(column=>
+      column.fieldType==="reference"&&editingCell?.endsWith("::"+column.key)
+    );
+    if(!activeColumn)return;
+    const resource=activeColumn.dataSource?.resource;
+    if(!REFERENCE_RESOURCES[resource])return;
+    const query=String(referenceSearchQueries[resource]||"").trim();
+    if(query.length<2)return;
+
+    let cancelled=false;
+    const timer=window.setTimeout(async()=>{
+      setReferenceSearchLoading(previous=>({...previous,[resource]:true}));
+      try{
+        await searchReferenceRecords(
+          resource,
+          query,
+          activeColumn.dataSource?.searchField||REFERENCE_RESOURCES[resource].searchField
+        );
+      }catch(searchError){
+        if(!cancelled)setError(searchError.response?.data?.message||"Unable to search linked records.");
+      }finally{
+        if(!cancelled)setReferenceSearchLoading(previous=>({...previous,[resource]:false}));
+      }
+    },250);
+
+    return()=>{
+      cancelled=true;
+      window.clearTimeout(timer);
+    };
+  },[editingCell,customColumns,referenceSearchQueries,searchReferenceRecords]);
+
+  // Preserve the display label of a saved selection even when it is outside
+  // the first page of the linked list.
+  useEffect(()=>{
+    const activeColumn=customColumns.find(column=>
+      column.fieldType==="reference"&&editingCell?.endsWith("::"+column.key)
+    );
+    if(!activeColumn)return;
+    const resource=activeColumn.dataSource?.resource;
+    const currentValue=String(editingValue??"").trim();
+    if(!REFERENCE_RESOURCES[resource]||!currentValue)return;
+    const valueField=activeColumn.dataSource?.valueField||"_id";
+    if((referenceRecords[resource]||[]).some(record=>String(record?.[valueField]??"")===currentValue))return;
+
+    let active=true;
+    searchReferenceRecords(
+      resource,
+      "",
+      activeColumn.dataSource?.searchField||REFERENCE_RESOURCES[resource].searchField,
+      [currentValue]
+    ).catch(searchError=>{
+      if(active)setError(searchError.response?.data?.message||"Unable to load the selected linked record.");
+    });
+    return()=>{active=false;};
+  },[editingCell,editingValue,customColumns,referenceRecords,searchReferenceRecords]);
 
   useEffect(()=>{
     let cancelled=false;
@@ -331,6 +421,12 @@ export default function DynamicTable({
       const option=column.options.find(candidate=>String(candidate?.value??candidate)===String(item));
       return option?.label??option??item;
     }).join(", ");
+    if(column.fieldType==="reference"){
+      const resource=column.dataSource?.resource;
+      const valueField=column.dataSource?.valueField||"_id";
+      const record=(referenceRecords[resource]||[]).find(item=>String(item?.[valueField]??"")===String(value));
+      return referenceRecordLabel(resource,record,column.dataSource?.labelField)||String(value);
+    }
     return String(value);
   };
 
@@ -410,6 +506,57 @@ export default function DynamicTable({
     };
 
     if(column.fieldType==="textarea")return <textarea {...common} rows={2}/>;
+    if(column.fieldType==="reference"){
+      const resource=column.dataSource?.resource;
+      const resourceMeta=REFERENCE_RESOURCES[resource];
+      if(!resourceMeta)return <div className="small text-danger">This column needs a linked-record source. Open Change columns to fix it.</div>;
+      const valueField=column.dataSource?.valueField||"_id";
+      const labelField=column.dataSource?.labelField||resourceMeta.labelField;
+      const query=String(referenceSearchQueries[resource]||"").trim().toLowerCase();
+      const records=referenceRecords[resource]||[];
+      const filteredRecords=query.length>=2
+        ?records.filter(record=>[
+          record?.[labelField],
+          record?.[column.dataSource?.searchField||resourceMeta.searchField],
+          record?.name,
+          record?.companyName
+        ].some(candidate=>String(candidate??"").toLowerCase().includes(query)))
+        :records;
+      const selectedValue=String(editingValue??"");
+      const hasSelected=filteredRecords.some(record=>String(record?.[valueField]??"")===selectedValue);
+
+      return(
+        <div className="dynamic-reference-editor">
+          <input
+            type="search"
+            className="form-control form-control-sm mb-2"
+            value={referenceSearchQueries[resource]||""}
+            onChange={event=>setReferenceSearchQueries(previous=>({...previous,[resource]:event.target.value}))}
+            placeholder={`Search ${resourceMeta.label.toLowerCase()}`}
+            aria-label={`Search ${resourceMeta.label.toLowerCase()}`}
+            autoComplete="off"
+          />
+          <select
+            className="form-select form-select-sm"
+            value={selectedValue}
+            onChange={event=>setEditingValue(event.target.value)}
+            onBlur={commit}
+            onKeyDown={common.onKeyDown}
+            autoFocus
+          >
+            <option value="">Select {resourceMeta.label.toLowerCase().replace(/s$/,"")}</option>
+            {selectedValue&&!hasSelected&&<option value={selectedValue}>Current selection</option>}
+            {filteredRecords.map(record=>{
+              const value=record?.[valueField];
+              if(value===undefined||value===null)return null;
+              return <option key={String(value)} value={String(value)}>{referenceRecordLabel(resource,record,labelField)||String(value)}</option>;
+            })}
+            {referenceSearchLoading[resource]&&<option value="" disabled>Searching...</option>}
+          </select>
+          <div className="form-text">Search by name, then choose a saved record.</div>
+        </div>
+      );
+    }
     if(column.fieldType==="select"||column.fieldType==="multiselect"){
       const multiple=column.fieldType==="multiselect";
       return(
@@ -542,6 +689,10 @@ export default function DynamicTable({
       setError("Add at least one choice.");
       return;
     }
+    if(customForm.fieldType==="reference"&&!REFERENCE_RESOURCES[customForm.referenceResource]){
+      setError("Choose a list for this existing-record column.");
+      return;
+    }
 
     const slug=label.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,50)||"field";
     const key=`custom_${slug}_${Date.now()}`;
@@ -549,7 +700,10 @@ export default function DynamicTable({
       ? customForm.defaultValue==="true"
       : customForm.fieldType==="multiselect"
         ? customForm.defaultValue.split(/\r?\n|,/).map(value=>value.trim()).filter(Boolean)
-        : customForm.defaultValue;
+        : customForm.fieldType==="reference"
+          ? ""
+          : customForm.defaultValue;
+    const referenceMeta=REFERENCE_RESOURCES[customForm.referenceResource];
 
     setDraft(prev=>[...prev,{
       key,
@@ -562,6 +716,14 @@ export default function DynamicTable({
       options:["select","multiselect"].includes(customForm.fieldType)?options.map(value=>({value,label:value})):[],
       defaultValue,
       editable:Boolean(customForm.editable),
+      dataSource:customForm.fieldType==="reference"?{
+        type:"lookup",
+        resource:customForm.referenceResource,
+        valueField:"_id",
+        labelField:referenceMeta.labelField,
+        searchField:referenceMeta.searchField,
+        multiple:false
+      }:null,
       sourceKeys:[],
       separator:" ",
       order:prev.length
@@ -946,7 +1108,21 @@ export default function DynamicTable({
                         {FIELD_TYPES.map(type=><option key={type.value} value={type.value}>{type.label}</option>)}
                       </select>
                     </div>
-                    {["select","multiselect"].includes(customForm.fieldType) ? (
+                    {customForm.fieldType==="reference" ? (
+                      <div className="col-md-6">
+                        <label className="form-label">Choose which list to link</label>
+                        <select
+                          className="form-select"
+                          value={customForm.referenceResource}
+                          onChange={event=>setCustomForm(previous=>({...previous,referenceResource:event.target.value}))}
+                        >
+                          {Object.entries(REFERENCE_RESOURCES).map(([key,meta])=>(
+                            <option key={key} value={key}>{meta.label}</option>
+                          ))}
+                        </select>
+                        <div className="form-text">Each row can link to a saved record from this list.</div>
+                      </div>
+                    ) : ["select","multiselect"].includes(customForm.fieldType) ? (
                       <div className="col-12">
                         <label className="form-label">Choices</label>
                         <textarea className="form-control" rows={2} value={customForm.optionsText} onChange={event=>setCustomForm(prev=>({...prev,optionsText:event.target.value}))} placeholder="One choice per line"/>
@@ -957,14 +1133,12 @@ export default function DynamicTable({
                         <input className="form-control" value={customForm.defaultValue} onChange={event=>setCustomForm(prev=>({...prev,defaultValue:event.target.value}))} placeholder="Leave blank for none"/>
                       </div>
                     )}
-                    {customForm.fieldType!=="reference"&&(
-                      <div className="col-12">
-                        <div className="form-check form-switch">
-                          <input className="form-check-input" type="checkbox" checked={customForm.editable} onChange={event=>setCustomForm(prev=>({...prev,editable:event.target.checked}))}/>
-                          <label className="form-check-label">People can edit this column directly</label>
-                        </div>
+                    <div className="col-12">
+                      <div className="form-check form-switch">
+                        <input className="form-check-input" type="checkbox" checked={customForm.editable} onChange={event=>setCustomForm(prev=>({...prev,editable:event.target.checked}))}/>
+                        <label className="form-check-label">People can edit this column directly</label>
                       </div>
-                    )}
+                    </div>
                   </div>
                   <button type="button" className="btn btn-primary mt-3" onClick={addCustomField} disabled={!customForm.label.trim()}>Add column</button>
                 </div>

@@ -24,8 +24,17 @@ const storage=multer.diskStorage({
   }
 });
 const upload=multer({storage,limits:{files:5,fileSize:5*1024*1024},fileFilter:(_,file,cb)=>{
-  cb(null,isAllowedUploadType(file.mimetype,false));
+  if(!isAllowedUploadType(file.mimetype,false)){
+    return cb(new Error("Only JPG, PNG, GIF or WebP product images are supported."));
+  }
+  return cb(null,true);
 }});
+
+async function discardUploadedFiles(files=[]){
+  await Promise.allSettled((Array.isArray(files)?files:[]).map(file=>
+    file?.path?fs.promises.unlink(file.path):Promise.resolve()
+  ));
+}
 
 function owner(req){return req.user?.id;}
 function publicUrl(req,filePath){return req.protocol+"://"+req.get("host")+filePath;}
@@ -87,6 +96,7 @@ router.get("/:id",auth,async(req,res)=>{
 });
 
 router.post("/",auth,upload.array("images",5),async(req,res)=>{
+  let uploadedFilesPersisted=false;
   try{
     const code=String(req.body.productCode||"").trim().toUpperCase()||await nextProductCode(owner(req));
     if(await Product.exists({createdBy:owner(req),productCode:code}))return res.status(409).json({message:"Product code already exists."});
@@ -115,11 +125,17 @@ router.post("/",auth,upload.array("images",5),async(req,res)=>{
     if(product.rate<0||product.quantity<0)return res.status(400).json({message:"Rate and quantity cannot be negative."});
     await applyWorkflows({resource:"products",event:"record_created",doc:product,createdBy:owner(req)});
     await product.save();
+    uploadedFilesPersisted=true;
     res.status(201).json({message:"Product created successfully.",product});
-  }catch(error){res.status(400).json({message:error.message});}
+  }catch(error){
+    res.status(error.status||400).json({message:error.message});
+  }finally{
+    if(!uploadedFilesPersisted)await discardUploadedFiles(req.files);
+  }
 });
 
 router.put("/:id",auth,upload.array("images",5),async(req,res)=>{
+  let uploadedFilesPersisted=false;
   try{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid product ID."});
     const product=await Product.findOne({_id:req.params.id,createdBy:owner(req)});
@@ -164,8 +180,13 @@ router.put("/:id",auth,upload.array("images",5),async(req,res)=>{
     if(product.rate<0||product.quantity<0||product.minStock<0)return res.status(400).json({message:"Stock and pricing values cannot be negative."});
     await applyWorkflows({resource:"products",event:"record_updated",doc:product,createdBy:owner(req)});
     await product.save();
+    uploadedFilesPersisted=true;
     res.json({message:"Product updated successfully.",product});
-  }catch(error){res.status(400).json({message:error.message});}
+  }catch(error){
+    res.status(error.status||400).json({message:error.message});
+  }finally{
+    if(!uploadedFilesPersisted)await discardUploadedFiles(req.files);
+  }
 });
 
 router.patch("/:id/stock",auth,async(req,res)=>{

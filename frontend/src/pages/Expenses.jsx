@@ -16,7 +16,7 @@ export default function Expenses(){
   const [searchParams,setSearchParams]=useSearchParams();
   const expenseFormConfig=useFormConfiguration("expenses.form",EXPENSE_FORM_FIELDS);
   const [expenses,setExpenses]=useState([]);
-  const [summary,setSummary]=useState({totalExpense:0,expenseCount:0,averageExpense:0});
+  const [summary,setSummary]=useState({totalExpense:0,totalTax:0,totalSpent:0,expenseCount:0,averageExpense:0,averageTotalSpent:0});
   const [filters,setFilters]=useState({search:"",category:"",startDate:"",endDate:""});
   const [searchInput,setSearchInput]=useState("");
   const [loading,setLoading]=useState(true);
@@ -52,7 +52,7 @@ export default function Expenses(){
         return;
       }
       setExpenses(Array.isArray(list.data?.expenses)?list.data.expenses:[]);
-      setSummary(stats.data||{totalExpense:0,expenseCount:0,averageExpense:0});
+      setSummary(stats.data||{totalExpense:0,totalTax:0,totalSpent:0,expenseCount:0,averageExpense:0,averageTotalSpent:0});
     }catch(e){
       setError(e.response?.data?.message||"Unable to load expenses.");
     }finally{setLoading(false);}
@@ -173,9 +173,9 @@ export default function Expenses(){
     {error&&<div className="alert alert-danger">{error}</div>}
 
     <div className="row g-3 mb-3">
-      <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Total spent</div><div className="fs-4 fw-bold">{money(summary.totalExpense)}</div></div></div></div>
+      <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Total spent (incl. tax)</div><div className="fs-4 fw-bold">{money(summary.totalSpent)}</div><div className="small text-muted">Expense amount plus recorded tax</div></div></div></div>
       <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Number of expenses</div><div className="fs-4 fw-bold">{summary.expenseCount||0}</div></div></div></div>
-      <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Average Expense</div><div className="fs-4 fw-bold">{money(summary.averageExpense)}</div></div></div></div>
+      <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Average total cost</div><div className="fs-4 fw-bold">{money(summary.averageTotalSpent)}</div><div className="small text-muted">Includes recorded tax</div></div></div></div>
     </div>
 
     <div className="card border-0 shadow-sm mb-3"><div className="card-body">

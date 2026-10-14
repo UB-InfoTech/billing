@@ -5,6 +5,7 @@ const Order=require("../models/Order2");
 const Profile=require("../models/Profile");
 const {generateEWayBill}=require("../services/ewaybill/ewaybillService");
 const {getValidToken}=require("../utils/ewaybill/tokenManager");
+const {validateRequestedEwayBill}=require("../utils/ewaybill/pdfAccess");
 const {aspid,password,printUrl}=require("../config/ewaybillConfig");
 const auth=require("../middleware/auth");
 const router=express.Router();
@@ -37,13 +38,7 @@ async function sendPdf(req,res){
     throw error;
   }
 
-  const requestedEwbNo=String(req.params.ewbNo||"").trim();
-  const savedEwbNo=String(order.ewbDetails?.ewbNo||"").trim();
-  if(!requestedEwbNo||!savedEwbNo||requestedEwbNo!==savedEwbNo){
-    const error=new Error("This E-Way Bill does not belong to the selected invoice.");
-    error.status=404;
-    throw error;
-  }
+  const requestedEwbNo=validateRequestedEwayBill(order,req.params.ewbNo);
 
   const profile=await profileForOrder(order);
   const gstin=profile.gstin;

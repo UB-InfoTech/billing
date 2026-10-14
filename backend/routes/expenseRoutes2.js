@@ -24,10 +24,34 @@ const upload=multer({
     }
   }),
   limits:{fileSize:10*1024*1024},
-  fileFilter:(_,file,cb)=>cb(null,isAllowedUploadType(file.mimetype,true))
+  fileFilter:(_,file,cb)=>{
+    if(!isAllowedUploadType(file.mimetype,true)){
+      return cb(new Error("Only JPG, PNG, GIF, WebP or PDF receipts are supported."));
+    }
+    return cb(null,true);
+  }
 });
 const owner=req=>req.user.id;
 const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
+
+async function discardExpenseUpload(file){
+  if(!file?.path)return;
+  try{await fs.promises.unlink(file.path);}catch(error){if(error.code!=="ENOENT")console.error("Failed to clean up rejected expense receipt:",error);}
+}
+
+const receiveExpenseReceipt=(req,res,next)=>{
+  upload.single("receipt")(req,res,async error=>{
+    if(!error)return next();
+    await discardExpenseUpload(req.file);
+    const status=error.code==="LIMIT_FILE_SIZE"?413:400;
+    const message=error.code==="LIMIT_FILE_SIZE"
+      ?"Each receipt must be 10 MB or smaller."
+      :error.code==="LIMIT_UNEXPECTED_FILE"
+        ?"Upload one receipt at a time."
+        :error.message||"Unable to upload the receipt.";
+    return res.status(status).json({message});
+  });
+};
 
 function referenceError(message){
   const error=new Error(message);
@@ -183,7 +207,18 @@ router.put("/:id",auth,async(req,res)=>{
   }
 });
 
-router.post("/upload-receipt",auth,upload.single("receipt"),async(req,res)=>{try{if(!req.file)return res.status(400).json({message:"Receipt file is required."});res.status(201).json({receiptUrl:"/uploads/expenses/"+req.file.filename,filename:req.file.filename});}catch(error){res.status(400).json({message:error.message});}});
+router.post("/upload-receipt",auth,receiveExpenseReceipt,async(req,res)=>{
+  try{
+    if(!req.file)return res.status(400).json({message:"Choose a receipt file first."});
+    return res.status(201).json({
+      receiptUrl:"/uploads/expenses/"+req.file.filename,
+      filename:req.file.filename
+    });
+  }catch(error){
+    await discardExpenseUpload(req.file);
+    return res.status(400).json({message:error.message||"Unable to upload the receipt."});
+  }
+});
 
 router.delete("/:id",auth,async(req,res)=>{try{if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid expense ID."});const expense=await Expense.findOneAndDelete({_id:req.params.id,createdBy:owner(req)});if(!expense)return res.status(404).json({message:"Expense not found."});res.json({message:"Expense deleted successfully."});}catch(error){res.status(500).json({message:error.message});}});
 

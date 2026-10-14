@@ -113,6 +113,7 @@ export default function FormConfigurator({
   saving=false,
 }){
   const [draft,setDraft]=useState(()=>fields.map(clone));
+  const [savedDraftSignature,setSavedDraftSignature]=useState(()=>JSON.stringify(fields.map(clone)));
   const [search,setSearch]=useState("");
   const [dragKey,setDragKey]=useState(null);
   const [dropTargetKey,setDropTargetKey]=useState(null);
@@ -132,16 +133,42 @@ export default function FormConfigurator({
   });
   const [sourceCatalog,setSourceCatalog]=useState(DATA_SOURCES);
 
+  const incomingFieldsSignature=JSON.stringify(fields.map(clone));
+  const draftRef=React.useRef(draft);
+  const savedDraftSignatureRef=React.useRef(savedDraftSignature);
+  const wasOpenRef=React.useRef(false);
+  const lastIncomingFieldsSignatureRef=React.useRef(incomingFieldsSignature);
+  draftRef.current=draft;
+  savedDraftSignatureRef.current=savedDraftSignature;
+
   useEffect(()=>{
-    if(!open)return;
-    setDraft(fields.map(clone));
-    setSearch("");
-    setExpandedKey(null);
-    setShowAddField(false);
-    setShowAdvanced(false);
-    setShowPreview(true);
-    setError("");
-  },[open,fields]);
+    if(!open){
+      wasOpenRef.current=false;
+      lastIncomingFieldsSignatureRef.current=incomingFieldsSignature;
+      return;
+    }
+
+    const isOpening=!wasOpenRef.current;
+    const externalFieldsChanged=lastIncomingFieldsSignatureRef.current!==incomingFieldsSignature;
+    const draftIsClean=JSON.stringify(draftRef.current)===savedDraftSignatureRef.current;
+
+    // Initialize when opening. If the saved configuration updates from outside
+    // while the builder is open, refresh only when the user's draft is still
+    // clean; never silently overwrite unsaved changes.
+    if(isOpening||(externalFieldsChanged&&draftIsClean)){
+      const next=fields.map(clone);
+      setDraft(next);
+      setSavedDraftSignature(JSON.stringify(next));
+      setSearch("");
+      setExpandedKey(null);
+      setShowAddField(false);
+      setShowAdvanced(false);
+      setShowPreview(true);
+      setError("");
+    }
+    wasOpenRef.current=true;
+    lastIncomingFieldsSignatureRef.current=incomingFieldsSignature;
+  },[open,incomingFieldsSignature]);
 
   useEffect(()=>{
     if(!open)return;
@@ -362,7 +389,11 @@ export default function FormConfigurator({
         }
       }
 
-      await onSave(draft.map((field,index)=>({...field,order:index})));
+      const normalizedDraft=draft.map((field,index)=>({...field,order:index}));
+      const savedFields=await onSave(normalizedDraft);
+      const confirmedFields=(Array.isArray(savedFields)?savedFields:normalizedDraft).map(clone);
+      setDraft(confirmedFields);
+      setSavedDraftSignature(JSON.stringify(confirmedFields));
       onClose();
     }catch(saveError){
       setError(saveError?.response?.data?.message||saveError?.message||"Unable to save these changes.");
@@ -372,10 +403,23 @@ export default function FormConfigurator({
   const reset=async()=>{
     try{
       setError("");
-      await onReset();
+      const resetFields=await onReset();
+      const confirmedFields=(Array.isArray(resetFields)?resetFields:fields).map(clone);
+      setDraft(confirmedFields);
+      setSavedDraftSignature(JSON.stringify(confirmedFields));
+      setExpandedKey(null);
+      setSearch("");
     }catch(resetError){
       setError(resetError?.response?.data?.message||resetError?.message||"Unable to reset the form.");
     }
+  };
+
+  const requestClose=()=>{
+    if(saving)return;
+    const hasUnsavedChanges=JSON.stringify(draft)!==savedDraftSignature;
+    if(hasUnsavedChanges&&!window.confirm("Discard the unsaved form changes? Your saved form will stay unchanged."))return;
+    if(hasUnsavedChanges)setDraft(JSON.parse(savedDraftSignature));
+    onClose();
   };
 
   const addFormulaToken=(key,token)=>{
@@ -414,7 +458,7 @@ export default function FormConfigurator({
   if(!open)return null;
 
   return(
-    <div className="form-settings-overlay" onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}>
+    <div className="form-settings-overlay" onMouseDown={event=>{if(event.target===event.currentTarget)requestClose();}}>
       <section className="form-builder" role="dialog" aria-modal="true" aria-label={title}>
         <header className="form-builder-header">
           <div className="min-w-0">
@@ -422,7 +466,7 @@ export default function FormConfigurator({
             <h4 className="mb-1">{title}</h4>
             <p className="mb-0">{subtitle||"Start with the basics. Drag fields, rename them and choose how people use them. More options stay hidden until you need them."}</p>
           </div>
-          <button type="button" className="btn btn-light border rounded-circle form-builder-close" onClick={onClose} aria-label="Close">
+          <button type="button" className="btn btn-light border rounded-circle form-builder-close" onClick={requestClose} aria-label="Close">
             <i className="bi bi-x-lg"></i>
           </button>
         </header>
@@ -968,7 +1012,7 @@ export default function FormConfigurator({
         <footer className="form-builder-footer">
           <button type="button" className="btn btn-outline-danger" disabled={saving} onClick={reset}><i className="bi bi-arrow-counterclockwise me-1"></i>Reset to default</button>
           <div className="ms-auto d-flex gap-2">
-            <button type="button" className="btn btn-light border" disabled={saving} onClick={onClose}>Cancel</button>
+            <button type="button" className="btn btn-light border" disabled={saving} onClick={requestClose}>Cancel</button>
             <button type="button" className="btn btn-primary px-4" disabled={saving} onClick={save}>{saving?<><span className="spinner-border spinner-border-sm me-2"></span>Saving</>:"Save changes"}</button>
           </div>
         </footer>

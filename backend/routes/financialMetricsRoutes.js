@@ -6,13 +6,12 @@ const Product=require("../models/Product");
 const ReportConfiguration=require("../models/ReportConfiguration");
 const auth=require("../middleware/auth");
 const {getInvoiceRevenue}=require("../utils/syncClientData");
+const {ratio,pct}=require("../utils/financialMetricMath");
 
 const router=express.Router();
 const owner=req=>req.user.id;
 const {buildOrderDateRange}=require("../utils/orderDateRange");
 const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
-const ratio=(a,b)=>b?round2(Number(a||0)/Number(b)):null;
-const pct=(a,b)=>b?round2(Number(a||0)*100/Number(b)):null;
 const num=v=>Number.isFinite(Number(v))?Number(v):0;
 const dateRange=(start,end)=>buildOrderDateRange({startDate:start,endDate:end});
 
@@ -104,7 +103,7 @@ router.get("/",auth,async(req,res)=>{
     const bookValuePerShare=equity!==null&&shares!==null?ratio(equity,shares):null;
     const marketCap=marketPrice!==null&&shares!==null?round2(marketPrice*shares):null;
     const workingCapital=currentAssets!==null&&currentLiabilities!==null?round2(currentAssets-currentLiabilities):null;
-    const quickAssets=currentAssets!==null?round2(currentAssets-(inventory||0)):null;
+    const quickAssets=currentAssets!==null&&inventory!==null?round2(currentAssets-inventory):null;
     const contribution=variableCosts!==null?round2(netSales-variableCosts):null;
     const contributionRatio=contribution===null?null:pct(contribution,netSales);
     const breakEven=fixedCosts!==null&&contributionRatio?round2(fixedCosts/(contributionRatio/100)):null;

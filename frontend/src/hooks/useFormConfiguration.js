@@ -185,6 +185,21 @@ export const getFieldPath=(record,path)=>{
   return String(path).split(".").reduce((value,key)=>value==null?undefined:value[key],record);
 };
 
+const numericConditionMatches=(current,expected,operator)=>{
+  // Empty is not zero. A numeric rule should match only when both operands
+  // contain valid numbers, otherwise blank fields can accidentally activate it.
+  if(
+    current===null||current===undefined||String(current).trim()===""||
+    expected===null||expected===undefined||String(expected).trim()===""
+  )return false;
+  const currentNumber=Number(current);
+  const expectedNumber=Number(expected);
+  if(!Number.isFinite(currentNumber)||!Number.isFinite(expectedNumber))return false;
+  if(operator==="greater_than")return currentNumber>expectedNumber;
+  if(operator==="less_than")return currentNumber<expectedNumber;
+  return false;
+};
+
 export const fieldConditionMatches=(condition,values)=>{
   const current=values?.[condition?.fieldKey];
   const expected=condition?.value??"";
@@ -194,8 +209,8 @@ export const fieldConditionMatches=(condition,values)=>{
     case "not_equals":return text!==target;
     case "contains":return text.includes(target);
     case "not_contains":return !text.includes(target);
-    case "greater_than":return Number(current)>Number(expected);
-    case "less_than":return Number(current)<Number(expected);
+    case "greater_than":return numericConditionMatches(current,expected,"greater_than");
+    case "less_than":return numericConditionMatches(current,expected,"less_than");
     case "empty":return text.trim()==="";
     case "not_empty":return text.trim()!=="";
     default:return text===target;

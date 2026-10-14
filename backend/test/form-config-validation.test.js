@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const { sanitizeFields } = require("../routes/formConfigRoutes");
 const {
   findRemovedFieldDependency,
   validateFieldReferences
@@ -124,4 +125,57 @@ test("persists optional condition actions without a schema validation error", as
   });
 
   await assert.doesNotReject(config.validate());
+});
+
+
+test("blank validation bounds remain unbounded after saving a form", () => {
+  const [field] = sanitizeFields([{
+    key: "unitPrice",
+    label: "Unit price",
+    fieldType: "currency",
+    validation: { min: null, max: null, pattern: "" }
+  }]);
+
+  assert.equal(field.validation.min, null);
+  assert.equal(field.validation.max, null);
+});
+
+test("missing and empty-string validation bounds remain unbounded", () => {
+  const [missing] = sanitizeFields([{
+    key: "quantity",
+    label: "Quantity",
+    fieldType: "number"
+  }]);
+  const [empty] = sanitizeFields([{
+    key: "quantity",
+    label: "Quantity",
+    fieldType: "number",
+    validation: { min: "", max: "   ", pattern: "" }
+  }]);
+
+  assert.equal(missing.validation.min, null);
+  assert.equal(missing.validation.max, null);
+  assert.equal(empty.validation.min, null);
+  assert.equal(empty.validation.max, null);
+});
+
+test("explicit zero and positive validation bounds are preserved", () => {
+  const [field] = sanitizeFields([{
+    key: "quantity",
+    label: "Quantity",
+    fieldType: "number",
+    validation: { min: 0, max: 250, pattern: "" }
+  }]);
+
+  assert.equal(field.validation.min, 0);
+  assert.equal(field.validation.max, 250);
+});
+
+test("an invalid validation pattern is still rejected", () => {
+  assert.throws(() => sanitizeFields([{
+    key: "quantity",
+    label: "Quantity",
+    fieldType: "number",
+    validation: { min: null, max: null, pattern: "[" }
+  }]), /validation pattern.*not valid/i);
 });

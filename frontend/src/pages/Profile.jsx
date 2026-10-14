@@ -5,6 +5,7 @@ import FormConfigurator from "../components/FormConfigurator";
 import ConfiguredField from "../components/ConfiguredField";
 import {PROFILE_FORM_FIELDS} from "../config/noCodeCatalog";
 import {
+  applyFormulas,
   buildConfiguredDefaults,
   getFieldState,
   hydrateConfiguredValues,
@@ -82,33 +83,57 @@ export default function Profile(){
     );
   };
 
-  const load=async()=>{
-    try{
-      setLoading(true);
-      const response=await axios.get(API+"/api/profile",auth());
-      setProfile(hydrateConfiguredValues({...blankProfile(),...(response.data||{})},profileFields));
-      setError("");
-      setSuccessMessage("");
-    }catch(loadError){
-      setError(loadError.response?.data?.message||"Unable to load company profile.");
-    }finally{setLoading(false);}
-  };
-
-  useEffect(()=>{load();},[]);
+  useEffect(()=>{
+    let active=true;
+    const load=async()=>{
+      try{
+        setLoading(true);
+        const response=await axios.get(API+"/api/profile",auth());
+        if(!active)return;
+        const hydrated=hydrateConfiguredValues(
+          {...blankProfile(),...(response.data||{})},
+          profileFields
+        );
+        setProfile(applyFormulas(profileFields,hydrated));
+        setError("");
+        setSuccessMessage("");
+      }catch(loadError){
+        if(active)setError(loadError.response?.data?.message||"Unable to load company profile.");
+      }finally{
+        if(active)setLoading(false);
+      }
+    };
+    load();
+    return()=>{active=false;};
+  },[profileFields]);
 
   const updateValue=(key,value)=>{
-    setProfile(previous=>syncConfiguredCustomFields({...previous,[key]:value},profileFields));
+    setProfile(previous=>applyFormulas(
+      profileFields,
+      syncConfiguredCustomFields({...previous,[key]:value},profileFields)
+    ));
   };
 
   const save=async event=>{
     event.preventDefault();
-    const next=syncConfiguredCustomFields(profile,profileFields);
+    const next=applyFormulas(profileFields,syncConfiguredCustomFields(profile,profileFields));
+    const validationValues={...next,...(next.customFields||{})};
+    const missing=profileFields.filter(field=>!field.formula).find(field=>{
+      const state=getFieldState(field,validationValues);
+      if(!state.visible||!state.required||state.disabled)return false;
+      const value=field.custom?next.customFields?.[field.key]??next[field.key]:next[field.key];
+      return String(value??"").trim()==="";
+    });
+    if(missing){
+      setError("Please complete “"+missing.label+"” before saving.");
+      return;
+    }
     setError("");
     setSuccessMessage("");
     try{
       setSaving(true);
       const response=await axios.put(API+"/api/profile",next,auth());
-      setProfile(hydrateConfiguredValues(response.data||next,profileFields));
+      setProfile(applyFormulas(profileFields,hydrateConfiguredValues(response.data||next,profileFields)));
       setError("");
       setSuccessMessage("Company profile saved. These details will be used on your invoices.");
     }catch(saveError){

@@ -71,8 +71,15 @@ const sanitizeFields=fields=>{
     if(["number","currency"].includes(fieldType))formula=cleanString(raw?.formula,500);
     const formulaReadOnly=Boolean(formula);
 
-    const resource=SOURCES.includes(raw?.dataSource?.resource)?raw.dataSource.resource:"";
+    const configuredResource=SOURCES.includes(raw?.dataSource?.resource)?raw.dataSource.resource:"";
+    const resource=configuredResource==="none"?"":configuredResource;
     const dataSourceType=raw?.dataSource?.type==="lookup"&&resource?"lookup":"none";
+    if(fieldType==="reference"&&dataSourceType!=="lookup"){
+      throw new Error(`Choose a list for “${label}” before saving the form.`);
+    }
+    if(["select","multiselect"].includes(fieldType)&&dataSourceType!=="lookup"&&options.length===0){
+      throw new Error(`Add at least one choice for “${label}”.`);
+    }
 
     const conditions=Array.isArray(raw?.conditions)
       ?raw.conditions.slice(0,30).map(item=>({
@@ -80,7 +87,7 @@ const sanitizeFields=fields=>{
         fieldKey:cleanString(item?.fieldKey,100),
         operator:OPERATORS.includes(item?.operator)?item.operator:"equals",
         value:cleanString(item?.value,300)
-      })).filter(item=>item.fieldKey)
+      }))
       :[];
 
     return {
@@ -113,7 +120,7 @@ const sanitizeFields=fields=>{
           ?raw.dataSource.autoFill.slice(0,30).map(item=>({
             targetKey:cleanString(item?.targetKey,100),
             sourceKey:cleanString(item?.sourceKey,100)
-          })).filter(item=>item.targetKey&&item.sourceKey)
+          }))
           :[]
       },
       conditions,
@@ -128,6 +135,14 @@ const sanitizeFields=fields=>{
   });
 
   result.forEach(field=>{
+    const incompleteCondition=(field.conditions||[]).find(condition=>!condition.fieldKey);
+    if(incompleteCondition){
+      throw new Error(`Choose a field for every rule on “${field.label}” or remove the unfinished rule.`);
+    }
+    const incompleteMapping=(field.dataSource?.autoFill||[]).find(mapping=>!mapping.targetKey||!mapping.sourceKey);
+    if(incompleteMapping){
+      throw new Error(`Complete every auto-fill mapping for “${field.label}” or remove the unfinished mapping.`);
+    }
     const min=field.validation?.min;
     const max=field.validation?.max;
     if(min!==null&&max!==null&&min!==undefined&&max!==undefined&&Number(min)>Number(max)){

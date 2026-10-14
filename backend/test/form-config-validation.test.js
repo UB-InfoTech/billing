@@ -179,3 +179,43 @@ test("an invalid validation pattern is still rejected", () => {
     validation: { min: null, max: null, pattern: "[" }
   }]), /validation pattern.*not valid/i);
 });
+
+test("requires a linked-record source for reference fields", () => {
+  assert.throws(() => sanitizeFields([{
+    key: "accountManager",
+    label: "Account manager",
+    fieldType: "reference",
+    dataSource: { type: "none", resource: "none" }
+  }]), /choose a list.*account manager/i);
+});
+
+test("requires choices for manual dropdown fields", () => {
+  assert.throws(() => sanitizeFields([{
+    key: "customerType",
+    label: "Customer type",
+    fieldType: "select",
+    options: []
+  }]), /add at least one choice.*customer type/i);
+});
+
+test("rejects unfinished conditional rules instead of silently dropping them", () => {
+  assert.throws(() => sanitizeFields([{
+    key: "discountReason",
+    label: "Discount reason",
+    fieldType: "text",
+    conditions: [{ action: "show", fieldKey: "", operator: "equals", value: "Business" }]
+  }]), /choose a field for every rule/i);
+});
+
+test("rejects unfinished auto-fill mappings instead of silently dropping them", () => {
+  assert.throws(() => sanitizeFields([{
+    key: "customer",
+    label: "Customer",
+    fieldType: "reference",
+    dataSource: {
+      type: "lookup",
+      resource: "clients",
+      autoFill: [{ targetKey: "gstNumber", sourceKey: "" }]
+    }
+  }]), /complete every auto-fill mapping/i);
+});

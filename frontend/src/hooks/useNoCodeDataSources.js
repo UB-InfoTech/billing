@@ -13,8 +13,14 @@ const mergeRecords=(existing=[],incoming=[])=>{
   return [...byId.values()];
 };
 
+export const normalizeRequestedResources=(resources=[])=>Array.from(new Set(
+  (Array.isArray(resources)?resources:[])
+    .map(resource=>String(resource??"").trim())
+    .filter(resource=>resource&&resource.toLowerCase()!=="none")
+));
+
 export function useNoCodeDataSources(resources=[]){
-  const requested=useMemo(()=>Array.from(new Set((resources||[]).filter(Boolean))),[JSON.stringify(resources||[])]);
+  const requested=useMemo(()=>normalizeRequestedResources(resources),[JSON.stringify(resources||[])]);
   const [records,setRecords]=useState({});
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
@@ -26,17 +32,29 @@ export function useNoCodeDataSources(resources=[]){
       try{
         setLoading(true);setError("");
         const entries=await Promise.all(requested.map(async resource=>{
-          const response=await axios.get(apiBase+"/api/no-code-data/"+encodeURIComponent(resource),{...authConfig(),params:{limit:200}});
-          return [resource,response.data?.records||[]];
+          try{
+            const response=await axios.get(apiBase+"/api/no-code-data/"+encodeURIComponent(resource),{...authConfig(),params:{limit:200}});
+            return {resource,items:Array.isArray(response.data?.records)?response.data.records:[],error:""};
+          }catch(fetchError){
+            return {
+              resource,
+              items:null,
+              error:fetchError.response?.data?.message||`Unable to load ${resource} records.`
+            };
+          }
         }));
         if(!cancelled){
           setRecords(previous=>{
             const next={...previous};
-            entries.forEach(([resource,items])=>{
-              next[resource]=mergeRecords(next[resource]||[],items);
+            entries.forEach(({resource,items})=>{
+              // One unavailable source should not suppress usable customer,
+              // product or invoice choices from the other lookup lists.
+              if(items!==null)next[resource]=mergeRecords(previous[resource]||[],items);
             });
             return next;
           });
+          const failed=entries.find(entry=>entry.error);
+          setError(failed?.error||"");
         }
       }catch(fetchError){
         if(!cancelled)setError(fetchError.response?.data?.message||"Unable to load linked data.");
@@ -48,7 +66,8 @@ export function useNoCodeDataSources(resources=[]){
   },[requested]);
 
   const searchRecords=useCallback(async(resource,query="",searchField="",ids=[])=>{
-    if(!resource)return [];
+    const resourceKey=String(resource??"").trim();
+    if(!resourceKey||resourceKey.toLowerCase()==="none")return [];
     const params={limit:200};
     const normalizedQuery=String(query||"").trim();
     if(normalizedQuery)params.q=normalizedQuery;
@@ -57,11 +76,11 @@ export function useNoCodeDataSources(resources=[]){
 
     try{
       const response=await axios.get(
-        apiBase+"/api/no-code-data/"+encodeURIComponent(resource),
+        apiBase+"/api/no-code-data/"+encodeURIComponent(resourceKey),
         {...authConfig(),params}
       );
       const matches=Array.isArray(response.data?.records)?response.data.records:[];
-      setRecords(previous=>({...previous,[resource]:mergeRecords(previous[resource]||[],matches)}));
+      setRecords(previous=>({...previous,[resourceKey]:mergeRecords(previous[resourceKey]||[],matches)}));
       setError("");
       return matches;
     }catch(searchError){

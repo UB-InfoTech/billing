@@ -176,6 +176,7 @@ export default function DynamicTable({
   const [searchTerm,setSearchTerm]=useState("");
   const [editingCell,setEditingCell]=useState(null);
   const [editingValue,setEditingValue]=useState("");
+  const [savingCells,setSavingCells]=useState(()=>new Set());
   const [error,setError]=useState("");
   const [showColumnDetails,setShowColumnDetails]=useState(false);
 
@@ -371,8 +372,18 @@ export default function DynamicTable({
     // Enter and blur often fire back-to-back; prevent duplicate writes for the
     // same cell while the first save is in flight.
     commitsInProgressRef.current.add(stateKey);
+    setSavingCells(previous=>{
+      const next=new Set(previous);
+      next.add(stateKey);
+      return next;
+    });
     saveCustomValue(rowKey,column.key,editingValue).finally(()=>{
       commitsInProgressRef.current.delete(stateKey);
+      setSavingCells(previous=>{
+        const next=new Set(previous);
+        next.delete(stateKey);
+        return next;
+      });
     });
   };
 
@@ -444,6 +455,7 @@ export default function DynamicTable({
     const rowKey=String(getRowKey(row,rowIndex));
     const stateKey=customValueKey(rowKey,column.key);
     const value=resolvedValue(column.key,row,rowIndex);
+    const isSaving=savingCells.has(stateKey);
 
     if(column.editable===false){
       return <span className={value===null||value===undefined||value===""?"text-muted":""}>{formatCustomValue(column,value)}</span>;
@@ -458,12 +470,17 @@ export default function DynamicTable({
         type="button"
         className="dynamic-custom-cell"
         onClick={()=>startEdit(rowKey,column,value)}
-        title="Click to edit"
+        disabled={isSaving}
+        aria-busy={isSaving}
+        title={isSaving?"Saving this value…":"Click to edit"}
       >
         <span className={value===null||value===undefined||value===""?"text-muted":""}>
           {formatCustomValue(column,value)}
         </span>
-        <i className="bi bi-pencil-square ms-2 opacity-0 dynamic-custom-edit-icon"></i>
+        {isSaving
+          ? <span className="spinner-border spinner-border-sm ms-2" role="status" aria-label="Saving"></span>
+          : <i className="bi bi-pencil-square ms-2 opacity-0 dynamic-custom-edit-icon"></i>
+        }
       </button>
     );
   };

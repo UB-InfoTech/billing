@@ -9,6 +9,7 @@ const Machine=require("../models/Machine");
 const Supplier=require("../models/Supplier");
 const CreditNote=require("../models/CreditNote");
 const auth=require("../middleware/auth");
+const {buildMongoBillableQuantityExpression}=require("../utils/orderLineFinancials");
 const {getInvoiceRevenue}=require("../utils/syncClientData");
 const router=express.Router();
 const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
@@ -66,16 +67,7 @@ router.get("/top-selling-sarees",auth,async(req,res)=>{
   try{
     // Keep this calculation in sync with the invoice model: MTR lines bill
     // MTR minus short pieces, while PCS lines bill quantity minus short pieces.
-    const rawQuantity={
-      $cond:[
-        {$eq:[{$ifNull:["$subOrders.qtyUnit","PCS"]},"MTR"]},
-        {$ifNull:["$subOrders.MTR",0]},
-        {$ifNull:["$subOrders.quantity",0]}
-      ]
-    };
-    const billableQuantity={
-      $max:[{$subtract:[rawQuantity,{$ifNull:["$subOrders.shortPcs",0]}]},0]
-    };
+    const billableQuantity=buildMongoBillableQuantityExpression();
     const rows=await Order.aggregate([
       {$match:{createdBy:new mongoose.Types.ObjectId(owner(req)),status:{$ne:"Cancelled"}}},
       {$unwind:"$subOrders"},
@@ -86,7 +78,7 @@ router.get("/top-selling-sarees",auth,async(req,res)=>{
           unit:{$ifNull:["$subOrders.qtyUnit","PCS"]}
         },
         quantity:{$sum:billableQuantity},
-        revenue:{$sum:{$multiply:[billableQuantity,{$ifNull:["$subOrders.unitPrice",0]}]}}
+        revenue:{$sum:{$multiply:[billableQuantity,{$max:[0,{$ifNull:["$subOrders.unitPrice",0]}]}]}}
       }},
       {$sort:{revenue:-1,quantity:-1}},
       {$limit:20}

@@ -223,6 +223,7 @@ export default function DynamicTable({
   columnsRef.current=columns;
   const commitsInProgressRef=useRef(new Set());
   const cancelledEditRef=useRef(null);
+  const referenceIdLookupAttemptsRef=useRef(new Set());
 
   const customColumns=useMemo(()=>draft.filter(column=>column.kind==="custom"),[draft]);
   const mergeSources=useMemo(()=>draft.filter(column=>column.kind!=="merged"),[draft]);
@@ -271,7 +272,10 @@ export default function DynamicTable({
     const resource=activeColumn.dataSource?.resource;
     if(!REFERENCE_RESOURCES[resource])return;
     const query=String(referenceSearchQueries[resource]||"").trim();
-    if(query.length<2)return;
+    if(query.length<2){
+      setReferenceSearchLoading(previous=>previous[resource]?({...previous,[resource]:false}):previous);
+      return;
+    }
 
     let cancelled=false;
     const timer=window.setTimeout(async()=>{
@@ -304,9 +308,12 @@ export default function DynamicTable({
     if(!activeColumn)return;
     const resource=activeColumn.dataSource?.resource;
     const currentValue=String(editingValue??"").trim();
-    if(!REFERENCE_RESOURCES[resource]||!currentValue)return;
+    if(!REFERENCE_RESOURCES[resource]||!currentValue||!/^[a-f0-9]{24}$/i.test(currentValue))return;
     const valueField=activeColumn.dataSource?.valueField||"_id";
     if((referenceRecords[resource]||[]).some(record=>String(record?.[valueField]??"")===currentValue))return;
+    const requestKey=resource+":"+currentValue;
+    if(referenceIdLookupAttemptsRef.current.has(requestKey))return;
+    referenceIdLookupAttemptsRef.current.add(requestKey);
 
     let active=true;
     searchReferenceRecords(

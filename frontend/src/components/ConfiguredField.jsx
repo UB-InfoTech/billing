@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState} from "react";
 import ArithmeticInput from "./ArithmeticInput";
+import {normalizeBooleanValue} from "../utils/fieldValue";
 
 export default function ConfiguredField({
   field,
@@ -225,7 +226,7 @@ export default function ConfiguredField({
     );
   }else if(field.fieldType==="boolean"){
     control=<div className="form-check form-switch pt-2">
-      <input className="form-check-input" type="checkbox" checked={Boolean(value)} onChange={event=>handleValue(event.target.checked)} disabled={effectiveDisabled||effectiveReadOnly}/>
+      <input className="form-check-input" type="checkbox" checked={normalizeBooleanValue(value)} onChange={event=>handleValue(event.target.checked)} disabled={effectiveDisabled||effectiveReadOnly}/>
     </div>;
   }else if(field.fieldType==="number"||field.fieldType==="currency"){
     control=<ArithmeticInput

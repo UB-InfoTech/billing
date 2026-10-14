@@ -3,7 +3,7 @@ import axios from "axios";
 import FormConfigurator from "./FormConfigurator";
 import ConfiguredField from "./ConfiguredField";
 import {EWAY_BILL_FIELDS} from "../config/noCodeCatalog";
-import {buildConfiguredDefaults,getFieldState,hydrateConfiguredValues,syncConfiguredCustomFields,useFormConfiguration} from "../hooks/useFormConfiguration";
+import {applyFormulas,buildConfiguredDefaults,getFieldState,hydrateConfiguredValues,syncConfiguredCustomFields,useFormConfiguration} from "../hooks/useFormConfiguration";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const DEFAULT_VALUES={
@@ -35,8 +35,17 @@ export default function EWayBillForm({orderId,customizeOnly=false,onClose}){
 
   const eventFields=fields||EWAY_BILL_FIELDS;
 
+  // Apply configured defaults even when the form's saved definition arrives
+  // after the screen first renders. Existing values are preserved.
+  useEffect(()=>{
+    setFormData(previous=>buildConfiguredDefaults({...previous,customFields:{...(previous.customFields||{})}},eventFields));
+  },[eventFields]);
+
   const updateValue=(key,value)=>{
-    setFormData(previous=>syncConfiguredCustomFields({...previous,[key]:value},eventFields));
+    setFormData(previous=>applyFormulas(
+      eventFields,
+      syncConfiguredCustomFields({...previous,[key]:value},eventFields)
+    ));
   };
 
   const resetValues=()=>{
@@ -72,7 +81,7 @@ export default function EWayBillForm({orderId,customizeOnly=false,onClose}){
     setError("");
     setResponse(null);
     try{
-      const values=syncConfiguredCustomFields(formData,eventFields);
+      const values=applyFormulas(eventFields,syncConfiguredCustomFields(formData,eventFields));
       const payload={...values,customFields:values.customFields||{}};
       const result=await axios.post(`${API}/api/ewaybill/generate/${orderId}`,payload,{
         headers:{"x-auth-token":localStorage.getItem("token")||""}

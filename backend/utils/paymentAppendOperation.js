@@ -1,18 +1,32 @@
 /**
  * Build an atomic invoice payment append.
  *
- * The balance check belongs in the database write filter, not only in the
- * earlier invoice read: another request may have changed the due balance
- * while a bulk payment was being allocated.
+ * Match the due balance observed during validation exactly. That makes a
+ * competing payment or credit adjustment fail this write instead of letting
+ * a pre-update snapshot overwrite the invoice's calculated financial totals.
  */
-function buildPaymentAppendOperation({ orderId, createdBy, amount, payment, paymentDate }) {
+function buildPaymentAppendOperation({
+  orderId,
+  createdBy,
+  amount,
+  expectedDueAmount,
+  payment,
+  paymentDate
+}) {
   const normalizedAmount = Number(amount);
+  const expectedDue = Number(expectedDueAmount);
 
   if (!orderId || createdBy === undefined || createdBy === null) {
     throw new TypeError("Invoice ID and business ownership are required.");
   }
   if (!Number.isFinite(normalizedAmount) || normalizedAmount <= 0) {
     throw new TypeError("Payment amount must be a finite number greater than zero.");
+  }
+  if (!Number.isFinite(expectedDue) || expectedDue < 0) {
+    throw new TypeError("Expected invoice balance must be a valid non-negative number.");
+  }
+  if (Math.round(normalizedAmount * 100) > Math.round(expectedDue * 100)) {
+    throw new TypeError("Payment amount exceeds the expected invoice balance.");
   }
   if (!payment || typeof payment !== "object" || Array.isArray(payment)) {
     throw new TypeError("A payment record is required.");
@@ -31,7 +45,9 @@ function buildPaymentAppendOperation({ orderId, createdBy, amount, payment, paym
       _id: orderId,
       createdBy,
       status: { $ne: "Cancelled" },
-      dueAmount: { $gte: normalizedAmount }
+      // Exact-match the balance observed by the caller. A stale write returns
+      // no document, allowing the route to report a retryable conflict.
+      dueAmount: expectedDue
     },
     update: {
       $push: { payments: payment },

@@ -5,6 +5,7 @@ const dotenv=require("dotenv");
 const path=require("path");
 const mongoSanitize=require("express-mongo-sanitize");
 const rateLimit=require("express-rate-limit");
+const {getCorsPolicy,isCorsOriginAllowed}=require("./utils/corsPolicy");
 const {isSafePublicUploadPath}=require("./utils/uploadFileTypes");
 const {isPrivateExpenseUploadPath}=require("./utils/expenseReceiptAccess");
 
@@ -15,14 +16,16 @@ const PORT=Number(process.env.PORT||5000);
 
 const apiLimiter=rateLimit({windowMs:15*60*1000,limit:300,standardHeaders:"draft-7",legacyHeaders:false});
 
-const allowedOrigins=String(process.env.FRONTEND_URLS||process.env.FRONTEND_URL||"*")
-  .split(",").map(x=>x.trim()).filter(Boolean);
+const corsPolicy=getCorsPolicy();
+const allowedOrigins=corsPolicy.allowedOrigins;
 
 app.set("trust proxy",1);
 app.use(cors({
   origin:(origin,callback)=>{
-    if(!origin||allowedOrigins.includes("*")||allowedOrigins.includes(origin))return callback(null,true);
-    return callback(new Error("CORS origin not allowed."));
+    if(isCorsOriginAllowed(origin,allowedOrigins))return callback(null,true);
+    const error=new Error("CORS origin not allowed.");
+    error.status=403;
+    return callback(error);
   },
   credentials:true,
   allowedHeaders:["Content-Type","x-auth-token","Authorization"],
@@ -129,6 +132,7 @@ const errorHandler=(err,req,res,next)=>{
 app.use(errorHandler);
 
 async function start(){
+  if(corsPolicy.configurationError)throw new Error(corsPolicy.configurationError);
   if(!process.env.MONGO_URI)throw new Error("MONGO_URI is required.");
   if(!process.env.JWT_SECRET)throw new Error("JWT_SECRET is required.");
   await mongoose.connect(process.env.MONGO_URI,{serverSelectionTimeoutMS:10000});

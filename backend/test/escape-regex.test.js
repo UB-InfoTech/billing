@@ -20,3 +20,12 @@ test("converts nullish input to a safe empty string", () => {
   assert.equal(escapeRegex(null), "");
   assert.equal(escapeRegex(undefined), "");
 });
+
+test("escapes braces and compound terms for literal customer searches", () => {
+  const { escapeRegex } = require("../utils/escapeRegex");
+  const search = "{Client} [Retail] (A+B)?";
+  const regex = new RegExp(escapeRegex(search), "i");
+
+  assert.equal(regex.test("{Client} [Retail] (A+B)?"), true);
+  assert.equal(regex.test("Client Retail A+B"), false);
+});

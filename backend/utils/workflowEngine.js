@@ -1,5 +1,6 @@
 const WorkflowDefinition=require("../models/WorkflowDefinition");
 const {isProtectedWorkflowField,ORDER_STATUSES}=require("./workflowPolicy");
+const {numericConditionMatches}=require("./conditionMatcher");
 
 const readValue=(doc,key)=>{
   if(!doc||!key)return "";
@@ -19,8 +20,8 @@ const matches=(condition,doc)=>{
     case "not_equals":return text!==target;
     case "contains":return text.includes(target);
     case "not_contains":return !text.includes(target);
-    case "greater_than":return Number(current)>Number(expected);
-    case "less_than":return Number(current)<Number(expected);
+    case "greater_than":return numericConditionMatches(current,expected,"greater_than");
+    case "less_than":return numericConditionMatches(current,expected,"less_than");
     case "empty":return text==="";
     case "not_empty":return text!=="";
     default:return text===target;

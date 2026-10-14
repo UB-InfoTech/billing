@@ -112,13 +112,34 @@ router.get("/summary",auth,async(req,res)=>{
       {createdBy:new mongoose.Types.ObjectId(owner(req))},
       req.query
     );
+    const totalIncludingTax={$add:[{$ifNull:["$amount",0]},{$ifNull:["$taxAmount",0]}]};
     const [summary,categories,vendors,top]=await Promise.all([
-      Expense.aggregate([{$match:match},{$group:{_id:null,total:{$sum:"$amount"},count:{$sum:1},average:{$avg:"$amount"}}}]),
+      Expense.aggregate([{$match:match},{$group:{
+        _id:null,
+        total:{$sum:"$amount"},
+        tax:{$sum:{$ifNull:["$taxAmount",0]}},
+        totalSpent:{$sum:totalIncludingTax},
+        count:{$sum:1},
+        average:{$avg:"$amount"},
+        averageTotalSpent:{$avg:totalIncludingTax}
+      }}]),
       Expense.aggregate([{$match:match},{$group:{_id:"$category",total:{$sum:"$amount"},count:{$sum:1}}},{$sort:{total:-1}}]),
       Expense.aggregate([{$match:match},{ $match:{vendor:{$ne:""}}},{$group:{_id:"$vendor",total:{$sum:"$amount"},count:{$sum:1}}},{$sort:{total:-1}},{$limit:10}]),
       Expense.find(match).sort({amount:-1}).limit(10).lean()
     ]);
-    res.json({totalExpense:round2(summary[0]?.total),expenseCount:summary[0]?.count||0,averageExpense:round2(summary[0]?.average),categoryBreakdown:categories,vendorBreakdown:vendors,topExpenses:top});
+    res.json({
+      // Keep the base expense amount for accounting metrics; use totalSpent
+      // for the day-to-day cash outflow shown to users (amount plus tax).
+      totalExpense:round2(summary[0]?.total),
+      totalTax:round2(summary[0]?.tax),
+      totalSpent:round2(summary[0]?.totalSpent),
+      expenseCount:summary[0]?.count||0,
+      averageExpense:round2(summary[0]?.average),
+      averageTotalSpent:round2(summary[0]?.averageTotalSpent),
+      categoryBreakdown:categories,
+      vendorBreakdown:vendors,
+      topExpenses:top
+    });
   }catch(error){res.status(error.status||500).json({message:error.message});}
 });
 

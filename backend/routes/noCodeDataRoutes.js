@@ -9,6 +9,7 @@ const Supplier=require("../models/Supplier");
 const Machine=require("../models/Machine");
 const User=require("../models/User");
 const {isNoCodeSourceSafe,buildNoCodeSourceQuery,getNoCodeSourceProjection}=require("../utils/noCodeSourcePolicy");
+const {escapeRegex}=require("../utils/escapeRegex");
 
 const router=express.Router();
 const owner=req=>req.user.id;
@@ -121,8 +122,7 @@ router.get("/:source",auth,async(req,res)=>{
     }
 
     if(q){
-      const escaped=q.replace(/[.*+?^$()|[\\]\\\\]/g,"\\\\$&");
-      const regex=new RegExp(escaped,"i");
+      const regex=new RegExp(escapeRegex(q),"i");
       const requestedSearchField=cleanString(req.query.searchField,80);
       const allowedSearchFields=new Set(source.fields.map(([field])=>field));
       const searchFields=[...new Set([

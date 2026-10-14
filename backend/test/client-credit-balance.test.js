@@ -43,3 +43,42 @@ test("manual adjustments reject invalid values and negative balances", () => {
   assert.throws(() => applyManualCreditAdjustment(10, [], -11), /cannot become negative/i);
   assert.equal(sumCustomerCredit([note(10), note(-5), note("bad")]), 10);
 });
+
+test("customer sync filters include the balance snapshot to avoid overwriting a concurrent change", () => {
+  const { buildClientCreditBalanceSyncFilter } = require("../utils/clientCreditBalance");
+  const client = {
+    _id: "client-123",
+    createdBy: "owner-456",
+    creditBalance: 75,
+    creditBalanceAdjustment: 50
+  };
+  assert.deepEqual(buildClientCreditBalanceSyncFilter(client), {
+    _id: "client-123",
+    createdBy: "owner-456",
+    creditBalance: 75,
+    creditBalanceAdjustment: 50
+  });
+});
+
+test("customer sync filters also support legacy records missing balance fields", () => {
+  const { buildClientCreditBalanceSyncFilter } = require("../utils/clientCreditBalance");
+  const filter = buildClientCreditBalanceSyncFilter({
+    _id: "client-123",
+    createdBy: "owner-456"
+  });
+  assert.deepEqual(filter, {
+    _id: "client-123",
+    createdBy: "owner-456",
+    $and: [
+      { $or: [
+        { creditBalance: { $exists: false } },
+        { creditBalance: null },
+        { creditBalance: 0 }
+      ] },
+      { $or: [
+        { creditBalanceAdjustment: { $exists: false } },
+        { creditBalanceAdjustment: null }
+      ] }
+    ]
+  });
+});

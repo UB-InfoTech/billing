@@ -171,6 +171,7 @@ export default function DynamicTable({
   const [loadingValues,setLoadingValues]=useState(false);
   const [saving,setSaving]=useState(false);
   const [showSettings,setShowSettings]=useState(false);
+  const [savedDraftSignature,setSavedDraftSignature]=useState(()=>JSON.stringify(cloneColumns(columns)));
   const [draggedColumnKey,setDraggedColumnKey]=useState(null);
   const [dropTargetColumnKey,setDropTargetColumnKey]=useState(null);
   const [searchTerm,setSearchTerm]=useState("");
@@ -240,10 +241,14 @@ export default function DynamicTable({
           authConfig()
         );
         if(cancelled)return;
-        setDraft(mergeSavedColumns(columnsRef.current,response.data?.columns));
+        const loadedDraft=mergeSavedColumns(columnsRef.current,response.data?.columns);
+        setDraft(loadedDraft);
+        setSavedDraftSignature(JSON.stringify(loadedDraft));
       }catch(loadError){
         if(!cancelled){
-          setDraft(cloneColumns(columnsRef.current));
+          const defaults=cloneColumns(columnsRef.current);
+          setDraft(defaults);
+          setSavedDraftSignature(JSON.stringify(defaults));
           setError(loadError.response?.data?.message||"Unable to load table settings.");
         }
       }finally{
@@ -624,7 +629,9 @@ export default function DynamicTable({
         authConfig()
       );
 
-      setDraft(mergeSavedColumns(columns,response.data?.columns));
+      const savedDraft=mergeSavedColumns(columnsRef.current,response.data?.columns);
+      setDraft(savedDraft);
+      setSavedDraftSignature(JSON.stringify(savedDraft));
       setShowSettings(false);
     }catch(saveError){
       setError(saveError.response?.data?.message||"Unable to save table settings.");
@@ -643,7 +650,9 @@ export default function DynamicTable({
     try{
       setSaving(true);
       await axios.delete(`${apiBase}/api/table-config/${encodeURIComponent(tableKey)}`,authConfig());
-      setDraft(cloneColumns(columnsRef.current));
+      const defaults=cloneColumns(columnsRef.current);
+      setDraft(defaults);
+      setSavedDraftSignature(JSON.stringify(defaults));
       setCustomValues({});
       setError("");
       setShowSettings(false);
@@ -658,6 +667,16 @@ export default function DynamicTable({
     setSearchTerm("");
     setError("");
     setShowSettings(true);
+  };
+
+  const requestCloseSettings=()=>{
+    const hasUnsavedChanges=JSON.stringify(draft)!==savedDraftSignature;
+    if(hasUnsavedChanges&&!window.confirm("Discard the unsaved list changes? Your saved layout will stay unchanged."))return;
+    if(hasUnsavedChanges){
+      try{setDraft(JSON.parse(savedDraftSignature));}catch{}
+    }
+    setShowSettings(false);
+    setSearchTerm("");
   };
 
   const visibleSelectedCount=rows.filter(row=>selectedIds.includes(String(getRowKey(row)))).length;
@@ -764,7 +783,7 @@ export default function DynamicTable({
 
       {showSettings&&(
         <div className="dynamic-settings-overlay" onMouseDown={event=>{
-          if(event.target===event.currentTarget)setShowSettings(false);
+          if(event.target===event.currentTarget)requestCloseSettings();
         }}>
           <section className="dynamic-settings-drawer dynamic-table-builder" role="dialog" aria-modal="true" aria-label="Customize table">
             <header className="dynamic-table-builder-header">
@@ -773,7 +792,7 @@ export default function DynamicTable({
                 <h5 className="mb-1">Choose what this list shows</h5>
                 <p className="mb-0">Show, hide, rename and move columns. These changes affect only your view of the list.</p>
               </div>
-              <button type="button" className="btn btn-light border rounded-circle" onClick={()=>setShowSettings(false)} aria-label="Close table customization">
+              <button type="button" className="btn btn-light border rounded-circle" onClick={requestCloseSettings} aria-label="Close table customization">
                 <i className="bi bi-x-lg"></i>
               </button>
             </header>
@@ -993,7 +1012,7 @@ export default function DynamicTable({
             <footer className="dynamic-settings-drawer-footer">
               <button type="button" className="btn btn-outline-danger" onClick={resetSettings} disabled={saving}>Reset to default</button>
               <div className="ms-auto d-flex gap-2">
-                <button type="button" className="btn btn-light border" onClick={()=>setShowSettings(false)} disabled={saving}>Cancel</button>
+                <button type="button" className="btn btn-light border" onClick={requestCloseSettings} disabled={saving}>Cancel</button>
                 <button type="button" className="btn btn-primary px-4" onClick={saveSettings} disabled={saving||loadingConfig}>
                   {saving?<><span className="spinner-border spinner-border-sm me-2"></span>Saving</>:"Save changes"}
                 </button>

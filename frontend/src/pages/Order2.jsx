@@ -137,7 +137,6 @@ function Order2() {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
     // const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
-    const [sortConfig, setSortConfig] = useState({ key: 'date', direction: 'asc' });
     // const [sortKey, setSortKey] = useState('orderDate'); // default
     // const [sortKey, setSortKey] = useState('orderNumber'); // default
     const [sortKey, setSortKey] = useState('orderDate'); // default
@@ -1264,15 +1263,6 @@ function Order2() {
         XLSX.writeFile(workbook, 'orders_report.xlsx');
     };
 
-    // const getSortIcon = (key) => {
-    //     if (sortConfig.key !== key) return '↕';
-    //     return sortConfig.direction === 'asc' ? '↑' : '↓';
-    // };
-    const getSortIcon = (key) => {
-        if (sortKey !== key) return null;
-        return sortOrder === 'asc' ? '↑' : '↓';
-    };
-
     const reportRef = useRef();
     const contentRef = useRef(null);
     const reactToPrintFn = useReactToPrint({ contentRef });
@@ -1491,6 +1481,8 @@ const styles = {
                             {key:"dueAmount",label:"Due Amount",render:order=>`₹${Number(order.dueAmount||0).toFixed(2)}`},
                         ]}
                         onSort={handleSort}
+                        sortKey={sortKey}
+                        sortDirection={sortOrder}
                         actionColumn={{
                             label:"Actions",
                             locked:true,

@@ -1226,6 +1226,13 @@ function Order2() {
         (_, index) => pageWindowStart + index
     );
 
+    // Deleting the last invoice on the current page can reduce the page count.
+    // Keep the view on the last available page instead of showing an empty list.
+    useEffect(() => {
+        const lastAvailablePage = Math.max(1, totalPages);
+        if (currentPage > lastAvailablePage) setCurrentPage(lastAvailablePage);
+    }, [currentPage, totalPages]);
+
     const handleExportExcel = () => {
         // const exportData = filteredOrders.map(order => ({
         const exportData = sortedData.map(order => ({

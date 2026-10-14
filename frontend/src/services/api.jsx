@@ -37,8 +37,10 @@ export const openExpenseReceipt=async(value)=>{
     const apiOrigin=new URL(BASE_URL||window.location.origin,window.location.origin).origin;
     const isExpenseUpload=parsed.pathname.toLowerCase().includes("/uploads/expenses/");
     if(parsed.origin!==apiOrigin||!isExpenseUpload){
-      const externalWindow=window.open(receipt,"_blank","noopener,noreferrer");
+      const externalWindow=window.open(receipt,"_blank");
       if(!externalWindow)throw new Error("Please allow pop-ups to open the receipt.");
+      // Detach the opened tab from this application after checking it exists.
+      externalWindow.opener=null;
       return;
     }
     pathname=parsed.pathname;

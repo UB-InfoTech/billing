@@ -11,6 +11,7 @@ const CreditNote=require("../models/CreditNote");
 const auth=require("../middleware/auth");
 const {getSafeUploadExtension,isAllowedUploadType}=require("../utils/uploadFileTypes");
 const {escapeRegex}=require("../utils/escapeRegex");
+const {normalizeProductWriteError}=require("../utils/productWriteError");
 
 const router=express.Router();
 const uploadDir=path.join(__dirname,"../public/uploads/products");
@@ -143,7 +144,8 @@ router.post("/",auth,receiveProductImages,async(req,res)=>{
     uploadedFilesPersisted=true;
     res.status(201).json({message:"Product created successfully.",product});
   }catch(error){
-    res.status(error.status||400).json({message:error.message});
+    const writeError=normalizeProductWriteError(error);
+    res.status(writeError.status||400).json({message:writeError.message});
   }finally{
     if(!uploadedFilesPersisted)await discardUploadedFiles(req.files);
   }
@@ -198,7 +200,8 @@ router.put("/:id",auth,receiveProductImages,async(req,res)=>{
     uploadedFilesPersisted=true;
     res.json({message:"Product updated successfully.",product});
   }catch(error){
-    res.status(error.status||400).json({message:error.message});
+    const writeError=normalizeProductWriteError(error);
+    res.status(writeError.status||400).json({message:writeError.message});
   }finally{
     if(!uploadedFilesPersisted)await discardUploadedFiles(req.files);
   }

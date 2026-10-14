@@ -72,6 +72,16 @@ export default function Calendar(){
   );
   const {records:linkedRecords,searchRecords:searchLinkedRecords}=useNoCodeDataSources(linkedEventSources);
 
+  // If a user opens a blank event while their saved form settings are loading,
+  // apply newly-loaded defaults only to empty fields and preserve their typing.
+  useEffect(()=>{
+    if(!modal.open||modal.id)return;
+    setModal(previous=>{
+      if(!previous.open||previous.id)return previous;
+      return {...previous,values:buildConfiguredDefaults(previous.values,eventFields)};
+    });
+  },[eventFields,modal.open,modal.id]);
+
   const load=async()=>{
     try{
       setLoading(true);

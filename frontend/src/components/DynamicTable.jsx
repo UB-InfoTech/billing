@@ -154,6 +154,8 @@ export default function DynamicTable({
   loading=false,
   rowClassName,
   onSort,
+  sortKey="",
+  sortDirection="asc",
   selectable,
   selectedIds=[],
   onToggleRow,
@@ -679,9 +681,15 @@ export default function DynamicTable({
                 <th
                   key={column.key}
                   onClick={()=>onSort?.(column.key)}
+                  aria-sort={sortKey===column.key?(sortDirection==="asc"?"ascending":"descending"):"none"}
                   style={column.width?{width:`${(column.width/12)*100}%`}:undefined}
                 >
-                  {column.label}
+                  <span>{column.label}</span>
+                  {sortKey===column.key&&(
+                    <span className="dynamic-table-sort-indicator ms-1" aria-label={sortDirection==="asc"?"sorted ascending":"sorted descending"}>
+                      {sortDirection==="asc"?"↑":"↓"}
+                    </span>
+                  )}
                 </th>
               ))}
               {actionColumn&&<th className="text-end">{actionColumn.label||"Actions"}</th>}

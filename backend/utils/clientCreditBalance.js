@@ -35,6 +35,50 @@ function resolveClientCreditBalance(client = {}, creditNotes = []) {
  * Apply a manual adjustment without making the amount disappear on the next
  * customer-summary refresh.
  */
+/**
+ * Match the balance fields used to derive a sync result. This optimistic
+ * filter prevents a summary refresh from overwriting a concurrent payment,
+ * Credit Note, or manual credit adjustment.
+ */
+function buildClientCreditBalanceSyncFilter(client = {}) {
+  const filter = {
+    _id: client._id,
+    createdBy: client.createdBy
+  };
+  const clauses = [];
+
+  if (client.creditBalance === undefined || client.creditBalance === null) {
+    clauses.push({
+      $or: [
+        { creditBalance: { $exists: false } },
+        { creditBalance: null },
+        { creditBalance: 0 }
+      ]
+    });
+  } else {
+    filter.creditBalance = client.creditBalance;
+  }
+
+  const hasAdjustment = Object.prototype.hasOwnProperty.call(client, "creditBalanceAdjustment")
+    && client.creditBalanceAdjustment !== undefined
+    && client.creditBalanceAdjustment !== null
+    && Number.isFinite(Number(client.creditBalanceAdjustment));
+
+  if (hasAdjustment) {
+    filter.creditBalanceAdjustment = client.creditBalanceAdjustment;
+  } else {
+    clauses.push({
+      $or: [
+        { creditBalanceAdjustment: { $exists: false } },
+        { creditBalanceAdjustment: null }
+      ]
+    });
+  }
+
+  if (clauses.length) filter.$and = clauses;
+  return filter;
+}
+
 function applyManualCreditAdjustment(currentBalance, creditNotes, amount) {
   const current = Number(currentBalance);
   const adjustment = Number(amount);
@@ -59,5 +103,6 @@ module.exports = {
   round2,
   sumCustomerCredit,
   resolveClientCreditBalance,
-  applyManualCreditAdjustment
+  applyManualCreditAdjustment,
+  buildClientCreditBalanceSyncFilter
 };

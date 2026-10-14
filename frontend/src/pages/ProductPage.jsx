@@ -302,13 +302,19 @@ export default function ProductPage(){
       {successMessage&&<div className="alert alert-success d-flex align-items-center gap-2" role="status"><i className="bi bi-check-circle-fill"></i><span>{successMessage}</span><button type="button" className="btn-close ms-auto" aria-label="Dismiss message" onClick={()=>setSuccessMessage("")}></button></div>}
 
       {showForm&&(
-        <form onSubmit={handleSubmit} className="card border-0 shadow-sm mb-4 product-edit-form">
+        <form
+          onSubmit={handleSubmit}
+          className="card border-0 shadow-sm mb-4 product-edit-form"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="product-form-title"
+        >
           <div className="card-header bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div>
-              <h5 className="mb-1">{editingProduct?"Edit product details":"Add a product"}</h5>
+              <h5 id="product-form-title" className="mb-1">{editingProduct?"Edit product details":"Add a product"}</h5>
               <div className="small text-muted">{editingProduct?"Update the details and save your changes.":"Enter the details you know. You can add more information later."}</div>
             </div>
-            <button type="button" className="btn btn-sm btn-light border" onClick={()=>{setShowForm(false);setEditingProduct(null);setImages([]);setError("");}}>Close</button>
+            <button type="button" className="btn btn-sm btn-light border" onClick={()=>{setShowForm(false);setEditingProduct(null);setImages([]);setError("");}} aria-label="Close product form">Close</button>
           </div>
 
           <div className="card-body">

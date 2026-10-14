@@ -175,10 +175,21 @@ const SalesAnalytics = () => {
   };
 
   const filterByDateRange = () => {
-    if (!salesData || !startDate || !endDate) return;
+    if (!salesData) return;
+
+    // Support a start-only or end-only filter, matching the backend reports.
+    // Clearing both dates and pressing Filter restores the unfiltered data.
+    if (!startDate && !endDate) {
+      setFilteredSales(salesData);
+      return;
+    }
 
     const startBoundary = getDateRangeBoundary(startDate, false);
     const endBoundary = getDateRangeBoundary(endDate, true);
+    if (startBoundary && endBoundary && startBoundary > endBoundary) {
+      alert("The start date must be on or before the end date.");
+      return;
+    }
     const filtered = { ...salesData };
 
     // The summary groups contain invoice records, while dailyTrend is already

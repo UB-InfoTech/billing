@@ -9,6 +9,13 @@ const router=express.Router();
 const owner=req=>String(req.user.id);
 const cleanString=(value,max)=>String(value??"").trim().slice(0,max);
 const FIELD_TYPES=["text","textarea","number","currency","date","datetime","boolean","select","multiselect","reference"];
+const LOOKUP_MODELS={
+  clients:require("../models/Client"),
+  products:require("../models/Product"),
+  orders:require("../models/Order2"),
+  expenses:require("../models/Expense")
+};
+const LOOKUP_RESOURCES=Object.keys(LOOKUP_MODELS);
 
 const normalizeCustomValue=(field,value)=>{
   if(value===null||value===undefined||value===""||(Array.isArray(value)&&value.length===0))return null;
@@ -27,6 +34,11 @@ const normalizeCustomValue=(field,value)=>{
       const selected=[...new Set(value.map(item=>cleanString(item,200)).filter(Boolean))];
       if(selected.some(item=>!allowed.has(item)))throw new Error("Please choose valid options.");
       return selected;
+    }
+    case "reference":{
+      const id=cleanString(value,100);
+      if(!mongoose.isValidObjectId(id))throw new Error("Choose an existing record from your business account.");
+      return id;
     }
     default:
       return cleanString(value,5000);
@@ -62,6 +74,9 @@ const sanitizeColumns=(columns)=>{
 
     if(kind==="merged"&&sourceKeys.length<2)throw new Error("Merged columns must contain at least two source fields.");
     if(kind==="custom"&&["select","multiselect"].includes(fieldType)&&options.length===0)throw new Error("Add at least one choice for this custom column.");
+    if(kind==="custom"&&fieldType==="reference"&&!LOOKUP_RESOURCES.includes(cleanString(raw?.dataSource?.resource,80))){
+      throw new Error("Choose whether this column links to a customer, product, invoice or expense.");
+    }
 
     return{
       key,
@@ -75,9 +90,12 @@ const sanitizeColumns=(columns)=>{
       editable:raw?.editable!==false,
       dataSource:kind==="custom"&&raw?.dataSource&&typeof raw.dataSource==="object"?{
         type:raw.dataSource.type==="lookup"?"lookup":"none",
-        resource:cleanString(raw.dataSource.resource,80),
+        resource:LOOKUP_RESOURCES.includes(cleanString(raw.dataSource.resource,80))
+          ?cleanString(raw.dataSource.resource,80)
+          :"",
         valueField:cleanString(raw.dataSource.valueField||"_id",100),
         labelField:cleanString(raw.dataSource.labelField,100),
+        searchField:cleanString(raw.dataSource.searchField||raw.dataSource.labelField,100),
         multiple:Boolean(raw.dataSource.multiple)
       }:null,
       sourceKeys:kind==="merged"?sourceKeys:[],
@@ -161,6 +179,14 @@ router.put("/:tableKey/values",auth,async(req,res)=>{
     }
 
     const value=normalizeCustomValue(field,req.body?.value);
+    if(field.fieldType==="reference"&&value!==null){
+      const model=LOOKUP_MODELS[field.dataSource?.resource];
+      const exists=model&&await model.exists({
+        _id:value,
+        createdBy:new mongoose.Types.ObjectId(owner(req))
+      });
+      if(!exists)return res.status(400).json({message:"Choose a record that belongs to your business account."});
+    }
     if(value===null){
       await TableCustomValue.deleteOne({createdBy:owner(req),tableKey,rowKey,fieldKey});
       return res.json({message:"Value cleared.",value:null});

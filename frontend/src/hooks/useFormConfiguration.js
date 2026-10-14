@@ -314,6 +314,23 @@ export const applyAutoFill=(field,record,values)=>{
   return next;
 };
 
+/**
+ * Prepare a genuinely new record. Configured defaults should take precedence
+ * over the page's placeholder values (including 0, false, and static defaults
+ * such as "Cash"). Do not use this for editing existing records.
+ */
+export const buildNewRecordDefaults=(baseValues={},fields=[])=>{
+  const next={...(baseValues||{}),customFields:{...((baseValues||{}).customFields||{})}};
+  (fields||[]).forEach(field=>{
+    const defaultValue=field.defaultValue;
+    if(defaultValue===undefined||defaultValue===null||defaultValue==="")return;
+    const value=Array.isArray(defaultValue)?defaultValue.slice():defaultValue;
+    next[field.key]=value;
+    if(field.custom)next.customFields[field.key]=Array.isArray(value)?value.slice():value;
+  });
+  return next;
+};
+
 export const buildConfiguredDefaults=(baseValues={},fields=[])=>{
   const next={...(baseValues||{}),customFields:{...((baseValues||{}).customFields||{})}};
   (fields||[]).forEach(field=>{

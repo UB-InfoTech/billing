@@ -9,6 +9,7 @@ import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import {formatDateInput} from "../utils/dateInput";
 
 const today=()=>formatDateInput(new Date());
+const EMPTY_INITIAL_DATA=Object.freeze({});
 const EMPTY={
   title:"",
   description:"",
@@ -34,7 +35,7 @@ const EMPTY={
   customFields:{}
 };
 
-export default function ExpenseForm({onSubmit,onCancel,initialData={}}){
+export default function ExpenseForm({onSubmit,onCancel,initialData=EMPTY_INITIAL_DATA}){
   const [searchParams,setSearchParams]=useSearchParams();
   const expenseFormConfig=useFormConfiguration("expenses.form",EXPENSE_FORM_FIELDS);
   const [form,setForm]=useState(EMPTY);

@@ -395,26 +395,24 @@ router.post("/orders/:id/pay",auth,async(req,res)=>{
     // Repeat the due-balance condition in the database write itself. A check
     // followed by document.save() can over-collect when two payments arrive at
     // the same time and both read the same prior balance.
+    const paymentOperation=buildPaymentAppendOperation({
+      orderId:order._id,
+      createdBy:uid,
+      amount,
+      expectedDueAmount:Number(order.dueAmount||0),
+      payment:{
+        amount,
+        paymentDate,
+        method,
+        amountReference:reference,
+        processedBy:uid
+      },
+      paymentDate
+    });
     const paymentUpdate=Order.findOneAndUpdate(
-      {
-        _id:order._id,
-        createdBy:uid,
-        status:{$ne:"Cancelled"},
-        dueAmount:{$gte:amount}
-      },
-      {
-        $push:{
-          payments:{
-            amount,
-            paymentDate,
-            method,
-            amountReference:reference,
-            processedBy:uid
-          }
-        },
-        $set:{lastPaymentDate:paymentDate}
-      },
-      {new:true,runValidators:true}
+      paymentOperation.filter,
+      paymentOperation.update,
+      paymentOperation.options
     );
     if(session)paymentUpdate.session(session);
     const updatedOrder=await paymentUpdate;
@@ -644,6 +642,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
         orderId:item.order._id,
         createdBy:userId(req),
         amount:item.appliedAmount,
+        expectedDueAmount:Number(item.order.dueAmount||0),
         payment:paymentData,
         paymentDate:parsedDate
       });

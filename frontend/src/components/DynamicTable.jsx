@@ -370,8 +370,7 @@ export default function DynamicTable({
       try{
         setLoadingValues(true);
         const next={};
-        // Keep each request below the backend's 500-row cap and avoid a very
-        // long URL when customer/product lists contain many records.
+        // Keep each request below the backend's row cap and avoid long URLs.
         const batchSize=100;
         for(let start=0;start<rowKeys.length;start+=batchSize){
           const batch=rowKeys.slice(start,start+batchSize);
@@ -384,6 +383,43 @@ export default function DynamicTable({
             next[`${item.rowKey}::${item.fieldKey}`]=item.value;
           });
         }
+
+        // Warm reference labels for the saved IDs shown on this page. Without
+        // this pass, older records outside the first lookup page display their
+        // database ID instead of a readable customer/product/invoice name.
+        const referenceIdsByResource=new Map();
+        customColumns.filter(column=>
+          column.fieldType==="reference"&&REFERENCE_RESOURCES[column.dataSource?.resource]
+        ).forEach(column=>{
+          const resource=column.dataSource.resource;
+          const ids=new Set(referenceIdsByResource.get(resource)||[]);
+          rowKeys.forEach(rowKey=>{
+            const value=String(next[`${rowKey}::${column.key}`]??"").trim();
+            if(/^[a-f0-9]{24}$/i.test(value))ids.add(value);
+          });
+          if(ids.size)referenceIdsByResource.set(resource,ids);
+        });
+
+        for(const [resource,idSet] of referenceIdsByResource){
+          const ids=[...idSet];
+          for(let start=0;start<ids.length;start+=50){
+            if(cancelled)return;
+            try{
+              const referenceColumn=customColumns.find(column=>
+                column.fieldType==="reference"&&column.dataSource?.resource===resource
+              );
+              await searchReferenceRecords(
+                resource,
+                "",
+                referenceColumn?.dataSource?.searchField||REFERENCE_RESOURCES[resource].searchField,
+                ids.slice(start,start+50)
+              );
+            }catch(lookupError){
+              if(!cancelled)setError(lookupError.response?.data?.message||"Some linked record names could not be loaded.");
+            }
+          }
+        }
+
         if(!cancelled)setCustomValues(next);
       }catch(loadError){
         if(!cancelled)setError(loadError.response?.data?.message||"Unable to load custom field values.");
@@ -394,7 +430,7 @@ export default function DynamicTable({
 
     loadValues();
     return()=>{cancelled=true;};
-  },[tableKey,loadingConfig,rowKeySignature,customFieldSignature]);
+  },[tableKey,loadingConfig,rowKeySignature,customFieldSignature,customColumns,searchReferenceRecords]);
 
   const findColumn=key=>draft.find(column=>column.key===key);
   const findBaseColumn=key=>columns.find(column=>column.key===key);

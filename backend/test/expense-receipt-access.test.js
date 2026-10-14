@@ -2,7 +2,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   getExpenseReceiptFilename,
-  isExpenseReceiptOwnedBy
+  isExpenseReceiptOwnedBy,
+  isPrivateExpenseUploadPath
 } = require("../utils/expenseReceiptAccess");
 
 const ownerA = "aaaaaaaaaaaaaaaaaaaaaaaa";
@@ -31,4 +32,14 @@ test("new receipt filenames are scoped to the uploading business account", () =>
   assert.equal(isExpenseReceiptOwnedBy(filename, ownerA), true);
   assert.equal(isExpenseReceiptOwnedBy(filename, ownerB), false);
   assert.equal(isExpenseReceiptOwnedBy("../../" + filename, ownerA), false);
+});
+
+test("identifies private expense receipt paths after URL decoding and normalization", () => {
+  assert.equal(isPrivateExpenseUploadPath("/expenses/receipt.pdf"), true);
+  assert.equal(isPrivateExpenseUploadPath("/expenses"), true);
+  assert.equal(isPrivateExpenseUploadPath("/expenses%2Freceipt.pdf"), true);
+  assert.equal(isPrivateExpenseUploadPath("/old/../expenses/receipt.pdf"), true);
+  assert.equal(isPrivateExpenseUploadPath("/other/receipt.pdf"), false);
+  assert.equal(isPrivateExpenseUploadPath("/products/image.png"), false);
+  assert.equal(isPrivateExpenseUploadPath("/expenses/%E0%A4%A"), true);
 });

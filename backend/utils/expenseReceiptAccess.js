@@ -41,8 +41,29 @@ function isExpenseReceiptOwnedBy(filename, ownerId) {
   return safeFilename.toLowerCase().startsWith(safeOwner.toLowerCase() + "-");
 }
 
+/**
+ * Return true for expense-receipt paths relative to the /uploads mount.
+ * Decode and normalize the path before checking so encoded slashes,
+ * backslashes, repeated separators and dot segments cannot bypass the guard.
+ * Malformed percent-encoding is rejected conservatively.
+ */
+function isPrivateExpenseUploadPath(value) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(String(value ?? ""));
+  } catch {
+    return true;
+  }
+
+  const normalized = path.posix.normalize(
+    "/" + decoded.replace(/\\/g, "/").replace(/^\/+/, "")
+  ).toLowerCase();
+  return normalized === "/expenses" || normalized.startsWith("/expenses/");
+}
+
 module.exports = {
   getExpenseReceiptFilename,
   isExpenseReceiptOwnedBy,
+  isPrivateExpenseUploadPath,
   ALLOWED_RECEIPT_EXTENSION
 };

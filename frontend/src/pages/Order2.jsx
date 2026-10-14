@@ -1281,38 +1281,46 @@ function Order2() {
     //     const updated = subOrders.filter((_, i) => i !== index);
     //     setSubOrders(updated);
     // };
-    const handleDownloadEwayBill = async (ewbNo) => {
-        if (!ewbNo) return alert('❌ Invalid EWB number');
+    const handleDownloadEwayBill = async (ewbNo, orderId = editingOrder?._id) => {
+        if (!ewbNo || !orderId) {
+            alert("An invoice and E-Way Bill number are required to download this PDF.");
+            return;
+        }
 
-        // setLoading(true); // Start spinner
-        alert('Downloading PDF...');
         try {
-            const response = await axios.get(`${linkone}/api/ewaybill/pdf/${ewbNo}/${profile.gstin}/${profile.eWayUserName}/${profile.eWayPassword}`, {
-                responseType: 'blob',
-                headers: { 'x-auth-token': localStorage.getItem('token') || '' }
-            });
+            const response = await axios.get(
+                `${linkone}/api/ewaybill/pdf/${encodeURIComponent(ewbNo)}`,
+                {
+                    params: { orderId },
+                    responseType: "blob",
+                    headers: { "x-auth-token": localStorage.getItem("token") || "" }
+                }
+            );
 
-            const blob = new Blob([response.data], { type: 'application/pdf' });
+            const blob = new Blob([response.data], { type: "application/pdf" });
             const url = window.URL.createObjectURL(blob);
-
-            const link = document.createElement('a');
+            const link = document.createElement("a");
             link.href = url;
             link.download = `ewaybill_${ewbNo}.pdf`;
             document.body.appendChild(link);
             link.click();
-
-            // Cleanup
             link.remove();
-            window.URL.revokeObjectURL(url);
-
+            window.setTimeout(() => window.URL.revokeObjectURL(url), 60000);
+            alert("E-Way Bill PDF downloaded successfully.");
         } catch (err) {
-            console.error('Error downloading PDF:', err);
-            alert('❌ Failed to download PDF');
-        } finally {
-            // setLoading(false); // Stop spinner
-            alert('✅ Download complete');
+            let message = err.response?.data?.message || err.message || "Unable to download the E-Way Bill PDF.";
+            if (err.response?.data instanceof Blob) {
+                try {
+                    const body = JSON.parse(await err.response.data.text());
+                    message = body.message || message;
+                } catch {
+                    // Keep the generic download error if the response is not JSON.
+                }
+            }
+            console.error("Error downloading E-Way Bill PDF:", err);
+            alert("Unable to download E-Way Bill PDF: " + message);
         }
-    }
+    };
 const styles = {
         pageReport: {
             '@media print': {
@@ -1953,7 +1961,7 @@ const styles = {
                                                 <i className="bi bi-file-earmark-pdf"></i>
                                             </button> */}
 
-                                            <button className="btn btn-primary" onClick={() => handleDownloadEwayBill(editingOrder.ewbDetails.ewbNo)}>
+                                            <button className="btn btn-primary" onClick={() => handleDownloadEwayBill(editingOrder.ewbDetails.ewbNo, editingOrder._id)}>
                                                 <i className="bi bi-file-earmark-arrow-down"></i>
                                             </button>
                                         </details>

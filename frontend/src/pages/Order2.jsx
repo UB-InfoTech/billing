@@ -141,7 +141,7 @@ function Order2() {
     // const [sortKey, setSortKey] = useState('orderDate'); // default
     // const [sortKey, setSortKey] = useState('orderNumber'); // default
     const [sortKey, setSortKey] = useState('orderDate'); // default
-    const [sortOrder, setSortOrder] = useState('asc'); // default
+    const [sortOrder, setSortOrder] = useState('desc'); // show the newest invoices first
 
 
     const [filters, setFilters] = useState({
@@ -735,6 +735,21 @@ function Order2() {
             setShowModal(false);
             setEditingOrder(null);
             setSubOrders([]);
+            setCurrentPage(1);
+            if (!wasEditing) {
+                // A newly created invoice should be immediately visible, even
+                // when the user had an old search or status/date filter active.
+                setSearch("");
+                setFilters({
+                    status: "",
+                    paymentStatus: "",
+                    dateRange: [],
+                    minTotal: "",
+                    maxTotal: "",
+                    startDate: "",
+                    endDate: "",
+                });
+            }
             setOrdersMessage(wasEditing?"Invoice updated successfully.":"Invoice created successfully.");
             await fetchOrders();
         } catch (error) {
@@ -1036,12 +1051,19 @@ function Order2() {
         const fromDate = getDateRangeBoundary(filters.startDate, false);
         const toDate = getDateRangeBoundary(filters.endDate, true);
 
+        const searchTerm = search.trim().toLowerCase();
         return sortedOrders.filter(order => {
-            const clientName = clients.find(client => client._id === order.clientId)?.companyName || '';
+            const linkedClient = clients.find(client => String(client._id) === String(order.clientId));
+            // Use the invoice's saved customer name as a fallback for older or
+            // unlinked invoices; the customer record may have been renamed later.
+            const customerName = String(
+                linkedClient?.companyName || linkedClient?.name || order.companyName || ""
+            ).toLowerCase();
+            const invoiceNumber = String(order.orderNumber || "").toLowerCase();
             const orderDate = new Date(order.orderDate);
             const hasValidOrderDate = !Number.isNaN(orderDate.getTime());
             return (
-                (clientName.toLowerCase().includes(search.toLowerCase()) || String(order.orderNumber||"").toLowerCase().includes(search.toLowerCase())) &&
+                (!searchTerm || customerName.includes(searchTerm) || invoiceNumber.includes(searchTerm)) &&
                 (filters.status === '' || order.status === filters.status) &&
                 (filters.paymentStatus === '' || (filters.paymentStatus === "Outstanding" ? Number(order.dueAmount||0)>0 : order.paymentStatus === filters.paymentStatus)) &&
                 (!selectedRangeStart || (hasValidOrderDate && orderDate >= selectedRangeStart)) &&

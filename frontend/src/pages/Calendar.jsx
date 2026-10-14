@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from "react";
+import React,{useEffect,useMemo,useRef,useState} from "react";
 import {useNavigate,useSearchParams} from "react-router-dom";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -60,6 +60,8 @@ export default function Calendar(){
   const [events,setEvents]=useState([]);
   const [modal,setModal]=useState({open:false,id:null,values:{}});
   const [loading,setLoading]=useState(true);
+  const [saving,setSaving]=useState(false);
+  const savingEventRef=useRef(false);
   const [error,setError]=useState("");
 
   const isFormBuilderOpen=searchParams.get("customize")==="form";
@@ -83,7 +85,7 @@ export default function Calendar(){
 
   useEffect(()=>{load();},[]);
 
-  const close=()=>setModal({open:false,id:null,values:{}});
+  const close=()=>{if(!savingEventRef.current)setModal({open:false,id:null,values:{}});};
 
   const openCreate=(dateInput="")=>{
     const values=emptyEvent(eventFields);
@@ -127,6 +129,7 @@ export default function Calendar(){
   };
 
   const save=async()=>{
+    if(savingEventRef.current)return;
     const values=syncConfiguredCustomFields(applyFormulas(eventFields,modal.values),eventFields);
     const validationValues={...values,...(values.customFields||{})};
 
@@ -163,6 +166,9 @@ export default function Calendar(){
       customFields:values.customFields||{}
     };
 
+    savingEventRef.current=true;
+    setSaving(true);
+    setError("");
     try{
       if(modal.id){
         const response=await axios.put(API+"/api/events/"+modal.id,payload,auth());
@@ -172,14 +178,17 @@ export default function Calendar(){
         setEvents(previous=>[...previous,{...response.data,id:response.data._id}]);
       }
       setError("");
-      close();
+      setModal({open:false,id:null,values:{}});
     }catch(saveError){
       setError(saveError.response?.data?.message||"Unable to save event.");
+    }finally{
+      savingEventRef.current=false;
+      setSaving(false);
     }
   };
 
   const remove=async eventId=>{
-    if(!eventId||!window.confirm("Delete this event?"))return;
+    if(savingEventRef.current||!eventId||!window.confirm("Delete this event?"))return;
     try{
       await axios.delete(API+"/api/events/"+eventId,auth());
       setEvents(previous=>previous.filter(event=>event.id!==eventId));
@@ -327,9 +336,9 @@ export default function Calendar(){
                   </div>}
             </div>
             <div className="modal-footer">
-              {modal.id&&<button className="btn btn-outline-danger me-auto" onClick={()=>remove(modal.id)}>Delete</button>}
-              <button className="btn btn-secondary" onClick={close}>Close</button>
-              <button className="btn btn-primary" onClick={save} disabled={formLoading}>{formLoading?"Loading...":"Save"}</button>
+              {modal.id&&<button type="button" className="btn btn-outline-danger me-auto" onClick={()=>remove(modal.id)} disabled={saving}>Delete</button>}
+              <button type="button" className="btn btn-secondary" onClick={close} disabled={saving}>Close</button>
+              <button type="button" className="btn btn-primary" onClick={save} disabled={formLoading||saving}>{saving?"Saving...":formLoading?"Loading...":"Save"}</button>
             </div>
           </div></div>
           

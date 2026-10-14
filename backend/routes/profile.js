@@ -123,7 +123,7 @@ router.patch('/billNoSequence', auth, async (req, res) => {
     }
     res.json(toPublicProfile(profile));
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.status||500).json({ message: err.message });
   }
 });
 

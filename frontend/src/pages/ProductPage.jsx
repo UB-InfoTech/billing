@@ -57,6 +57,14 @@ export default function ProductPage(){
   );
 
   const configuredFields=productFormConfig.fields||[];
+
+  // A new form can be opened from a page link before saved form settings finish
+  // loading. Fill only still-empty fields when the configuration arrives, so
+  // configured defaults take effect without replacing anything already typed.
+  useEffect(()=>{
+    if(!showForm||editingProduct)return;
+    setForm(previous=>buildConfiguredDefaults(previous,configuredFields));
+  },[configuredFields,showForm,editingProduct]);
   const visibleFields=configuredFields.filter(field=>field.visible!==false);
   const primaryProductKeys=new Set(["productName","rate","quantity"]);
   const productFieldValues={...form,...(form.customFields||{})};

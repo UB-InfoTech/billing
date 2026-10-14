@@ -783,7 +783,7 @@ const defaultInvoiceConfiguration=()=>({
 async function renderInvoice(order,res){
   const profile=await Profile.findOne({createdBy:String(order.createdBy)}).lean()||{};
   const invoiceConfig=await InvoiceConfiguration.findOne({createdBy:String(order.createdBy)}).lean()||defaultInvoiceConfiguration();
-  const client=order.clientId?await Client.findById(order.clientId).lean():null;
+  const client=order.clientId?await Client.findOne({_id:order.clientId,createdBy:String(order.createdBy)}).lean():null;
   const dueDate=new Date(order.orderDate||new Date());
   const terms=Number(order.paymentTerms);
   if(Number.isFinite(terms))dueDate.setDate(dueDate.getDate()+terms);
@@ -802,11 +802,26 @@ async function renderInvoice(order,res){
   }
 }
 
-router.get("/:orderId/invoice",auth,async(req,res)=>{try{const order=await Order.findOne({_id:req.params.orderId,createdBy:userId(req)}).lean();if(!order)return res.status(404).json({message:"Order not found"});await renderInvoice(order,res);}catch(error){res.status(500).json({message:"Error generating invoice",error:error.message});}});
-router.get("/:orderId/KachuBill",auth,async(req,res)=>{try{const order=await Order.findOne({_id:req.params.orderId,createdBy:userId(req)}).lean();if(!order)return res.status(404).json({message:"Order not found"});await renderInvoice(order,res);}catch(error){res.status(500).json({message:"Error generating bill",error:error.message});}});
+router.get("/:orderId/invoice",auth,async(req,res)=>{
+  try{
+    if(!mongoose.isValidObjectId(req.params.orderId))return res.status(400).json({message:"Invalid invoice ID."});
+    const order=await Order.findOne({_id:req.params.orderId,createdBy:userId(req)}).lean();
+    if(!order)return res.status(404).json({message:"Order not found"});
+    await renderInvoice(order,res);
+  }catch(error){res.status(500).json({message:"Error generating invoice",error:error.message});}
+});
+router.get("/:orderId/KachuBill",auth,async(req,res)=>{
+  try{
+    if(!mongoose.isValidObjectId(req.params.orderId))return res.status(400).json({message:"Invalid invoice ID."});
+    const order=await Order.findOne({_id:req.params.orderId,createdBy:userId(req)}).lean();
+    if(!order)return res.status(404).json({message:"Order not found"});
+    await renderInvoice(order,res);
+  }catch(error){res.status(500).json({message:"Error generating bill",error:error.message});}
+});
 
 router.get("/:orderId/payments/:paymentId/invoice",auth,async(req,res)=>{
   try{
+    if(!mongoose.isValidObjectId(req.params.orderId))return res.status(400).json({message:"Invalid invoice ID."});
     const order=await Order.findOne({_id:req.params.orderId,createdBy:userId(req)}).lean();
     if(!order)return res.status(404).json({message:"Order not found"});
 

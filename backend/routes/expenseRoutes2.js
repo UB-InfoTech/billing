@@ -72,10 +72,10 @@ async function validateExpenseReceiptReference(value,createdBy,currentReceipt=""
 
   // External receipt links were supported by earlier versions. Preserve those
   // links, but uploaded files in this app must pass account ownership checks.
-  if(/^https?:\\/\\//i.test(receipt)){
+  if (receipt.toLowerCase().startsWith("http://") || receipt.toLowerCase().startsWith("https://")) {
     let parsed;
     try{parsed=new URL(receipt);}catch{throw referenceError("Choose a valid receipt link.");}
-    if(!/(?:^|\\/)uploads\\/expenses\\//i.test(parsed.pathname))return receipt;
+    const normalizedPath = parsed.pathname.toLowerCase();
   }
 
   const filename=getExpenseReceiptFilename(receipt);

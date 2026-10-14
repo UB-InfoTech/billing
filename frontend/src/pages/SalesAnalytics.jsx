@@ -176,22 +176,42 @@ const SalesAnalytics = () => {
 
   const filterByDateRange = () => {
     if (!salesData || !startDate || !endDate) return;
-    const filtered = {};
+
+    const startBoundary = getDateRangeBoundary(startDate, false);
+    const endBoundary = getDateRangeBoundary(endDate, true);
+    const filtered = { ...salesData };
+
+    // The summary groups contain invoice records, while dailyTrend is already
+    // aggregated. Filter each shape according to its own data structure.
     Object.keys(salesData).forEach(period => {
-      const startBoundary = getDateRangeBoundary(startDate, false);
-      const endBoundary = getDateRangeBoundary(endDate, true);
-      const filteredOrders = salesData[period].orders.filter(order => {
+      const source = salesData[period];
+      if (!Array.isArray(source?.orders)) return;
+
+      const filteredOrders = source.orders.filter(order => {
         const orderDate = new Date(order.orderDate);
         return !Number.isNaN(orderDate.getTime()) &&
           (!startBoundary || orderDate >= startBoundary) &&
           (!endBoundary || orderDate <= endBoundary);
       });
       filtered[period] = {
-        totalSales: filteredOrders.reduce((sum, order) => sum + order.roundOffFinalRevenue, 0),
+        ...source,
+        totalSales: filteredOrders.reduce(
+          (sum, order) => sum + Number(order.roundOffFinalRevenue || order.finalRevenue || order.totalAmount || 0),
+          0
+        ),
         orderCount: filteredOrders.length,
         orders: filteredOrders,
       };
     });
+
+    filtered.dailyTrend = (Array.isArray(salesData.dailyTrend) ? salesData.dailyTrend : [])
+      .filter(item => {
+        const day = new Date(String(item?._id || "") + "T00:00:00");
+        return !Number.isNaN(day.getTime()) &&
+          (!startBoundary || day >= startBoundary) &&
+          (!endBoundary || day <= endBoundary);
+      });
+
     setFilteredSales(filtered);
   };
 
@@ -212,11 +232,14 @@ const SalesAnalytics = () => {
   };
 
   const exportToCSV = () => {
+    if (!filteredSales) return;
     const csvRows = [];
     const headers = ['Period', 'Total Sales', 'Order Count', 'Order Name', 'Revenue', 'Date'];
     csvRows.push(headers.map(csvCell).join(','));
 
-    Object.keys(filteredSales).forEach(period => {
+    Object.keys(filteredSales)
+      .filter(period => Array.isArray(filteredSales[period]?.orders))
+      .forEach(period => {
       filteredSales[period].orders.forEach(order => {
         const row = [
           period,

@@ -673,7 +673,7 @@ export default function DynamicTable({
     const hasUnsavedChanges=JSON.stringify(draft)!==savedDraftSignature;
     if(hasUnsavedChanges&&!window.confirm("Discard the unsaved list changes? Your saved layout will stay unchanged."))return;
     if(hasUnsavedChanges){
-      try{setDraft(JSON.parse(savedDraftSignature));}catch{}
+      setDraft(JSON.parse(savedDraftSignature));
     }
     setShowSettings(false);
     setSearchTerm("");

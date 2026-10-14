@@ -5537,3 +5537,108 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
   max-width: 100%;
   min-width: 0;
 }
+
+/* Calendar create/edit is a primary data-entry task, so use the same full
+   workspace as invoices and customers rather than a small floating dialog. */
+@media screen {
+  .calendar-event-modal {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 1425 !important;
+    display: flex !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: var(--workspace-bg, #f4f7fb) !important;
+  }
+
+  .calendar-event-dialog {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .calendar-event-dialog > .modal-content {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .calendar-event-dialog > .modal-content > .modal-header,
+  .calendar-event-dialog > .modal-content > .modal-footer {
+    flex: 0 0 auto;
+    min-width: 0;
+    padding: 14px clamp(14px, 2.5vw, 32px);
+    border-color: var(--workspace-border, #dce3ec);
+    background: #fff;
+  }
+
+  .calendar-event-dialog > .modal-content > .modal-header {
+    position: relative;
+    z-index: 2;
+  }
+
+  .calendar-event-dialog > .modal-content > .modal-body {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+    padding: clamp(14px, 2.5vw, 32px);
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    background: #f7f9fc;
+  }
+
+  .calendar-event-dialog > .modal-content > .modal-footer {
+    position: relative;
+    z-index: 2;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .calendar-event-dialog .row,
+  .calendar-event-dialog .form-config-field {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .calendar-event-dialog .form-control,
+  .calendar-event-dialog .form-select {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+@media screen and (max-width: 767.98px) {
+  .calendar-event-dialog > .modal-content > .modal-header,
+  .calendar-event-dialog > .modal-content > .modal-footer,
+  .calendar-event-dialog > .modal-content > .modal-body {
+    padding: 12px 14px !important;
+  }
+
+  .calendar-event-dialog > .modal-content > .modal-footer > .btn {
+    flex: 1 1 auto;
+  }
+}
+

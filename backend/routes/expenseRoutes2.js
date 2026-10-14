@@ -76,6 +76,7 @@ async function validateExpenseReceiptReference(value,createdBy,currentReceipt=""
     let parsed;
     try{parsed=new URL(receipt);}catch{throw referenceError("Choose a valid receipt link.");}
     const normalizedPath = parsed.pathname.toLowerCase();
+    if (!normalizedPath.includes("/uploads/expenses/")) return receipt;
   }
 
   const filename=getExpenseReceiptFilename(receipt);

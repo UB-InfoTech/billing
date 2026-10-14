@@ -1,14 +1,21 @@
-import React from "react";
+import React,{useState} from "react";
 import {useNavigate} from "react-router-dom";
 import deleteSVG from "../assets/delete.svg";
+import {openExpenseReceipt} from "../services/api";
 
-const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const money=v=>Number(v||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 
 export default function ExpenseCard({expense,onDelete}){
   const navigate=useNavigate();
+  const [receiptError,setReceiptError]=useState("");
   const receipt=expense.receipt||expense.receiptUrl;
   const clientName=expense.clientId?.companyName||expense.clientId?.name;
+  const handleReceiptOpen=async event=>{
+    event.preventDefault();
+    setReceiptError("");
+    try{await openExpenseReceipt(receipt);}
+    catch(error){setReceiptError(error.response?.data?.message||error.message||"Unable to open this receipt.");}
+  };
   return <div className="card mb-3 p-3 bg-white shadow-sm">
     <div className="row align-items-center">
       <div className="col-md-9">
@@ -18,7 +25,7 @@ export default function ExpenseCard({expense,onDelete}){
         {expense.gstNo&&<p className="mb-1 text-muted"><strong>GST:</strong> {expense.gstNo} &nbsp; <strong>Tax:</strong> {money(expense.taxAmount)}</p>}
         {clientName&&<p className="mb-1 text-muted"><strong>Client:</strong> {clientName}</p>}
         {expense.orderId?.orderNumber&&<p className="mb-1 text-muted"><strong>Invoice:</strong> {expense.orderId.orderNumber}</p>}
-        {receipt&&<a href={receipt.startsWith("http")?receipt:API+receipt} target="_blank" rel="noreferrer" className="text-primary">View Receipt</a>}
+        {receipt&&<><a href="#expense-receipt" onClick={handleReceiptOpen} className="text-primary">View Receipt</a>{receiptError&&<div className="small text-danger mt-1" role="alert">{receiptError}</div>}</>}
       </div>
       <div className="col-md-3 text-end">
         <button className="btn btn-sm btn-outline-primary me-2" onClick={()=>navigate("/edit-expense/"+expense._id)}>Edit</button><button className="btn btn-sm btn-outline-danger" onClick={()=>onDelete(expense._id)}><img src={deleteSVG} alt="Delete"/></button>

@@ -6,7 +6,7 @@ const auth=require("../middleware/auth");
 const router=express.Router();
 
 const FIELD_TYPES=["text","textarea","number","currency","date","datetime","select","multiselect","boolean","email","phone","url","reference"];
-const SOURCES=["none","clients","products","orders","expenses","suppliers","machines","users"];
+const SOURCES=["none","clients","products","orders","expenses","users"];
 const OPERATORS=["equals","not_equals","contains","not_contains","greater_than","less_than","empty","not_empty"];
 const {
   FORM_CONDITION_ACTIONS,
@@ -71,7 +71,11 @@ const sanitizeFields=fields=>{
     if(["number","currency"].includes(fieldType))formula=cleanString(raw?.formula,500);
     const formulaReadOnly=Boolean(formula);
 
-    const configuredResource=SOURCES.includes(raw?.dataSource?.resource)?raw.dataSource.resource:"";
+    const requestedResource=cleanString(raw?.dataSource?.resource,80);
+    if(raw?.dataSource?.type==="lookup"&&requestedResource&&!SOURCES.includes(requestedResource)){
+      throw new Error(`The linked list “${requestedResource}” is not available for this business. Choose another list.`);
+    }
+    const configuredResource=SOURCES.includes(requestedResource)?requestedResource:"";
     const resource=configuredResource==="none"?"":configuredResource;
     const dataSourceType=raw?.dataSource?.type==="lookup"&&resource?"lookup":"none";
     if(fieldType==="reference"&&dataSourceType!=="lookup"){

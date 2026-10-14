@@ -36,14 +36,8 @@ const DATA_SOURCES=[
   {value:"expenses",label:"Expense records",fields:[
     ["_id","Expense ID"],["title","Title"],["category","Category"],["amount","Amount"],["vendor","Vendor"],["date","Date"]
   ]},
-  {value:"suppliers",label:"Supplier records",fields:[
-    ["_id","Supplier ID"],["name","Supplier Name"],["gstin","GSTIN"],["reliability_score","Reliability Score"]
-  ]},
-  {value:"machines",label:"Machine records",fields:[
-    ["_id","Machine ID"],["name","Machine Name"],["totalOrdersProcessed","Orders Processed"],["totalRevenueGenerated","Revenue Generated"],["downtimeHours","Downtime Hours"]
-  ]},
-  {value:"users",label:"Team members",fields:[
-    ["_id","Team member"],["username","Name"],["email","Email"]
+  {value:"users",label:"Your account",fields:[
+    ["_id","Account ID"],["username","Username"],["email","Email"]
   ]},
 ];
 

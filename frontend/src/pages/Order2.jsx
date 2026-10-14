@@ -1076,17 +1076,9 @@ function Order2() {
         }
     };
 
-    const sortedOrders = useMemo(() => {
-        let sortableOrders = [...orders];
-        if (sortConfig.key) {
-            sortableOrders.sort((a, b) => {
-                if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
-                if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
-                return 0;
-            });
-        }
-        return sortableOrders;
-    }, [orders, sortConfig]);
+    // Filtering is independent of sort order. Apply the selected sort once,
+    // after filters, so pagination and the active sort indicator stay aligned.
+    const sortedOrders = useMemo(() => [...orders], [orders]);
 
     // Filtering
     const filteredOrders = useMemo(() => {
@@ -1141,11 +1133,12 @@ function Order2() {
 
     const handleSort = (key) => {
         if (sortKey === key) {
-            setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+            setSortOrder(previous => previous === 'asc' ? 'desc' : 'asc');
         } else {
             setSortKey(key);
             setSortOrder('asc');
         }
+        setCurrentPage(1);
     };
 
 
@@ -1276,8 +1269,8 @@ function Order2() {
     //     return sortConfig.direction === 'asc' ? '↑' : '↓';
     // };
     const getSortIcon = (key) => {
-        if (sortConfig.key !== key) return null;
-        return sortConfig.direction === 'asc' ? '↑' : '↓';
+        if (sortKey !== key) return null;
+        return sortOrder === 'asc' ? '↑' : '↓';
     };
 
     const reportRef = useRef();

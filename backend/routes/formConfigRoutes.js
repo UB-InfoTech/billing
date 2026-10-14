@@ -17,6 +17,11 @@ const {
 const ACTIONS=FORM_CONDITION_ACTIONS;
 const owner=req=>String(req.user.id);
 const cleanString=(value,max)=>String(value??"").trim().slice(0,max);
+const optionalNumber=value=>{
+  if(value===null||value===undefined||String(value).trim()==="")return null;
+  const number=Number(value);
+  return Number.isFinite(number)?number:null;
+};
 
 const normalizeOptions=options=>{
   if(!Array.isArray(options))return [];
@@ -113,8 +118,10 @@ const sanitizeFields=fields=>{
       },
       conditions,
       validation:{
-        min:Number.isFinite(Number(raw?.validation?.min))?Number(raw.validation.min):null,
-        max:Number.isFinite(Number(raw?.validation?.max))?Number(raw.validation.max):null,
+        // Number(null) and Number("") are both 0. Treat blank limits as
+        // unbounded so saving a form doesn't silently cap numeric fields at 0.
+        min:optionalNumber(raw?.validation?.min),
+        max:optionalNumber(raw?.validation?.max),
         pattern:cleanString(raw?.validation?.pattern,500)
       }
     };
@@ -195,3 +202,4 @@ router.delete("/:formKey",auth,async(req,res)=>{
 });
 
 module.exports=router;
+module.exports.sanitizeFields=sanitizeFields;

@@ -6,7 +6,7 @@ const Product=require("../models/Product");
 const ReportConfiguration=require("../models/ReportConfiguration");
 const auth=require("../middleware/auth");
 const {getInvoiceRevenue}=require("../utils/syncClientData");
-const {ratio,pct}=require("../utils/financialMetricMath");
+const {ratio,pct,getPeriodDayCount}=require("../utils/financialMetricMath");
 
 const router=express.Router();
 const owner=req=>req.user.id;
@@ -109,7 +109,7 @@ router.get("/",auth,async(req,res)=>{
     const breakEven=fixedCosts!==null&&contributionRatio?round2(fixedCosts/(contributionRatio/100)):null;
     const periodStart=req.query.startDate||req.query.from;
     const periodEnd=req.query.endDate||req.query.to;
-    const days=periodStart&&periodEnd?Math.max(1,Math.ceil((new Date(periodEnd)-new Date(periodStart))/86400000)+1):365;
+    const days=getPeriodDayCount(periodStart,periodEnd);
     const metric=(key,label,group,value,unit,formula,requirements=[])=>({key,label,group,value:value===null?null:round2(value),unit,formula,requirements,status:value===null?"needs_setup":"ready"});
     const metrics=[
       metric("grossSales","Gross Sales","Profit & Loss",grossSales,"₹","Net sales + discounts"),

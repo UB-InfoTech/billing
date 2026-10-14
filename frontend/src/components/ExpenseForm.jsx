@@ -4,7 +4,7 @@ import {getExpenseOptions,uploadReceipt,openExpenseReceipt} from "../services/ap
 import FormConfigurator from "./FormConfigurator";
 import ConfiguredField from "./ConfiguredField";
 import {EXPENSE_FORM_FIELDS} from "../config/noCodeCatalog";
-import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,hydrateConfiguredValues,syncConfiguredCustomFields,buildConfiguredDefaults} from "../hooks/useFormConfiguration";
+import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,hydrateConfiguredValues,syncConfiguredCustomFields,buildConfiguredDefaults,buildNewRecordDefaults} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import {formatDateInput} from "../utils/dateInput";
 
@@ -59,7 +59,14 @@ export default function ExpenseForm({onSubmit,onCancel,initialData=EMPTY_INITIAL
 
   useEffect(()=>{
     const hydrated=hydrateConfiguredValues(initialData,fields);
-    setForm(buildConfiguredDefaults({...EMPTY,...hydrated,customFields:{...(hydrated.customFields||{})}},fields));
+    const initial={...EMPTY,...hydrated,customFields:{...(hydrated.customFields||{})}};
+    // New expenses should honor configured defaults even when the built-in
+    // blank form has static placeholders such as "Operational" or "Cash".
+    // Existing expenses keep their saved values, including numeric zero.
+    const prepared=initialData?._id
+      ?buildConfiguredDefaults(initial,fields)
+      :buildNewRecordDefaults(initial,fields);
+    setForm(applyFormulas(fields,prepared));
   },[initialData,fields]);
 
   const primaryExpenseKeys=new Set(["date","description","amount","category"]);

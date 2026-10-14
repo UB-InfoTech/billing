@@ -63,6 +63,7 @@ async function validateProductReferences(items,createdBy){
 const { buildOrderDateRange } = require("../utils/orderDateRange");
 const {escapeRegex}=require("../utils/escapeRegex");
 const { normalizePaymentUpdates } = require("../utils/bulkPaymentAllocations");
+const { buildPaymentAppendOperation } = require("../utils/paymentAppendOperation");
 
 async function nextOrderNumber(uid){
   // Reserve the sequence in a single atomic database operation so concurrent
@@ -632,17 +633,41 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
     if(allocatedCents!==Math.round(amount*100))throw new Error("Payment allocation must equal payment amount.");
 
     for(const item of allocations){
-      item.order.payments.push({
+      const paymentData={
         amount:item.appliedAmount,
         paymentDate:parsedDate,
         method,
         amountReference:reference,
         processedBy:userId(req)
+      };
+      const operation=buildPaymentAppendOperation({
+        orderId:item.order._id,
+        createdBy:userId(req),
+        amount:item.appliedAmount,
+        payment:paymentData,
+        paymentDate:parsedDate
       });
-      item.order.lastPaymentDate=parsedDate;
-      await item.order.save(session?{session}:undefined);
-      const payment=item.order.payments[item.order.payments.length-1];
-      savedAllocations.push({order:item.order,paymentId:payment?._id});
+      const paymentWrite=Order.findOneAndUpdate(
+        operation.filter,
+        operation.update,
+        operation.options
+      );
+      if(session)paymentWrite.session(session);
+      const updatedOrder=await paymentWrite;
+      if(!updatedOrder){
+        const conflict=new Error(
+          `Invoice ${item.order.orderNumber||item.order._id} changed while this bulk payment was processing. Refresh the selected invoices and try again.`
+        );
+        conflict.status=409;
+        throw conflict;
+      }
+
+      const payment=updatedOrder.payments[updatedOrder.payments.length-1];
+      savedAllocations.push({
+        orderId:updatedOrder._id,
+        createdBy:userId(req),
+        paymentId:payment?._id
+      });
     }
 
     const log=new PaymentLog({
@@ -690,15 +715,22 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
     }else if(savedAllocations.length){
       for(const item of savedAllocations.reverse()){
         try{
-          item.order.payments.pull({_id:item.paymentId});
-          await item.order.save();
+          await Order.findOneAndUpdate(
+            {
+              _id:item.orderId,
+              createdBy:item.createdBy,
+              "payments._id":item.paymentId
+            },
+            {$pull:{payments:{_id:item.paymentId}}},
+            {new:true}
+          );
         }catch(rollbackError){
           console.error("Bulk payment rollback failed:",rollbackError);
         }
       }
     }
     console.error("Bulk payment error:",error);
-    return res.status(400).json({success:false,message:error.message||"Unable to process bulk payment."});
+    return res.status(error.status||400).json({success:false,message:error.message||"Unable to process bulk payment."});
   }finally{
     if(session)await session.endSession();
   }

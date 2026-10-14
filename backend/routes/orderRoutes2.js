@@ -390,26 +390,48 @@ router.post("/orders/:id/pay",auth,async(req,res)=>{
       if(duplicate)throw new Error("Payment reference already exists.");
     }
 
-    order.payments.push({
-      amount,
-      paymentDate,
-      method,
-      amountReference:reference,
-      processedBy:uid,
-    });
-    order.lastPaymentDate=paymentDate;
-    await order.save(session?{session}:undefined);
+    // Repeat the due-balance condition in the database write itself. A check
+    // followed by document.save() can over-collect when two payments arrive at
+    // the same time and both read the same prior balance.
+    const paymentUpdate=Order.findOneAndUpdate(
+      {
+        _id:order._id,
+        createdBy:uid,
+        status:{$ne:"Cancelled"},
+        dueAmount:{$gte:amount}
+      },
+      {
+        $push:{
+          payments:{
+            amount,
+            paymentDate,
+            method,
+            amountReference:reference,
+            processedBy:uid
+          }
+        },
+        $set:{lastPaymentDate:paymentDate}
+      },
+      {new:true,runValidators:true}
+    );
+    if(session)paymentUpdate.session(session);
+    const updatedOrder=await paymentUpdate;
+    if(!updatedOrder){
+      const conflict=new Error("The invoice balance changed while you were recording this payment. Refresh the invoice and try again.");
+      conflict.status=409;
+      throw conflict;
+    }
 
     if(session)await session.commitTransaction();
-    await syncClientDataSafely(order.clientId);
+    await syncClientDataSafely(updatedOrder.clientId,"a single-invoice payment");
 
-    return res.json({success:true,message:"Payment recorded successfully.",order});
+    return res.json({success:true,message:"Payment recorded successfully.",order:updatedOrder});
   }catch(error){
     if(session){
       try{if(session.inTransaction())await session.abortTransaction();}catch{}
     }
     console.error("Payment create error:",error);
-    return res.status(400).json({success:false,message:error.message||"Unable to record payment."});
+    return res.status(error.status||400).json({success:false,message:error.message||"Unable to record payment."});
   }finally{
     if(session)await session.endSession();
   }

@@ -61,6 +61,7 @@ async function validateProductReferences(items,createdBy){
 }
 
 const { buildOrderDateRange } = require("../utils/orderDateRange");
+const {escapeRegex}=require("../utils/escapeRegex");
 const { normalizePaymentUpdates } = require("../utils/bulkPaymentAllocations");
 
 async function nextOrderNumber(uid){
@@ -189,7 +190,7 @@ router.get("/orders",auth,async(req,res)=>{
   try{
     const query={createdBy:userId(req)};
     const search=String(req.query.search||"").trim();
-    if(search){const rx=new RegExp(search.replace(/[.*+?^$()|[\\]\\\\]/g,"\\\\$&"),"i");query.$or=[{orderNumber:rx},{companyName:rx},{gstNumber:rx},{challanNumber:rx}];}
+    if(search){const rx=new RegExp(escapeRegex(search),"i");query.$or=[{orderNumber:rx},{companyName:rx},{gstNumber:rx},{challanNumber:rx}];}
     if(req.query.status&&STATUSES.includes(req.query.status))query.status=req.query.status;
     if(req.query.paymentStatus&&["Unpaid","Partial","Paid"].includes(req.query.paymentStatus))query.paymentStatus=req.query.paymentStatus;
     if(idOrNull(req.query.clientId))query.clientId=req.query.clientId;

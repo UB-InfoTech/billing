@@ -548,6 +548,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
   const transactional=isReplicaSetAvailable();
   const session=transactional?await mongoose.startSession():null;
   const savedAllocations=[];
+  let rollbackIncomplete=false;
 
   try{
     const {method="Cash",amountReference="",splitType="proportional",updates,paymentDate}=req.body||{};
@@ -710,25 +711,64 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
     });
   }catch(error){
     if(session){
-      try{if(session.inTransaction())await session.abortTransaction();}catch{}
+      try{
+        if(session.inTransaction())await session.abortTransaction();
+      }catch(rollbackError){
+        rollbackIncomplete=true;
+        console.error("Bulk payment transaction rollback failed:",rollbackError);
+      }
     }else if(savedAllocations.length){
       for(const item of savedAllocations.reverse()){
+        let rolledBack=false;
         try{
-          await Order.findOneAndUpdate(
-            {
+          // Retry with the latest balance snapshot. The exact-match guard keeps
+          // this compensating write from overwriting a concurrent payment's
+          // derived totals.
+          for(let attempt=0;attempt<5;attempt+=1){
+            const current=await Order.findOne({
               _id:item.orderId,
               createdBy:item.createdBy,
               "payments._id":item.paymentId
-            },
-            {$pull:{payments:{_id:item.paymentId}}},
-            {new:true}
-          );
+            }).select("dueAmount").lean();
+            if(!current){
+              rolledBack=true;
+              break;
+            }
+
+            const expectedDue=current.dueAmount===undefined
+              ?{$exists:false}
+              :current.dueAmount;
+            const restored=await Order.findOneAndUpdate(
+              {
+                _id:item.orderId,
+                createdBy:item.createdBy,
+                "payments._id":item.paymentId,
+                dueAmount:expectedDue
+              },
+              {$pull:{payments:{_id:item.paymentId}}},
+              {new:true}
+            );
+            if(restored){
+              rolledBack=true;
+              break;
+            }
+          }
+          if(!rolledBack){
+            throw new Error("Invoice balance kept changing during payment rollback.");
+          }
         }catch(rollbackError){
+          rollbackIncomplete=true;
           console.error("Bulk payment rollback failed:",rollbackError);
         }
       }
     }
     console.error("Bulk payment error:",error);
+    if(rollbackIncomplete){
+      return res.status(500).json({
+        success:false,
+        message:"Bulk payment failed and automatic rollback could not be completed. Review the affected invoice payment histories before trying again."
+      });
+    }
     return res.status(error.status||400).json({success:false,message:error.message||"Unable to process bulk payment."});
   }finally{
     if(session)await session.endSession();

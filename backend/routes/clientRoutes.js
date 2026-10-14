@@ -9,6 +9,7 @@ const {applyManualCreditAdjustment}=require("../utils/clientCreditBalance");
 const {assertClientIdentity,hasClientIdentity}=require("../utils/clientIdentity");
 const {getInvoiceRevenue}=require("../utils/syncClientData");
 const auth=require("../middleware/auth");
+const {escapeRegex}=require("../utils/escapeRegex");
 
 const router=express.Router();
 const owner=req=>req.user.id;
@@ -34,7 +35,7 @@ router.get("/search",auth,async(req,res)=>{
   try{
     const query={createdBy:owner(req)};
     const q=String(req.query.q||req.query.name||"").trim();
-    if(q){const rx=new RegExp(q.replace(/[.*+?^$()|[\]\\]/g,"\\$&"),"i");query.$or=[{name:rx},{companyName:rx},{email:rx},{phone:rx},{gstNumber:rx}];}
+    if(q){const rx=new RegExp(escapeRegex(q),"i");query.$or=[{name:rx},{companyName:rx},{email:rx},{phone:rx},{gstNumber:rx}];}
     if(req.query.businessType)query.businessType=req.query.businessType;
     if(req.query.accountStatus)query.accountStatus=req.query.accountStatus;
     const minRevenue=Number(req.query.minRevenue),maxRevenue=Number(req.query.maxRevenue);
@@ -49,7 +50,7 @@ router.get("/",auth,async(req,res)=>{
     if(req.query.businessType)query.businessType=req.query.businessType;
     if(req.query.accountStatus)query.accountStatus=req.query.accountStatus;
     const q=String(req.query.search||"").trim();
-    if(q){const rx=new RegExp(q.replace(/[.*+?^$()|[\]\\]/g,"\\$&"),"i");query.$or=[{name:rx},{companyName:rx},{email:rx},{phone:rx},{gstNumber:rx}];}
+    if(q){const rx=new RegExp(escapeRegex(q),"i");query.$or=[{name:rx},{companyName:rx},{email:rx},{phone:rx},{gstNumber:rx}];}
     const minRevenue=Number(req.query.minRevenue),maxRevenue=Number(req.query.maxRevenue);
     if(Number.isFinite(minRevenue)||Number.isFinite(maxRevenue)){query.totalRevenue={};if(Number.isFinite(minRevenue))query.totalRevenue.$gte=minRevenue;if(Number.isFinite(maxRevenue))query.totalRevenue.$lte=maxRevenue;}
     const sortField=["name","companyName","totalRevenue","orderCount","lastOrderDate","createdAt"].includes(req.query.sort)?req.query.sort:"createdAt";

@@ -1,5 +1,5 @@
 import BusinessPageHeader from "../components/BusinessPageHeader";
-import React,{useEffect,useMemo,useState,useCallback} from "react";
+import React,{useEffect,useMemo,useState,useCallback,useRef} from "react";
 import {useSearchParams} from "react-router-dom";
 import { createProduct, fetchProducts, updateProduct, deleteProduct, searchProductByBarcode } from "../services/productService";
 import { Html5QrcodeScanner } from "html5-qrcode";
@@ -8,7 +8,7 @@ import ConfiguredField from "../components/ConfiguredField";
 import DynamicTable from "../components/DynamicTable";
 import { PRODUCT_FORM_FIELDS } from "../config/noCodeCatalog";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
-import { useFormConfiguration, applyFormulas, applyAutoFill, getFieldState, hydrateConfiguredValues, syncConfiguredCustomFields, buildConfiguredDefaults } from "../hooks/useFormConfiguration";
+import { useFormConfiguration, applyFormulas, applyAutoFill, getFieldState, hydrateConfiguredValues, syncConfiguredCustomFields, buildConfiguredDefaults, buildNewRecordDefaults } from "../hooks/useFormConfiguration";
 import {formatDateInput} from "../utils/dateInput";
 
 const PRODUCT_PAGE_SIZE=100;
@@ -58,13 +58,17 @@ export default function ProductPage(){
 
   const configuredFields=productFormConfig.fields||[];
 
-  // A new form can be opened from a page link before saved form settings finish
-  // loading. Fill only still-empty fields when the configuration arrives, so
-  // configured defaults take effect without replacing anything already typed.
+  // Keep the initial blank form in sync if a deep link opens it while saved
+  // settings are still loading. The form is not editable until loading ends, so
+  // defaults can safely be applied once without overwriting typed values later.
+  const productDefaultsAppliedRef=useRef(false);
   useEffect(()=>{
-    if(!showForm||editingProduct)return;
-    setForm(previous=>buildConfiguredDefaults(previous,configuredFields));
-  },[configuredFields,showForm,editingProduct]);
+    if(productFormConfig.loading||productDefaultsAppliedRef.current)return;
+    productDefaultsAppliedRef.current=true;
+    if(showForm&&!editingProduct){
+      setForm(previous=>applyFormulas(configuredFields,buildNewRecordDefaults(previous,configuredFields)));
+    }
+  },[productFormConfig.loading,configuredFields,showForm,editingProduct]);
   const visibleFields=configuredFields.filter(field=>field.visible!==false);
   const primaryProductKeys=new Set(["productName","rate","quantity"]);
   const productFieldValues={...form,...(form.customFields||{})};
@@ -78,7 +82,7 @@ export default function ProductPage(){
   const resetProduct=(openForm=true)=>{
     setEditingProduct(null);
     setImages([]);
-    setForm(buildConfiguredDefaults({...emptyBase},configuredFields));
+    setForm(applyFormulas(configuredFields,buildNewRecordDefaults({...emptyBase},configuredFields)));
     setError("");
     setSuccessMessage("");
     setShowForm(openForm);
@@ -291,7 +295,7 @@ export default function ProductPage(){
         description="Keep product names, selling prices and stock in one place. Add the details you know; the rest can wait."
         className="mb-3"
       >
-        <button type="button" className="btn btn-primary" onClick={resetProduct}><i className="bi bi-plus-lg me-1"></i>Add product</button>
+        <button type="button" className="btn btn-primary" onClick={resetProduct} disabled={productFormConfig.loading}><i className="bi bi-plus-lg me-1"></i>Add product</button>
       </BusinessPageHeader>
 
       {error&&<div className="alert alert-danger" role="alert">{error}</div>}

@@ -11,16 +11,22 @@ const auth=require("../middleware/auth");
 const {buildExpenseDateRange}=require("../utils/expenseDateRange");
 const {normalizeExpenseFinancials}=require("../utils/expenseFinancials");
 const {getSafeUploadExtension,isAllowedUploadType}=require("../utils/uploadFileTypes");
+const {getExpenseReceiptFilename,isExpenseReceiptOwnedBy}=require("../utils/expenseReceiptAccess");
+const {escapeRegex}=require("../utils/escapeRegex");
 const router=express.Router();
 const uploadDir=path.join(__dirname,"../public/uploads/expenses");
 fs.mkdirSync(uploadDir,{recursive:true});
 const upload=multer({
   storage:multer.diskStorage({
     destination:(_,__,cb)=>cb(null,uploadDir),
-    filename:(_,file,cb)=>{
+    filename:(req,file,cb)=>{
       const ext=getSafeUploadExtension(file.mimetype);
       if(!ext)return cb(new Error("Only JPG, PNG, GIF, WebP or PDF receipts are supported."));
-      cb(null,Date.now()+"-"+Math.random().toString(36).slice(2,9)+ext);
+      const accountId=String(req.user?.id||"").trim();
+      if(!/^[a-f0-9]{24}$/i.test(accountId)){
+        return cb(new Error("Your account could not be verified for this receipt upload."));
+      }
+      cb(null,accountId+"-"+Date.now()+"-"+Math.random().toString(36).slice(2,9)+ext);
     }
   }),
   limits:{fileSize:10*1024*1024},
@@ -57,6 +63,34 @@ function referenceError(message){
   const error=new Error(message);
   error.status=400;
   return error;
+}
+
+async function validateExpenseReceiptReference(value,createdBy,currentReceipt=""){
+  const receipt=String(value??"").trim();
+  if(!receipt)return "";
+  if(receipt===String(currentReceipt??"").trim())return receipt;
+
+  // External receipt links were supported by earlier versions. Preserve those
+  // links, but uploaded files in this app must pass account ownership checks.
+  if(/^https?:\\/\\//i.test(receipt)){
+    let parsed;
+    try{parsed=new URL(receipt);}catch{throw referenceError("Choose a valid receipt link.");}
+    if(!/(?:^|\\/)uploads\\/expenses\\//i.test(parsed.pathname))return receipt;
+  }
+
+  const filename=getExpenseReceiptFilename(receipt);
+  if(!filename)throw referenceError("Choose a valid receipt file.");
+
+  if(isExpenseReceiptOwnedBy(filename,createdBy)){
+    return "/uploads/expenses/"+filename;
+  }
+
+  // Older receipt filenames did not include an account prefix. Permit them
+  // only if an expense belonging to this account already references the file.
+  const receiptPath=new RegExp("(?:^|/)uploads/expenses/"+escapeRegex(filename)+"(?:[?#].*)?$","i");
+  const belongsToAccount=await Expense.exists({createdBy,receipt:receiptPath});
+  if(!belongsToAccount)throw referenceError("This receipt does not belong to your business.");
+  return receipt;
 }
 
 async function validateReferenceOwnership({clientId,orderId},createdBy){
@@ -165,6 +199,43 @@ router.get("/",auth,async(req,res)=>{
   }catch(error){res.status(error.status||500).json({message:error.message});}
 });
 
+router.get("/receipt/:filename",auth,async(req,res)=>{
+  try{
+    const filename=getExpenseReceiptFilename(req.params.filename);
+    if(!filename)return res.status(400).json({message:"Invalid receipt file."});
+
+    let authorized=isExpenseReceiptOwnedBy(filename,owner(req));
+    if(!authorized){
+      const receiptPath=new RegExp("(?:^|/)uploads/expenses/"+escapeRegex(filename)+"(?:[?#].*)?$","i");
+      authorized=Boolean(await Expense.exists({createdBy:owner(req),receipt:receiptPath}));
+    }
+    if(!authorized)return res.status(404).json({message:"Receipt not found."});
+
+    const root=path.resolve(uploadDir);
+    const filePath=path.resolve(root,filename);
+    if(!filePath.startsWith(root+path.sep))return res.status(400).json({message:"Invalid receipt file."});
+
+    let stat;
+    try{stat=await fs.promises.stat(filePath);}catch(error){
+      if(error.code==="ENOENT")return res.status(404).json({message:"Receipt file is no longer available."});
+      throw error;
+    }
+    if(!stat.isFile())return res.status(404).json({message:"Receipt file is no longer available."});
+
+    res.set("Cache-Control","no-store");
+    res.set("X-Content-Type-Options","nosniff");
+    res.type(path.extname(filename));
+    res.set("Content-Disposition",'inline; filename="'+filename+'"');
+    return res.sendFile(filePath,error=>{
+      if(error&&!res.headersSent){
+        res.status(error.statusCode||500).json({message:"Unable to open this receipt."});
+      }
+    });
+  }catch(error){
+    return res.status(500).json({message:"Unable to open this receipt."});
+  }
+});
+
 router.get("/:id",auth,async(req,res)=>{
   try{if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid expense ID."});const expense=await Expense.findOne({_id:req.params.id,createdBy:owner(req)}).populate({path:"clientId",select:"name companyName",match:{createdBy:owner(req)}}).populate({path:"orderId",select:"orderNumber",match:{createdBy:owner(req)}}).lean();if(!expense)return res.status(404).json({message:"Expense not found."});res.json(expense);}catch(error){res.status(500).json({message:error.message});}
 });
@@ -176,6 +247,7 @@ router.post("/",auth,async(req,res)=>{
       return res.status(400).json({message:"Description is required."});
     }
     await validateReferenceOwnership(body,owner(req));
+    body.receipt=await validateExpenseReceiptReference(body.receipt,owner(req));
     const financials=normalizeExpenseFinancials(body.amount,body.taxRate);
     const expense=new Expense({
       ...body,
@@ -207,6 +279,9 @@ router.put("/:id",auth,async(req,res)=>{
       {clientId:body.clientId,orderId:body.orderId},
       owner(req)
     );
+    if(body.receipt!==undefined){
+      body.receipt=await validateExpenseReceiptReference(body.receipt,owner(req),expense.receipt);
+    }
     const allowed=[
       "title","description","amount","category","subCategory","tags",
       "paymentMethod","currency","vendor","gstNo","taxDeductible","taxRate",

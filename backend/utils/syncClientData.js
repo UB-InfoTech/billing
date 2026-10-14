@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const Client = require("../models/Client");
 const Order = require("../models/Order2");
 const CreditNote = require("../models/CreditNote");
-const { resolveClientCreditBalance } = require("./clientCreditBalance");
+const { resolveClientCreditBalance, buildClientCreditBalanceSyncFilter } = require("./clientCreditBalance");
 
 function round2(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
@@ -32,7 +32,7 @@ function getInvoiceRevenue(order = {}) {
     : 0;
 }
 
-async function syncClientData(clientId) {
+async function syncClientData(clientId, attempt = 0) {
   if (!clientId || !mongoose.isValidObjectId(clientId)) return null;
 
   const client = await Client.findById(clientId)
@@ -52,12 +52,21 @@ async function syncClientData(clientId) {
   const { creditBalance, creditBalanceAdjustment } = creditState;
 
   if (!orders.length) {
-    return Client.findOneAndUpdate({ _id: client._id, createdBy: client.createdBy }, { $set: {
-      orderCount: 0, totalRevenue: 0, lastOrderDate: null, totalPaid: 0,
-      pendingPayments: 0, outstanding_balance: 0, averageOrderValue: 0,
-      preferredProducts: [], orderFrequency: "Occasional", payments: [], paymentHistory: [],
-      creditBalance, creditBalanceAdjustment
-    }}, { new: true }).lean();
+    const updated = await Client.findOneAndUpdate(
+      buildClientCreditBalanceSyncFilter(client),
+      { $set: {
+        orderCount: 0, totalRevenue: 0, lastOrderDate: null, totalPaid: 0,
+        pendingPayments: 0, outstanding_balance: 0, averageOrderValue: 0,
+        preferredProducts: [], orderFrequency: "Occasional", payments: [], paymentHistory: [],
+        creditBalance, creditBalanceAdjustment
+      }},
+      { new: true, runValidators: true }
+    ).lean();
+
+    if (updated) return updated;
+    if (attempt < 2) return syncClientData(clientId, attempt + 1);
+    throw new Error("Customer balance changed during summary refresh; retry the refresh.");
+
   }
 
   const totalRevenue = round2(orders.reduce((sum, order) => sum + getInvoiceRevenue(order), 0));
@@ -82,12 +91,21 @@ async function syncClientData(clientId) {
   const paymentHistory=orders.flatMap(o=>(o.payments||[]).map(p=>p._id));
   const lastOrderDate=orders.reduce((latest,o)=>{const d=new Date(o.orderDate||o.createdAt);return !latest||d>latest?d:latest;},null);
 
-  return Client.findOneAndUpdate({_id:client._id,createdBy:client.createdBy}, {$set:{
-    orderCount:orders.length,totalRevenue,lastOrderDate,totalPaid,
-    pendingPayments:outstanding,outstanding_balance:outstanding,
-    averageOrderValue:round2(totalRevenue/orders.length),preferredProducts,
-    orderFrequency,payments:orders.map(o=>o._id),paymentHistory,creditBalance,creditBalanceAdjustment
-  }},{new:true}).lean();
+  const updated = await Client.findOneAndUpdate(
+    buildClientCreditBalanceSyncFilter(client),
+    { $set: {
+      orderCount:orders.length,totalRevenue,lastOrderDate,totalPaid,
+      pendingPayments:outstanding,outstanding_balance:outstanding,
+      averageOrderValue:round2(totalRevenue/orders.length),preferredProducts,
+      orderFrequency,payments:orders.map(o=>o._id),paymentHistory,
+      creditBalance,creditBalanceAdjustment
+    }},
+    {new:true,runValidators:true}
+  ).lean();
+
+  if (updated) return updated;
+  if (attempt < 2) return syncClientData(clientId, attempt + 1);
+  throw new Error("Customer balance changed during summary refresh; retry the refresh.");
 }
 
 async function syncClientDataSafely(clientId, context = "a saved financial transaction") {

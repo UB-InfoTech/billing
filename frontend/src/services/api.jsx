@@ -34,12 +34,14 @@ export const openExpenseReceipt=async(value)=>{
   if(isAbsoluteHttp){
     let parsed;
     try{parsed=new URL(receipt);}catch{throw new Error("This receipt link is invalid.");}
-    const apiOrigin=new URL(BASE_URL||window.location.origin,window.location.origin).origin;
+    // Older records may store an absolute URL from a previous deployment
+    // hostname. Route app-upload paths through the current authenticated API;
+    // it checks record ownership before returning the file. Truly external
+    // receipt links continue to open at their original URL.
     const isExpenseUpload=parsed.pathname.toLowerCase().includes("/uploads/expenses/");
-    if(parsed.origin!==apiOrigin||!isExpenseUpload){
+    if(!isExpenseUpload){
       const externalWindow=window.open(receipt,"_blank");
       if(!externalWindow)throw new Error("Please allow pop-ups to open the receipt.");
-      // Detach the opened tab from this application after checking it exists.
       externalWindow.opener=null;
       return;
     }

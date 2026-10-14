@@ -189,6 +189,22 @@ test("requires a linked-record source for reference fields", () => {
   }]), /choose a list.*account manager/i);
 });
 
+test("rejects linked lists that are not safely available to a business account", () => {
+  assert.throws(() => sanitizeFields([{
+    key: "supplier",
+    label: "Supplier",
+    fieldType: "text",
+    dataSource: { type: "lookup", resource: "suppliers" }
+  }]), /not available for this business/i);
+
+  assert.throws(() => sanitizeFields([{
+    key: "machine",
+    label: "Machine",
+    fieldType: "reference",
+    dataSource: { type: "lookup", resource: "machines" }
+  }]), /not available for this business/i);
+});
+
 test("requires choices for manual dropdown fields", () => {
   assert.throws(() => sanitizeFields([{
     key: "customerType",

@@ -136,6 +136,9 @@ async function start(){
   if(!process.env.MONGO_URI)throw new Error("MONGO_URI is required.");
   if(!process.env.JWT_SECRET)throw new Error("JWT_SECRET is required.");
   await mongoose.connect(process.env.MONGO_URI,{serverSelectionTimeoutMS:10000});
+  // Payment reference uniqueness is a financial-integrity constraint. Ensure
+  // the unique index exists before the HTTP server can accept payment writes.
+  await require("./models/PaymentReference").createIndexes();
   console.log("MongoDB Connected");
   app.listen(PORT,()=>console.log("Server running on port "+PORT));
 }

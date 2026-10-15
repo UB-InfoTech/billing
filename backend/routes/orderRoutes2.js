@@ -473,16 +473,16 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
     const findOrder=Order.findOne({_id:req.params.orderId,createdBy:uid}).lean();
     if(session)findOrder.session(session);
     const order=await findOrder;
-    if(!order)return res.status(404).json({success:false,message:"Invoice not found."});
+    if(!order){const error=new Error("Invoice not found.");error.status=404;throw error;}
 
     const currentPayments=Array.isArray(order.payments)?order.payments:[];
     const paymentIndex=currentPayments.findIndex(item=>String(item?._id)===String(req.params.paymentId));
-    if(paymentIndex<0)return res.status(404).json({success:false,message:"Payment not found."});
+    if(paymentIndex<0){const error=new Error("Payment not found.");error.status=404;throw error;}
     const currentPayment=currentPayments[paymentIndex];
 
     const available=Number(order.dueAmount||0)+Number(currentPayment.amount||0);
     if(Math.round(amount*100)>Math.round(available*100)){
-      return res.status(400).json({success:false,message:"Payment amount exceeds the available invoice balance."});
+      throw new Error("Payment amount exceeds the available invoice balance.");
     }
 
     // Always check the proposed non-empty reference, even when it matches this
@@ -498,7 +498,7 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
       });
       if(session)duplicateQuery.session(session);
       if(await duplicateQuery){
-        return res.status(409).json({success:false,message:"Payment reference already exists."});
+        const error=new Error("Payment reference already exists.");error.status=409;throw error;
       }
     }
 
@@ -561,11 +561,11 @@ router.delete("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
     const findOrder=Order.findOne({_id:req.params.orderId,createdBy:uid}).lean();
     if(session)findOrder.session(session);
     const order=await findOrder;
-    if(!order)return res.status(404).json({success:false,message:"Invoice not found."});
+    if(!order){const error=new Error("Invoice not found.");error.status=404;throw error;}
 
     const currentPayments=Array.isArray(order.payments)?order.payments:[];
     const paymentIndex=currentPayments.findIndex(item=>String(item?._id)===String(req.params.paymentId));
-    if(paymentIndex<0)return res.status(404).json({success:false,message:"Payment not found."});
+    if(paymentIndex<0){const error=new Error("Payment not found.");error.status=404;throw error;}
 
     const nextPayments=currentPayments.filter((_,index)=>index!==paymentIndex);
     const wasLastRecordedPayment=paymentIndex===currentPayments.length-1;

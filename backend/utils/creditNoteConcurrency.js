@@ -58,4 +58,24 @@ function buildInvoiceCreditWriteFilter(order, createdBy) {
   return filter;
 }
 
-module.exports = { buildInvoiceCreditWriteFilter };
+/**
+ * Only posted Credit Notes belonging to the invoice owner consume available
+ * credit value or item quantity. The owner is required to prevent cross-tenant
+ * rows from affecting invoice validation.
+ */
+function buildPreviouslyCreditedFilter({ orderId, createdBy, excludeCreditNoteId = null }) {
+  if (!orderId) throw new TypeError("Original invoice ID is required.");
+  if (createdBy === undefined || createdBy === null) {
+    throw new TypeError("Business ownership is required for Credit Note lookup.");
+  }
+
+  const filter = {
+    originalOrderId: orderId,
+    createdBy,
+    status: "Posted"
+  };
+  if (excludeCreditNoteId) filter._id = { $ne: excludeCreditNoteId };
+  return filter;
+}
+
+module.exports = { buildInvoiceCreditWriteFilter, buildPreviouslyCreditedFilter };

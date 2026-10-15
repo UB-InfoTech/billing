@@ -23,6 +23,8 @@ const ClientSchema = new mongoose.Schema({
   creditBalance:{type:Number,default:0,min:0},
   // Manual adjustments are kept separately from posted Credit Note credits.
   creditBalanceAdjustment:{type:Number,default:0},
+  // Optimistic concurrency token for derived customer summaries.
+  financialSummaryVersion:{type:Number,default:0,min:0},
   paymentTerms:{type:String,enum:["30","60","90","Advance"],default:"30"},
   loyaltyPoints:{type:Number,default:0,min:0},
   discountRate:{type:Number,default:0,min:0,max:100},

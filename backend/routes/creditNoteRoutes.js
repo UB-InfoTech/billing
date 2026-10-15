@@ -1747,10 +1747,6 @@ async function cancelCreditNote(req, res) {
       round2(currentCreditApplied - adjustmentAmount)
     );
 
-    const paymentsTotal = (order.payments || []).reduce(
-      (sum, p) => sum + (Number(p.amount) || 0),
-      0
-    );
     if (note.stockAffecting && note.inventoryMovements?.length) {
       let Product;
       try {

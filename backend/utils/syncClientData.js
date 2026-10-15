@@ -36,9 +36,14 @@ async function syncClientData(clientId, attempt = 0) {
   if (!clientId || !mongoose.isValidObjectId(clientId)) return null;
 
   const client = await Client.findById(clientId)
-    .select("_id createdBy creditBalance creditBalanceAdjustment")
+    .select("_id createdBy creditBalance creditBalanceAdjustment financialSummaryVersion")
     .lean();
   if (!client) return null;
+
+  const currentSummaryVersion = Number(client.financialSummaryVersion);
+  const nextSummaryVersion = Number.isFinite(currentSummaryVersion) && currentSummaryVersion >= 0
+    ? currentSummaryVersion + 1
+    : 1;
 
   const [orders, creditRows] = await Promise.all([
     Order.find({ clientId: client._id, createdBy: client.createdBy, status: { $ne: "Cancelled" } })
@@ -58,7 +63,7 @@ async function syncClientData(clientId, attempt = 0) {
         orderCount: 0, totalRevenue: 0, lastOrderDate: null, totalPaid: 0,
         pendingPayments: 0, outstanding_balance: 0, averageOrderValue: 0,
         preferredProducts: [], orderFrequency: "Occasional", payments: [], paymentHistory: [],
-        creditBalance, creditBalanceAdjustment
+        creditBalance, creditBalanceAdjustment, financialSummaryVersion: nextSummaryVersion
       }},
       { new: true, runValidators: true }
     ).lean();
@@ -98,7 +103,7 @@ async function syncClientData(clientId, attempt = 0) {
       pendingPayments:outstanding,outstanding_balance:outstanding,
       averageOrderValue:round2(totalRevenue/orders.length),preferredProducts,
       orderFrequency,payments:orders.map(o=>o._id),paymentHistory,
-      creditBalance,creditBalanceAdjustment
+      creditBalance,creditBalanceAdjustment,financialSummaryVersion:nextSummaryVersion
     }},
     {new:true,runValidators:true}
   ).lean();

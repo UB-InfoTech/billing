@@ -36,7 +36,7 @@ async function syncClientData(clientId, attempt = 0) {
   if (!clientId || !mongoose.isValidObjectId(clientId)) return null;
 
   const client = await Client.findById(clientId)
-    .select("_id createdBy creditBalance creditBalanceAdjustment financialSummaryVersion")
+    .select("_id createdBy creditBalance creditBalanceAdjustment +financialSummaryVersion")
     .lean();
   if (!client) return null;
 

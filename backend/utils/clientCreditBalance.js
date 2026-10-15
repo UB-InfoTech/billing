@@ -75,6 +75,24 @@ function buildClientCreditBalanceSyncFilter(client = {}) {
     });
   }
 
+  // Every successful summary refresh advances this token in the same atomic
+  // update as the summary values. A competing refresh then has to re-read its
+  // source data rather than overwriting a newer calculation.
+  const hasSummaryVersion = client.financialSummaryVersion !== undefined
+    && client.financialSummaryVersion !== null
+    && Number.isFinite(Number(client.financialSummaryVersion));
+  if (hasSummaryVersion) {
+    filter.financialSummaryVersion = Number(client.financialSummaryVersion);
+  } else {
+    clauses.push({
+      $or: [
+        { financialSummaryVersion: { $exists: false } },
+        { financialSummaryVersion: null },
+        { financialSummaryVersion: 0 }
+      ]
+    });
+  }
+
   if (clauses.length) filter.$and = clauses;
   return filter;
 }

@@ -7,7 +7,7 @@ const CreditNoteCounter = require("../models/CreditNoteCounter");
 const auth = require('../middleware/auth');
 const { syncClientDataSafely } = require("../utils/syncClientData");
 const { exceedsCurrencyLimit, meetsCurrencyTarget } = require("../utils/currencyValidation");
-const { buildInvoiceCreditWriteFilter } = require("../utils/creditNoteConcurrency");
+const { buildInvoiceCreditWriteFilter, buildPreviouslyCreditedFilter } = require("../utils/creditNoteConcurrency");
 
 
 const router = express.Router();
@@ -171,15 +171,14 @@ function calculateSettlement(settlement, grandTotal, orderDue) {
 }
 
 async function getPreviouslyCredited(orderId, session, excludeCreditNoteId = null, createdBy = null) {
-  const filter = {
-    originalOrderId: orderId,
-    status: { $ne: "Cancelled" },
-  };
-  if (createdBy) filter.createdBy = createdBy;
-
-  if (excludeCreditNoteId && mongoose.isValidObjectId(excludeCreditNoteId)) {
-    filter._id = { $ne: excludeCreditNoteId };
-  }
+  const filter = buildPreviouslyCreditedFilter({
+    orderId,
+    createdBy,
+    excludeCreditNoteId:
+      excludeCreditNoteId && mongoose.isValidObjectId(excludeCreditNoteId)
+        ? excludeCreditNoteId
+        : null,
+  });
 
   const rows = await CreditNote.find(filter)
     .select("items totals.grandTotal creditMode")
@@ -390,7 +389,8 @@ router.get("/available/:orderId", auth, async (req, res) => {
     const { map, total } = await getPreviouslyCredited(
       order._id,
       null,
-      excludeCreditNoteId || null
+      excludeCreditNoteId || null,
+      req.user.id
     );
     const invoiceTotal = getOrderInvoiceTotal(order);
 

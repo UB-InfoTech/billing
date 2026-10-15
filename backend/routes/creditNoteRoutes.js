@@ -7,6 +7,7 @@ const CreditNoteCounter = require("../models/CreditNoteCounter");
 const auth = require('../middleware/auth');
 const { syncClientDataSafely } = require("../utils/syncClientData");
 const { exceedsCurrencyLimit, meetsCurrencyTarget } = require("../utils/currencyValidation");
+const { buildInvoiceCreditWriteFilter } = require("../utils/creditNoteConcurrency");
 
 
 const router = express.Router();
@@ -714,6 +715,7 @@ router.post("/", auth, async (req, res) => {
   let originalCreditApplied = 0;
   let originalCreditNoteCount = 0;
   let orderUpdated = false;
+  let orderAfterWrite = null;
   let noteSavedId = null;
 
   try {
@@ -996,37 +998,26 @@ router.post("/", auth, async (req, res) => {
       customerCreditClientId = order.clientId;
     }
 
-    if (finalSettlement.adjustmentAmount > 0) {
-      const nextCreditApplied = round2(
-        Number(order.creditAppliedAmount || 0) +
-          finalSettlement.adjustmentAmount
+    const nextCreditApplied = round2(
+      Number(order.creditAppliedAmount || 0) +
+        finalSettlement.adjustmentAmount
+    );
+    const updatedOrder = await Order.findOneAndUpdate(
+      buildInvoiceCreditWriteFilter(order, userId),
+      {
+        $set: { creditAppliedAmount: nextCreditApplied },
+        $inc: { creditNoteCount: 1 },
+      },
+      { new: true, runValidators: true, session }
+    );
+    if (!updatedOrder) {
+      const conflict = new Error(
+        "This invoice changed while the Credit Note was being posted. Refresh the invoice and try again."
       );
-
-      await Order.findByIdAndUpdate(
-        order._id,
-        {
-          $set: {
-            creditAppliedAmount: nextCreditApplied,
-            dueAmount: Math.max(
-              0,
-              round2(
-                getOrderInvoiceTotal(order) -
-                  paymentTotal -
-                  nextCreditApplied
-              )
-            ),
-          },
-          $inc: { creditNoteCount: 1 },
-        },
-        { session }
-      );
-    } else {
-      await Order.findByIdAndUpdate(
-        order._id,
-        { $inc: { creditNoteCount: 1 } },
-        { session }
-      );
+      conflict.status = 409;
+      throw conflict;
     }
+    orderAfterWrite = updatedOrder;
     orderUpdated = true;
 
     const settled = round2(
@@ -1124,11 +1115,14 @@ router.post("/", auth, async (req, res) => {
       }
       if (orderUpdated && orderForRollback) {
         try {
-          await Order.findOneAndUpdate(
-            { _id: orderForRollback._id, createdBy: userId },
+          const restoredOrder = await Order.findOneAndUpdate(
+            buildInvoiceCreditWriteFilter(orderAfterWrite, userId),
             { $set: { creditAppliedAmount: originalCreditApplied, creditNoteCount: originalCreditNoteCount } },
-            { new: true }
+            { new: true, runValidators: true }
           );
+          if (!restoredOrder) {
+            console.error("Credit Note rollback skipped invoice restoration because the invoice changed again.");
+          }
         } catch (rollbackError) {
           console.error("Credit note rollback could not restore invoice balances:", rollbackError);
         }
@@ -1163,7 +1157,8 @@ router.post("/", auth, async (req, res) => {
 
     console.error("Credit note create error:", error);
     const status =
-      error?.code === 11000
+      Number(error?.status) ||
+      (error?.code === 11000
         ? 409
         : /authentication required/i.test(error?.message || "")
         ? 401
@@ -1171,7 +1166,7 @@ router.post("/", auth, async (req, res) => {
             error?.message || ""
           )
         ? 400
-        : 500;
+        : 500);
 
     return res.status(status).json({
       message: error?.message || "Unable to create credit note.",
@@ -1359,6 +1354,7 @@ router.put("/:id", auth, async (req, res) => {
   let previousOrderId = null;
   let previousNote = null;
   let orderSaved = false;
+  let orderAfterWrite = null;
   let noteSaved = false;
 
   try {
@@ -1513,7 +1509,7 @@ router.put("/:id", auth, async (req, res) => {
       });
     }
 
-    order.creditAppliedAmount = round2(
+    const nextCreditApplied = round2(
       Number(order.creditAppliedAmount || 0) +
       prepared.finalSettlement.adjustmentAmount
     );
@@ -1534,7 +1530,19 @@ router.put("/:id", auth, async (req, res) => {
       }
     }
 
-    await order.save(session ? { session } : undefined);
+    const updatedOrder = await Order.findOneAndUpdate(
+      buildInvoiceCreditWriteFilter(order, userId),
+      { $set: { creditAppliedAmount: nextCreditApplied } },
+      { new: true, runValidators: true, session }
+    );
+    if (!updatedOrder) {
+      const conflict = new Error(
+        "This invoice changed while the Credit Note was being edited. Refresh the invoice and try again."
+      );
+      conflict.status = 409;
+      throw conflict;
+    }
+    orderAfterWrite = updatedOrder;
     orderSaved = true;
 
     note.creditNoteNumber = number;
@@ -1575,7 +1583,7 @@ router.put("/:id", auth, async (req, res) => {
 
     // Shape the response before committing. A later read failure must not make
     // a successfully saved financial change look like a failed request.
-    const originalOrder = order.toObject();
+    const originalOrder = orderAfterWrite.toObject();
     const updatedNote = note.toObject();
     const responseBody = {
       message: "Credit Note updated successfully.",
@@ -1615,11 +1623,14 @@ router.put("/:id", auth, async (req, res) => {
       }
       if (orderSaved && previousOrderFinancials && previousOrderId) {
         try {
-          await Order.findOneAndUpdate(
-            { _id: previousOrderId, createdBy: userId },
+          const restoredOrder = await Order.findOneAndUpdate(
+            buildInvoiceCreditWriteFilter(orderAfterWrite, userId),
             { $set: previousOrderFinancials },
-            { new: true }
+            { new: true, runValidators: true }
           );
+          if (!restoredOrder) {
+            console.error("Credit Note edit rollback skipped invoice restoration because the invoice changed again.");
+          }
         } catch (rollbackError) {
           console.error("Credit Note edit rollback could not restore invoice balances:", rollbackError);
         }
@@ -1648,7 +1659,7 @@ router.put("/:id", auth, async (req, res) => {
       }
     }
     console.error("Credit note update error:", error);
-    return res.status(400).json({ message: error.message || "Unable to update Credit Note." });
+    return res.status(error.status || 400).json({ message: error.message || "Unable to update Credit Note." });
   } finally {
     if (session) await session.endSession();
   }
@@ -1673,6 +1684,7 @@ async function cancelCreditNote(req, res) {
   let previousOrderFinancials = null;
   let previousOrderId = null;
   let orderUpdated = false;
+  let orderAfterWrite = null;
   let noteSaved = false;
 
   try {
@@ -1781,17 +1793,23 @@ async function cancelCreditNote(req, res) {
     }
 
     const updatedOrder = await Order.findOneAndUpdate(
-      { _id: order._id, createdBy: userId },
+      buildInvoiceCreditWriteFilter(order, userId),
       {
         $set: {
           creditAppliedAmount: nextCreditApplied,
-          dueAmount,
           creditNoteCount: Math.max(0, Number(order.creditNoteCount || 0) - 1),
         },
       },
-      { new: true, session }
+      { new: true, runValidators: true, session }
     );
-    if (!updatedOrder) throw new Error("Original invoice could not be updated.");
+    if (!updatedOrder) {
+      const conflict = new Error(
+        "This invoice changed while the Credit Note was being cancelled. Refresh the invoice and try again."
+      );
+      conflict.status = 409;
+      throw conflict;
+    }
+    orderAfterWrite = updatedOrder;
     orderUpdated = true;
 
     note.status = "Cancelled";
@@ -1843,11 +1861,14 @@ async function cancelCreditNote(req, res) {
       }
       if (orderUpdated && previousOrderFinancials && previousOrderId) {
         try {
-          await Order.findOneAndUpdate(
-            { _id: previousOrderId, createdBy: userId },
+          const restoredOrder = await Order.findOneAndUpdate(
+            buildInvoiceCreditWriteFilter(orderAfterWrite, userId),
             { $set: previousOrderFinancials },
-            { new: true }
+            { new: true, runValidators: true }
           );
+          if (!restoredOrder) {
+            console.error("Credit Note cancellation rollback skipped invoice restoration because the invoice changed again.");
+          }
         } catch (rollbackError) {
           console.error("Credit Note cancellation rollback could not restore invoice balances:", rollbackError);
         }
@@ -1876,7 +1897,7 @@ async function cancelCreditNote(req, res) {
       }
     }
     console.error("Credit note cancellation error:", error);
-    return res.status(400).json({ message: error.message });
+    return res.status(error.status || 400).json({ message: error.message });
   } finally {
     if (session) await session.endSession();
   }

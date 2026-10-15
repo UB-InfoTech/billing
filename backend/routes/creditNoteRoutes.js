@@ -1694,7 +1694,7 @@ router.put("/:id", auth, async (req, res) => {
       }
     }
     console.error("Credit note update error:", error);
-    return res.status(error.status || 400).json({ message: error.message || "Unable to update Credit Note." });
+    return res.status(error.status || (error.code === 11000 ? 409 : 400)).json({ message: error.message || "Unable to update Credit Note." });
   } finally {
     if (session) await session.endSession();
   }
@@ -1947,7 +1947,7 @@ async function cancelCreditNote(req, res) {
       }
     }
     console.error("Credit note cancellation error:", error);
-    return res.status(error.status || 400).json({ message: error.message });
+    return res.status(error.status || (error.code === 11000 ? 409 : 400)).json({ message: error.message });
   } finally {
     if (session) await session.endSession();
   }

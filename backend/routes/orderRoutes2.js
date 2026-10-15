@@ -651,6 +651,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
   const session=transactional?await mongoose.startSession():null;
   const savedAllocations=[];
   let rollbackIncomplete=false;
+  let reservedReferenceId=null;
 
   try{
     const {method="Cash",amountReference="",splitType="proportional",updates,paymentDate}=req.body||{};
@@ -674,9 +675,18 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
 
     if(session)session.startTransaction({writeConcern:{w:"majority",j:true}});
 
-    const duplicateQuery=Order.exists({"payments.amountReference":reference,createdBy:userId(req)});
-    if(session)duplicateQuery.session(session);
-    if(await duplicateQuery)throw new Error("Payment reference already exists.");
+    const duplicateOrderQuery=Order.exists({"payments.amountReference":reference,createdBy:userId(req)});
+    const duplicateLogQuery=PaymentLog.exists({userId:userId(req),reference});
+    if(session){duplicateOrderQuery.session(session);duplicateLogQuery.session(session);}
+    const [duplicateOrder,duplicateLog]=await Promise.all([duplicateOrderQuery,duplicateLogQuery]);
+    if(duplicateOrder||duplicateLog){
+      const conflict=new Error("Payment reference already exists. Use a different reference.");
+      conflict.status=409;
+      throw conflict;
+    }
+    reservedReferenceId=await reservePaymentReference({
+      createdBy:userId(req),reference,kind:"bulk",session
+    });
 
     const orderQuery=Order.find({_id:{$in:ids},createdBy:userId(req)});
     if(session)orderQuery.session(session);
@@ -792,6 +802,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
     await log.save(session?{session}:undefined);
 
     if(session)await session.commitTransaction();
+    reservedReferenceId=null;
 
     const clientIds=[...new Set(allocations.map(item=>String(item.order.clientId||"")).filter(Boolean))];
     await Promise.allSettled(clientIds.map(clientId=>syncClientDataSafely(clientId,"a bulk payment")));
@@ -862,6 +873,15 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
           rollbackIncomplete=true;
           console.error("Bulk payment rollback failed:",rollbackError);
         }
+      }
+    }
+    if(!session&&reservedReferenceId&&!rollbackIncomplete){
+      try{
+        await releasePaymentReference({reservationId:reservedReferenceId,createdBy:userId(req)});
+        reservedReferenceId=null;
+      }catch(releaseError){
+        rollbackIncomplete=true;
+        console.error("Bulk payment reference rollback failed:",releaseError);
       }
     }
     console.error("Bulk payment error:",error);

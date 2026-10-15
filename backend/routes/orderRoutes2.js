@@ -64,6 +64,7 @@ const { buildOrderDateRange } = require("../utils/orderDateRange");
 const {escapeRegex}=require("../utils/escapeRegex");
 const { normalizePaymentUpdates } = require("../utils/bulkPaymentAllocations");
 const { buildPaymentAppendOperation } = require("../utils/paymentAppendOperation");
+const { buildPaymentArrayMutationOperation } = require("../utils/paymentArrayMutation");
 
 async function nextOrderNumber(uid){
   // Reserve the sequence in a single atomic database operation so concurrent
@@ -453,59 +454,93 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
 
   try{
     const uid=userId(req);
+    if(!mongoose.isValidObjectId(req.params.orderId)||!mongoose.isValidObjectId(req.params.paymentId)){
+      return res.status(400).json({success:false,message:"Invalid invoice or payment ID."});
+    }
+
     const amount=round2(req.body?.amount);
     const method=req.body?.method||"Cash";
     const reference=String(req.body?.amountReference||"").trim();
     const paymentDate=new Date(req.body?.paymentDate||new Date());
 
-    if(!Number.isFinite(amount)||amount<=0)return res.status(400).json({message:"Payment amount must be a valid number greater than zero."});
-    if(!METHODS.includes(method))return res.status(400).json({message:"Invalid payment method."});
-    if(Number.isNaN(paymentDate.getTime()))return res.status(400).json({message:"Invalid payment date."});
-    if(reference.length>100)return res.status(400).json({message:"Payment reference must be at most 100 characters."});
+    if(!Number.isFinite(amount)||amount<=0)return res.status(400).json({success:false,message:"Payment amount must be a valid number greater than zero."});
+    if(!METHODS.includes(method))return res.status(400).json({success:false,message:"Invalid payment method."});
+    if(Number.isNaN(paymentDate.getTime()))return res.status(400).json({success:false,message:"Invalid payment date."});
+    if(reference.length>100)return res.status(400).json({success:false,message:"Payment reference must be at most 100 characters."});
 
     if(session)session.startTransaction();
 
-    const findOrder=Order.findOne({_id:req.params.orderId,createdBy:uid});
+    const findOrder=Order.findOne({_id:req.params.orderId,createdBy:uid}).lean();
     if(session)findOrder.session(session);
     const order=await findOrder;
-    if(!order)throw new Error("Order not found.");
+    if(!order)return res.status(404).json({success:false,message:"Invoice not found."});
 
-    const payment=order.payments.id(req.params.paymentId);
-    if(!payment)throw new Error("Payment not found.");
+    const currentPayments=Array.isArray(order.payments)?order.payments:[];
+    const paymentIndex=currentPayments.findIndex(item=>String(item?._id)===String(req.params.paymentId));
+    if(paymentIndex<0)return res.status(404).json({success:false,message:"Payment not found."});
+    const currentPayment=currentPayments[paymentIndex];
 
-    const available=Number(order.dueAmount||0)+Number(payment.amount||0);
-    if(Math.round(amount*100)>Math.round(available*100))throw new Error("Payment amount exceeds the available invoice balance.");
+    const available=Number(order.dueAmount||0)+Number(currentPayment.amount||0);
+    if(Math.round(amount*100)>Math.round(available*100)){
+      return res.status(400).json({success:false,message:"Payment amount exceeds the available invoice balance."});
+    }
 
-    if(reference&&reference!==payment.amountReference){
+    // Always check the proposed non-empty reference, even when it matches this
+    // payment's current value. This also detects duplicates already in legacy data.
+    if(reference){
       const duplicateQuery=Order.exists({
         createdBy:uid,
         "payments.amountReference":reference,
         $or:[
           {_id:{$ne:order._id}},
-          {_id:order._id,payments:{$elemMatch:{_id:{$ne:payment._id},amountReference:reference}}}
+          {_id:order._id,payments:{$elemMatch:{_id:{$ne:currentPayment._id},amountReference:reference}}}
         ]
       });
       if(session)duplicateQuery.session(session);
-      const duplicate=await duplicateQuery;
-      if(duplicate)throw new Error("Payment reference already exists.");
+      if(await duplicateQuery){
+        return res.status(409).json({success:false,message:"Payment reference already exists."});
+      }
     }
 
-    payment.amount=amount;
-    payment.method=method;
-    payment.amountReference=reference;
-    payment.paymentDate=paymentDate;
+    const nextPayments=currentPayments.map((item,index)=>index===paymentIndex?{
+      ...item,
+      amount,
+      method,
+      amountReference:reference,
+      paymentDate
+    }:item);
+    const wasLastRecordedPayment=paymentIndex===currentPayments.length-1;
+    const lastPaymentDate=wasLastRecordedPayment?paymentDate:(order.lastPaymentDate||null);
+    const operation=buildPaymentArrayMutationOperation({
+      orderId:order._id,
+      createdBy:uid,
+      expectedDueAmount:order.dueAmount,
+      expectedPayments:order.payments,
+      nextPayments,
+      lastPaymentDate
+    });
+    const updateQuery=Order.findOneAndUpdate(
+      operation.filter,
+      operation.update,
+      operation.options
+    );
+    if(session)updateQuery.session(session);
+    const updatedOrder=await updateQuery;
+    if(!updatedOrder){
+      const conflict=new Error("This invoice changed while you were editing the payment. Refresh it and try again.");
+      conflict.status=409;
+      throw conflict;
+    }
 
-    await order.save(session?{session}:undefined);
     if(session)await session.commitTransaction();
-    await syncClientDataSafely(order.clientId);
-
-    return res.json({success:true,message:"Payment updated successfully.",order});
+    await syncClientDataSafely(updatedOrder.clientId,"a payment edit");
+    return res.json({success:true,message:"Payment updated successfully.",order:updatedOrder});
   }catch(error){
     if(session){
       try{if(session.inTransaction())await session.abortTransaction();}catch{}
     }
     console.error("Payment update error:",error);
-    return res.status(400).json({message:error.message||"Unable to update payment."});
+    return res.status(error.status||400).json({success:false,message:error.message||"Unable to update payment."});
   }finally{
     if(session)await session.endSession();
   }
@@ -516,29 +551,59 @@ router.delete("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
   const session=transactional?await mongoose.startSession():null;
 
   try{
+    const uid=userId(req);
+    if(!mongoose.isValidObjectId(req.params.orderId)||!mongoose.isValidObjectId(req.params.paymentId)){
+      return res.status(400).json({success:false,message:"Invalid invoice or payment ID."});
+    }
+
     if(session)session.startTransaction();
 
-    const findOrder=Order.findOne({_id:req.params.orderId,createdBy:userId(req)});
+    const findOrder=Order.findOne({_id:req.params.orderId,createdBy:uid}).lean();
     if(session)findOrder.session(session);
     const order=await findOrder;
-    if(!order)throw new Error("Order not found.");
+    if(!order)return res.status(404).json({success:false,message:"Invoice not found."});
 
-    const payment=order.payments.id(req.params.paymentId);
-    if(!payment)throw new Error("Payment not found.");
+    const currentPayments=Array.isArray(order.payments)?order.payments:[];
+    const paymentIndex=currentPayments.findIndex(item=>String(item?._id)===String(req.params.paymentId));
+    if(paymentIndex<0)return res.status(404).json({success:false,message:"Payment not found."});
 
-    order.payments.pull({_id:req.params.paymentId});
-    await order.save(session?{session}:undefined);
+    const nextPayments=currentPayments.filter((_,index)=>index!==paymentIndex);
+    const wasLastRecordedPayment=paymentIndex===currentPayments.length-1;
+    const remainingLastPayment=nextPayments[nextPayments.length-1];
+    const lastPaymentDate=wasLastRecordedPayment
+      ?(remainingLastPayment?.paymentDate||remainingLastPayment?.createdAt||null)
+      :(order.lastPaymentDate||null);
+
+    const operation=buildPaymentArrayMutationOperation({
+      orderId:order._id,
+      createdBy:uid,
+      expectedDueAmount:order.dueAmount,
+      expectedPayments:order.payments,
+      nextPayments,
+      lastPaymentDate
+    });
+    const updateQuery=Order.findOneAndUpdate(
+      operation.filter,
+      operation.update,
+      operation.options
+    );
+    if(session)updateQuery.session(session);
+    const updatedOrder=await updateQuery;
+    if(!updatedOrder){
+      const conflict=new Error("This invoice changed while you were deleting the payment. Refresh it and try again.");
+      conflict.status=409;
+      throw conflict;
+    }
 
     if(session)await session.commitTransaction();
-    await syncClientDataSafely(order.clientId);
-
-    return res.json({success:true,message:"Payment deleted successfully.",order});
+    await syncClientDataSafely(updatedOrder.clientId,"a payment deletion");
+    return res.json({success:true,message:"Payment deleted successfully.",order:updatedOrder});
   }catch(error){
     if(session){
       try{if(session.inTransaction())await session.abortTransaction();}catch{}
     }
     console.error("Payment delete error:",error);
-    return res.status(400).json({message:error.message||"Unable to delete payment."});
+    return res.status(error.status||400).json({success:false,message:error.message||"Unable to delete payment."});
   }finally{
     if(session)await session.endSession();
   }

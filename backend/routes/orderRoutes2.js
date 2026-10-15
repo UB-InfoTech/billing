@@ -65,6 +65,7 @@ const {escapeRegex}=require("../utils/escapeRegex");
 const { normalizePaymentUpdates } = require("../utils/bulkPaymentAllocations");
 const { buildPaymentAppendOperation } = require("../utils/paymentAppendOperation");
 const { buildPaymentArrayMutationOperation } = require("../utils/paymentArrayMutation");
+const { reservePaymentReference, ensurePaymentReferenceReserved, releasePaymentReference } = require("../utils/paymentReferenceReservation");
 
 async function nextOrderNumber(uid){
   // Reserve the sequence in a single atomic database operation so concurrent
@@ -355,6 +356,7 @@ router.delete("/orders/:id/delete",auth,async(req,res)=>{
 router.post("/orders/:id/pay",auth,async(req,res)=>{
   const transactional=isReplicaSetAvailable();
   const session=transactional?await mongoose.startSession():null;
+  let reservedReferenceId=null;
 
   try{
     const uid=userId(req);
@@ -363,11 +365,11 @@ router.post("/orders/:id/pay",auth,async(req,res)=>{
     const reference=String(req.body?.amountReference||"").trim();
     const paymentDate=new Date(req.body?.paymentDate||new Date());
 
-    if(!uid)return res.status(401).json({message:"Authentication required."});
-    if(!Number.isFinite(amount)||amount<=0)return res.status(400).json({message:"Payment amount must be a valid number greater than zero."});
-    if(!METHODS.includes(method))return res.status(400).json({message:"Invalid payment method."});
-    if(Number.isNaN(paymentDate.getTime()))return res.status(400).json({message:"Invalid payment date."});
-    if(reference.length>100)return res.status(400).json({message:"Payment reference must be at most 100 characters."});
+    if(!uid)return res.status(401).json({success:false,message:"Authentication required."});
+    if(!Number.isFinite(amount)||amount<=0)return res.status(400).json({success:false,message:"Payment amount must be a valid number greater than zero."});
+    if(!METHODS.includes(method))return res.status(400).json({success:false,message:"Invalid payment method."});
+    if(Number.isNaN(paymentDate.getTime()))return res.status(400).json({success:false,message:"Invalid payment date."});
+    if(reference.length>100)return res.status(400).json({success:false,message:"Payment reference must be at most 100 characters."});
 
     if(session)session.startTransaction();
 
@@ -384,18 +386,22 @@ router.post("/orders/:id/pay",auth,async(req,res)=>{
     }
 
     if(reference){
-      const duplicateQuery=Order.exists({
-        "payments.amountReference":reference,
-        createdBy:uid,
+      const duplicateOrderQuery=Order.exists({"payments.amountReference":reference,createdBy:uid});
+      const duplicateLogQuery=PaymentLog.exists({userId:uid,reference});
+      if(session){duplicateOrderQuery.session(session);duplicateLogQuery.session(session);}
+      const [duplicateOrder,duplicateLog]=await Promise.all([duplicateOrderQuery,duplicateLogQuery]);
+      if(duplicateOrder||duplicateLog){
+        const error=new Error("Payment reference already exists. Use a different reference.");
+        error.status=409;
+        throw error;
+      }
+      reservedReferenceId=await reservePaymentReference({
+        createdBy:uid,reference,kind:"single",session
       });
-      if(session)duplicateQuery.session(session);
-      const duplicate=await duplicateQuery;
-      if(duplicate)throw new Error("Payment reference already exists.");
     }
 
-    // Repeat the due-balance condition in the database write itself. A check
-    // followed by document.save() can over-collect when two payments arrive at
-    // the same time and both read the same prior balance.
+    // The conditional write protects the balance observed above from concurrent
+    // payments, credits, or invoice edits.
     const paymentOperation=buildPaymentAppendOperation({
       orderId:order._id,
       createdBy:uid,
@@ -424,15 +430,22 @@ router.post("/orders/:id/pay",auth,async(req,res)=>{
     }
 
     if(session)await session.commitTransaction();
+    reservedReferenceId=null;
     await syncClientDataSafely(updatedOrder.clientId,"a single-invoice payment");
 
     return res.json({success:true,message:"Payment recorded successfully.",order:updatedOrder});
   }catch(error){
     if(session){
       try{if(session.inTransaction())await session.abortTransaction();}catch{}
+    }else if(reservedReferenceId){
+      try{await releasePaymentReference({reservationId:reservedReferenceId,createdBy:userId(req)});}
+      catch(releaseError){console.error("Payment reference rollback failed:",releaseError);}
     }
     console.error("Payment create error:",error);
-    return res.status(error.status||400).json({success:false,message:error.message||"Unable to record payment."});
+    return res.status(error.status||(error.code===11000?409:400)).json({
+      success:false,
+      message:error.message||"Unable to record payment."
+    });
   }finally{
     if(session)await session.endSession();
   }
@@ -451,6 +464,7 @@ router.get("/orders/:id/payments",auth,async(req,res)=>{
 router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
   const transactional=isReplicaSetAvailable();
   const session=transactional?await mongoose.startSession():null;
+  let newlyReservedReferenceId=null;
 
   try{
     const uid=userId(req);
@@ -479,16 +493,17 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
     const paymentIndex=currentPayments.findIndex(item=>String(item?._id)===String(req.params.paymentId));
     if(paymentIndex<0){const error=new Error("Payment not found.");error.status=404;throw error;}
     const currentPayment=currentPayments[paymentIndex];
+    const currentReference=String(currentPayment.amountReference||"").trim();
 
     const available=Number(order.dueAmount||0)+Number(currentPayment.amount||0);
     if(Math.round(amount*100)>Math.round(available*100)){
       throw new Error("Payment amount exceeds the available invoice balance.");
     }
 
-    // Always check the proposed non-empty reference, even when it matches this
-    // payment's current value. This also detects duplicates already in legacy data.
-    if(reference){
-      const duplicateQuery=Order.exists({
+    // One bulk-payment reference intentionally appears on several invoices.
+    // Only a changed reference needs a duplicate check against other allocations.
+    if(reference&&reference!==currentReference){
+      const duplicateOrderQuery=Order.exists({
         createdBy:uid,
         "payments.amountReference":reference,
         $or:[
@@ -496,10 +511,25 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
           {_id:order._id,payments:{$elemMatch:{_id:{$ne:currentPayment._id},amountReference:reference}}}
         ]
       });
-      if(session)duplicateQuery.session(session);
-      if(await duplicateQuery){
-        const error=new Error("Payment reference already exists.");error.status=409;throw error;
+      const duplicateLogQuery=PaymentLog.exists({userId:uid,reference});
+      if(session){duplicateOrderQuery.session(session);duplicateLogQuery.session(session);}
+      const [duplicateOrder,duplicateLog]=await Promise.all([duplicateOrderQuery,duplicateLogQuery]);
+      if(duplicateOrder||duplicateLog){
+        const error=new Error("Payment reference already exists. Use a different reference.");
+        error.status=409;
+        throw error;
       }
+      newlyReservedReferenceId=await reservePaymentReference({
+        createdBy:uid,reference,kind:"single",session
+      });
+    }
+
+    // Preserve old references in the ledger too, including records created
+    // before reference reservations were introduced.
+    if(currentReference){
+      await ensurePaymentReferenceReserved({
+        createdBy:uid,reference:currentReference,kind:"historical",session
+      });
     }
 
     const nextPayments=currentPayments.map((item,index)=>index===paymentIndex?{
@@ -519,11 +549,7 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
       nextPayments,
       lastPaymentDate
     });
-    const updateQuery=Order.findOneAndUpdate(
-      operation.filter,
-      operation.update,
-      operation.options
-    );
+    const updateQuery=Order.findOneAndUpdate(operation.filter,operation.update,operation.options);
     if(session)updateQuery.session(session);
     const updatedOrder=await updateQuery;
     if(!updatedOrder){
@@ -533,14 +559,20 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
     }
 
     if(session)await session.commitTransaction();
+    newlyReservedReferenceId=null;
     await syncClientDataSafely(updatedOrder.clientId,"a payment edit");
     return res.json({success:true,message:"Payment updated successfully.",order:updatedOrder});
   }catch(error){
     if(session){
       try{if(session.inTransaction())await session.abortTransaction();}catch{}
+    }else if(newlyReservedReferenceId){
+      try{await releasePaymentReference({reservationId:newlyReservedReferenceId,createdBy:userId(req)});}
+      catch(releaseError){console.error("Payment reference rollback failed:",releaseError);}
     }
     console.error("Payment update error:",error);
-    return res.status(error.status||400).json({success:false,message:error.message||"Unable to update payment."});
+    return res.status(error.status||(error.code===11000?409:400)).json({
+      success:false,message:error.message||"Unable to update payment."
+    });
   }finally{
     if(session)await session.endSession();
   }
@@ -566,6 +598,13 @@ router.delete("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
     const currentPayments=Array.isArray(order.payments)?order.payments:[];
     const paymentIndex=currentPayments.findIndex(item=>String(item?._id)===String(req.params.paymentId));
     if(paymentIndex<0){const error=new Error("Payment not found.");error.status=404;throw error;}
+    const currentPayment=currentPayments[paymentIndex];
+    const currentReference=String(currentPayment.amountReference||"").trim();
+    if(currentReference){
+      await ensurePaymentReferenceReserved({
+        createdBy:uid,reference:currentReference,kind:"historical",session
+      });
+    }
 
     const nextPayments=currentPayments.filter((_,index)=>index!==paymentIndex);
     const wasLastRecordedPayment=paymentIndex===currentPayments.length-1;
@@ -582,11 +621,7 @@ router.delete("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
       nextPayments,
       lastPaymentDate
     });
-    const updateQuery=Order.findOneAndUpdate(
-      operation.filter,
-      operation.update,
-      operation.options
-    );
+    const updateQuery=Order.findOneAndUpdate(operation.filter,operation.update,operation.options);
     if(session)updateQuery.session(session);
     const updatedOrder=await updateQuery;
     if(!updatedOrder){
@@ -603,7 +638,9 @@ router.delete("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
       try{if(session.inTransaction())await session.abortTransaction();}catch{}
     }
     console.error("Payment delete error:",error);
-    return res.status(error.status||400).json({success:false,message:error.message||"Unable to delete payment."});
+    return res.status(error.status||(error.code===11000?409:400)).json({
+      success:false,message:error.message||"Unable to delete payment."
+    });
   }finally{
     if(session)await session.endSession();
   }

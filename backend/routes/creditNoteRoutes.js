@@ -1355,6 +1355,7 @@ router.put("/:id", auth, async (req, res) => {
   let previousNote = null;
   let orderSaved = false;
   let orderAfterWrite = null;
+  let noteAfterWrite = null;
   let noteSaved = false;
 
   try {
@@ -1578,13 +1579,46 @@ router.put("/:id", auth, async (req, res) => {
       meetsCurrencyTarget(prepared.settled, prepared.grandTotal) ? "Settled" : "Partially Settled";
     note.note = String(req.body?.note ?? note.note ?? "").trim().slice(0, 1000);
 
-    await note.save(session ? { session } : undefined);
+    const noteUpdateFields = {
+      creditNoteNumber: note.creditNoteNumber,
+      creditNoteDate: note.creditNoteDate,
+      reason: note.reason,
+      creditMode: note.creditMode,
+      stockAffecting: note.stockAffecting,
+      inventoryStatus: note.inventoryStatus,
+      inventoryMovements: note.inventoryMovements,
+      settlement: note.settlement,
+      items: note.items,
+      totals: note.totals,
+      originalInvoiceTotal: note.originalInvoiceTotal,
+      manualCredit: note.manualCredit,
+      settlementStatus: note.settlementStatus,
+      note: note.note,
+    };
+    const savedNote = await CreditNote.findOneAndUpdate(
+      {
+        _id: note._id,
+        createdBy: userId,
+        status: "Posted",
+        updatedAt: previousNote.updatedAt,
+      },
+      { $set: noteUpdateFields },
+      { new: true, runValidators: true, session }
+    );
+    if (!savedNote) {
+      const conflict = new Error(
+        "This Credit Note changed while it was being edited. Reload it and try again."
+      );
+      conflict.status = 409;
+      throw conflict;
+    }
+    noteAfterWrite = savedNote;
     noteSaved = true;
 
     // Shape the response before committing. A later read failure must not make
     // a successfully saved financial change look like a failed request.
     const originalOrder = orderAfterWrite.toObject();
-    const updatedNote = note.toObject();
+    const updatedNote = noteAfterWrite.toObject();
     const responseBody = {
       message: "Credit Note updated successfully.",
       creditNote: {
@@ -1612,11 +1646,12 @@ router.put("/:id", auth, async (req, res) => {
             "settlement", "items", "totals", "originalInvoiceTotal",
             "manualCredit", "settlementStatus", "note"
           ].forEach(key => { restoreNoteFields[key] = previousNote[key]; });
-          await CreditNote.findOneAndUpdate(
-            { _id: req.params.id, createdBy: userId },
+          const restoredNote = await CreditNote.findOneAndUpdate(
+            { _id: req.params.id, createdBy: userId, status: "Posted", updatedAt: noteAfterWrite.updatedAt },
             { $set: restoreNoteFields },
-            { new: true }
+            { new: true, runValidators: true }
           );
+          if (!restoredNote) console.error("Credit Note edit rollback skipped note restoration because it changed again.");
         } catch (rollbackError) {
           console.error("Credit Note edit rollback could not restore the note:", rollbackError);
         }
@@ -1685,6 +1720,7 @@ async function cancelCreditNote(req, res) {
   let previousOrderId = null;
   let orderUpdated = false;
   let orderAfterWrite = null;
+  let noteAfterWrite = null;
   let noteSaved = false;
 
   try {
@@ -1715,15 +1751,6 @@ async function cancelCreditNote(req, res) {
       (sum, p) => sum + (Number(p.amount) || 0),
       0
     );
-    const dueAmount = Math.max(
-      0,
-      round2(
-        getOrderInvoiceTotal(order) -
-          paymentsTotal -
-          nextCreditApplied
-      )
-    );
-
     if (note.stockAffecting && note.inventoryMovements?.length) {
       let Product;
       try {
@@ -1818,11 +1845,37 @@ async function cancelCreditNote(req, res) {
     note.cancelledAt = new Date();
     note.cancelledBy = userId;
 
-    await note.save(session ? { session } : undefined);
+    const savedNote = await CreditNote.findOneAndUpdate(
+      {
+        _id: note._id,
+        createdBy: userId,
+        status: "Posted",
+        updatedAt: previousNote.updatedAt,
+      },
+      {
+        $set: {
+          status: "Cancelled",
+          settlementStatus: "Cancelled",
+          cancellationReason: note.cancellationReason,
+          cancelledAt: note.cancelledAt,
+          cancelledBy: note.cancelledBy,
+          inventoryStatus: note.inventoryStatus,
+        },
+      },
+      { new: true, runValidators: true, session }
+    );
+    if (!savedNote) {
+      const conflict = new Error(
+        "This Credit Note changed while it was being cancelled. Reload it and try again."
+      );
+      conflict.status = 409;
+      throw conflict;
+    }
+    noteAfterWrite = savedNote;
     noteSaved = true;
 
     const orderForResponse = updatedOrder.toObject();
-    const cancelledNote = note.toObject();
+    const cancelledNote = noteAfterWrite.toObject();
     const responseBody = {
       message: "Credit note cancelled successfully.",
       creditNote: {
@@ -1843,8 +1896,8 @@ async function cancelCreditNote(req, res) {
     } else {
       if (noteSaved && previousNote) {
         try {
-          await CreditNote.findOneAndUpdate(
-            { _id: req.params.id, createdBy: userId },
+          const restoredNote = await CreditNote.findOneAndUpdate(
+            { _id: req.params.id, createdBy: userId, status: "Cancelled", updatedAt: noteAfterWrite.updatedAt },
             { $set: {
               status: previousNote.status,
               settlementStatus: previousNote.settlementStatus,
@@ -1853,8 +1906,9 @@ async function cancelCreditNote(req, res) {
               cancelledBy: previousNote.cancelledBy,
               inventoryStatus: previousNote.inventoryStatus,
             } },
-            { new: true }
+            { new: true, runValidators: true }
           );
+          if (!restoredNote) console.error("Credit Note cancellation rollback skipped note restoration because it changed again.");
         } catch (rollbackError) {
           console.error("Credit Note cancellation rollback could not restore the note:", rollbackError);
         }

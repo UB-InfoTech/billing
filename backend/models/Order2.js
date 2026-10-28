@@ -146,7 +146,13 @@ orderSchema.pre("save",function(next){
 
 orderSchema.pre("findOneAndUpdate",async function(next){
   try{
-    const current=await this.model.findOne(this.getQuery()).lean();
+    // Middleware recalculates payment and due fields from the current invoice.
+    // In a transaction, this read must use the same session as the write so the
+    // calculation cannot be based on a different snapshot.
+    const currentQuery=this.model.findOne(this.getQuery());
+    const session=this.getOptions().session;
+    if(session)currentQuery.session(session);
+    const current=await currentQuery.lean();
     if(!current)return next();
 
     const update=this.getUpdate()||{};

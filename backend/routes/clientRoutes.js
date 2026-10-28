@@ -124,11 +124,17 @@ router.put("/:id/credit",auth,async(req,res)=>{
       .lean();
     if(!client)return res.status(404).json({message:"Client not found"});
 
-    const postedCredits=await CreditNote.find({
-      clientId:client._id,
-      createdBy:owner(req),
-      status:"Posted"
-    }).select("settlement.customerCreditAmount").lean();
+    let postedCredits=[];
+    const hasStoredAdjustment=client.creditBalanceAdjustment!==undefined
+      && client.creditBalanceAdjustment!==null
+      && Number.isFinite(Number(client.creditBalanceAdjustment));
+    if(!hasStoredAdjustment){
+      postedCredits=await CreditNote.find({
+        clientId:client._id,
+        createdBy:owner(req),
+        status:"Posted"
+      }).select("settlement.customerCreditAmount").lean();
+    }
 
     let mutation;
     try{

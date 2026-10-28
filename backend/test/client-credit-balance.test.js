@@ -44,7 +44,7 @@ test("manual adjustments reject invalid values and negative balances", () => {
   assert.equal(sumCustomerCredit([note(10), note(-5), note("bad")]), 10);
 });
 
-test("customer sync filters include the balance snapshot to avoid overwriting a concurrent change", () => {
+test("customer sync filters include the balance snapshot and summary revision", () => {
   const { buildClientCreditBalanceSyncFilter } = require("../utils/clientCreditBalance");
   const client = {
     _id: "client-123",
@@ -56,7 +56,14 @@ test("customer sync filters include the balance snapshot to avoid overwriting a 
     _id: "client-123",
     createdBy: "owner-456",
     creditBalance: 75,
-    creditBalanceAdjustment: 50
+    creditBalanceAdjustment: 50,
+    $and: [{
+      $or: [
+        { financialSummaryVersion: { $exists: false } },
+        { financialSummaryVersion: null },
+        { financialSummaryVersion: 0 }
+      ]
+    }]
   });
 });
 
@@ -78,6 +85,11 @@ test("customer sync filters also support legacy records missing balance fields",
       { $or: [
         { creditBalanceAdjustment: { $exists: false } },
         { creditBalanceAdjustment: null }
+      ] },
+      { $or: [
+        { financialSummaryVersion: { $exists: false } },
+        { financialSummaryVersion: null },
+        { financialSummaryVersion: 0 }
       ] }
     ]
   });

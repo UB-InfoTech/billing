@@ -1,15 +1,17 @@
 /**
  * Build a compare-and-swap update for an invoice's payment history.
  *
- * Replacing a payment array from a stale document can otherwise remove another
- * user's concurrent payment. Match both the persisted payment snapshot and
- * current due balance before replacing the array.
+ * Match the invoice revision and due balance before replacing its embedded
+ * payment array. Using updatedAt for current records avoids fragile exact BSON
+ * array equality while still preventing a stale edit from removing a concurrent
+ * payment. Older records without a timestamp retain the legacy array guard.
  */
 function buildPaymentArrayMutationOperation({
   orderId,
   createdBy,
   expectedDueAmount,
   expectedPayments,
+  expectedUpdatedAt,
   nextPayments,
   lastPaymentDate
 }) {
@@ -31,17 +33,28 @@ function buildPaymentArrayMutationOperation({
     throw new TypeError("Last payment date must be a valid date or null.");
   }
 
+  const filter = {
+    _id: orderId,
+    createdBy,
+    dueAmount: expectedDueAmount === undefined
+      ? { $exists: false }
+      : expectedDueAmount
+  };
+  const hasUpdatedAt = expectedUpdatedAt instanceof Date
+    && !Number.isNaN(expectedUpdatedAt.getTime());
+
+  if (hasUpdatedAt) {
+    filter.updatedAt = expectedUpdatedAt;
+  } else {
+    // Legacy documents may not have timestamps. Retain the original history
+    // guard for those records rather than making the update unguarded.
+    filter.payments = expectedPayments === undefined
+      ? { $exists: false }
+      : expectedPayments;
+  }
+
   return {
-    filter: {
-      _id: orderId,
-      createdBy,
-      dueAmount: expectedDueAmount === undefined
-        ? { $exists: false }
-        : expectedDueAmount,
-      payments: expectedPayments === undefined
-        ? { $exists: false }
-        : expectedPayments
-    },
+    filter,
     update: {
       $set: {
         payments: nextPayments,

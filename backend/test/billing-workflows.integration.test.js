@@ -218,7 +218,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
 
     const availableCredit = await request(`/credit-notes/available/${orderId}`);
     assert.equal(availableCredit.response.status, 200, JSON.stringify(availableCredit.payload));
-    assert.equal(round2(availableCredit.payload.previouslyCreditedTotal || availableCredit.payload.totalCredited || 0), 0);
+    assert.equal(round2(availableCredit.payload.order.previouslyCreditedTotal), 0);
   } finally {
     if (server) await new Promise(resolve => server.close(resolve));
     if (mongoose.connection.readyState === 1 && ownerId) {

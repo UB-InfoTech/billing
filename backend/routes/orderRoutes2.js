@@ -546,6 +546,7 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
       createdBy:uid,
       expectedDueAmount:order.dueAmount,
       expectedPayments:order.payments,
+      expectedUpdatedAt:order.updatedAt,
       nextPayments,
       lastPaymentDate
     });
@@ -618,6 +619,7 @@ router.delete("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
       createdBy:uid,
       expectedDueAmount:order.dueAmount,
       expectedPayments:order.payments,
+      expectedUpdatedAt:order.updatedAt,
       nextPayments,
       lastPaymentDate
     });

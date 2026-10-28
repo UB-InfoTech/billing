@@ -71,13 +71,19 @@ async function applyCustomerCreditChange({
   const client = await clientQuery.lean();
   if (!client) throw new Error(notFoundMessage);
 
-  const postedNotesQuery = CreditNote.find({
-    clientId: client._id,
-    createdBy: userId,
-    status: "Posted"
-  }).select("settlement.customerCreditAmount");
-  if (session) postedNotesQuery.session(session);
-  const postedNotes = await postedNotesQuery.lean();
+  let postedNotes = [];
+  const hasStoredAdjustment = client.creditBalanceAdjustment !== undefined
+    && client.creditBalanceAdjustment !== null
+    && Number.isFinite(Number(client.creditBalanceAdjustment));
+  if (!hasStoredAdjustment) {
+    const postedNotesQuery = CreditNote.find({
+      clientId: client._id,
+      createdBy: userId,
+      status: "Posted"
+    }).select("settlement.customerCreditAmount");
+    if (session) postedNotesQuery.session(session);
+    postedNotes = await postedNotesQuery.lean();
+  }
 
   const mutation = buildClientCreditBalanceMutation({
     client,

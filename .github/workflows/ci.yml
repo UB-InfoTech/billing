@@ -10,6 +10,9 @@ jobs:
   backend:
     name: Backend checks
     runs-on: ubuntu-latest
+    env:
+      MONGO_URI: mongodb://127.0.0.1:27017/billing_ci?replicaSet=rs0
+      JWT_SECRET: billing-integration-tests-only-secret
     defaults:
       run:
         working-directory: backend
@@ -21,6 +24,61 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm install --no-audit --no-fund
+      - name: Start MongoDB replica set for integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name billing-mongo-test -p 27017:27017 mongo:7 --replSet rs0 --bind_ip_all
+
+          ready=0
+          for attempt in $(seq 1 60); do
+            if docker exec billing-mongo-test mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' 2>/dev/null | grep -q '^1
+        shell: bash
+        run: |
+          set -e
+          while IFS= read -r -d "" file; do node --check "$file"; done < <(find . -type f -name "*.js" -not -path "./node_modules/*" -print0)
+      - name: Run backend regression tests
+        run: npm test
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm install --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run build; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            docker logs billing-mongo-test
+            exit 1
+          fi
+
+          docker exec billing-mongo-test mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
+          ready=0
+          for attempt in $(seq 1 60); do
+            if docker exec billing-mongo-test mongosh --quiet --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -q 'true'; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            docker exec billing-mongo-test mongosh --quiet --eval 'rs.status()'
+            exit 1
+          fi
       - name: Check JavaScript syntax
         shell: bash
         run: |

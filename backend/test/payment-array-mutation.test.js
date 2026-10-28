@@ -42,6 +42,23 @@ test("payment edits match the prior payment history and due balance", () => {
   assert.deepEqual(operation.options, { new: true, runValidators: true });
 });
 
+test("payment edits use the invoice revision instead of exact BSON array equality", () => {
+  const updatedAt = new Date("2026-10-20T10:00:00.000Z");
+  const operation = buildPaymentArrayMutationOperation({
+    orderId: "invoice-1",
+    createdBy: "business-1",
+    expectedDueAmount: 400,
+    expectedPayments: [{ _id: "payment-1", amount: 100 }],
+    expectedUpdatedAt: updatedAt,
+    nextPayments: [{ _id: "payment-1", amount: 125 }],
+    lastPaymentDate: updatedAt
+  });
+
+  assert.equal(operation.filter.updatedAt, updatedAt);
+  assert.equal(operation.filter.dueAmount, 400);
+  assert.equal(Object.hasOwn(operation.filter, "payments"), false);
+});
+
 test("payment history mutations support legacy invoices without stored fields", () => {
   const operation = buildPaymentArrayMutationOperation({
     orderId: "invoice-1",

@@ -8,6 +8,7 @@ const auth = require('../middleware/auth');
 const { syncClientDataSafely } = require("../utils/syncClientData");
 const { exceedsCurrencyLimit, meetsCurrencyTarget } = require("../utils/currencyValidation");
 const { buildInvoiceCreditWriteFilter, buildPreviouslyCreditedFilter } = require("../utils/creditNoteConcurrency");
+const { buildClientCreditBalanceMutation } = require("../utils/clientCreditBalance");
 
 
 const router = express.Router();
@@ -46,6 +47,62 @@ function isReplicaSetAvailable() {
   return Object.values(topology.servers || {}).some(
     (server) => server.type === "RSPrimary" || server.type === "RSSecondary" || server.type === "Mongos"
   );
+}
+
+async function applyCustomerCreditChange({
+  clientId,
+  userId,
+  amount,
+  adjustmentDelta = 0,
+  minimumBalance = 0,
+  insufficientBalanceMessage,
+  notFoundMessage = "Customer for this Credit Note was not found in your account.",
+  missingBalanceMessage = "Client.creditBalance is required for customer credit settlement.",
+  session = null
+}) {
+  if (!clientId) throw new Error("Customer credit requires a client.");
+
+  const Client = require("../models/Client");
+  if (!Client.schema.path("creditBalance")) throw new Error(missingBalanceMessage);
+
+  const clientQuery = Client.findOne({ _id: clientId, createdBy: userId })
+    .select("creditBalance creditBalanceAdjustment createdBy +financialSummaryVersion");
+  if (session) clientQuery.session(session);
+  const client = await clientQuery.lean();
+  if (!client) throw new Error(notFoundMessage);
+
+  const postedNotesQuery = CreditNote.find({
+    clientId: client._id,
+    createdBy: userId,
+    status: "Posted"
+  }).select("settlement.customerCreditAmount");
+  if (session) postedNotesQuery.session(session);
+  const postedNotes = await postedNotesQuery.lean();
+
+  const mutation = buildClientCreditBalanceMutation({
+    client,
+    creditNotes: postedNotes,
+    amount,
+    adjustmentDelta,
+    minimumBalance,
+    insufficientBalanceMessage
+  });
+
+  const updateOptions = { new: true, runValidators: true };
+  if (session) updateOptions.session = session;
+  const updatedClient = await Client.findOneAndUpdate(
+    mutation.filter,
+    mutation.update,
+    updateOptions
+  );
+  if (!updatedClient) {
+    const conflict = new Error(
+      "The customer balance changed while this operation was being processed. Refresh and try again."
+    );
+    conflict.status = 409;
+    throw conflict;
+  }
+  return updatedClient;
 }
 
 function invoiceBilledQty(sub) {
@@ -977,23 +1034,14 @@ router.post("/", auth, async (req, res) => {
       if (!order.clientId) {
         throw new Error("Customer credit requires the invoice to have a clientId.");
       }
-      let Client;
-      try {
-        Client = require("../models/Client");
-      } catch {
-        throw new Error("Client model not found for customer credit allocation.");
-      }
-      if (!Client.schema.path("creditBalance")) {
-        throw new Error(
-          "Add Client.creditBalance to your Client schema before using Customer Credit settlement."
-        );
-      }
-      const updatedClient = await Client.findOneAndUpdate(
-        { _id: order.clientId, createdBy: userId },
-        { $inc: { creditBalance: finalSettlement.customerCreditAmount } },
-        { new: true, session }
-      );
-      if (!updatedClient) throw new Error("Customer for this Credit Note was not found in your account.");
+      await applyCustomerCreditChange({
+        clientId: order.clientId,
+        userId,
+        amount: finalSettlement.customerCreditAmount,
+        session,
+        notFoundMessage: "Customer for this Credit Note was not found in your account.",
+        missingBalanceMessage: "Add Client.creditBalance to your Client schema before using Customer Credit settlement."
+      });
       customerCreditAdded = Number(finalSettlement.customerCreditAmount);
       customerCreditClientId = order.clientId;
     }
@@ -1132,7 +1180,7 @@ router.post("/", auth, async (req, res) => {
           const Client = require("../models/Client");
           await Client.findOneAndUpdate(
             { _id: customerCreditClientId, createdBy: userId },
-            { $inc: { creditBalance: -customerCreditAdded } },
+            { $inc: { creditBalance: -customerCreditAdded, financialSummaryVersion: 1 } },
             { new: true }
           );
         } catch (rollbackError) {
@@ -1457,33 +1505,37 @@ router.put("/:id", auth, async (req, res) => {
       }
     }
 
-    if (oldCustomerCredit > 0) {
-      const Client = require("../models/Client");
-      if (!Client.schema.path("creditBalance")) {
-        throw new Error("Client.creditBalance is required for this Credit Note.");
+    const newCustomerCredit = Number(prepared.finalSettlement.customerCreditAmount || 0);
+    const creditClientId = note.clientId || order.clientId;
+    if (oldCustomerCredit > 0 || newCustomerCredit > 0) {
+      if (!creditClientId) throw new Error("Customer credit client is missing.");
+      if (newCustomerCredit > 0 && !order.clientId) {
+        throw new Error("Customer credit requires an invoice client.");
       }
-      const updatedClient = await Client.findOneAndUpdate(
-        {
-          _id: note.clientId,
-          createdBy: userId,
-          creditBalance: { $gte: oldCustomerCredit },
-        },
-        { $inc: { creditBalance: -oldCustomerCredit } },
-        { new: true, session }
-      );
-      if (!updatedClient) {
-        const clientExists = await Client.exists({
-          _id: note.clientId,
-          createdBy: userId,
-        }).session(session || null);
-        if (!clientExists) throw new Error("Customer for this Credit Note no longer exists.");
-        throw new Error(
-          "This Credit Note cannot be changed because some of its customer credit has already been used. Restore the customer's balance first."
-        );
+      if (
+        note.clientId &&
+        order.clientId &&
+        String(note.clientId) !== String(order.clientId)
+      ) {
+        throw new Error("This Credit Note is linked to a different customer than its invoice.");
       }
+
+      // Update the old and new credit as one delta. Splitting this into a
+      // reversal followed by a re-add creates a temporary false balance and
+      // lets a concurrent manual adjustment calculate the wrong offset.
+      await applyCustomerCreditChange({
+        clientId: creditClientId,
+        userId,
+        amount: round2(newCustomerCredit - oldCustomerCredit),
+        minimumBalance: oldCustomerCredit,
+        insufficientBalanceMessage: "This Credit Note cannot be changed because some of its customer credit has already been used. Restore the customer's balance first.",
+        notFoundMessage: "Customer for this Credit Note no longer exists.",
+        missingBalanceMessage: "Client.creditBalance is required for this Credit Note.",
+        session
+      });
       changedCustomerCredit.push({
-        clientId: note.clientId,
-        delta: -oldCustomerCredit,
+        clientId: creditClientId,
+        delta: round2(newCustomerCredit - oldCustomerCredit),
       });
     }
 
@@ -1491,24 +1543,6 @@ router.put("/:id", auth, async (req, res) => {
       0,
       round2(Number(order.creditAppliedAmount || 0) - oldAdjustment)
     );
-
-    if (prepared.finalSettlement.customerCreditAmount > 0) {
-      const Client = require("../models/Client");
-      if (!order.clientId) throw new Error("Customer credit requires an invoice client.");
-      if (!Client.schema.path("creditBalance")) {
-        throw new Error("Client.creditBalance is required for customer credit settlement.");
-      }
-      const updatedClient = await Client.findOneAndUpdate(
-        { _id: order.clientId, createdBy: userId },
-        { $inc: { creditBalance: prepared.finalSettlement.customerCreditAmount } },
-        { new: true, session }
-      );
-      if (!updatedClient) throw new Error("Customer for this Credit Note no longer exists.");
-      changedCustomerCredit.push({
-        clientId: order.clientId,
-        delta: Number(prepared.finalSettlement.customerCreditAmount),
-      });
-    }
 
     const nextCreditApplied = round2(
       Number(order.creditAppliedAmount || 0) +
@@ -1685,7 +1719,7 @@ router.put("/:id", auth, async (req, res) => {
         try {
           await require("../models/Client").findOneAndUpdate(
             { _id: change.clientId, createdBy: userId },
-            { $inc: { creditBalance: -Number(change.delta || 0) } },
+            { $inc: { creditBalance: -Number(change.delta || 0), financialSummaryVersion: 1 } },
             { new: true }
           );
         } catch (rollbackError) {
@@ -1778,37 +1812,17 @@ async function cancelCreditNote(req, res) {
 
     if (Number(note.settlement?.customerCreditAmount || 0) > 0) {
       if (!note.clientId) throw new Error("Customer credit client is missing.");
-      let Client;
-      try {
-        Client = require("../models/Client");
-      } catch {
-        throw new Error("Client model not found; cannot reverse customer credit.");
-      }
-      if (!Client.schema.path("creditBalance")) {
-        throw new Error(
-          "Client.creditBalance is required to reverse this customer credit."
-        );
-      }
       const creditToReverse = Number(note.settlement.customerCreditAmount);
-      const updatedClient = await Client.findOneAndUpdate(
-        {
-          _id: note.clientId,
-          createdBy: userId,
-          creditBalance: { $gte: creditToReverse },
-        },
-        { $inc: { creditBalance: -creditToReverse } },
-        { new: true, session }
-      );
-      if (!updatedClient) {
-        const clientExists = await Client.exists({
-          _id: note.clientId,
-          createdBy: userId,
-        }).session(session || null);
-        if (!clientExists) throw new Error("Customer for this Credit Note was not found in your account.");
-        throw new Error(
-          "This Credit Note cannot be cancelled because some of its customer credit has already been used. Restore the customer's balance first."
-        );
-      }
+      await applyCustomerCreditChange({
+        clientId: note.clientId,
+        userId,
+        amount: -creditToReverse,
+        minimumBalance: creditToReverse,
+        insufficientBalanceMessage: "This Credit Note cannot be cancelled because some of its customer credit has already been used. Restore the customer's balance first.",
+        notFoundMessage: "Customer for this Credit Note was not found in your account.",
+        missingBalanceMessage: "Client.creditBalance is required to reverse this customer credit.",
+        session
+      });
       changedCustomerCredit.push({
         clientId: note.clientId,
         delta: -creditToReverse,
@@ -1938,7 +1952,7 @@ async function cancelCreditNote(req, res) {
         try {
           await require("../models/Client").findOneAndUpdate(
             { _id: change.clientId, createdBy: userId },
-            { $inc: { creditBalance: -Number(change.delta || 0) } },
+            { $inc: { creditBalance: -Number(change.delta || 0), financialSummaryVersion: 1 } },
             { new: true }
           );
         } catch (rollbackError) {

@@ -5,7 +5,7 @@ const Client=require("../models/Client");
 const Order=require("../models/Order2");
 const CreditNote=require("../models/CreditNote");
 const Expense=require("../models/Expense");
-const {applyManualCreditAdjustment}=require("../utils/clientCreditBalance");
+const {buildClientCreditBalanceMutation}=require("../utils/clientCreditBalance");
 const {assertClientIdentity,hasClientIdentity}=require("../utils/clientIdentity");
 const {getInvoiceRevenue}=require("../utils/syncClientData");
 const auth=require("../middleware/auth");
@@ -119,7 +119,9 @@ router.put("/:id/credit",auth,async(req,res)=>{
     if(!Number.isFinite(amount)||amount===0||Math.abs(amount)>100000000){
       return res.status(400).json({message:"Enter a valid non-zero credit adjustment."});
     }
-    const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)});
+    const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)})
+      .select("creditBalance creditBalanceAdjustment createdBy +financialSummaryVersion")
+      .lean();
     if(!client)return res.status(404).json({message:"Client not found"});
 
     const postedCredits=await CreditNote.find({
@@ -127,22 +129,24 @@ router.put("/:id/credit",auth,async(req,res)=>{
       createdBy:owner(req),
       status:"Posted"
     }).select("settlement.customerCreditAmount").lean();
-    let adjustment;
+
+    let mutation;
     try{
-      adjustment=applyManualCreditAdjustment(
-        Number(client.creditBalance||0),
-        postedCredits,
-        amount
-      );
+      mutation=buildClientCreditBalanceMutation({
+        client,
+        creditNotes:postedCredits,
+        amount,
+        adjustmentDelta:amount
+      });
     }catch(error){
       return res.status(400).json({message:error.message});
     }
 
-    // Optimistic matching prevents two simultaneous adjustments from overwriting
-    // each other; a fresh balance is required if another request wins the race.
+    // Balance and its manual component are changed by one compare-and-set write.
+    // The revision also prevents a concurrent summary refresh from overwriting it.
     const updated=await Client.findOneAndUpdate(
-      {_id:client._id,createdBy:owner(req),creditBalance:Number(client.creditBalance||0)},
-      {$set:adjustment},
+      mutation.filter,
+      mutation.update,
       {new:true,runValidators:true}
     );
     if(!updated){

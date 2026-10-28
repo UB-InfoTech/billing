@@ -22,21 +22,24 @@ test("manual adjustment preserves the established adjustment during a Credit Not
     { settlement: { customerCreditAmount: 100 } }
   ];
 
-  const manualChange = applyManualCreditAdjustment(
-    customer.creditBalance,
-    oldPostedNotes,
-    10,
-    customer.creditBalanceAdjustment
-  );
-
-  assert.deepEqual(manualChange, {
-    creditBalance: 70,
-    creditBalanceAdjustment: 10
+  const manualMutation = buildClientCreditBalanceMutation({
+    client: customer,
+    creditNotes: oldPostedNotes,
+    amount: 10,
+    adjustmentDelta: 10
   });
+
+  assert.equal(manualMutation.nextBalance, 70);
+  assert.equal(manualMutation.creditBalanceAdjustment, 10);
 
   // Once the edited note is visible, the balance is still correct.
   const resolved = resolveClientCreditBalance(
-    { ...customer, ...manualChange },
+    {
+      ...customer,
+      creditBalance: manualMutation.nextBalance,
+      creditBalanceAdjustment: manualMutation.creditBalanceAdjustment,
+      financialSummaryVersion: 2
+    },
     [{ settlement: { customerCreditAmount: 60 } }]
   );
   assert.equal(resolved.creditBalance, 70);

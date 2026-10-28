@@ -140,6 +140,103 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     });
     assert.equal(duplicatePayment.response.status, 409, "Payment references must not be reused.");
 
+    const paymentId = payment.payload.order.payments[0]._id;
+    const editedPaymentReference = `ITPAYEDIT-${suffix}`;
+    const editedPayment = await request(`/order/orders/${orderId}/payments/${paymentId}`, {
+      method: "PUT",
+      body: {
+        amount: 70,
+        method: "Bank Transfer",
+        amountReference: editedPaymentReference,
+        paymentDate: "2026-10-02T11:00:00.000Z"
+      }
+    });
+    assert.equal(editedPayment.response.status, 200, JSON.stringify(editedPayment.payload));
+    assert.equal(round2(editedPayment.payload.order.paidAmount), 70);
+    assert.equal(round2(editedPayment.payload.order.dueAmount), 150);
+
+    const deletedPayment = await request(`/order/orders/${orderId}/payments/${paymentId}`, {
+      method: "DELETE"
+    });
+    assert.equal(deletedPayment.response.status, 200, JSON.stringify(deletedPayment.payload));
+    assert.equal(round2(deletedPayment.payload.order.paidAmount), 0);
+    assert.equal(round2(deletedPayment.payload.order.dueAmount), 220);
+    assert.equal(deletedPayment.payload.order.paymentStatus, "Unpaid");
+    assert.equal(deletedPayment.payload.order.payments.length, 0);
+
+    const replacementPayment = await request(`/order/orders/${orderId}/pay`, {
+      method: "POST",
+      body: {
+        amount: 60,
+        method: "Cash",
+        amountReference: `ITPAYFINAL-${suffix}`,
+        paymentDate: "2026-10-02T12:00:00.000Z"
+      }
+    });
+    assert.equal(replacementPayment.response.status, 200, JSON.stringify(replacementPayment.payload));
+    assert.equal(round2(replacementPayment.payload.order.dueAmount), 160);
+
+    const secondInvoiceResponse = await request("/order/orders/create", {
+      method: "POST",
+      body: {
+        clientId,
+        orderDate: "2026-10-04T10:00:00.000Z",
+        paymentTerms: "30",
+        taxPercentage: 10,
+        discountRate: 0,
+        subOrders: [{
+          orderName: "Second integration item",
+          qtyUnit: "PCS",
+          quantity: 1,
+          unitPrice: 100
+        }]
+      }
+    });
+    assert.equal(secondInvoiceResponse.response.status, 201, JSON.stringify(secondInvoiceResponse.payload));
+    const secondOrderId = secondInvoiceResponse.payload.order._id;
+    assert.equal(round2(secondInvoiceResponse.payload.order.dueAmount), 110);
+
+    const bulkPaymentReference = `ITBULK-${suffix}`;
+    const bulkPayment = await request("/order/orders/payments/bulk", {
+      method: "PUT",
+      body: {
+        method: "UPI",
+        amount: 100,
+        amountReference: bulkPaymentReference,
+        splitType: "custom",
+        paymentDate: "2026-10-05T10:00:00.000Z",
+        updates: [
+          { orderId, amount: 50 },
+          { orderId: secondOrderId, amount: 50 }
+        ]
+      }
+    });
+    assert.equal(bulkPayment.response.status, 200, JSON.stringify(bulkPayment.payload));
+    const bulkOrderOne = await Order.findOne({ _id: orderId, createdBy: ownerId }).lean();
+    const bulkOrderTwo = await Order.findOne({ _id: secondOrderId, createdBy: ownerId }).lean();
+    assert.equal(round2(bulkOrderOne.paidAmount), 110);
+    assert.equal(round2(bulkOrderOne.dueAmount), 110);
+    assert.equal(round2(bulkOrderTwo.paidAmount), 50);
+    assert.equal(round2(bulkOrderTwo.dueAmount), 60);
+    assert.ok(bulkOrderOne.payments.some(item => item.amountReference === bulkPaymentReference));
+    assert.ok(bulkOrderTwo.payments.some(item => item.amountReference === bulkPaymentReference));
+
+    const duplicateBulkPayment = await request("/order/orders/payments/bulk", {
+      method: "PUT",
+      body: {
+        method: "UPI",
+        amount: 100,
+        amountReference: bulkPaymentReference,
+        splitType: "custom",
+        paymentDate: "2026-10-05T10:00:00.000Z",
+        updates: [
+          { orderId, amount: 50 },
+          { orderId: secondOrderId, amount: 50 }
+        ]
+      }
+    });
+    assert.equal(duplicateBulkPayment.response.status, 409, "Bulk payment references must not be reused.");
+
     const creditNoteNumber = `IT${suffix}`;
     const posted = await request("/credit-notes", {
       method: "POST",
@@ -167,7 +264,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     let storedOrder = await Order.findOne({ _id: orderId, createdBy: ownerId }).lean();
     assert.equal(round2(storedClient.creditBalance), 55);
     assert.equal(storedOrder.creditNoteCount, 1);
-    assert.equal(round2(storedOrder.dueAmount), 160, "Customer-credit settlement must not be mistaken for an invoice-due adjustment.");
+    assert.equal(round2(storedOrder.dueAmount), 110, "Customer-credit settlement must not be mistaken for an invoice-due adjustment.");
 
     const edited = await request(`/credit-notes/${creditNoteId}`, {
       method: "PUT",
@@ -213,8 +310,8 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(round2(storedClient.creditBalance), 10, "Cancellation must preserve the independent manual adjustment.");
     assert.equal(round2(storedClient.creditBalanceAdjustment), 10);
     assert.equal(storedOrder.creditNoteCount, 0);
-    assert.equal(round2(storedOrder.paidAmount), 60);
-    assert.equal(round2(storedOrder.dueAmount), 160);
+    assert.equal(round2(storedOrder.paidAmount), 110);
+    assert.equal(round2(storedOrder.dueAmount), 110);
 
     const availableCredit = await request(`/credit-notes/available/${orderId}`);
     assert.equal(availableCredit.response.status, 200, JSON.stringify(availableCredit.payload));

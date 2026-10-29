@@ -332,7 +332,7 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
     if(oldClient)await syncClientDataSafely(oldClient);if(newClient&&newClient!==oldClient)await syncClientDataSafely(newClient);
     res.json({success:true,message:"Order updated successfully",order});
   }catch(error){
-    const staleSave=error?.name==="DocumentNotFoundError";
+    const staleSave=error?.name==="DocumentNotFoundError"||error?.name==="VersionError";
     return res.status(error.status||(staleSave?409:400)).json({
       success:false,
       message:staleSave
@@ -361,7 +361,7 @@ router.patch("/orders/:id/upd",auth,async(req,res)=>{
     await syncClientDataSafely(order.clientId,"an invoice status update");
     return res.json({message:"Order status updated",order});
   }catch(error){
-    const staleSave=error?.name==="DocumentNotFoundError";
+    const staleSave=error?.name==="DocumentNotFoundError"||error?.name==="VersionError";
     return res.status(error.status||(staleSave?409:400)).json({
       message:staleSave
         ?"This invoice changed while its status was being updated. Refresh the invoice and try again."

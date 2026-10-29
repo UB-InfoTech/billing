@@ -265,7 +265,7 @@ export default function ConfiguredField({
   }
 
   return (
-    <div className="form-config-field" style={{order:Number(field.order)||0}}>
+    <div className="form-config-field" data-field-key={field.key} style={{order:Number(field.order)||0}}>
       <label id={labelId} htmlFor={field.fieldType==="multiselect"&&field.dataSource?.type!=="lookup"?undefined:controlId} className="form-label form-entry-label">
         {icon&&<i className={icon+" me-1"}></i>}
         {label}

@@ -638,6 +638,27 @@ function Order2() {
         editingOrder?.creditAppliedAmount,
     ]);
 
+    const focusInvoiceField = (fieldKey, itemIndex = null) => {
+        if (!fieldKey) return;
+        window.requestAnimationFrame(() => {
+            const workspace = document.querySelector(".invoice-form-workspace");
+            if (!workspace) return;
+            const scope = itemIndex === null
+                ? workspace
+                : workspace.querySelectorAll(".order-config-item-row")[itemIndex];
+            if (!scope) return;
+            const fieldContainer = Array.from(scope.querySelectorAll(".form-config-field"))
+                .find(element => element.dataset.fieldKey === String(fieldKey));
+            const control = fieldContainer?.querySelector(
+                'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])'
+            );
+            if (control) {
+                fieldContainer.scrollIntoView({ behavior: "smooth", block: "center" });
+                control.focus({ preventScroll: true });
+            }
+        });
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -651,6 +672,7 @@ function Order2() {
         const missingOrderField=requiredOrderFields.find(field=>String(configuredOrderValue(field)??"").trim()==="");
         if(missingOrderField){
             setInvoiceFormError(`Please complete “${missingOrderField.label}” before saving.`);
+            focusInvoiceField(missingOrderField.key);
             return;
         }
 
@@ -667,6 +689,7 @@ function Order2() {
                 return state.visible&&state.required&&!state.disabled&&String(configuredItemValue(missingItem,field)??"").trim()==="";
             });
             setInvoiceFormError(`Please complete “${missingField?.label||"the item details"}” for the item before saving.`);
+            focusInvoiceField(missingField?.key, subOrders.findIndex(item => item === missingItem));
             return;
         }
 
@@ -692,14 +715,17 @@ function Order2() {
 
         if (editingOrder && !String(formData.orderNumber || "").trim()) {
             setInvoiceFormError("Invoice number is missing. Check the invoice number field.");
+            focusInvoiceField("orderNumber");
             return;
         }
         if (!String(formData.companyName || "").trim()) {
             setInvoiceFormError("Choose a customer before saving this invoice.");
+            focusInvoiceField("companyName");
             return;
         }
         if (!cleanItems.length || cleanItems.every(item => !String(item.orderName || "").trim())) {
             setInvoiceFormError("Add at least one item before saving this invoice.");
+            focusInvoiceField("orderName", 0);
             return;
         }
 
@@ -1724,7 +1750,7 @@ const styles = {
             )}
 
             {showModal && (
-                <div className="modal show d-block invoice-modal-backdrop" tabIndex="-1" role="presentation">
+                <div className="modal show d-block invoice-modal-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="invoice-modal-title">
                     <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable invoice-a4-dialog">
                         <div className="modal-content invoice-create-modal border-0" ref={modalRef}>
                             <div className="modal-header invoice-create-header p-4">
@@ -1732,7 +1758,7 @@ const styles = {
                                     <div className="d-flex align-items-center gap-2">
                                         <div>
                                             <div className="small text-primary text-uppercase fw-semibold mb-1">INVOICE</div>
-                                            <h5 className="modal-title fw-bold mb-1">
+                                            <h5 id="invoice-modal-title" className="modal-title fw-bold mb-1">
                                                 {editingOrder ? "Edit invoice" : "Create an invoice"}
                                             </h5>
                                             <div className="small text-secondary">Fill in the invoice details, add the items sold, then review the total and save.</div>
@@ -1750,7 +1776,7 @@ const styles = {
                                     type="button"
                                     className="btn-close"
                                     onClick={() => setShowModal(false)}
-                                    aria-label="Close"
+                                    aria-label="Close invoice form"
                                 ></button>
                             </div>
                             <div className="modal-body p-4 invoice-create-body">

@@ -500,14 +500,14 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     };
 
     let staleCreditNoteEditResult;
-    let competingCreditNoteResult;
+    let creditNotePostedDuringStaleEdit;
     try {
       const staleCreditNoteEditPromise = request("/order/orders/" + staleCreditNoteInvoiceId + "/update", {
         method: "PUT",
         body: { note: "Stale edit must not replace the invoice version." }
       });
       await creditRaceSaveReached;
-      competingCreditNoteResult = await request("/credit-notes", {
+      creditNotePostedDuringStaleEdit = await request("/credit-notes", {
         method: "POST",
         body: {
           creditNoteNumber: staleCreditNoteNumber,
@@ -533,7 +533,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     }
 
     assert.equal(creditRaceEditPaused, true, "The invoice edit must pause before the competing Credit Note is posted.");
-    assert.equal(competingCreditNoteResult.response.status, 201, JSON.stringify(competingCreditNoteResult.payload));
+    assert.equal(creditNotePostedDuringStaleEdit.response.status, 201, JSON.stringify(creditNotePostedDuringStaleEdit.payload));
     assert.equal(staleCreditNoteEditResult.response.status, 409, JSON.stringify(staleCreditNoteEditResult.payload));
 
     const [invoiceAfterCreditNoteRace, clientAfterCreditNoteRace, noteAfterCreditNoteRace] = await Promise.all([

@@ -9,6 +9,7 @@ const app = require("../server");
 
 const Order = require("../models/Order2");
 const Client = require("../models/Client");
+const Product = require("../models/Product");
 const Profile = require("../models/Profile");
 const CreditNote = require("../models/CreditNote");
 const PaymentReference = require("../models/PaymentReference");
@@ -37,6 +38,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     await Promise.all([
       Order.init(),
       Client.init(),
+      Product.init(),
       Profile.init(),
       CreditNote.init(),
       PaymentReference.init(),
@@ -112,6 +114,66 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
 
     const hiddenInvoice = await request(`/order/orders/${orderId}`, { token: otherOwnerToken });
     assert.equal(hiddenInvoice.response.status, 404, "Invoices must be isolated by business owner.");
+
+
+    // Two overlapping payment requests must not spend the same observed due balance.
+    const concurrentInvoiceResponse = await request("/order/orders/create", {
+      method: "POST",
+      body: {
+        clientId,
+        orderDate: "2026-10-06T10:00:00.000Z",
+        paymentTerms: "30",
+        taxPercentage: 0,
+        discountRate: 0,
+        subOrders: [{
+          orderName: "Concurrent payment item",
+          qtyUnit: "PCS",
+          quantity: 2,
+          unitPrice: 100
+        }]
+      }
+    });
+    assert.equal(concurrentInvoiceResponse.response.status, 201, JSON.stringify(concurrentInvoiceResponse.payload));
+    const concurrentOrderId = concurrentInvoiceResponse.payload.order._id;
+    assert.equal(round2(concurrentInvoiceResponse.payload.order.dueAmount), 200);
+
+    const concurrentReferences = [`ITRACEA-${suffix}`, `ITRACEB-${suffix}`];
+    const concurrentAttempts = await Promise.all(concurrentReferences.map(reference =>
+      request(`/order/orders/${concurrentOrderId}/pay`, {
+        method: "POST",
+        body: {
+          amount: 150,
+          method: "UPI",
+          amountReference: reference,
+          paymentDate: "2026-10-06T11:00:00.000Z"
+        }
+      })
+    ));
+    const acceptedAttempts = concurrentAttempts.filter(result => result.response.status === 200);
+    assert.equal(
+      acceptedAttempts.length,
+      1,
+      `Exactly one concurrent payment may be accepted; received statuses ${concurrentAttempts.map(result => result.response.status).join(", ")}.`
+    );
+
+    const failedAttemptIndex = concurrentAttempts.findIndex(result => result.response.status !== 200);
+    assert.notEqual(failedAttemptIndex, -1);
+    const persistedConcurrentOrder = await Order.findOne({
+      _id: concurrentOrderId,
+      createdBy: ownerId
+    }).lean();
+    assert.equal(persistedConcurrentOrder.payments.length, 1);
+    assert.equal(round2(persistedConcurrentOrder.paidAmount), 150);
+    assert.equal(round2(persistedConcurrentOrder.dueAmount), 50);
+    assert.equal(persistedConcurrentOrder.paymentStatus, "Partial");
+    assert.equal(
+      await PaymentReference.countDocuments({
+        createdBy: ownerId,
+        reference: concurrentReferences[failedAttemptIndex]
+      }),
+      0,
+      "A failed concurrent payment must not leave a reserved payment reference."
+    );
 
     const payment = await request(`/order/orders/${orderId}/pay`, {
       method: "POST",
@@ -313,6 +375,73 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(round2(storedOrder.paidAmount), 110);
     assert.equal(round2(storedOrder.dueAmount), 110);
 
+
+    // A late Credit Note failure must roll back earlier stock writes and leave no orphan note.
+    const stockProduct = await Product.create({
+      productName: `Rollback Product ${suffix}`,
+      productCode: `ITROLLBACK-${suffix}`,
+      rate: 10,
+      quantity: 20,
+      createdBy: ownerId
+    });
+    const stockInvoiceResponse = await request("/order/orders/create", {
+      method: "POST",
+      body: {
+        clientId,
+        orderDate: "2026-10-07T10:00:00.000Z",
+        paymentTerms: "30",
+        taxPercentage: 0,
+        discountRate: 0,
+        subOrders: [{
+          productId: String(stockProduct._id),
+          orderName: "Stock rollback item",
+          designNumber: "IT-ROLLBACK",
+          qtyUnit: "PCS",
+          quantity: 2,
+          unitPrice: 10
+        }]
+      }
+    });
+    assert.equal(stockInvoiceResponse.response.status, 201, JSON.stringify(stockInvoiceResponse.payload));
+    const stockInvoiceId = stockInvoiceResponse.payload.order._id;
+    const stockSubOrderId = stockInvoiceResponse.payload.order.subOrders[0]._id;
+    const stockBeforeFailure = await Product.findOne({ _id: stockProduct._id, createdBy: ownerId }).lean();
+    assert.equal(stockBeforeFailure.quantity, 20);
+
+    const duplicateCreditNote = await request("/credit-notes", {
+      method: "POST",
+      body: {
+        creditNoteNumber,
+        creditNoteDate: "2026-10-07T12:00:00.000Z",
+        reason: "Sales Return",
+        creditMode: "ITEM",
+        originalOrderId: stockInvoiceId,
+        stockAffecting: true,
+        items: [{ sourceSubOrderId: stockSubOrderId, quantity: 1 }],
+        settlement: {
+          adjustmentType: "Outstanding",
+          adjustmentAmount: 0,
+          refundAmount: 10,
+          refundMethod: "Cash",
+          customerCreditAmount: 0
+        }
+      }
+    });
+    assert.equal(duplicateCreditNote.response.status, 409, JSON.stringify(duplicateCreditNote.payload));
+
+    const [stockAfterFailure, orderAfterFailure, failedNotes, clientAfterFailure] = await Promise.all([
+      Product.findOne({ _id: stockProduct._id, createdBy: ownerId }).lean(),
+      Order.findOne({ _id: stockInvoiceId, createdBy: ownerId }).lean(),
+      CreditNote.find({ originalOrderId: stockInvoiceId, createdBy: ownerId }).lean(),
+      Client.findOne({ _id: clientId, createdBy: ownerId }).lean()
+    ]);
+    assert.equal(stockAfterFailure.quantity, stockBeforeFailure.quantity, "Stock must roll back when the Credit Note is rejected.");
+    assert.equal(orderAfterFailure.creditNoteCount || 0, 0);
+    assert.equal(round2(orderAfterFailure.creditAppliedAmount || 0), 0);
+    assert.equal(round2(orderAfterFailure.dueAmount), 20);
+    assert.equal(failedNotes.length, 0, "Failed Credit Note creation must not leave an orphan record.");
+    assert.equal(round2(clientAfterFailure.creditBalance), 10, "A failed stock-return Credit Note must not change customer credit.");
+
     const availableCredit = await request(`/credit-notes/available/${orderId}`);
     assert.equal(availableCredit.response.status, 200, JSON.stringify(availableCredit.payload));
     assert.equal(round2(availableCredit.payload.order.previouslyCreditedTotal), 0);
@@ -323,6 +452,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
         CreditNote.deleteMany({ createdBy: ownerId }),
         Order.deleteMany({ createdBy: ownerId }),
         Client.deleteMany({ createdBy: ownerId }),
+        Product.deleteMany({ createdBy: ownerId }),
         Profile.deleteMany({ createdBy: String(ownerId) }),
         PaymentReference.deleteMany({ createdBy: ownerId }),
         PaymentLog.deleteMany({ userId: ownerId })

@@ -50,6 +50,7 @@ function Clients() {
 
   // -----
   const [loading, setLoading] = useState(false);
+  const [clientsLoadError,setClientsLoadError]=useState("");
   const [formSaving,setFormSaving]=useState(false);
   const [formError,setFormError]=useState("");
   const [pageMessage,setPageMessage]=useState("");
@@ -174,6 +175,7 @@ function Clients() {
   const authConfig = { headers: { "x-auth-token": token || "" } };
   const fetchClients = async () => {
     setLoading(true);
+    setClientsLoadError("");
     try {
       const response = await axios.get(`${linkone}/api/clients`, {
         headers: {'x-auth-token': token}
@@ -185,7 +187,7 @@ function Clients() {
         window.location.reload();
         return;
       }
-      setPageMessage(error.response?.data?.message||"Customers could not be loaded. Refresh the page to try again.");
+      setClientsLoadError(error.response?.data?.message||"Customers could not be loaded. Refresh the page to try again.");
       console.error("Error fetching customers",error);
     } finally {
       setLoading(false);
@@ -503,6 +505,17 @@ function Clients() {
         </BusinessPageHeader>
 
         {pageMessage&&<div className="alert alert-info" role="status">{pageMessage}</div>}
+        {clientsLoadError&&(
+          <div className="alert alert-danger d-flex flex-wrap align-items-center gap-2" role="alert">
+            <div className="flex-grow-1">
+              <div className="fw-semibold">Customer list could not be refreshed.</div>
+              <div className="small">{clients.length?"Showing the last loaded customer records below.":"No customer records are available to display until loading succeeds."}</div>
+            </div>
+            <button type="button" className="btn btn-outline-danger btn-sm" onClick={fetchClients} disabled={loading}>
+              {loading?"Refreshing…":"Try again"}
+            </button>
+          </div>
+        )}
 
         <div className="customer-overview-grid mb-3">
           <div className="customer-overview-card">
@@ -574,7 +587,7 @@ function Clients() {
               tableKey="clients.list"
               rows={pagedClientRows}
               loading={loading}
-              emptyText={search.trim()||Object.values(filters).some(Boolean)?"No customers match these filters. Clear them to see everyone.":"No customers yet. Add a customer so their details are ready when you create an invoice."}
+              emptyText={clientsLoadError?"Customer records could not be loaded. Try again above.":search.trim()||Object.values(filters).some(Boolean)?"No customers match these filters. Clear them to see everyone.":"No customers yet. Add a customer so their details are ready when you create an invoice."}
               getRowKey={client => client._id}
               columns={[
                 { key:"__rowNumber", label:"#", locked:false, render:(_row,index)=>index+1 },

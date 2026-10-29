@@ -27,6 +27,24 @@ const PAYMENT_METHODS = ["Cash", "Bank Transfer", "UPI", "Cheque"];
 const MODES = ["ITEM", "AMOUNT"];
 const EPSILON = 0.01;
 
+// A competing transaction can lose a document-level write race even when the
+// request's compare-and-set filter is correct. Surface that as a retryable
+// conflict rather than an internal-server error or a misleading validation error.
+function isRetryableWriteConflict(error) {
+  return error?.code === 112
+    || error?.codeName === "WriteConflict"
+    || (
+      typeof error?.hasErrorLabel === "function"
+      && error.hasErrorLabel("TransientTransactionError")
+    );
+}
+
+function getCreditNoteErrorStatus(error, fallback = 400) {
+  if (Number(error?.status)) return Number(error.status);
+  if (error?.code === 11000 || isRetryableWriteConflict(error)) return 409;
+  return fallback;
+}
+
 function round2(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
 }
@@ -1216,7 +1234,7 @@ router.post("/", auth, async (req, res) => {
     console.error("Credit note create error:", error);
     const status =
       Number(error?.status) ||
-      (error?.code === 11000
+      (error?.code === 11000 || isRetryableWriteConflict(error)
         ? 409
         : /authentication required/i.test(error?.message || "")
         ? 401
@@ -1742,7 +1760,7 @@ router.put("/:id", auth, async (req, res) => {
       }
     }
     console.error("Credit note update error:", error);
-    return res.status(error.status || (error.code === 11000 ? 409 : 400)).json({ message: error.message || "Unable to update Credit Note." });
+    return res.status(getCreditNoteErrorStatus(error)).json({ message: error.message || "Unable to update Credit Note." });
   } finally {
     if (session) await session.endSession();
   }
@@ -1975,7 +1993,7 @@ async function cancelCreditNote(req, res) {
       }
     }
     console.error("Credit note cancellation error:", error);
-    return res.status(error.status || (error.code === 11000 ? 409 : 400)).json({ message: error.message });
+    return res.status(getCreditNoteErrorStatus(error)).json({ message: error.message });
   } finally {
     if (session) await session.endSession();
   }

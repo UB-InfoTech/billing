@@ -131,6 +131,131 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     const hiddenInvoice = await request(`/order/orders/${orderId}`, { token: otherOwnerToken });
     assert.equal(hiddenInvoice.response.status, 404, "Invoices must be isolated by business owner.");
 
+    // Force two independent customer-credit mutations to read the same summary
+    // revision. Exactly one may commit against that revision; the other must get
+    // a retryable conflict, and persisted credit must match the winning writes.
+    const competingClientResponse = await request("/clients", {
+      method: "POST",
+      body: {
+        name: `Concurrent Credit Customer ${suffix}`,
+        companyName: `Concurrent Credit Business ${suffix}`,
+        phone: "9999999998"
+      }
+    });
+    assert.equal(competingClientResponse.response.status, 201, JSON.stringify(competingClientResponse.payload));
+    const competingClientId = competingClientResponse.payload._id;
+
+    const competingInvoiceResponse = await request("/order/orders/create", {
+      method: "POST",
+      body: {
+        clientId: competingClientId,
+        orderDate: "2026-10-06T10:30:00.000Z",
+        paymentTerms: "30",
+        taxPercentage: 10,
+        discountRate: 0,
+        subOrders: [{
+          orderName: "Concurrent credit item",
+          qtyUnit: "PCS",
+          quantity: 2,
+          unitPrice: 10
+        }]
+      }
+    });
+    assert.equal(competingInvoiceResponse.response.status, 201, JSON.stringify(competingInvoiceResponse.payload));
+    const competingInvoiceId = competingInvoiceResponse.payload.order._id;
+    assert.equal(round2(competingInvoiceResponse.payload.order.roundOffFinalRevenue), 22);
+
+    const competingCreditNoteNumber = `RC${suffix}`;
+    const originalClientFindOneAndUpdate = Client.findOneAndUpdate;
+    let competingClientMutationCalls = 0;
+    let releaseCompetingClientMutations;
+    const competingClientMutationBarrier = new Promise(resolve => {
+      releaseCompetingClientMutations = resolve;
+    });
+    const barrierFailsafe = setTimeout(() => releaseCompetingClientMutations(), 3000);
+    barrierFailsafe.unref?.();
+
+    Client.findOneAndUpdate = function (filter, update) {
+      const model = this;
+      const args = arguments;
+      const isTargetMutation =
+        String(filter?._id || "") === String(competingClientId)
+        && Number.isFinite(Number(filter?.financialSummaryVersion))
+        && competingClientMutationCalls < 2;
+
+      if (!isTargetMutation) return originalClientFindOneAndUpdate.apply(model, args);
+
+      competingClientMutationCalls += 1;
+      if (competingClientMutationCalls === 2) releaseCompetingClientMutations();
+      return competingClientMutationBarrier.then(() => originalClientFindOneAndUpdate.apply(model, args));
+    };
+
+    let competingCreditResults;
+    try {
+      competingCreditResults = await Promise.all([
+        request("/credit-notes", {
+          method: "POST",
+          body: {
+            creditNoteNumber: competingCreditNoteNumber,
+            creditNoteDate: "2026-10-06T11:00:00.000Z",
+            reason: "Other",
+            creditMode: "AMOUNT",
+            originalOrderId: competingInvoiceId,
+            manualCredit: { taxableAmount: 20, taxRate: 10 },
+            settlement: {
+              adjustmentType: "Outstanding",
+              adjustmentAmount: 0,
+              refundAmount: 0,
+              customerCreditAmount: 22
+            }
+          }
+        }),
+        request(`/clients/${competingClientId}/credit`, {
+          method: "PUT",
+          body: { amount: 13 }
+        })
+      ]);
+    } finally {
+      clearTimeout(barrierFailsafe);
+      releaseCompetingClientMutations();
+      Client.findOneAndUpdate = originalClientFindOneAndUpdate;
+    }
+
+    assert.equal(competingClientMutationCalls, 2, "Both customer-credit mutations must reach the compare-and-set write before either proceeds.");
+    const [competingCreditNoteResult, competingManualCreditResult] = competingCreditResults;
+    assert.ok(
+      [201, 409].includes(competingCreditNoteResult.response.status),
+      `Concurrent Credit Note status should be 201 or 409, received ${competingCreditNoteResult.response.status}: ${JSON.stringify(competingCreditNoteResult.payload)}`
+    );
+    assert.ok(
+      [200, 409].includes(competingManualCreditResult.response.status),
+      `Concurrent manual credit status should be 200 or 409, received ${competingManualCreditResult.response.status}: ${JSON.stringify(competingManualCreditResult.payload)}`
+    );
+
+    const competingNoteSucceeded = competingCreditNoteResult.response.status === 201;
+    const competingAdjustmentSucceeded = competingManualCreditResult.response.status === 200;
+    assert.ok(competingNoteSucceeded || competingAdjustmentSucceeded, "At least one concurrent credit operation must commit.");
+
+    const [competingClientAfter, competingNotesAfter] = await Promise.all([
+      Client.findOne({ _id: competingClientId, createdBy: ownerId })
+        .select("creditBalance creditBalanceAdjustment +financialSummaryVersion")
+        .lean(),
+      CreditNote.find({
+        createdBy: ownerId,
+        originalOrderId: competingInvoiceId
+      }).lean()
+    ]);
+    const expectedCompetingBalance = (competingNoteSucceeded ? 22 : 0) + (competingAdjustmentSucceeded ? 13 : 0);
+    assert.equal(round2(competingClientAfter.creditBalance), expectedCompetingBalance);
+    assert.equal(round2(competingClientAfter.creditBalanceAdjustment), competingAdjustmentSucceeded ? 13 : 0);
+    assert.equal(competingNotesAfter.length, competingNoteSucceeded ? 1 : 0, "A rejected concurrent Credit Note must not leave an orphan record.");
+    if (!competingNoteSucceeded) {
+      assert.equal(competingCreditNoteResult.response.status, 409);
+    }
+    if (!competingAdjustmentSucceeded) {
+      assert.equal(competingManualCreditResult.response.status, 409);
+    }
+
 
     // Two overlapping payment requests must not spend the same observed due balance.
     const concurrentInvoiceResponse = await request("/order/orders/create", {

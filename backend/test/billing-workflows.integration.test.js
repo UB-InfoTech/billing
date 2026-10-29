@@ -256,6 +256,107 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
       assert.equal(competingManualCreditResult.response.status, 409);
     }
 
+    // Two cancellation requests for the same posted Credit Note must not reverse
+    // the same customer credit or invoice summary twice.
+    const cancellationRaceInvoiceResponse = await request("/order/orders/create", {
+      method: "POST",
+      body: {
+        clientId: competingClientId,
+        orderDate: "2026-10-06T12:30:00.000Z",
+        paymentTerms: "30",
+        taxPercentage: 10,
+        discountRate: 0,
+        subOrders: [{
+          orderName: "Concurrent cancellation item",
+          qtyUnit: "PCS",
+          quantity: 2,
+          unitPrice: 10
+        }]
+      }
+    });
+    assert.equal(cancellationRaceInvoiceResponse.response.status, 201, JSON.stringify(cancellationRaceInvoiceResponse.payload));
+    const cancellationRaceInvoiceId = cancellationRaceInvoiceResponse.payload.order._id;
+
+    const cancellationRaceNoteResponse = await request("/credit-notes", {
+      method: "POST",
+      body: {
+        creditNoteNumber: `CC${suffix}`,
+        creditNoteDate: "2026-10-06T13:00:00.000Z",
+        reason: "Other",
+        creditMode: "AMOUNT",
+        originalOrderId: cancellationRaceInvoiceId,
+        manualCredit: { taxableAmount: 20, taxRate: 10 },
+        settlement: {
+          adjustmentType: "Outstanding",
+          adjustmentAmount: 0,
+          refundAmount: 0,
+          customerCreditAmount: 22
+        }
+      }
+    });
+    assert.equal(cancellationRaceNoteResponse.response.status, 201, JSON.stringify(cancellationRaceNoteResponse.payload));
+    const cancellationRaceNoteId = cancellationRaceNoteResponse.payload.creditNote._id;
+
+    const originalCancellationFindOneAndUpdate = Client.findOneAndUpdate;
+    let cancellationMutationCalls = 0;
+    let releaseCancellationMutations;
+    const cancellationMutationBarrier = new Promise(resolve => {
+      releaseCancellationMutations = resolve;
+    });
+    const cancellationBarrierFailsafe = setTimeout(() => releaseCancellationMutations(), 3000);
+    cancellationBarrierFailsafe.unref?.();
+
+    Client.findOneAndUpdate = function (filter, update) {
+      const model = this;
+      const args = arguments;
+      const isTargetMutation =
+        String(filter?._id || "") === String(competingClientId)
+        && Number.isFinite(Number(filter?.financialSummaryVersion))
+        && cancellationMutationCalls < 2;
+
+      if (!isTargetMutation) return originalCancellationFindOneAndUpdate.apply(model, args);
+
+      cancellationMutationCalls += 1;
+      if (cancellationMutationCalls === 2) releaseCancellationMutations();
+      return cancellationMutationBarrier.then(() => originalCancellationFindOneAndUpdate.apply(model, args));
+    };
+
+    let cancellationRaceResults;
+    try {
+      cancellationRaceResults = await Promise.all([
+        request(`/credit-notes/${cancellationRaceNoteId}/cancel`, {
+          method: "POST",
+          body: { reason: "Concurrent cancellation attempt A" }
+        }),
+        request(`/credit-notes/${cancellationRaceNoteId}/cancel`, {
+          method: "POST",
+          body: { reason: "Concurrent cancellation attempt B" }
+        })
+      ]);
+    } finally {
+      clearTimeout(cancellationBarrierFailsafe);
+      releaseCancellationMutations();
+      Client.findOneAndUpdate = originalCancellationFindOneAndUpdate;
+    }
+
+    assert.equal(cancellationMutationCalls, 2, "Both cancellations must reach the credit-balance compare-and-set write.");
+    const successfulCancellations = cancellationRaceResults.filter(result => result.response.status === 200);
+    assert.equal(successfulCancellations.length, 1, `Exactly one cancellation may succeed; received statuses ${cancellationRaceResults.map(result => result.response.status).join(", ")}.`);
+    const rejectedCancellation = cancellationRaceResults.find(result => result.response.status !== 200);
+    assert.equal(rejectedCancellation.response.status, 409, JSON.stringify(rejectedCancellation.payload));
+
+    const [cancelledRaceNote, cancellationRaceInvoice, clientAfterCancellationRace] = await Promise.all([
+      CreditNote.findOne({ _id: cancellationRaceNoteId, createdBy: ownerId }).lean(),
+      Order.findOne({ _id: cancellationRaceInvoiceId, createdBy: ownerId }).lean(),
+      Client.findOne({ _id: competingClientId, createdBy: ownerId })
+        .select("creditBalance creditBalanceAdjustment +financialSummaryVersion")
+        .lean()
+    ]);
+    assert.equal(cancelledRaceNote.status, "Cancelled");
+    assert.equal(cancellationRaceInvoice.creditNoteCount || 0, 0, "The invoice Credit Note count must be reversed only once.");
+    assert.equal(round2(clientAfterCancellationRace.creditBalance), expectedCompetingBalance, "The customer credit must be reversed only once.");
+    assert.equal(round2(clientAfterCancellationRace.creditBalanceAdjustment), competingAdjustmentSucceeded ? 13 : 0, "Cancellation must not change the independent manual adjustment.");
+
 
     // Two overlapping payment requests must not spend the same observed due balance.
     const concurrentInvoiceResponse = await request("/order/orders/create", {

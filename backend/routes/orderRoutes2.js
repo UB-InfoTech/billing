@@ -84,6 +84,7 @@ const { normalizePaymentUpdates } = require("../utils/bulkPaymentAllocations");
 const { buildPaymentAppendOperation } = require("../utils/paymentAppendOperation");
 const { buildPaymentArrayMutationOperation } = require("../utils/paymentArrayMutation");
 const { reservePaymentReference, ensurePaymentReferenceReserved, releasePaymentReference } = require("../utils/paymentReferenceReservation");
+const { recordFinancialRecoveryIssue } = require("../utils/financialRecovery");
 
 async function nextOrderNumber(uid){
   // Reserve the sequence in a single atomic database operation so concurrent
@@ -687,6 +688,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
   const transactional=isReplicaSetAvailable();
   const session=transactional?await mongoose.startSession():null;
   const savedAllocations=[];
+  const rollbackFailures=[];
   let rollbackIncomplete=false;
   let reservedReferenceId=null;
 
@@ -865,6 +867,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
         if(session.inTransaction())await session.abortTransaction();
       }catch(rollbackError){
         rollbackIncomplete=true;
+        rollbackFailures.push({step:"abort-transaction",message:String(rollbackError?.message||rollbackError)});
         console.error("Bulk payment transaction rollback failed:",rollbackError);
       }
     }else if(savedAllocations.length){
@@ -908,6 +911,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
           }
         }catch(rollbackError){
           rollbackIncomplete=true;
+          rollbackFailures.push({step:"remove-invoice-payment",entityType:"invoice",entityId:String(item.orderId||""),message:String(rollbackError?.message||rollbackError)});
           console.error("Bulk payment rollback failed:",rollbackError);
         }
       }
@@ -918,11 +922,20 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
         reservedReferenceId=null;
       }catch(releaseError){
         rollbackIncomplete=true;
+        rollbackFailures.push({step:"release-payment-reference",message:String(releaseError?.message||releaseError)});
         console.error("Bulk payment reference rollback failed:",releaseError);
       }
     }
     console.error("Bulk payment error:",error);
     if(rollbackIncomplete){
+      await recordFinancialRecoveryIssue({
+        createdBy:userId(req),
+        operation:"bulk-payment",
+        summary:"Bulk payment failed and one or more compensation steps did not complete.",
+        originalError:error?.message||error,
+        invoiceIds:savedAllocations.map(item=>item.orderId),
+        recoveryFailures:rollbackFailures
+      });
       return res.status(500).json({
         success:false,
         message:"Bulk payment failed and automatic rollback could not be completed. Review the affected invoice payment histories before trying again."

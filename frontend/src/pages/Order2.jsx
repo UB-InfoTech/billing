@@ -2170,7 +2170,7 @@ const styles = {
                                         <div className="alert alert-danger" role="alert">
                                             <div className="fw-semibold">Payment history could not be loaded.</div>
                                             <div className="small mt-1">{paymentsLoadError}</div>
-                                            <button type="button" className="btn btn-sm btn-outline-danger mt-2" onClick={()=>fetchPayments()} disabled={paymentSubmitting}>Try again</button>
+                                            <button type="button" className="btn btn-sm btn-outline-danger mt-2" onClick={()=>fetchPayments()} disabled={paymentsLoading||paymentSubmitting}>Try again</button>
                                         </div>
                                     ):payments.length===0?(
                                         <div className="border rounded-3 bg-light text-center p-4">
@@ -2213,6 +2213,7 @@ const styles = {
                                                 </tr>
                                             );
                                         }}
+                                        />
                                     )}
 
                                     {editPayment && (

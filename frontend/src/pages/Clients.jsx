@@ -460,6 +460,36 @@ function Clients() {
     XLSX.writeFile(workbook, 'clients_report.xlsx');
   };
 
+  const handleCustomerModalKeyDown = event => {
+    if (event.key === "Escape") {
+      if (!formSettingsOpen) {
+        event.preventDefault();
+        setShowModal(false);
+        setFormError("");
+      }
+      return;
+    }
+    if (event.key !== "Tab") return;
+
+    const focusable = Array.from(event.currentTarget.querySelectorAll(
+      'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )).filter(element => element.getClientRects().length > 0);
+    if (!focusable.length) {
+      event.preventDefault();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+
   return (
       <div className="container-fluid customer-page py-4">
         <BusinessPageHeader
@@ -662,13 +692,21 @@ function Clients() {
           )}
 
           {showModal && (
-            <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}>
+            <div
+              className="modal show d-block"
+              tabIndex="-1"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="customer-form-title"
+              onKeyDown={handleCustomerModalKeyDown}
+              style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}
+            >
               <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable customer-a4-dialog">
                 <div className="modal-content customer-form-modal shadow-sm border-0">
                   <div className="modal-header bg-white text-dark p-3 border-bottom d-flex justify-content-between align-items-center">
                     <div className="d-flex align-items-center gap-2">
                       <div>
-                        <h5 className="modal-title fw-bold mb-1">{editingClient ? "Edit customer" : "Add a customer"}</h5>
+                        <h5 id="customer-form-title" className="modal-title fw-bold mb-1">{editingClient ? "Edit customer" : "Add a customer"}</h5>
                         <div className="small text-muted">Start with the customer or business name. Add contact details only when you need them.</div>
                       </div>
                     </div>

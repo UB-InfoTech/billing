@@ -54,9 +54,9 @@ export const ORDER_ITEM_FIELDS=[
 ];
 
 export const CLIENT_FORM_FIELDS=[
-  {key:"name",label:"Contact person (optional)",fieldType:"text",width:6,section:"basic",order:1,system:true},
-  {key:"email",label:"Email (optional)",fieldType:"text",width:6,section:"basic",order:3},
-  {key:"phone",label:"Phone (optional)",fieldType:"text",width:6,section:"basic",order:2},
+  {key:"name",label:"Contact person",fieldType:"text",width:6,section:"basic",order:1,system:true},
+  {key:"email",label:"Email",fieldType:"text",width:6,section:"basic",order:3},
+  {key:"phone",label:"Phone",fieldType:"text",width:6,section:"basic",order:2},
   {key:"address",label:"Address",fieldType:"textarea",width:6,section:"address",order:3},
   {key:"pinCode",label:"Pin Code",fieldType:"text",width:3,section:"address",order:4},
   {key:"stateCode",label:"State Code",fieldType:"text",width:3,section:"address",order:5},

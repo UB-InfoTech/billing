@@ -1,4 +1,4 @@
-import React,{useEffect,useRef,useState} from "react";
+import React,{useEffect,useId,useRef,useState} from "react";
 import ArithmeticInput from "./ArithmeticInput";
 import {normalizeBooleanValue} from "../utils/fieldValue";
 
@@ -21,13 +21,17 @@ export default function ConfiguredField({
   min,
   max,
   step,
-  readOnly=false
+  readOnly=false,
+  autoFocus=false
 }){
   const [lookupQuery,setLookupQuery]=useState("");
   const [lookupResults,setLookupResults]=useState(null);
   const [lookupSearching,setLookupSearching]=useState(false);
   const [lookupSearchError,setLookupSearchError]=useState("");
   const lookupRequestSequence=useRef(0);
+  const controlId=`configured-field-${useId()}`;
+  const labelId=`${controlId}-label`;
+  const helpId=`${controlId}-help`;
 
   const lookupResource=field?.dataSource?.type==="lookup"
     ?String(field.dataSource.resource||"")
@@ -103,7 +107,10 @@ export default function ConfiguredField({
   };
 
   const common={
+    id:controlId,
     className:"form-control form-entry-control",
+    autoFocus,
+    "aria-describedby":effectiveHelp?helpId:undefined,
     value:value??"",
     onChange:event=>handleValue(event.target.value),
     placeholder:placeholder||(effectiveReadOnly?"Filled automatically":field.fieldType==="date"?"Choose a date":field.fieldType==="datetime"?"Choose date and time":field.fieldType==="number"||field.fieldType==="currency"?"Enter "+label.toLowerCase():"Enter "+label.toLowerCase()),
@@ -144,6 +151,8 @@ export default function ConfiguredField({
           />
         )}
         <select
+          id={controlId}
+          aria-describedby={effectiveHelp?helpId:undefined}
           className="form-select form-entry-control"
           multiple={multiple}
           value={multiple?selectedLookupValues:String(value??"")}
@@ -178,7 +187,7 @@ export default function ConfiguredField({
   }else if(field.fieldType==="textarea"){
     control=<textarea {...common} rows={2}/>;
   }else if(field.fieldType==="select"){
-    control=<select className="form-select form-entry-control" value={value??""} onChange={event=>handleValue(event.target.value)} disabled={effectiveDisabled||effectiveReadOnly} required={effectiveRequired}>
+    control=<select id={controlId} aria-describedby={effectiveHelp?helpId:undefined} autoFocus={autoFocus} className="form-select form-entry-control" value={value??""} onChange={event=>handleValue(event.target.value)} disabled={effectiveDisabled||effectiveReadOnly} required={effectiveRequired}>
       <option value="">Select {label}</option>
       {(options||[]).map(option=>typeof option==="string"
         ?<option key={option} value={option}>{option}</option>
@@ -188,7 +197,7 @@ export default function ConfiguredField({
   }else if(field.fieldType==="multiselect"){
     const selected=new Set(Array.isArray(value)?value.map(String):value===null||value===undefined||value===""?[]:[String(value)]);
     control=(
-      <fieldset className="no-code-multiselect border rounded p-3" disabled={effectiveDisabled||effectiveReadOnly}>
+      <fieldset id={controlId} aria-labelledby={labelId} aria-describedby={effectiveHelp?helpId:undefined} className="no-code-multiselect border rounded p-3" disabled={effectiveDisabled||effectiveReadOnly}>
         <legend className="visually-hidden">{label} choices</legend>
         {Array.isArray(options)&&options.length?(
           <div className="d-flex flex-wrap gap-2">
@@ -226,7 +235,7 @@ export default function ConfiguredField({
     );
   }else if(field.fieldType==="boolean"){
     control=<div className="form-check form-switch pt-2">
-      <input className="form-check-input" type="checkbox" checked={normalizeBooleanValue(value)} onChange={event=>handleValue(event.target.checked)} disabled={effectiveDisabled||effectiveReadOnly}/>
+      <input id={controlId} aria-describedby={effectiveHelp?helpId:undefined} autoFocus={autoFocus} className="form-check-input" type="checkbox" checked={normalizeBooleanValue(value)} onChange={event=>handleValue(event.target.checked)} disabled={effectiveDisabled||effectiveReadOnly}/>
     </div>;
   }else if(field.fieldType==="number"||field.fieldType==="currency"){
     control=<ArithmeticInput
@@ -257,14 +266,14 @@ export default function ConfiguredField({
 
   return (
     <div className="form-config-field" style={{order:Number(field.order)||0}}>
-      <label className="form-label form-entry-label">
+      <label id={labelId} htmlFor={field.fieldType==="multiselect"&&field.dataSource?.type!=="lookup"?undefined:controlId} className="form-label form-entry-label">
         {icon&&<i className={icon+" me-1"}></i>}
         {label}
         {effectiveRequired?<span className="form-entry-required ms-2">Required</span>:<span className="form-entry-optional ms-2">Optional</span>}
         {effectiveReadOnly&&<span className="badge bg-light text-secondary border ms-2">Read only</span>}
       </label>
       {control}
-      {effectiveHelp&&<div className="form-text">{effectiveHelp}</div>}
+      {effectiveHelp&&<div id={helpId} className="form-text">{effectiveHelp}</div>}
       {field.dataSource?.type==="lookup"&&<div className="form-text">Search and select an existing record from your business account.</div>}
       {suffix}
     </div>

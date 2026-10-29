@@ -130,6 +130,7 @@ function Clients() {
     const common={
       field:{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled||clientFormConfig.loading},
       value:clientValue(field),
+      autoFocus:field.key==="companyName",
       onChange:value=>updateClientField(field,value,null),
       onRecordChange:record=>updateClientField(field,record?.[field.dataSource?.valueField||"_id"]??"",record),
       lookupRecords:source,

@@ -115,6 +115,9 @@ function Order2() {
     const [newPayment, setNewPayment] = useState({ amount: "", method: "Cash", amountReference: "", paymentDate: formatDateInput(new Date()) });
     const [paymentSubmitting,setPaymentSubmitting]=useState(false);
     const [paymentFeedback,setPaymentFeedback]=useState(null);
+    const [paymentsLoading,setPaymentsLoading]=useState(false);
+    const [paymentsLoadError,setPaymentsLoadError]=useState("");
+    const paymentHistoryRequestRef=useRef(0);
     const authConfig = () => ({ headers: { "x-auth-token": localStorage.getItem("token") || "" } });
 
     // const date = new DateObject()
@@ -802,6 +805,9 @@ function Order2() {
         setFormData(order);
         setEditPayment(null);
         setPaymentFeedback(null);
+        setPayments([]);
+        setPaymentsLoadError("");
+        paymentHistoryRequestRef.current += 1;
         setNewPayment({
             amount: "",
             method: "Cash",
@@ -845,13 +851,25 @@ function Order2() {
     }, [showPaymentModal]);
 
     const fetchPayments = async () => {
+        const currentOrderId = editingOrder?._id;
+        if (!currentOrderId) return false;
+        const requestId = ++paymentHistoryRequestRef.current;
+        setPaymentsLoading(true);
+        setPaymentsLoadError("");
         try {
-            const response = await axios.get(`${linkone}/api/order/orders/${editingOrder._id}/payments`, authConfig());
-            setPayments(response.data);
+            const response = await axios.get(`${linkone}/api/order/orders/${currentOrderId}/payments`, authConfig());
+            if (requestId !== paymentHistoryRequestRef.current) return false;
+            setPayments(Array.isArray(response.data) ? response.data : []);
+            return true;
         } catch (error) {
             const message = error.response?.data?.message || error.message || "Unable to load payment history.";
-            setOrdersMessage(message);
-            console.error("Error fetching payments:", message);
+            if (requestId === paymentHistoryRequestRef.current) {
+                setPaymentsLoadError(message);
+                console.error("Error fetching payments:", message);
+            }
+            return false;
+        } finally {
+            if (requestId === paymentHistoryRequestRef.current) setPaymentsLoading(false);
         }
     };
 
@@ -892,11 +910,13 @@ function Order2() {
                 },
                 authConfig()
             );
-            await fetchPayments();
+            const historyLoaded = await fetchPayments();
             setEditingOrder(response.data?.order || editingOrder);
             setNewPayment({ amount: "", method: "Cash", amountReference: "", paymentDate: formatDateInput(new Date()) });
             await fetchOrders();
-            setPaymentFeedback({type:"success",message:"Payment recorded successfully."});
+            setPaymentFeedback(historyLoaded
+                ? {type:"success",message:"Payment recorded successfully."}
+                : {type:"warning",message:"Payment was recorded successfully, but payment history could not refresh. Use Refresh history to check the latest list."});
         } catch (error) {
             showPaymentError(error.response?.data?.message || error.message || "Unable to record the payment. Please try again.");
         } finally {
@@ -927,11 +947,13 @@ function Order2() {
                 },
                 authConfig()
             );
-            await fetchPayments();
+            const historyLoaded = await fetchPayments();
             setEditingOrder(response.data?.order || editingOrder);
             setEditPayment(null);
             await fetchOrders();
-            setPaymentFeedback({type:"success",message:"Payment updated successfully."});
+            setPaymentFeedback(historyLoaded
+                ? {type:"success",message:"Payment updated successfully."}
+                : {type:"warning",message:"Payment changes were saved, but payment history could not refresh. Use Refresh history to check the latest list."});
         } catch (error) {
             setPaymentFeedback({type:"danger",message:error.response?.data?.message || error.message || "Unable to update the payment. Please try again."});
         } finally {
@@ -950,10 +972,12 @@ function Order2() {
                 `${linkone}/api/order/orders/${editingOrder._id}/payments/${paymentId}`,
                 authConfig()
             );
-            await fetchPayments();
+            const historyLoaded = await fetchPayments();
             setEditingOrder(response.data?.order || editingOrder);
             await fetchOrders();
-            setPaymentFeedback({type:"success",message:"Payment deleted and invoice balances recalculated."});
+            setPaymentFeedback(historyLoaded
+                ? {type:"success",message:"Payment deleted and invoice balances recalculated."}
+                : {type:"warning",message:"Payment was deleted and balances recalculated, but history could not refresh. Use Refresh history to check the latest list."});
         } catch (error) {
             setPaymentFeedback({type:"danger",message:error.response?.data?.message || error.message || "Unable to delete the payment. Please try again."});
         } finally {
@@ -2130,7 +2154,32 @@ const styles = {
                                     </section>
 
 
-                                                                        <DynamicTable
+                                    <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
+                                        <h6 className="mb-0">Payment history</h6>
+                                        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={()=>{setPaymentFeedback(null);fetchPayments();}} disabled={paymentsLoading||paymentSubmitting}>
+                                            <i className={`bi ${paymentsLoading?"bi-arrow-repeat":"bi-arrow-clockwise"} me-1`} aria-hidden="true"></i>
+                                            {paymentsLoading?"Loading history…":"Refresh history"}
+                                        </button>
+                                    </div>
+                                    {paymentsLoading?(
+                                        <div className="border rounded-3 bg-light text-center p-4" role="status">
+                                            <span className="spinner-border spinner-border-sm text-primary me-2" aria-hidden="true"></span>
+                                            Loading payment history…
+                                        </div>
+                                    ):paymentsLoadError?(
+                                        <div className="alert alert-danger" role="alert">
+                                            <div className="fw-semibold">Payment history could not be loaded.</div>
+                                            <div className="small mt-1">{paymentsLoadError}</div>
+                                            <button type="button" className="btn btn-sm btn-outline-danger mt-2" onClick={()=>fetchPayments()} disabled={paymentSubmitting}>Try again</button>
+                                        </div>
+                                    ):payments.length===0?(
+                                        <div className="border rounded-3 bg-light text-center p-4">
+                                            <i className="bi bi-receipt text-secondary fs-4 d-block mb-2" aria-hidden="true"></i>
+                                            <div className="fw-semibold">No payments recorded yet</div>
+                                            <div className="small text-secondary mt-1">Payments for this invoice will appear here.</div>
+                                        </div>
+                                    ):(
+                                        <DynamicTable
                                         tableKey="orders.payments"
                                         rows={payments}
                                         getRowKey={payment=>payment._id}
@@ -2164,7 +2213,7 @@ const styles = {
                                                 </tr>
                                             );
                                         }}
-                                    />
+                                    )}
 
                                     {editPayment && (
                                         <div>

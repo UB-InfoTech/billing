@@ -9,6 +9,7 @@ const { syncClientDataSafely } = require("../utils/syncClientData");
 const { exceedsCurrencyLimit, meetsCurrencyTarget } = require("../utils/currencyValidation");
 const { buildInvoiceCreditWriteFilter, buildPreviouslyCreditedFilter } = require("../utils/creditNoteConcurrency");
 const { buildClientCreditBalanceMutation } = require("../utils/clientCreditBalance");
+const { recordFinancialRecoveryIssue } = require("../utils/financialRecovery");
 
 
 const router = express.Router();
@@ -790,6 +791,7 @@ router.post("/", auth, async (req, res) => {
   const transactional = isReplicaSetAvailable();
   const session = transactional ? await mongoose.startSession() : null;
   const appliedStockChanges = [];
+  const rollbackFailures = [];
   let customerCreditAdded = 0;
   let customerCreditClientId = null;
   let orderForRollback = null;
@@ -1174,8 +1176,9 @@ router.post("/", auth, async (req, res) => {
     if (session) {
       try {
         if (session.inTransaction()) await session.abortTransaction();
-      } catch {
-        // Transaction may already be closed.
+      } catch (abortError) {
+        rollbackFailures.push({ step: "abort-transaction", message: String(abortError?.message || abortError) });
+        console.error("Credit Note transaction abort failed during create:", abortError);
       }
     }
 
@@ -1186,6 +1189,7 @@ router.post("/", auth, async (req, res) => {
         try {
           await CreditNote.deleteOne({ _id: noteSavedId, createdBy: userId });
         } catch (rollbackError) {
+          rollbackFailures.push({ step: "remove-credit-note", entityType: "creditNote", entityId: String(noteSavedId || ""), message: String(rollbackError?.message || rollbackError) });
           console.error("Credit note rollback could not remove the note:", rollbackError);
         }
       }
@@ -1197,9 +1201,11 @@ router.post("/", auth, async (req, res) => {
             { new: true, runValidators: true }
           );
           if (!restoredOrder) {
+            rollbackFailures.push({ step: "restore-invoice", entityType: "invoice", entityId: String(orderForRollback?._id || ""), message: "Invoice changed again before rollback restoration." });
             console.error("Credit Note rollback skipped invoice restoration because the invoice changed again.");
           }
         } catch (rollbackError) {
+          rollbackFailures.push({ step: "restore-invoice", entityType: "invoice", entityId: String(orderForRollback?._id || ""), message: String(rollbackError?.message || rollbackError) });
           console.error("Credit note rollback could not restore invoice balances:", rollbackError);
         }
       }
@@ -1212,6 +1218,7 @@ router.post("/", auth, async (req, res) => {
             { new: true }
           );
         } catch (rollbackError) {
+          rollbackFailures.push({ step: "restore-customer-credit", entityType: "client", entityId: String(customerCreditClientId || ""), message: String(rollbackError?.message || rollbackError) });
           console.error("Credit note rollback could not restore customer credit:", rollbackError);
         }
       }
@@ -1226,11 +1233,25 @@ router.post("/", auth, async (req, res) => {
             );
           }
         } catch (rollbackError) {
+          rollbackFailures.push({ step: "restore-stock", entityType: "product", entityId: String(appliedStockChanges[0]?.productId || ""), message: String(rollbackError?.message || rollbackError) });
           console.error("Credit note rollback could not restore stock:", rollbackError);
         }
       }
     }
 
+    if (rollbackFailures.length) {
+      await recordFinancialRecoveryIssue({
+        createdBy: userId,
+        operation: "credit-note-create",
+        summary: "Credit Note creation failed and one or more compensation steps did not complete.",
+        originalError: error?.message || error,
+        invoiceIds: orderForRollback?._id ? [orderForRollback._id] : [],
+        creditNoteId: noteSavedId,
+        clientIds: customerCreditClientId ? [customerCreditClientId] : [],
+        productIds: appliedStockChanges.map(change => change.productId),
+        recoveryFailures: rollbackFailures
+      });
+    }
     console.error("Credit note create error:", error);
     const status =
       Number(error?.status) ||
@@ -1425,6 +1446,7 @@ router.put("/:id", auth, async (req, res) => {
   const transactional = isReplicaSetAvailable();
   const session = transactional ? await mongoose.startSession() : null;
   const changedStock = [];
+  const rollbackFailures = [];
   const changedCustomerCredit = [];
   let previousOrderFinancials = null;
   let previousOrderId = null;
@@ -1699,7 +1721,10 @@ router.put("/:id", auth, async (req, res) => {
     return res.json(responseBody);
   } catch (error) {
     if (session) {
-      try { if (session.inTransaction()) await session.abortTransaction(); } catch {}
+      try { if (session.inTransaction()) await session.abortTransaction(); } catch (abortError) {
+        rollbackFailures.push({ step: "abort-transaction", message: String(abortError?.message || abortError) });
+        console.error("Credit Note transaction abort failed during edit:", abortError);
+      }
     } else {
       // Standalone MongoDB has no multi-document rollback. Best-effort inverse
       // writes restore only the effects this request had already applied.
@@ -1717,8 +1742,12 @@ router.put("/:id", auth, async (req, res) => {
             { $set: restoreNoteFields },
             { new: true, runValidators: true }
           );
-          if (!restoredNote) console.error("Credit Note edit rollback skipped note restoration because it changed again.");
+          if (!restoredNote) {
+            rollbackFailures.push({ step: "restore-credit-note", entityType: "creditNote", entityId: String(req.params.id), message: "Credit Note changed again before rollback restoration." });
+            console.error("Credit Note edit rollback skipped note restoration because it changed again.");
+          }
         } catch (rollbackError) {
+          rollbackFailures.push({ step: "restore-credit-note", entityType: "creditNote", entityId: String(req.params.id), message: String(rollbackError?.message || rollbackError) });
           console.error("Credit Note edit rollback could not restore the note:", rollbackError);
         }
       }
@@ -1730,9 +1759,11 @@ router.put("/:id", auth, async (req, res) => {
             { new: true, runValidators: true }
           );
           if (!restoredOrder) {
+            rollbackFailures.push({ step: "restore-invoice", entityType: "invoice", entityId: String(previousOrderId || ""), message: "Invoice changed again before rollback restoration." });
             console.error("Credit Note edit rollback skipped invoice restoration because the invoice changed again.");
           }
         } catch (rollbackError) {
+          rollbackFailures.push({ step: "restore-invoice", entityType: "invoice", entityId: String(previousOrderId || ""), message: String(rollbackError?.message || rollbackError) });
           console.error("Credit Note edit rollback could not restore invoice balances:", rollbackError);
         }
       }
@@ -1744,6 +1775,7 @@ router.put("/:id", auth, async (req, res) => {
             { new: true }
           );
         } catch (rollbackError) {
+          rollbackFailures.push({ step: "restore-stock", entityType: "product", entityId: String(change.productId || ""), message: String(rollbackError?.message || rollbackError) });
           console.error("Credit Note edit rollback could not restore stock:", rollbackError);
         }
       }
@@ -1755,9 +1787,23 @@ router.put("/:id", auth, async (req, res) => {
             { new: true }
           );
         } catch (rollbackError) {
+          rollbackFailures.push({ step: "restore-customer-credit", entityType: "client", entityId: String(change.clientId || ""), message: String(rollbackError?.message || rollbackError) });
           console.error("Credit Note edit rollback could not restore customer credit:", rollbackError);
         }
       }
+    }
+    if (rollbackFailures.length) {
+      await recordFinancialRecoveryIssue({
+        createdBy: userId,
+        operation: "credit-note-edit",
+        summary: "Credit Note edit failed and one or more compensation steps did not complete.",
+        originalError: error?.message || error,
+        invoiceIds: previousOrderId ? [previousOrderId] : [],
+        creditNoteId: req.params.id,
+        clientIds: changedCustomerCredit.map(change => change.clientId),
+        productIds: changedStock.map(change => change.productId),
+        recoveryFailures: rollbackFailures
+      });
     }
     console.error("Credit note update error:", error);
     return res.status(getCreditNoteErrorStatus(error)).json({ message: error.message || "Unable to update Credit Note." });
@@ -1780,6 +1826,7 @@ async function cancelCreditNote(req, res) {
   const transactional = isReplicaSetAvailable();
   const session = transactional ? await mongoose.startSession() : null;
   const changedStock = [];
+  const rollbackFailures = [];
   const changedCustomerCredit = [];
   let previousNote = null;
   let previousOrderFinancials = null;
@@ -1934,7 +1981,10 @@ async function cancelCreditNote(req, res) {
     if (session) {
       try {
         if (session.inTransaction()) await session.abortTransaction();
-      } catch {}
+      } catch (abortError) {
+        rollbackFailures.push({ step: "abort-transaction", message: String(abortError?.message || abortError) });
+        console.error("Credit Note transaction abort failed during cancellation:", abortError);
+      }
     } else {
       if (noteSaved && previousNote) {
         try {
@@ -1950,8 +2000,12 @@ async function cancelCreditNote(req, res) {
             } },
             { new: true, runValidators: true }
           );
-          if (!restoredNote) console.error("Credit Note cancellation rollback skipped note restoration because it changed again.");
+          if (!restoredNote) {
+            rollbackFailures.push({ step: "restore-credit-note", entityType: "creditNote", entityId: String(req.params.id), message: "Credit Note changed again before rollback restoration." });
+            console.error("Credit Note cancellation rollback skipped note restoration because it changed again.");
+          }
         } catch (rollbackError) {
+          rollbackFailures.push({ step: "restore-credit-note", entityType: "creditNote", entityId: String(req.params.id), message: String(rollbackError?.message || rollbackError) });
           console.error("Credit Note cancellation rollback could not restore the note:", rollbackError);
         }
       }
@@ -1963,9 +2017,11 @@ async function cancelCreditNote(req, res) {
             { new: true, runValidators: true }
           );
           if (!restoredOrder) {
+            rollbackFailures.push({ step: "restore-invoice", entityType: "invoice", entityId: String(previousOrderId || ""), message: "Invoice changed again before rollback restoration." });
             console.error("Credit Note cancellation rollback skipped invoice restoration because the invoice changed again.");
           }
         } catch (rollbackError) {
+          rollbackFailures.push({ step: "restore-invoice", entityType: "invoice", entityId: String(previousOrderId || ""), message: String(rollbackError?.message || rollbackError) });
           console.error("Credit Note cancellation rollback could not restore invoice balances:", rollbackError);
         }
       }
@@ -1977,6 +2033,7 @@ async function cancelCreditNote(req, res) {
             { new: true }
           );
         } catch (rollbackError) {
+          rollbackFailures.push({ step: "restore-stock", entityType: "product", entityId: String(change.productId || ""), message: String(rollbackError?.message || rollbackError) });
           console.error("Credit Note cancellation rollback could not restore stock:", rollbackError);
         }
       }
@@ -1988,9 +2045,23 @@ async function cancelCreditNote(req, res) {
             { new: true }
           );
         } catch (rollbackError) {
+          rollbackFailures.push({ step: "restore-customer-credit", entityType: "client", entityId: String(change.clientId || ""), message: String(rollbackError?.message || rollbackError) });
           console.error("Credit Note cancellation rollback could not restore customer credit:", rollbackError);
         }
       }
+    }
+    if (rollbackFailures.length) {
+      await recordFinancialRecoveryIssue({
+        createdBy: userId,
+        operation: "credit-note-cancel",
+        summary: "Credit Note cancellation failed and one or more compensation steps did not complete.",
+        originalError: error?.message || error,
+        invoiceIds: previousOrderId ? [previousOrderId] : [],
+        creditNoteId: req.params.id,
+        clientIds: changedCustomerCredit.map(change => change.clientId),
+        productIds: changedStock.map(change => change.productId),
+        recoveryFailures: rollbackFailures
+      });
     }
     console.error("Credit note cancellation error:", error);
     return res.status(getCreditNoteErrorStatus(error)).json({ message: error.message });

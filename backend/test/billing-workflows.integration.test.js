@@ -641,6 +641,129 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(failedNotes.length, 0, "Failed Credit Note creation must not leave an orphan record.");
     assert.equal(round2(clientAfterFailure.creditBalance), 10, "A failed stock-return Credit Note must not change customer credit.");
 
+
+    // Inject a late Credit Note edit failure in standalone mode after stock, customer credit,
+    // and invoice summary writes have occurred; compensation must restore all persisted state.
+    const standalonePostedNumber = `ITSTAND-${suffix}`;
+    const standalonePosted = await request("/credit-notes", {
+      method: "POST",
+      body: {
+        creditNoteNumber: standalonePostedNumber,
+        creditNoteDate: "2026-10-07T14:00:00.000Z",
+        reason: "Sales Return",
+        creditMode: "ITEM",
+        originalOrderId: stockInvoiceId,
+        stockAffecting: true,
+        items: [{ sourceSubOrderId: stockSubOrderId, quantity: 1 }],
+        settlement: {
+          adjustmentType: "Outstanding",
+          adjustmentAmount: 0,
+          refundAmount: 0,
+          customerCreditAmount: 10
+        },
+        note: "Original note value"
+      }
+    });
+    assert.equal(standalonePosted.response.status, 201, JSON.stringify(standalonePosted.payload));
+    const standalonePostedId = standalonePosted.payload.creditNote._id;
+
+    let editFailureInjected = false;
+    const originalCreditNoteFindOneAndUpdate = CreditNote.findOneAndUpdate;
+    CreditNote.findOneAndUpdate = function (filter, update, options) {
+      if (
+        !editFailureInjected &&
+        String(filter?._id) === String(standalonePostedId) &&
+        update?.$set?.note === "Injected edit failure"
+      ) {
+        editFailureInjected = true;
+        return Promise.resolve(null);
+      }
+      return originalCreditNoteFindOneAndUpdate.apply(this, arguments);
+    };
+
+    let failedCreditNoteEdit;
+    try {
+      failedCreditNoteEdit = await withStandaloneFallback(() => request(`/credit-notes/${standalonePostedId}`, {
+        method: "PUT",
+        body: {
+          creditNoteNumber: standalonePostedNumber,
+          creditNoteDate: "2026-10-07T15:00:00.000Z",
+          reason: "Sales Return",
+          creditMode: "ITEM",
+          stockAffecting: true,
+          items: [{ sourceSubOrderId: stockSubOrderId, quantity: 1 }],
+          settlement: {
+            adjustmentType: "Outstanding",
+            adjustmentAmount: 0,
+            refundAmount: 0,
+            customerCreditAmount: 10
+          },
+          note: "Injected edit failure"
+        }
+      }));
+    } finally {
+      CreditNote.findOneAndUpdate = originalCreditNoteFindOneAndUpdate;
+    }
+
+    assert.equal(editFailureInjected, true, "The edit must fail after earlier financial writes.");
+    assert.equal(failedCreditNoteEdit.response.status, 409, JSON.stringify(failedCreditNoteEdit.payload));
+    let [noteAfterEditFailure, orderAfterEditFailure, productAfterEditFailure, clientAfterEditFailure] = await Promise.all([
+      CreditNote.findOne({ _id: standalonePostedId, createdBy: ownerId }).lean(),
+      Order.findOne({ _id: stockInvoiceId, createdBy: ownerId }).lean(),
+      Product.findOne({ _id: stockProduct._id, createdBy: ownerId }).lean(),
+      Client.findOne({ _id: clientId, createdBy: ownerId }).lean()
+    ]);
+    assert.equal(noteAfterEditFailure.status, "Posted");
+    assert.equal(noteAfterEditFailure.note, "Original note value");
+    assert.equal(round2(noteAfterEditFailure.totals.grandTotal), 10);
+    assert.equal(orderAfterEditFailure.creditNoteCount, 1);
+    assert.equal(round2(orderAfterEditFailure.creditAppliedAmount || 0), 0);
+    assert.equal(round2(orderAfterEditFailure.dueAmount), 20);
+    assert.equal(productAfterEditFailure.quantity, 21);
+    assert.equal(round2(clientAfterEditFailure.creditBalance), 20);
+    assert.equal(round2(clientAfterEditFailure.creditBalanceAdjustment), 10);
+
+    // Inject a cancellation write failure after the stock, customer credit, and invoice writes.
+    let cancellationFailureInjected = false;
+    CreditNote.findOneAndUpdate = function (filter, update, options) {
+      if (
+        !cancellationFailureInjected &&
+        String(filter?._id) === String(standalonePostedId) &&
+        update?.$set?.status === "Cancelled"
+      ) {
+        cancellationFailureInjected = true;
+        return Promise.resolve(null);
+      }
+      return originalCreditNoteFindOneAndUpdate.apply(this, arguments);
+    };
+
+    let failedCreditNoteCancellation;
+    try {
+      failedCreditNoteCancellation = await withStandaloneFallback(() => request(`/credit-notes/${standalonePostedId}/cancel`, {
+        method: "POST",
+        body: { reason: "Injected cancellation failure" }
+      }));
+    } finally {
+      CreditNote.findOneAndUpdate = originalCreditNoteFindOneAndUpdate;
+    }
+
+    assert.equal(cancellationFailureInjected, true, "The cancellation must fail after earlier financial writes.");
+    assert.equal(failedCreditNoteCancellation.response.status, 409, JSON.stringify(failedCreditNoteCancellation.payload));
+    const [noteAfterCancelFailure, orderAfterCancelFailure, productAfterCancelFailure, clientAfterCancelFailure] = await Promise.all([
+      CreditNote.findOne({ _id: standalonePostedId, createdBy: ownerId }).lean(),
+      Order.findOne({ _id: stockInvoiceId, createdBy: ownerId }).lean(),
+      Product.findOne({ _id: stockProduct._id, createdBy: ownerId }).lean(),
+      Client.findOne({ _id: clientId, createdBy: ownerId }).lean()
+    ]);
+    assert.equal(noteAfterCancelFailure.status, "Posted");
+    assert.equal(noteAfterCancelFailure.note, "Original note value");
+    assert.equal(orderAfterCancelFailure.creditNoteCount, 1);
+    assert.equal(round2(orderAfterCancelFailure.creditAppliedAmount || 0), 0);
+    assert.equal(round2(orderAfterCancelFailure.dueAmount), 20);
+    assert.equal(productAfterCancelFailure.quantity, 21);
+    assert.equal(round2(clientAfterCancelFailure.creditBalance), 20);
+    assert.equal(round2(clientAfterCancelFailure.creditBalanceAdjustment), 10);
+
     const availableCredit = await request(`/credit-notes/available/${orderId}`);
     assert.equal(availableCredit.response.status, 200, JSON.stringify(availableCredit.payload));
     assert.equal(round2(availableCredit.payload.order.previouslyCreditedTotal), 0);

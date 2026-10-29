@@ -458,10 +458,21 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     // Race an invoice's non-financial edit against Credit Note posting. Even
     // when the edit does not alter invoice totals, its stale save must not erase
     // the newer invoice revision that records the posted Credit Note.
+    const creditRaceClientResponse = await request("/clients", {
+      method: "POST",
+      body: {
+        name: "Invoice Edit Race Customer " + suffix,
+        companyName: "Invoice Edit Race Business " + suffix,
+        phone: "9999999997"
+      }
+    });
+    assert.equal(creditRaceClientResponse.response.status, 201, JSON.stringify(creditRaceClientResponse.payload));
+    const creditRaceClientId = creditRaceClientResponse.payload._id;
+
     const staleCreditNoteInvoiceResponse = await request("/order/orders/create", {
       method: "POST",
       body: {
-        clientId,
+        clientId: creditRaceClientId,
         orderDate: "2026-10-06T15:00:00.000Z",
         paymentTerms: "30",
         taxPercentage: 0,
@@ -538,7 +549,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
 
     const [invoiceAfterCreditNoteRace, clientAfterCreditNoteRace, noteAfterCreditNoteRace] = await Promise.all([
       Order.findOne({ _id: staleCreditNoteInvoiceId, createdBy: ownerId }).lean(),
-      Client.findOne({ _id: clientId, createdBy: ownerId }).lean(),
+      Client.findOne({ _id: creditRaceClientId, createdBy: ownerId }).lean(),
       CreditNote.findOne({ creditNoteNumber: staleCreditNoteNumber, createdBy: ownerId }).lean()
     ]);
     assert.equal(round2(invoiceAfterCreditNoteRace.roundOffFinalRevenue), 200);
@@ -548,7 +559,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(invoiceAfterCreditNoteRace.note, "", "The rejected stale edit must not persist its note.");
     assert.equal(noteAfterCreditNoteRace.status, "Posted");
     assert.equal(round2(noteAfterCreditNoteRace.totals.grandTotal), 22);
-    assert.ok(round2(clientAfterCreditNoteRace.creditBalance) >= 22, "The posted Credit Note must remain reflected in customer credit.");
+    assert.equal(round2(clientAfterCreditNoteRace.creditBalance), 22, "The posted Credit Note must remain reflected in its isolated customer credit balance.");
 
 
 

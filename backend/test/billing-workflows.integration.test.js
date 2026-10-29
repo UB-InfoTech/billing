@@ -1327,6 +1327,13 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     });
     assert.equal(shortResolutionNote.response.status, 400, "Resolution requires a meaningful reconciliation note.");
 
+    const correctedRecoveryProduct = await Product.findOneAndUpdate(
+      { _id: recoveryProduct._id, createdBy: ownerId },
+      { $set: { quantity: 10 } },
+      { new: true }
+    );
+    assert.equal(correctedRecoveryProduct.quantity, 10, "Correct the deliberately introduced stock discrepancy before resolving its alert.");
+
     const resolvedRecoveryIssue = await request("/financial-recovery-issues/" + recoveryIssue._id + "/resolve", {
       method: "PATCH",
       body: { resolutionNote: "Physical stock discrepancy was investigated and corrected." }
@@ -1342,6 +1349,87 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
       false,
       "A reconciled issue must no longer appear in the open queue."
     );
+
+    // Bulk-payment recovery also needs a durable issue if one invoice cannot be
+    // compensated after a later batch write fails.
+    const bulkRecoveryReference = "ITBULKREC-" + suffix;
+    const originalPaymentLogSaveForRecovery = PaymentLog.prototype.save;
+    const originalOrderUpdateForRecovery = Order.findOneAndUpdate;
+    let recoveryPaymentLogFailureInjected = false;
+    let bulkCompensationFailureInjected = false;
+
+    PaymentLog.prototype.save = function (...args) {
+      if (this.reference === bulkRecoveryReference) {
+        recoveryPaymentLogFailureInjected = true;
+        return Promise.reject(new Error("Injected bulk PaymentLog persistence failure."));
+      }
+      return originalPaymentLogSaveForRecovery.apply(this, args);
+    };
+
+    Order.findOneAndUpdate = function (filter, update, options) {
+      if (
+        String(filter?._id || "") === String(fallbackInvoiceOneId)
+        && filter?.["payments._id"]
+        && update?.$pull?.payments
+      ) {
+        bulkCompensationFailureInjected = true;
+        return Promise.resolve(null);
+      }
+      return originalOrderUpdateForRecovery.apply(this, arguments);
+    };
+
+    let failedBulkRecovery;
+    try {
+      failedBulkRecovery = await withStandaloneFallback(() => request("/order/orders/payments/bulk", {
+        method: "PUT",
+        body: {
+          method: "UPI",
+          amount: 20,
+          amountReference: bulkRecoveryReference,
+          splitType: "custom",
+          paymentDate: "2026-10-08T17:00:00.000Z",
+          updates: [
+            { orderId: fallbackInvoiceOneId, amount: 10 },
+            { orderId: fallbackInvoiceTwoId, amount: 10 }
+          ]
+        }
+      }));
+    } finally {
+      PaymentLog.prototype.save = originalPaymentLogSaveForRecovery;
+      Order.findOneAndUpdate = originalOrderUpdateForRecovery;
+    }
+
+    assert.equal(recoveryPaymentLogFailureInjected, true, "The bulk batch log must fail after invoice allocations.");
+    assert.equal(bulkCompensationFailureInjected, true, "One invoice allocation's compensation must fail.");
+    assert.equal(failedBulkRecovery.response.status, 500, JSON.stringify(failedBulkRecovery.payload));
+
+    const [bulkRecoveryOrderOne, bulkRecoveryOrderTwo, missingBulkLog, reservedRecoveryReference] = await Promise.all([
+      Order.findOne({ _id: fallbackInvoiceOneId, createdBy: ownerId }).lean(),
+      Order.findOne({ _id: fallbackInvoiceTwoId, createdBy: ownerId }).lean(),
+      PaymentLog.findOne({ userId: ownerId, reference: bulkRecoveryReference }).lean(),
+      PaymentReference.findOne({ createdBy: ownerId, reference: bulkRecoveryReference }).lean()
+    ]);
+    assert.equal(round2(bulkRecoveryOrderOne.paidAmount), 60, "The unresolved allocation must remain visible for reconciliation.");
+    assert.equal(round2(bulkRecoveryOrderOne.dueAmount), 40);
+    assert.equal(bulkRecoveryOrderOne.payments.length, 2);
+    assert.equal(round2(bulkRecoveryOrderTwo.paidAmount), 50, "The other invoice's successful compensation must be complete.");
+    assert.equal(round2(bulkRecoveryOrderTwo.dueAmount), 50);
+    assert.equal(bulkRecoveryOrderTwo.payments.length, 1);
+    assert.equal(missingBulkLog, null, "The failed batch log must not be persisted.");
+    assert.ok(reservedRecoveryReference, "Keep the reference reserved when rollback is incomplete to prevent unsafe reuse.");
+
+    const bulkRecoveryIssuesResponse = await request("/financial-recovery-issues?status=Open");
+    assert.equal(bulkRecoveryIssuesResponse.response.status, 200);
+    const bulkRecoveryIssue = bulkRecoveryIssuesResponse.payload.issues.find(issue =>
+      issue.operation === "bulk-payment"
+      && (issue.invoiceIds || []).some(id => String(id) === String(fallbackInvoiceOneId))
+    );
+    assert.ok(bulkRecoveryIssue, "An incomplete bulk rollback must produce an open recovery issue.");
+    assert.ok((bulkRecoveryIssue.recoveryFailures || []).some(failure =>
+      failure.step === "remove-invoice-payment"
+      && String(failure.entityId) === String(fallbackInvoiceOneId)
+    ));
+
 
   } finally {
     if (server) await new Promise(resolve => server.close(resolve));

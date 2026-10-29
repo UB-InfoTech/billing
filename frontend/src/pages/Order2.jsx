@@ -776,7 +776,6 @@ function Order2() {
         setFormData(order);
         setEditPayment(null);
         setPaymentFeedback(null);
-        setPaymentSubmitting(false);
         setNewPayment({
             amount: "",
             method: "Cash",
@@ -2040,7 +2039,7 @@ const styles = {
                             <div className="modal-content orders-fullscreen-content">
                                 <div className="modal-header">
                                     <h5 id="payment-modal-title" className="modal-title">Manage Payments — {editingOrder?.companyName || "Customer"}</h5>
-                                    <button type="button" className="btn-close" onClick={() => {setShowPaymentModal(false);setPaymentFeedback(null);}} aria-label="Close payment manager"></button>
+                                    <button type="button" className="btn-close" onClick={() => {if(!paymentSubmitting){setShowPaymentModal(false);setPaymentFeedback(null);}}} aria-label="Close payment manager" disabled={paymentSubmitting}></button>
                                 </div>
                                 <div className="modal-body orders-fullscreen-body">
 

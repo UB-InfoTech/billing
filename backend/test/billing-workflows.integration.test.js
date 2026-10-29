@@ -357,6 +357,104 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(round2(clientAfterCancellationRace.creditBalance), expectedCompetingBalance, "The customer credit must be reversed only once.");
     assert.equal(round2(clientAfterCancellationRace.creditBalanceAdjustment), competingAdjustmentSucceeded ? 13 : 0, "Cancellation must not change the independent manual adjustment.");
 
+    // Pause a stale invoice edit immediately before save, post a payment, then
+    // release the save. It must conflict rather than overwrite the due calculated
+    // from the pre-payment snapshot.
+    const staleEditInvoiceResponse = await request("/order/orders/create", {
+      method: "POST",
+      body: {
+        clientId,
+        orderDate: "2026-10-06T14:00:00.000Z",
+        paymentTerms: "30",
+        taxPercentage: 0,
+        discountRate: 0,
+        subOrders: [{
+          orderName: "Invoice edit and payment race",
+          qtyUnit: "PCS",
+          quantity: 2,
+          unitPrice: 100
+        }]
+      }
+    });
+    assert.equal(staleEditInvoiceResponse.response.status, 201, JSON.stringify(staleEditInvoiceResponse.payload));
+    const staleEditInvoiceId = staleEditInvoiceResponse.payload.order._id;
+
+    const originalOrderSave = Order.prototype.save;
+    let invoiceEditSavePaused = false;
+    let signalInvoiceEditSaveReached;
+    const invoiceEditSaveReached = new Promise(resolve => {
+      signalInvoiceEditSaveReached = resolve;
+    });
+    let releaseInvoiceEditSave;
+    const invoiceEditSaveGate = new Promise(resolve => {
+      releaseInvoiceEditSave = resolve;
+    });
+    const invoiceEditSaveFailsafe = setTimeout(() => {
+      releaseInvoiceEditSave();
+      signalInvoiceEditSaveReached();
+    }, 3000);
+    invoiceEditSaveFailsafe.unref?.();
+
+    Order.prototype.save = function (...args) {
+      if (
+        !invoiceEditSavePaused
+        && String(this._id || "") === String(staleEditInvoiceId)
+        && !this.isNew
+      ) {
+        invoiceEditSavePaused = true;
+        signalInvoiceEditSaveReached();
+        return invoiceEditSaveGate.then(() => originalOrderSave.apply(this, args));
+      }
+      return originalOrderSave.apply(this, args);
+    };
+
+    let staleInvoiceEditResult;
+    let paymentDuringInvoiceEdit;
+    try {
+      const staleInvoiceEditPromise = request(`/order/orders/${staleEditInvoiceId}/update`, {
+        method: "PUT",
+        body: {
+          subOrders: [{
+            orderName: "Invoice edit and payment race",
+            qtyUnit: "PCS",
+            quantity: 2,
+            unitPrice: 80
+          }]
+        }
+      });
+      await invoiceEditSaveReached;
+      paymentDuringInvoiceEdit = await request(`/order/orders/${staleEditInvoiceId}/pay`, {
+        method: "POST",
+        body: {
+          amount: 100,
+          method: "UPI",
+          amountReference: `ITEDITPAY-${suffix}`,
+          paymentDate: "2026-10-06T14:30:00.000Z"
+        }
+      });
+      releaseInvoiceEditSave();
+      staleInvoiceEditResult = await staleInvoiceEditPromise;
+    } finally {
+      clearTimeout(invoiceEditSaveFailsafe);
+      releaseInvoiceEditSave();
+      Order.prototype.save = originalOrderSave;
+    }
+
+    assert.equal(invoiceEditSavePaused, true, "The invoice edit must pause after reading the stale invoice and before saving.");
+    assert.equal(paymentDuringInvoiceEdit.response.status, 200, JSON.stringify(paymentDuringInvoiceEdit.payload));
+    assert.equal(round2(paymentDuringInvoiceEdit.payload.order.dueAmount), 100);
+    assert.equal(staleInvoiceEditResult.response.status, 409, JSON.stringify(staleInvoiceEditResult.payload));
+
+    const staleEditInvoiceAfterRace = await Order.findOne({
+      _id: staleEditInvoiceId,
+      createdBy: ownerId
+    }).lean();
+    assert.equal(round2(staleEditInvoiceAfterRace.roundOffFinalRevenue), 200, "The rejected edit must not persist its revised invoice total.");
+    assert.equal(round2(staleEditInvoiceAfterRace.paidAmount), 100);
+    assert.equal(round2(staleEditInvoiceAfterRace.dueAmount), 100, "The due must still equal invoice total minus posted payments.");
+    assert.equal(staleEditInvoiceAfterRace.payments.length, 1);
+    assert.equal(staleEditInvoiceAfterRace.paymentStatus, "Partial");
+
 
     // Two overlapping payment requests must not spend the same observed due balance.
     const concurrentInvoiceResponse = await request("/order/orders/create", {

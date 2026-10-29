@@ -33,6 +33,24 @@ const isReplicaSetAvailable=()=>{
 };
 
 const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
+
+const ORDER_SAVE_GUARD_FIELDS=["updatedAt","dueAmount","paidAmount","creditAppliedAmount","creditNoteCount"];
+
+// Guard document saves with the financial snapshot observed before editing.
+// Payments and Credit Notes update these values atomically, so a stale form save
+// must conflict instead of recalculating the due from old payment history.
+function applyOrderSaveConcurrencyGuard(order,createdBy){
+  const guard={createdBy};
+  for(const field of ORDER_SAVE_GUARD_FIELDS){
+    const defaulted=field!=="updatedAt"
+      &&typeof order.$isDefault==="function"
+      &&order.$isDefault(field);
+    guard[field]=order[field]===undefined||defaulted
+      ?{$exists:false}
+      :order[field];
+  }
+  order.$where=guard;
+}
 const userId=req=>req.user.id;
 const idOrNull=v=>v&&mongoose.isValidObjectId(v)?v:null;
 
@@ -308,11 +326,20 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
       }
     }
 
+    applyOrderSaveConcurrencyGuard(order,userId(req));
     await order.save();
     const newClient=String(order.clientId||"");
     if(oldClient)await syncClientDataSafely(oldClient);if(newClient&&newClient!==oldClient)await syncClientDataSafely(newClient);
     res.json({success:true,message:"Order updated successfully",order});
-  }catch(error){res.status(400).json({success:false,message:error.message});}
+  }catch(error){
+    const staleSave=error?.name==="DocumentNotFoundError";
+    return res.status(error.status||(staleSave?409:400)).json({
+      success:false,
+      message:staleSave
+        ?"This invoice changed while you were editing it. Refresh the invoice and try again."
+        :error.message
+    });
+  }
 });
 
 router.patch("/orders/:id/upd",auth,async(req,res)=>{
@@ -329,10 +356,18 @@ router.patch("/orders/:id/upd",auth,async(req,res)=>{
     order.statusHistory=Array.isArray(order.statusHistory)?order.statusHistory:[];
     order.statusHistory.push({status:req.body.status,timestamp:new Date()});
     await applyWorkflows({resource:"orders",event:"record_updated",doc:order,createdBy:userId(req)});
+    applyOrderSaveConcurrencyGuard(order,userId(req));
     await order.save();
     await syncClientDataSafely(order.clientId,"an invoice status update");
     return res.json({message:"Order status updated",order});
-  }catch(error){res.status(error.status||400).json({message:error.message});}
+  }catch(error){
+    const staleSave=error?.name==="DocumentNotFoundError";
+    return res.status(error.status||(staleSave?409:400)).json({
+      message:staleSave
+        ?"This invoice changed while its status was being updated. Refresh the invoice and try again."
+        :error.message
+    });
+  }
 });
 
 router.delete("/orders/:id/delete",auth,async(req,res)=>{

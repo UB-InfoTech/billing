@@ -454,6 +454,102 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(round2(staleEditInvoiceAfterRace.dueAmount), 100, "The due must still equal invoice total minus posted payments.");
     assert.equal(staleEditInvoiceAfterRace.payments.length, 1);
     assert.equal(staleEditInvoiceAfterRace.paymentStatus, "Partial");
+    
+    // Race an invoice's non-financial edit against Credit Note posting. Even
+    // when the edit does not alter invoice totals, its stale save must not erase
+    // the newer invoice revision that records the posted Credit Note.
+    const staleCreditNoteInvoiceResponse = await request("/order/orders/create", {
+      method: "POST",
+      body: {
+        clientId,
+        orderDate: "2026-10-06T15:00:00.000Z",
+        paymentTerms: "30",
+        taxPercentage: 0,
+        discountRate: 0,
+        subOrders: [{
+          orderName: "Invoice edit and Credit Note race",
+          qtyUnit: "PCS",
+          quantity: 2,
+          unitPrice: 100
+        }]
+      }
+    });
+    assert.equal(staleCreditNoteInvoiceResponse.response.status, 201, JSON.stringify(staleCreditNoteInvoiceResponse.payload));
+    const staleCreditNoteInvoiceId = staleCreditNoteInvoiceResponse.payload.order._id;
+    const staleCreditNoteNumber = "CE" + suffix;
+
+    const originalCreditRaceSave = Order.prototype.save;
+    let creditRaceEditPaused = false;
+    let signalCreditRaceSaveReached;
+    const creditRaceSaveReached = new Promise(resolve => { signalCreditRaceSaveReached = resolve; });
+    let releaseCreditRaceSave;
+    const creditRaceSaveGate = new Promise(resolve => { releaseCreditRaceSave = resolve; });
+    const creditRaceFailsafe = setTimeout(() => {
+      releaseCreditRaceSave();
+      signalCreditRaceSaveReached();
+    }, 3000);
+    creditRaceFailsafe.unref?.();
+
+    Order.prototype.save = function (...args) {
+      if (!creditRaceEditPaused && String(this._id || "") === String(staleCreditNoteInvoiceId) && !this.isNew) {
+        creditRaceEditPaused = true;
+        signalCreditRaceSaveReached();
+        return creditRaceSaveGate.then(() => originalCreditRaceSave.apply(this, args));
+      }
+      return originalCreditRaceSave.apply(this, args);
+    };
+
+    let staleCreditNoteEditResult;
+    let competingCreditNoteResult;
+    try {
+      const staleCreditNoteEditPromise = request("/order/orders/" + staleCreditNoteInvoiceId + "/update", {
+        method: "PUT",
+        body: { note: "Stale edit must not replace the invoice version." }
+      });
+      await creditRaceSaveReached;
+      competingCreditNoteResult = await request("/credit-notes", {
+        method: "POST",
+        body: {
+          creditNoteNumber: staleCreditNoteNumber,
+          creditNoteDate: "2026-10-06T15:30:00.000Z",
+          reason: "Other",
+          creditMode: "AMOUNT",
+          originalOrderId: staleCreditNoteInvoiceId,
+          manualCredit: { taxableAmount: 20, taxRate: 10 },
+          settlement: {
+            adjustmentType: "Outstanding",
+            adjustmentAmount: 0,
+            refundAmount: 0,
+            customerCreditAmount: 22
+          }
+        }
+      });
+      releaseCreditRaceSave();
+      staleCreditNoteEditResult = await staleCreditNoteEditPromise;
+    } finally {
+      clearTimeout(creditRaceFailsafe);
+      releaseCreditRaceSave();
+      Order.prototype.save = originalCreditRaceSave;
+    }
+
+    assert.equal(creditRaceEditPaused, true, "The invoice edit must pause before the competing Credit Note is posted.");
+    assert.equal(competingCreditNoteResult.response.status, 201, JSON.stringify(competingCreditNoteResult.payload));
+    assert.equal(staleCreditNoteEditResult.response.status, 409, JSON.stringify(staleCreditNoteEditResult.payload));
+
+    const [invoiceAfterCreditNoteRace, clientAfterCreditNoteRace, noteAfterCreditNoteRace] = await Promise.all([
+      Order.findOne({ _id: staleCreditNoteInvoiceId, createdBy: ownerId }).lean(),
+      Client.findOne({ _id: clientId, createdBy: ownerId }).lean(),
+      CreditNote.findOne({ creditNoteNumber: staleCreditNoteNumber, createdBy: ownerId }).lean()
+    ]);
+    assert.equal(round2(invoiceAfterCreditNoteRace.roundOffFinalRevenue), 200);
+    assert.equal(invoiceAfterCreditNoteRace.creditNoteCount, 1, "The posted Credit Note must remain attached to the invoice.");
+    assert.equal(round2(invoiceAfterCreditNoteRace.creditAppliedAmount || 0), 0);
+    assert.equal(round2(invoiceAfterCreditNoteRace.dueAmount), 200);
+    assert.equal(invoiceAfterCreditNoteRace.note, "", "The rejected stale edit must not persist its note.");
+    assert.equal(noteAfterCreditNoteRace.status, "Posted");
+    assert.equal(round2(noteAfterCreditNoteRace.totals.grandTotal), 22);
+    assert.ok(round2(clientAfterCreditNoteRace.creditBalance) >= 22, "The posted Credit Note must remain reflected in customer credit.");
+
 
 
     // Two overlapping payment requests must not spend the same observed due balance.

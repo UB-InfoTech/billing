@@ -15,6 +15,7 @@ const CreditNote = require("../models/CreditNote");
 const PaymentReference = require("../models/PaymentReference");
 const PaymentLog = require("../models/PaymentLog2");
 const CreditNoteCounter = require("../models/CreditNoteCounter");
+const FinancialRecoveryIssue = require("../models/FinancialRecoveryIssue");
 
 const mongoUri = process.env.MONGO_URI;
 const round2 = value => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
@@ -43,7 +44,8 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
       CreditNote.init(),
       PaymentReference.init(),
       PaymentLog.init(),
-      CreditNoteCounter.init()
+      CreditNoteCounter.init(),
+      FinancialRecoveryIssue.init()
     ]);
 
     ownerId = new mongoose.Types.ObjectId();
@@ -1224,6 +1226,123 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     const availableCredit = await request(`/credit-notes/available/${orderId}`);
     assert.equal(availableCredit.response.status, 200, JSON.stringify(availableCredit.payload));
     assert.equal(round2(availableCredit.payload.order.previouslyCreditedTotal), 0);
+
+    // A failed compensation must create a durable, owner-scoped recovery issue.
+    const recoveryProduct = await Product.create({
+      productName: "Recovery Product " + suffix,
+      productCode: "ITREC-" + suffix,
+      rate: 10,
+      quantity: 10,
+      createdBy: ownerId
+    });
+    const recoveryInvoiceResponse = await request("/order/orders/create", {
+      method: "POST",
+      body: {
+        clientId,
+        orderDate: "2026-10-08T16:00:00.000Z",
+        paymentTerms: "30",
+        taxPercentage: 0,
+        discountRate: 0,
+        subOrders: [{
+          productId: String(recoveryProduct._id),
+          orderName: "Recovery log item",
+          qtyUnit: "PCS",
+          quantity: 2,
+          unitPrice: 10
+        }]
+      }
+    });
+    assert.equal(recoveryInvoiceResponse.response.status, 201, JSON.stringify(recoveryInvoiceResponse.payload));
+    const recoveryInvoiceId = recoveryInvoiceResponse.payload.order._id;
+    const recoverySubOrderId = recoveryInvoiceResponse.payload.order.subOrders[0]._id;
+
+    const originalRecoveryProductUpdate = Product.findOneAndUpdate;
+    let stockCompensationFailureInjected = false;
+    Product.findOneAndUpdate = function (filter, update, options) {
+      if (
+        !stockCompensationFailureInjected
+        && String(filter?._id || "") === String(recoveryProduct._id)
+        && Number(update?.$inc?.quantity) < 0
+      ) {
+        stockCompensationFailureInjected = true;
+        return Promise.reject(new Error("Injected stock compensation failure for recovery logging."));
+      }
+      return originalRecoveryProductUpdate.apply(this, arguments);
+    };
+
+    let failedRecoveryCreditNote;
+    try {
+      failedRecoveryCreditNote = await withStandaloneFallback(() => request("/credit-notes", {
+        method: "POST",
+        body: {
+          creditNoteNumber,
+          creditNoteDate: "2026-10-08T16:30:00.000Z",
+          reason: "Sales Return",
+          creditMode: "ITEM",
+          originalOrderId: recoveryInvoiceId,
+          stockAffecting: true,
+          items: [{ sourceSubOrderId: recoverySubOrderId, quantity: 1 }],
+          settlement: {
+            adjustmentType: "Outstanding",
+            adjustmentAmount: 0,
+            refundAmount: 10,
+            refundMethod: "Cash",
+            customerCreditAmount: 0
+          }
+        }
+      }));
+    } finally {
+      Product.findOneAndUpdate = originalRecoveryProductUpdate;
+    }
+
+    assert.equal(stockCompensationFailureInjected, true, "The stock rollback failure must be injected after the Credit Note write fails.");
+    assert.equal(failedRecoveryCreditNote.response.status, 409, JSON.stringify(failedRecoveryCreditNote.payload));
+    const recoveryProductAfterFailure = await Product.findOne({ _id: recoveryProduct._id, createdBy: ownerId }).lean();
+    assert.equal(recoveryProductAfterFailure.quantity, 11, "The injected failed compensation should leave the known stock discrepancy for investigation.");
+
+    const ownerRecoveryIssuesResponse = await request("/financial-recovery-issues?status=Open");
+    assert.equal(ownerRecoveryIssuesResponse.response.status, 200, JSON.stringify(ownerRecoveryIssuesResponse.payload));
+    const recoveryIssue = ownerRecoveryIssuesResponse.payload.issues.find(issue =>
+      issue.operation === "credit-note-create"
+      && (issue.invoiceIds || []).some(id => String(id) === String(recoveryInvoiceId))
+    );
+    assert.ok(recoveryIssue, "The failed compensation must persist an open recovery issue for the affected invoice.");
+    assert.equal(recoveryIssue.status, "Open");
+    assert.ok((recoveryIssue.productIds || []).some(id => String(id) === String(recoveryProduct._id)));
+    assert.ok((recoveryIssue.recoveryFailures || []).some(failure =>
+      failure.step === "restore-stock" && failure.message.includes("Injected stock compensation failure")
+    ));
+
+    const otherOwnerRecoveryIssues = await request("/financial-recovery-issues?status=All", { token: otherOwnerToken });
+    assert.equal(otherOwnerRecoveryIssues.response.status, 200, JSON.stringify(otherOwnerRecoveryIssues.payload));
+    assert.equal(
+      otherOwnerRecoveryIssues.payload.issues.some(issue => String(issue._id) === String(recoveryIssue._id)),
+      false,
+      "Recovery issues must not leak across business owners."
+    );
+
+    const shortResolutionNote = await request("/financial-recovery-issues/" + recoveryIssue._id + "/resolve", {
+      method: "PATCH",
+      body: { resolutionNote: "fixed" }
+    });
+    assert.equal(shortResolutionNote.response.status, 400, "Resolution requires a meaningful reconciliation note.");
+
+    const resolvedRecoveryIssue = await request("/financial-recovery-issues/" + recoveryIssue._id + "/resolve", {
+      method: "PATCH",
+      body: { resolutionNote: "Physical stock discrepancy was investigated and corrected." }
+    });
+    assert.equal(resolvedRecoveryIssue.response.status, 200, JSON.stringify(resolvedRecoveryIssue.payload));
+    assert.equal(resolvedRecoveryIssue.payload.issue.status, "Resolved");
+    assert.equal(resolvedRecoveryIssue.payload.issue.resolvedBy, String(ownerId));
+
+    const openRecoveryIssuesAfterResolve = await request("/financial-recovery-issues?status=Open");
+    assert.equal(openRecoveryIssuesAfterResolve.response.status, 200);
+    assert.equal(
+      openRecoveryIssuesAfterResolve.payload.issues.some(issue => String(issue._id) === String(recoveryIssue._id)),
+      false,
+      "A reconciled issue must no longer appear in the open queue."
+    );
+
   } finally {
     if (server) await new Promise(resolve => server.close(resolve));
     if (mongoose.connection.readyState === 1 && ownerId) {
@@ -1233,6 +1352,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
         Client.deleteMany({ createdBy: ownerId }),
         Product.deleteMany({ createdBy: ownerId }),
         Profile.deleteMany({ createdBy: String(ownerId) }),
+        FinancialRecoveryIssue.deleteMany({ createdBy: ownerId }),
         PaymentReference.deleteMany({ createdBy: ownerId }),
         PaymentLog.deleteMany({ userId: ownerId })
       ]);

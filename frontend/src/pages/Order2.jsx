@@ -113,6 +113,8 @@ function Order2() {
     const [payments, setPayments] = useState([]);
     const [editPayment, setEditPayment] = useState(null);
     const [newPayment, setNewPayment] = useState({ amount: "", method: "Cash", amountReference: "", paymentDate: formatDateInput(new Date()) });
+    const [paymentSubmitting,setPaymentSubmitting]=useState(false);
+    const [paymentFeedback,setPaymentFeedback]=useState(null);
     const authConfig = () => ({ headers: { "x-auth-token": localStorage.getItem("token") || "" } });
 
     // const date = new DateObject()
@@ -773,6 +775,8 @@ function Order2() {
         setEditingOrder(order);
         setFormData(order);
         setEditPayment(null);
+        setPaymentFeedback(null);
+        setPaymentSubmitting(false);
         setNewPayment({
             amount: "",
             method: "Cash",
@@ -829,31 +833,37 @@ function Order2() {
     const addPayment = async (orderId) => {
         const amount = Number(newPayment.amount);
         const due = Number(editingOrder?.dueAmount || 0);
+        const showPaymentError = message => setPaymentFeedback({type:"danger",message});
 
         if(editingOrder?.status==="Cancelled"){
-            alert("This invoice is cancelled. Change its status before recording another payment.");
+            showPaymentError("This invoice is cancelled. Change its status before recording another payment.");
             return;
         }
 
         if (!Number.isFinite(amount) || amount <= 0) {
-            alert("❌ Enter a valid payment amount.");
+            showPaymentError("Enter a payment amount greater than ₹0.00.");
             return;
         }
-        // Match the API's exact currency-cent validation. A one-paise
-        // tolerance here would only let the user submit a payment the server
-        // must reject.
+        // Keep the same cent-level limit as the API so a valid-looking
+        // payment is not submitted when it exceeds the current due balance.
         if (Math.round(amount * 100) > Math.round(due * 100)) {
-            alert(`Payment cannot exceed the current due balance of ₹${due.toFixed(2)}.`);
+            showPaymentError(`Payment cannot exceed the current due balance of ₹${due.toFixed(2)}.`);
+            return;
+        }
+        if (!newPayment.paymentDate) {
+            showPaymentError("Choose the date the payment was received.");
             return;
         }
 
+        setPaymentSubmitting(true);
+        setPaymentFeedback(null);
         try {
             const response = await axios.post(
                 `${linkone}/api/order/orders/${orderId}/pay`,
                 {
                     ...newPayment,
                     amount,
-                    paymentDate: newPayment.paymentDate || formatDateInput(new Date()),
+                    paymentDate: newPayment.paymentDate,
                 },
                 authConfig()
             );
@@ -861,21 +871,34 @@ function Order2() {
             setEditingOrder(response.data?.order || editingOrder);
             setNewPayment({ amount: "", method: "Cash", amountReference: "", paymentDate: formatDateInput(new Date()) });
             await fetchOrders();
-            alert("✅ Payment added successfully.");
+            setPaymentFeedback({type:"success",message:"Payment recorded successfully."});
         } catch (error) {
-            alert("❌ " + (error.response?.data?.message || error.message || "Unable to add payment."));
+            showPaymentError(error.response?.data?.message || error.message || "Unable to record the payment. Please try again.");
+        } finally {
+            setPaymentSubmitting(false);
         }
     };
 
     const updatePayment = async () => {
         if (!editingOrder || !editPayment) return;
+        const amount=Number(editPayment.amount);
+        if(!Number.isFinite(amount)||amount<=0){
+            setPaymentFeedback({type:"danger",message:"Enter a payment amount greater than ₹0.00."});
+            return;
+        }
+        if(!editPayment.paymentDate){
+            setPaymentFeedback({type:"danger",message:"Choose the date the payment was received."});
+            return;
+        }
+        setPaymentSubmitting(true);
+        setPaymentFeedback(null);
         try {
             const response = await axios.put(
                 `${linkone}/api/order/orders/${editingOrder._id}/payments/${editPayment._id}`,
                 {
                     ...editPayment,
-                    amount: Number(editPayment.amount),
-                    paymentDate: editPayment.paymentDate || formatDateInput(new Date()),
+                    amount,
+                    paymentDate: editPayment.paymentDate,
                 },
                 authConfig()
             );
@@ -883,9 +906,11 @@ function Order2() {
             setEditingOrder(response.data?.order || editingOrder);
             setEditPayment(null);
             await fetchOrders();
-            alert("✅ Payment updated successfully.");
+            setPaymentFeedback({type:"success",message:"Payment updated successfully."});
         } catch (error) {
-            alert("❌ Error updating payment: " + (error.response?.data?.message || error.message || "Unable to update payment."));
+            setPaymentFeedback({type:"danger",message:error.response?.data?.message || error.message || "Unable to update the payment. Please try again."});
+        } finally {
+            setPaymentSubmitting(false);
         }
     };
 
@@ -893,6 +918,8 @@ function Order2() {
         if (!editingOrder?._id || !paymentId) return;
         if (!window.confirm("Delete this payment? The invoice balance will be recalculated.")) return;
 
+        setPaymentSubmitting(true);
+        setPaymentFeedback(null);
         try {
             const response = await axios.delete(
                 `${linkone}/api/order/orders/${editingOrder._id}/payments/${paymentId}`,
@@ -901,9 +928,11 @@ function Order2() {
             await fetchPayments();
             setEditingOrder(response.data?.order || editingOrder);
             await fetchOrders();
-            alert("✅ Payment deleted successfully.");
+            setPaymentFeedback({type:"success",message:"Payment deleted and invoice balances recalculated."});
         } catch (error) {
-            alert("❌ Error deleting payment: " + (error.response?.data?.message || error.message || "Unable to delete payment."));
+            setPaymentFeedback({type:"danger",message:error.response?.data?.message || error.message || "Unable to delete the payment. Please try again."});
+        } finally {
+            setPaymentSubmitting(false);
         }
     };
 
@@ -2006,50 +2035,74 @@ const styles = {
 
             {
                 showPaymentModal && (
-                    <div className="modal fade show d-block orders-fullscreen-backdrop payments-fullscreen" tabIndex="-1">
+                    <div className="modal fade show d-block orders-fullscreen-backdrop payments-fullscreen" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="payment-modal-title">
                         <div className="modal-dialog orders-fullscreen-dialog">
                             <div className="modal-content orders-fullscreen-content">
                                 <div className="modal-header">
-                                    <h5 className="modal-title">Manage Payments — {editingOrder?.companyName || "Customer"}</h5>
-                                    <button type="button" className="btn-close" onClick={() => setShowPaymentModal(false)}></button>
+                                    <h5 id="payment-modal-title" className="modal-title">Manage Payments — {editingOrder?.companyName || "Customer"}</h5>
+                                    <button type="button" className="btn-close" onClick={() => {setShowPaymentModal(false);setPaymentFeedback(null);}} aria-label="Close payment manager"></button>
                                 </div>
                                 <div className="modal-body orders-fullscreen-body">
 
-                                    <h6>Add Payment :</h6>
-                                    <div className="d-flex gap-2 mb-2 orders-payment-entry-row">
-
-                                        <div className="col-3">
-                                            <ArithmeticInput
-                                                value={newPayment.amount}
-                                                onValueChange={value=>setNewPayment(prev=>({...prev,amount:value}))}
-                                                className="form-control"
-                                                placeholder="Amount"
-                                                min="0.01"
-                                                max={Number(editingOrder?.dueAmount || 0)}
-                                                step="0.01"
-                                                disabled={editingOrder?.status==="Cancelled"||Number(editingOrder?.dueAmount||0)<=0}
-                                                required
-                                            />
-                                            <div className="small text-muted mt-1">Due: ₹{Number(editingOrder?.dueAmount || 0).toFixed(2)}</div>
+                                    <section className="payment-entry-panel mb-4" aria-labelledby="payment-entry-title">
+                                        <div className="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+                                            <div>
+                                                <h6 id="payment-entry-title" className="mb-1">Record a payment</h6>
+                                                <p className="small text-secondary mb-0">Enter the amount received and how it was paid.</p>
+                                            </div>
+                                            <div className="payment-due-summary" aria-live="polite">
+                                                <span>Amount still due</span>
+                                                <strong>₹{Number(editingOrder?.dueAmount || 0).toFixed(2)}</strong>
+                                            </div>
                                         </div>
-                                        <div className="col-3">
-                                            <select className="form-select" value={newPayment.method} onChange={(e) => setNewPayment({ ...newPayment, method: e.target.value })}>
-                                                <option>Cash</option>
-                                                <option>Bank Transfer</option>
-                                                <option>UPI</option>
-                                                <option>Cheque</option>
-                                            </select>
+                                        <div className="row g-3 orders-payment-entry-row">
+                                            <div className="col-12 col-md-4">
+                                                <label htmlFor="payment-amount" className="form-label">Amount received (₹)<span className="text-danger ms-1" aria-hidden="true">*</span></label>
+                                                <ArithmeticInput
+                                                    id="payment-amount"
+                                                    aria-describedby="payment-amount-help"
+                                                    value={newPayment.amount}
+                                                    onValueChange={value=>{setPaymentFeedback(null);setNewPayment(prev=>({...prev,amount:value}));}}
+                                                    className="form-control"
+                                                    placeholder="Enter amount"
+                                                    min="0.01"
+                                                    max={Number(editingOrder?.dueAmount || 0)}
+                                                    step="0.01"
+                                                    disabled={paymentSubmitting||editingOrder?.status==="Cancelled"||Number(editingOrder?.dueAmount||0)<=0}
+                                                    required
+                                                />
+                                                <div id="payment-amount-help" className="form-text">Cannot exceed the current due balance.</div>
+                                            </div>
+                                            <div className="col-12 col-md-4">
+                                                <label htmlFor="payment-method" className="form-label">Payment method</label>
+                                                <select id="payment-method" className="form-select" value={newPayment.method} onChange={(e) => {setPaymentFeedback(null);setNewPayment(prev => ({ ...prev, method: e.target.value }));}} disabled={paymentSubmitting}>
+                                                    <option>Cash</option>
+                                                    <option>Bank Transfer</option>
+                                                    <option>UPI</option>
+                                                    <option>Cheque</option>
+                                                </select>
+                                            </div>
+                                            <div className="col-12 col-md-4">
+                                                <label htmlFor="payment-reference" className="form-label">Reference (optional)</label>
+                                                <input id="payment-reference" type="text" className="form-control" placeholder="UPI ID, cheque no. or bank reference" maxLength="100" value={newPayment.amountReference} onChange={(e) => {setPaymentFeedback(null);setNewPayment(prev => ({ ...prev, amountReference: e.target.value }));}} disabled={paymentSubmitting} />
+                                            </div>
+                                            <div className="col-12 col-md-4">
+                                                <label htmlFor="payment-date" className="form-label">Date received</label>
+                                                <input id="payment-date" type="date" className="form-control" value={newPayment.paymentDate || ""} onChange={(e) => {setPaymentFeedback(null);setNewPayment(prev => ({ ...prev, paymentDate: e.target.value }));}} disabled={paymentSubmitting} required />
+                                            </div>
                                         </div>
-                                        <div className="col-5" >
-                                            <input type="text" className="form-control" placeholder="Reference (optional)" maxLength="100" value={newPayment.amountReference} onChange={(e) => setNewPayment({ ...newPayment, amountReference: e.target.value })} />
-                                            <input type="date" className="form-control mt-2" value={newPayment.paymentDate || ""} onChange={(e) => setNewPayment({ ...newPayment, paymentDate: e.target.value })} />
-                                        </div>
-                                        {/* // <button className="btn btn-success" onClick={addPayment}>Add Payment</button> */}
-                                    </div>
-                                    <button className="btn btn-primary" disabled={editingOrder?.status==="Cancelled"||Number(editingOrder?.dueAmount || 0) <= 0 || !newPayment.amount} onClick={() => addPayment(editingOrder._id)}>Add Payment</button>
-                                    {editingOrder?.status==="Cancelled"&&(
-                                        <div className="small text-danger mt-2">This invoice is cancelled. Change its status before recording another payment.</div>
-                                    )}
+                                        {paymentFeedback&&(
+                                            <div className={`alert alert-${paymentFeedback.type} mt-3 mb-0`} role={paymentFeedback.type==="danger"?"alert":"status"}>
+                                                {paymentFeedback.message}
+                                            </div>
+                                        )}
+                                        {editingOrder?.status==="Cancelled"&&(
+                                            <div className="alert alert-warning mt-3 mb-0" role="note">This invoice is cancelled. Change its status before recording another payment.</div>
+                                        )}
+                                        <button type="button" className="btn btn-primary mt-3" disabled={paymentSubmitting||editingOrder?.status==="Cancelled"||Number(editingOrder?.dueAmount || 0) <= 0 || !newPayment.amount || !newPayment.paymentDate} onClick={() => addPayment(editingOrder._id)}>
+                                            {paymentSubmitting?<><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving payment…</>:"Record payment"}
+                                        </button>
+                                    </section>
 
 
                                                                         <DynamicTable
@@ -2067,9 +2120,9 @@ const styles = {
                                             locked:true,
                                             render:p=>(
                                                 <div className="d-flex gap-1 justify-content-end">
-                                                    <button className="btn btn-warning btn-sm" onClick={()=>setEditPayment(p)} title="Edit"><img src={editSVG} alt="Edit" /></button>
-                                                    <button className="btn btn-danger btn-sm" onClick={()=>deletePayment(p._id)} title="Delete"><img src={deleteSVG} alt="Delete" /></button>
-                                                    <button className="btn btn-info btn-sm" onClick={()=>printReceipt(p._id)} title="Receipt"><img src={receiptSVG} alt="Receipt" /></button>
+                                                    <button type="button" className="btn btn-warning btn-sm" onClick={()=>{setPaymentFeedback(null);setEditPayment(p);}} title="Edit payment" aria-label="Edit payment" disabled={paymentSubmitting}><img src={editSVG} alt="" /></button>
+                                                    <button type="button" className="btn btn-danger btn-sm" onClick={()=>deletePayment(p._id)} title="Delete payment" aria-label="Delete payment" disabled={paymentSubmitting}><img src={deleteSVG} alt="" /></button>
+                                                    <button type="button" className="btn btn-info btn-sm" onClick={()=>printReceipt(p._id)} title="Print receipt" aria-label="Print receipt" disabled={paymentSubmitting}><img src={receiptSVG} alt="" /></button>
                                                 </div>
                                             )
                                         }}
@@ -2090,28 +2143,40 @@ const styles = {
 
                                     {editPayment && (
                                         <div>
-                                            <h6>Edit Payment</h6>
-
-                                            <ArithmeticInput
-                                                value={editPayment.amount}
-                                                onValueChange={value=>setEditPayment(prev=>({...prev,amount:value}))}
-                                                className="form-control mb-2"
-                                                min="0.01"
-                                                step="0.01"
-                                                placeholder="Payment amount"
-                                            />
-                                            <input type="date" className="form-control mb-2" value={formatDateInput(editPayment.paymentDate)} onChange={(e) => setEditPayment({ ...editPayment, paymentDate: e.target.value })} />
-                                            <select className="form-select mb-2" value={editPayment.method} onChange={(e) => setEditPayment({ ...editPayment, method: e.target.value })}>
-                                                <option>Cash</option>
-                                                <option>Bank Transfer</option>
-                                                <option>UPI</option>
-                                                <option>Cheque</option>
-                                            </select>
-                                            {/* <div className="col-5" > */}
-                                            <input type="text" className="form-control" placeholder="Reference" value={editPayment.amountReference} onChange={(e) => setEditPayment({ ...editPayment, amountReference: e.target.value })} />
-                                            {/* <input type="text" className="form-control" placeholder="Reference" value={newPayment.amountReference} onChange={(e) => setNewPayment({ ...newPayment, amountReference: e.target.value })} /> */}
-                                            {/* </div> */}
-                                            <button className="btn btn-info" onClick={updatePayment}>Update Payment</button>
+                                            <section className="payment-edit-panel mt-4" aria-labelledby="payment-edit-title">
+                                                <div className="d-flex align-items-start justify-content-between gap-2 mb-3">
+                                                    <h6 id="payment-edit-title" className="mb-0">Edit payment</h6>
+                                                    <button type="button" className="btn btn-sm btn-light border" disabled={paymentSubmitting} onClick={()=>setEditPayment(null)}>Cancel edit</button>
+                                                </div>
+                                                <div className="row g-3">
+                                                    <div className="col-12 col-md-4">
+                                                        <label htmlFor="edit-payment-amount" className="form-label">Amount (₹)</label>
+                                                        <ArithmeticInput id="edit-payment-amount" value={editPayment.amount} onValueChange={value=>setEditPayment(prev=>({...prev,amount:value}))} className="form-control" min="0.01" step="0.01" required />
+                                                    </div>
+                                                    <div className="col-12 col-md-4">
+                                                        <label htmlFor="edit-payment-date" className="form-label">Date received</label>
+                                                        <input id="edit-payment-date" type="date" className="form-control" value={formatDateInput(editPayment.paymentDate)} onChange={(e) => setEditPayment(prev => ({ ...prev, paymentDate: e.target.value }))} required />
+                                                    </div>
+                                                    <div className="col-12 col-md-4">
+                                                        <label htmlFor="edit-payment-method" className="form-label">Payment method</label>
+                                                        <select id="edit-payment-method" className="form-select" value={editPayment.method} onChange={(e) => setEditPayment(prev => ({ ...prev, method: e.target.value }))}>
+                                                            <option>Cash</option>
+                                                            <option>Bank Transfer</option>
+                                                            <option>UPI</option>
+                                                            <option>Cheque</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="col-12">
+                                                        <label htmlFor="edit-payment-reference" className="form-label">Reference (optional)</label>
+                                                        <input id="edit-payment-reference" type="text" className="form-control" maxLength="100" placeholder="UPI ID, cheque no. or bank reference" value={editPayment.amountReference||""} onChange={(e) => setEditPayment(prev => ({ ...prev, amountReference: e.target.value }))} />
+                                                    </div>
+                                                </div>
+                                                <div className="d-flex gap-2 mt-3">
+                                                    <button type="button" className="btn btn-info" onClick={updatePayment} disabled={paymentSubmitting||!editPayment.amount||!editPayment.paymentDate}>
+                                                        {paymentSubmitting?"Saving changes…":"Save changes"}
+                                                    </button>
+                                                </div>
+                                            </section>
                                         </div>
                                     )}
                                 </div>

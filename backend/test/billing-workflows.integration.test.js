@@ -644,7 +644,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
 
     // Inject a late Credit Note edit failure in standalone mode after stock, customer credit,
     // and invoice summary writes have occurred; compensation must restore all persisted state.
-    const standalonePostedNumber = `ITSTAND-${suffix}`;
+    const standalonePostedNumber = `ST${suffix}`;
     const standalonePosted = await request("/credit-notes", {
       method: "POST",
       body: {

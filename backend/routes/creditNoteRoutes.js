@@ -1034,7 +1034,11 @@ router.post("/", auth, async (req, res) => {
     })
       .session(session)
       .lean();
-    if (duplicate) throw new Error("Credit Note number already exists.");
+    if (duplicate) {
+      const conflict = new Error("Credit Note number already exists.");
+      conflict.status = 409;
+      throw conflict;
+    }
 
     if (finalSettlement.customerCreditAmount > 0) {
       if (!order.clientId) {
@@ -1451,7 +1455,11 @@ router.put("/:id", auth, async (req, res) => {
       creditNoteNumber: number,
       _id: { $ne: note._id },
     }).session(session).lean();
-    if (duplicate) throw new Error("Credit Note number already exists.");
+    if (duplicate) {
+      const conflict = new Error("Credit Note number already exists.");
+      conflict.status = 409;
+      throw conflict;
+    }
 
     const reason = req.body?.reason ?? note.reason;
     const creditMode = req.body?.creditMode ?? note.creditMode;

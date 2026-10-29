@@ -392,6 +392,32 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(orphanBatchLog, null, "Failed bulk payment must not leave a batch log.");
     assert.equal(failedReservation, null, "Successful compensation must release the payment reference.");
 
+    // The same reference should be reusable after the failed batch was fully compensated.
+    const retriedBulkPayment = await withStandaloneFallback(() => request("/order/orders/payments/bulk", {
+      method: "PUT",
+      body: {
+        method: "UPI",
+        amount: 100,
+        amountReference: injectedBulkReference,
+        splitType: "custom",
+        paymentDate: "2026-10-08T12:05:00.000Z",
+        updates: [
+          { orderId: fallbackInvoiceOneId, amount: 50 },
+          { orderId: fallbackInvoiceTwoId, amount: 50 }
+        ]
+      }
+    }));
+    assert.equal(retriedBulkPayment.response.status, 200, JSON.stringify(retriedBulkPayment.payload));
+    const [retriedOrderOne, retriedOrderTwo] = await Promise.all([
+      Order.findOne({ _id: fallbackInvoiceOneId, createdBy: ownerId }).lean(),
+      Order.findOne({ _id: fallbackInvoiceTwoId, createdBy: ownerId }).lean()
+    ]);
+    for (const order of [retriedOrderOne, retriedOrderTwo]) {
+      assert.equal(order.payments.length, 1);
+      assert.equal(round2(order.paidAmount), 50);
+      assert.equal(round2(order.dueAmount), 50);
+    }
+
     const creditNoteNumber = `IT${suffix}`;
     const posted = await request("/credit-notes", {
       method: "POST",

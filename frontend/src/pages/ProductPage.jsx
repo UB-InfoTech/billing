@@ -301,6 +301,14 @@ export default function ProductPage(){
     return [...base,...custom];
   },[configuredFields]);
 
+  const hasActiveProductFilters=Boolean(searchInput.trim()||lowStock);
+  const clearProductFilters=()=>{
+    setSearchInput("");
+    setSearch("");
+    setLowStock(false);
+    setCurrentPage(1);
+  };
+
   return(
     <div className="container-fluid py-3">
       <BusinessPageHeader
@@ -397,7 +405,10 @@ export default function ProductPage(){
                 <span className="small">Low stock only</span>
               </label>
             </div>
-            <span className="small text-muted">{pagination.total} product{pagination.total===1?"":"s"} found</span>
+            <div className="d-flex flex-wrap align-items-center gap-2">
+              <span className="small text-muted">{pagination.total} product{pagination.total===1?"":"s"} found</span>
+              {hasActiveProductFilters&&<button type="button" className="btn btn-sm btn-light border" onClick={clearProductFilters}>Clear filters</button>}
+            </div>
           </div>
 
           <DynamicTable
@@ -406,7 +417,7 @@ export default function ProductPage(){
             rows={products}
             getRowKey={product=>product._id}
             loading={loading}
-            emptyText={search.trim()?"No products match your search. Clear the search to see all products.":lowStock?"No products are at or below the minimum stock level.":"No products yet. Add a product once and reuse its name and price on invoices."}
+            emptyText={hasActiveProductFilters?"No products match your current filters. Clear filters to see all products.":"No products yet. Add a product once and reuse its name and price on invoices."}
             columns={tableColumns}
             actionColumn={{
               label:"Actions",

@@ -410,6 +410,15 @@ function Clients() {
     });
   },[clients,search,filters]);
 
+  const hasActiveClientFilters=Boolean(
+    search.trim()||Object.values(filters).some(value=>String(value??"").trim())
+  );
+  const clearClientFilters=()=>{
+    setSearch("");
+    setFilters({businessType:"",accountStatus:"",minRevenue:"",maxRevenue:""});
+    setCurrentPage(1);
+  };
+
   const totalPages=Math.ceil(filteredClients.length/itemsPerPage);
   const indexOfLastItem=currentPage*itemsPerPage;
   const indexOfFirstItem=indexOfLastItem-itemsPerPage;
@@ -566,19 +575,20 @@ function Clients() {
             <details className="filter-details mt-3">
               <summary><i className="bi bi-sliders me-2"></i>More filters <span className="text-secondary fw-normal">(optional)</span></summary>
               <div className="row g-2 align-items-end pt-3">
-                <div className="col-sm-5">
+                <div className="col-sm-6">
                   <label className="form-label small" htmlFor="customer-min-revenue">Minimum total sales (₹)</label>
                   <input id="customer-min-revenue" type="number" min="0" className="form-control" placeholder="No minimum" value={filters.minRevenue} onChange={event=>{setFilters(prev=>({...prev,minRevenue:event.target.value}));setCurrentPage(1);}}/>
                 </div>
-                <div className="col-sm-5">
+                <div className="col-sm-6">
                   <label className="form-label small" htmlFor="customer-max-revenue">Maximum total sales (₹)</label>
                   <input id="customer-max-revenue" type="number" min="0" className="form-control" placeholder="No maximum" value={filters.maxRevenue} onChange={event=>{setFilters(prev=>({...prev,maxRevenue:event.target.value}));setCurrentPage(1);}}/>
                 </div>
-                <div className="col-sm-2">
-                  <button type="button" className="btn btn-outline-secondary w-100" onClick={()=>{setSearch("");setFilters({businessType:"",accountStatus:"",minRevenue:"",maxRevenue:""});setCurrentPage(1);}}>Clear all</button>
-                </div>
               </div>
             </details>
+            <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+              <span className="small text-secondary">{filteredClients.length} customer{filteredClients.length===1?"":"s"}{hasActiveClientFilters?" match your filters":" in your records"}</span>
+              {hasActiveClientFilters&&<button type="button" className="btn btn-sm btn-light border" onClick={clearClientFilters}>Clear filters</button>}
+            </div>
           </div>
 
             {/* Table */}
@@ -587,7 +597,7 @@ function Clients() {
               tableKey="clients.list"
               rows={pagedClientRows}
               loading={loading}
-              emptyText={clientsLoadError?"Customer records could not be loaded. Try again above.":search.trim()||Object.values(filters).some(Boolean)?"No customers match these filters. Clear them to see everyone.":"No customers yet. Add a customer so their details are ready when you create an invoice."}
+              emptyText={clientsLoadError?"Customer records could not be loaded. Try again above.":hasActiveClientFilters?"No customers match these filters. Use Clear filters to see everyone.":"No customers yet. Add a customer so their details are ready when you create an invoice."}
               getRowKey={client => client._id}
               columns={[
                 { key:"__rowNumber", label:"#", locked:false, render:(_row,index)=>index+1 },

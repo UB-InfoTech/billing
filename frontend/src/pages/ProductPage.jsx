@@ -50,6 +50,7 @@ export default function ProductPage(){
   const [lowStock,setLowStock]=useState(false);
   const [currentPage,setCurrentPage]=useState(1);
   const [pagination,setPagination]=useState({page:1,pages:1,total:0});
+  const productLoadRequestRef=useRef(0);
   const visiblePageStart=Math.max(1,Math.min(currentPage-3,pagination.pages-6));
   const visiblePageNumbers=Array.from(
     {length:Math.min(7,pagination.pages)},
@@ -101,7 +102,8 @@ export default function ProductPage(){
     }
   },[searchParams,setSearchParams]);
 
-  const loadProducts=async()=>{
+  const loadProducts=useCallback(async()=>{
+    const requestId=++productLoadRequestRef.current;
     try{
       setLoading(true);
       setError("");
@@ -113,6 +115,11 @@ export default function ProductPage(){
         sort:"productName",
         order:"asc"
       });
+
+      // Search/filter requests can finish out of order. Only the newest
+      // request may update the visible list, pagination, or error state.
+      if(requestId!==productLoadRequestRef.current)return;
+
       const pageCount=Math.max(1,Number(response.data?.pages)||1);
       const total=Math.max(0,Number(response.data?.total)||0);
       setPagination({page:Math.min(currentPage,pageCount),pages:pageCount,total});
@@ -122,16 +129,23 @@ export default function ProductPage(){
       }
       setProducts(Array.isArray(response.data?.products)?response.data.products:[]);
     }catch(loadError){
-      setError(loadError.response?.data?.message||"Unable to load products.");
-    }finally{setLoading(false);}
-  };
+      if(requestId===productLoadRequestRef.current){
+        setError(loadError.response?.data?.message||"Unable to load products.");
+      }
+    }finally{
+      if(requestId===productLoadRequestRef.current)setLoading(false);
+    }
+  },[search,lowStock,currentPage]);
 
   useEffect(()=>{
     const timer=window.setTimeout(()=>{setCurrentPage(1);setSearch(searchInput.trim());},250);
     return()=>window.clearTimeout(timer);
   },[searchInput]);
 
-  useEffect(()=>{loadProducts();},[search,lowStock,currentPage]);
+  useEffect(()=>{
+    loadProducts();
+    return()=>{productLoadRequestRef.current+=1;};
+  },[loadProducts]);
 
   const handleEdit=useCallback(product=>{
     const hydrated=buildConfiguredDefaults(hydrateConfiguredValues(product,configuredFields),configuredFields);

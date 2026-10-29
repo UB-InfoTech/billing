@@ -42,6 +42,13 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
             const isOldDefault=savedLabel&&savedLabel===LEGACY_DEFAULT_LABELS[item.key];
             return {...fallback,label:!savedLabel||isOldDefault?fallback.label:savedLabel};
           });
+        // Older saved navigation preferences predate the recovery queue. Keep
+        // this financial-safety page reachable unless the owner explicitly hid it.
+        const recoveryKey="financial-recovery";
+        const recoveryWasConfigured=saved.some(item=>item.key===recoveryKey);
+        if(!recoveryWasConfigured&&byKey.has(recoveryKey)){
+          next.push(byKey.get(recoveryKey));
+        }
         if(next.length)setMenuItems(next);
       }catch{
         if(!cancelled)setMenuItems(MENU_ITEMS);

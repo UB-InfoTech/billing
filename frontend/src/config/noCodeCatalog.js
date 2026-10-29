@@ -8,6 +8,7 @@ export const MODULE_CATALOG=[
   {key:"calendar",label:"Calendar",route:"/calendar",icon:"bi-calendar3",description:"Important dates and reminders"},
   {key:"bulk-payment",label:"Payments",route:"/bulk-payment",icon:"bi-cash-stack",description:"Receive and manage payments"},
   {key:"credit-notes",label:"Credit Notes",route:"/credit-notes",icon:"bi-file-earmark-minus",description:"Returns and adjustments"},
+  {key:"financial-recovery",label:"Recovery issues",route:"/financial-recovery",icon:"bi-shield-exclamation",description:"Review incomplete financial recovery"},
   {key:"settings",label:"Settings",route:"/settings",icon:"bi-sliders2",description:"Customize your software"},
 ];
 

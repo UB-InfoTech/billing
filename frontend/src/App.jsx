@@ -16,6 +16,7 @@ import Profile from "./pages/Profile.jsx";
 import BulkPayment from "./pages/BulkPayment.jsx";
 import CreditNote from "./pages/CreditNote.jsx";
 import Settings from "./pages/Settings.jsx";
+import FinancialRecoveryIssues from "./pages/FinancialRecoveryIssues.jsx";
 
 function ProtectedRoute({children}){
   return localStorage.getItem("token") ? children : <Navigate to="/login" replace />;
@@ -38,6 +39,7 @@ export default function App(){
       <Route path="calendar" element={<ProtectedRoute><Calendar/></ProtectedRoute>}/>
       <Route path="bulk-payment" element={<ProtectedRoute><BulkPayment/></ProtectedRoute>}/>
       <Route path="credit-notes" element={<ProtectedRoute><CreditNote/></ProtectedRoute>}/>
+      <Route path="financial-recovery" element={<ProtectedRoute><FinancialRecoveryIssues/></ProtectedRoute>}/>
       <Route path="profile" element={<ProtectedRoute><Profile/></ProtectedRoute>}/>
       <Route path="settings" element={<ProtectedRoute><Settings/></ProtectedRoute>}/>
       <Route path="*" element={<Navigate to="/dashboard" replace/>}/>

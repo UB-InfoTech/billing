@@ -74,6 +74,22 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
       return { response, payload };
     }
 
+    async function withStandaloneFallback(operation) {
+      const originalGetClient = mongoose.connection.getClient;
+      mongoose.connection.getClient = () => ({
+        topology: {
+          description: {
+            servers: { simulatedStandalone: { type: "Standalone" } }
+          }
+        }
+      });
+      try {
+        return await operation();
+      } finally {
+        mongoose.connection.getClient = originalGetClient;
+      }
+    }
+
     const suffix = crypto.randomBytes(5).toString("hex").toUpperCase();
     paymentReference = `ITPAY-${suffix}`;
     const createdClient = await request("/clients", {
@@ -299,6 +315,83 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     });
     assert.equal(duplicateBulkPayment.response.status, 409, "Bulk payment references must not be reused.");
 
+
+    // Simulate standalone MongoDB and fail the PaymentLog write after all invoice allocations.
+    const fallbackInvoiceOneResponse = await request("/order/orders/create", {
+      method: "POST",
+      body: {
+        clientId,
+        orderDate: "2026-10-08T10:00:00.000Z",
+        paymentTerms: "30",
+        taxPercentage: 0,
+        discountRate: 0,
+        subOrders: [{ orderName: "Bulk rollback one", qtyUnit: "PCS", quantity: 1, unitPrice: 100 }]
+      }
+    });
+    assert.equal(fallbackInvoiceOneResponse.response.status, 201, JSON.stringify(fallbackInvoiceOneResponse.payload));
+    const fallbackInvoiceOneId = fallbackInvoiceOneResponse.payload.order._id;
+
+    const fallbackInvoiceTwoResponse = await request("/order/orders/create", {
+      method: "POST",
+      body: {
+        clientId,
+        orderDate: "2026-10-08T11:00:00.000Z",
+        paymentTerms: "30",
+        taxPercentage: 0,
+        discountRate: 0,
+        subOrders: [{ orderName: "Bulk rollback two", qtyUnit: "PCS", quantity: 1, unitPrice: 100 }]
+      }
+    });
+    assert.equal(fallbackInvoiceTwoResponse.response.status, 201, JSON.stringify(fallbackInvoiceTwoResponse.payload));
+    const fallbackInvoiceTwoId = fallbackInvoiceTwoResponse.payload.order._id;
+    const injectedBulkReference = `ITBULKFAIL-${suffix}`;
+    const originalPaymentLogSave = PaymentLog.prototype.save;
+    let injectedFailureOccurred = false;
+    PaymentLog.prototype.save = function (...args) {
+      if (this.reference === injectedBulkReference) {
+        injectedFailureOccurred = true;
+        return Promise.reject(new Error("Injected PaymentLog persistence failure after invoice writes."));
+      }
+      return originalPaymentLogSave.apply(this, args);
+    };
+
+    let failedBulkPayment;
+    try {
+      failedBulkPayment = await withStandaloneFallback(() => request("/order/orders/payments/bulk", {
+        method: "PUT",
+        body: {
+          method: "UPI",
+          amount: 100,
+          amountReference: injectedBulkReference,
+          splitType: "custom",
+          paymentDate: "2026-10-08T12:00:00.000Z",
+          updates: [
+            { orderId: fallbackInvoiceOneId, amount: 50 },
+            { orderId: fallbackInvoiceTwoId, amount: 50 }
+          ]
+        }
+      }));
+    } finally {
+      PaymentLog.prototype.save = originalPaymentLogSave;
+    }
+
+    assert.equal(injectedFailureOccurred, true, "The test must fail after invoice allocations have been written.");
+    assert.equal(failedBulkPayment.response.status, 400, JSON.stringify(failedBulkPayment.payload));
+    const [fallbackOrderOne, fallbackOrderTwo, orphanBatchLog, failedReservation] = await Promise.all([
+      Order.findOne({ _id: fallbackInvoiceOneId, createdBy: ownerId }).lean(),
+      Order.findOne({ _id: fallbackInvoiceTwoId, createdBy: ownerId }).lean(),
+      PaymentLog.findOne({ userId: ownerId, reference: injectedBulkReference }).lean(),
+      PaymentReference.findOne({ createdBy: ownerId, reference: injectedBulkReference }).lean()
+    ]);
+    for (const order of [fallbackOrderOne, fallbackOrderTwo]) {
+      assert.equal(order.payments.length, 0, "Standalone compensation must remove each partial allocation.");
+      assert.equal(round2(order.paidAmount), 0);
+      assert.equal(round2(order.dueAmount), 100);
+      assert.equal(order.paymentStatus, "Unpaid");
+    }
+    assert.equal(orphanBatchLog, null, "Failed bulk payment must not leave a batch log.");
+    assert.equal(failedReservation, null, "Successful compensation must release the payment reference.");
+
     const creditNoteNumber = `IT${suffix}`;
     const posted = await request("/credit-notes", {
       method: "POST",
@@ -511,6 +604,29 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
       }
     });
     assert.equal(duplicateCreditNote.response.status, 409, JSON.stringify(duplicateCreditNote.payload));
+
+
+    // Exercise the standalone compensation branch for a failure after the stock increment.
+    const standaloneDuplicateCreditNote = await withStandaloneFallback(() => request("/credit-notes", {
+      method: "POST",
+      body: {
+        creditNoteNumber,
+        creditNoteDate: "2026-10-07T13:00:00.000Z",
+        reason: "Sales Return",
+        creditMode: "ITEM",
+        originalOrderId: stockInvoiceId,
+        stockAffecting: true,
+        items: [{ sourceSubOrderId: stockSubOrderId, quantity: 1 }],
+        settlement: {
+          adjustmentType: "Outstanding",
+          adjustmentAmount: 0,
+          refundAmount: 10,
+          refundMethod: "Cash",
+          customerCreditAmount: 0
+        }
+      }
+    }));
+    assert.equal(standaloneDuplicateCreditNote.response.status, 409, JSON.stringify(standaloneDuplicateCreditNote.payload));
 
     const [stockAfterFailure, orderAfterFailure, failedNotes, clientAfterFailure] = await Promise.all([
       Product.findOne({ _id: stockProduct._id, createdBy: ownerId }).lean(),

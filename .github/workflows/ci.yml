@@ -32,7 +32,8 @@ jobs:
 
           ready=0
           for attempt in $(seq 1 60); do
-            if docker exec billing-mongo-test mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' 2>/dev/null | grep -q '^1$'; then
+            ping_result="$(docker exec billing-mongo-test mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' 2>/dev/null || true)"
+            if [ "$ping_result" = "1" ]; then
               ready=1
               break
             fi
@@ -46,7 +47,8 @@ jobs:
           docker exec billing-mongo-test mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
           ready=0
           for attempt in $(seq 1 60); do
-            if docker exec billing-mongo-test mongosh --quiet --eval 'db.hello().isWritablePrimary' 2>/dev/null | grep -q 'true'; then
+            primary_result="$(docker exec billing-mongo-test mongosh --quiet --eval 'db.hello().isWritablePrimary' 2>/dev/null || true)"
+            if [ "$primary_result" = "true" ]; then
               ready=1
               break
             fi
@@ -71,24 +73,8 @@ jobs:
 
           ready=0
           for attempt in $(seq 1 60); do
-            if docker exec billing-mongo-standalone-test mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' 2>/dev/null | grep -q '^1
-  frontend:
-    name: Frontend checks
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - run: npm install --no-audit --no-fund
-      - run: npm run lint
-      - run: npm run build
-; then
+            ping_result="$(docker exec billing-mongo-standalone-test mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' 2>/dev/null || true)"
+            if [ "$ping_result" = "1" ]; then
               ready=1
               break
             fi

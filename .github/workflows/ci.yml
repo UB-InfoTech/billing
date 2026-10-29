@@ -63,6 +63,45 @@ jobs:
           while IFS= read -r -d "" file; do node --check "$file"; done < <(find . -type f -name "*.js" -not -path "./node_modules/*" -print0)
       - name: Run backend regression tests
         run: npm test
+      - name: Start standalone MongoDB for compensation integration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run -d --name billing-mongo-standalone-test -p 27018:27017 mongo:7 --bind_ip_all
+
+          ready=0
+          for attempt in $(seq 1 60); do
+            if docker exec billing-mongo-standalone-test mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' 2>/dev/null | grep -q '^1
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm install --no-audit --no-fund
+      - run: npm run lint
+      - run: npm run build
+; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != "1" ]; then
+            docker logs billing-mongo-standalone-test
+            exit 1
+          fi
+      - name: Run financial workflow integration test against standalone MongoDB
+        env:
+          MONGO_URI: mongodb://127.0.0.1:27018/billing_standalone_ci
+        run: node --test test/billing-workflows.integration.test.js
 
   frontend:
     name: Frontend checks

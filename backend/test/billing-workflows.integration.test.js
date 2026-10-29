@@ -360,6 +360,59 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(round2(manualAdjustment.payload.creditBalance), 76);
     assert.equal(round2(manualAdjustment.payload.creditBalanceAdjustment), 10);
 
+    const secondCreditNoteNumber = `S${suffix}`;
+    const secondPosted = await request("/credit-notes", {
+      method: "POST",
+      body: {
+        creditNoteNumber: secondCreditNoteNumber,
+        creditNoteDate: "2026-10-03T13:00:00.000Z",
+        reason: "Other",
+        creditMode: "AMOUNT",
+        originalOrderId: orderId,
+        manualCredit: { taxableAmount: 10, taxRate: 0 },
+        settlement: {
+          adjustmentType: "Outstanding",
+          adjustmentAmount: 0,
+          refundAmount: 10,
+          refundMethod: "Cash",
+          customerCreditAmount: 0
+        }
+      }
+    });
+    assert.equal(secondPosted.response.status, 201, JSON.stringify(secondPosted.payload));
+    const secondCreditNoteId = secondPosted.payload.creditNote._id;
+
+    // Editing another posted note to a number already in use must fail without changing any financial records.
+    const duplicateEdit = await request(`/credit-notes/${secondCreditNoteId}`, {
+      method: "PUT",
+      body: {
+        creditNoteNumber,
+        creditNoteDate: "2026-10-03T13:00:00.000Z",
+        reason: "Other",
+        creditMode: "AMOUNT",
+        manualCredit: { taxableAmount: 10, taxRate: 0 },
+        settlement: {
+          adjustmentType: "Outstanding",
+          adjustmentAmount: 0,
+          refundAmount: 10,
+          refundMethod: "Cash",
+          customerCreditAmount: 0
+        }
+      }
+    });
+    assert.equal(duplicateEdit.response.status, 409, JSON.stringify(duplicateEdit.payload));
+
+    let [secondNoteAfterEdit, orderAfterDuplicateEdit, clientAfterDuplicateEdit] = await Promise.all([
+      CreditNote.findOne({ _id: secondCreditNoteId, createdBy: ownerId }).lean(),
+      Order.findOne({ _id: orderId, createdBy: ownerId }).lean(),
+      Client.findOne({ _id: clientId, createdBy: ownerId }).lean()
+    ]);
+    assert.equal(secondNoteAfterEdit.creditNoteNumber, secondCreditNoteNumber);
+    assert.equal(secondNoteAfterEdit.status, "Posted");
+    assert.equal(round2(secondNoteAfterEdit.totals.grandTotal), 10);
+    assert.equal(orderAfterDuplicateEdit.creditNoteCount, 2);
+    assert.equal(round2(clientAfterDuplicateEdit.creditBalance), 76);
+
     const cancelled = await request(`/credit-notes/${creditNoteId}/cancel`, {
       method: "POST",
       body: { reason: "Integration test cleanup" }
@@ -371,10 +424,40 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     storedOrder = await Order.findOne({ _id: orderId, createdBy: ownerId }).lean();
     assert.equal(round2(storedClient.creditBalance), 10, "Cancellation must preserve the independent manual adjustment.");
     assert.equal(round2(storedClient.creditBalanceAdjustment), 10);
-    assert.equal(storedOrder.creditNoteCount, 0);
+    assert.equal(storedOrder.creditNoteCount, 1);
     assert.equal(round2(storedOrder.paidAmount), 110);
     assert.equal(round2(storedOrder.dueAmount), 110);
 
+    // Repeated cancellation must be rejected and must not reverse customer credit twice.
+    const repeatedCancellation = await request(`/credit-notes/${creditNoteId}/cancel`, {
+      method: "POST",
+      body: { reason: "Repeated cancellation regression" }
+    });
+    assert.equal(repeatedCancellation.response.status, 400, JSON.stringify(repeatedCancellation.payload));
+
+    const [clientAfterRepeatedCancel, orderAfterRepeatedCancel, noteAfterRepeatedCancel] = await Promise.all([
+      Client.findOne({ _id: clientId, createdBy: ownerId }).lean(),
+      Order.findOne({ _id: orderId, createdBy: ownerId }).lean(),
+      CreditNote.findOne({ _id: creditNoteId, createdBy: ownerId }).lean()
+    ]);
+    assert.equal(round2(clientAfterRepeatedCancel.creditBalance), 10);
+    assert.equal(round2(clientAfterRepeatedCancel.creditBalanceAdjustment), 10);
+    assert.equal(orderAfterRepeatedCancel.creditNoteCount, 1);
+    assert.equal(noteAfterRepeatedCancel.status, "Cancelled");
+
+    const cancelledSecond = await request(`/credit-notes/${secondCreditNoteId}/cancel`, {
+      method: "POST",
+      body: { reason: "Integration test cleanup" }
+    });
+    assert.equal(cancelledSecond.response.status, 200, JSON.stringify(cancelledSecond.payload));
+
+    storedClient = await Client.findOne({ _id: clientId, createdBy: ownerId }).lean();
+    storedOrder = await Order.findOne({ _id: orderId, createdBy: ownerId }).lean();
+    assert.equal(round2(storedClient.creditBalance), 10);
+    assert.equal(round2(storedClient.creditBalanceAdjustment), 10);
+    assert.equal(storedOrder.creditNoteCount, 0);
+    assert.equal(round2(storedOrder.paidAmount), 110);
+    assert.equal(round2(storedOrder.dueAmount), 110);
 
     // A late Credit Note failure must roll back earlier stock writes and leave no orphan note.
     const stockProduct = await Product.create({

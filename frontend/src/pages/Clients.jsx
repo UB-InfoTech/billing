@@ -422,6 +422,11 @@ function Clients() {
   const totalPages=Math.ceil(filteredClients.length/itemsPerPage);
   const indexOfLastItem=currentPage*itemsPerPage;
   const indexOfFirstItem=indexOfLastItem-itemsPerPage;
+  const pageWindowStart=Math.max(1,Math.min(currentPage-3,totalPages-6));
+  const visiblePageNumbers=Array.from(
+    {length:Math.min(7,totalPages)},
+    (_,index)=>pageWindowStart+index
+  );
 
   // If a delete or refreshed filter removes the last page, move to the last
   // available page instead of showing an empty list while other customers exist.
@@ -437,6 +442,7 @@ function Clients() {
       setSortKey(key);
       setSortClient('asc');
     }
+    setCurrentPage(1);
   };
 
   const sortedData = [...filteredClients].sort((a, b) => {
@@ -455,10 +461,13 @@ function Clients() {
       return sortClient === 'asc' ? aVal - bVal : bVal - aVal;
     }
 
-    // Default string comparison
+    // Missing values are treated as empty text so optional customer fields
+    // do not break sorting when some records have not filled them in.
+    const aText=String(aVal??"");
+    const bText=String(bVal??"");
     return sortClient === 'asc'
-      ? aVal?.toString().localeCompare(bVal?.toString())
-      : bVal?.toString().localeCompare(aVal?.toString());
+      ? aText.localeCompare(bText,undefined,{numeric:true,sensitivity:"base"})
+      : bText.localeCompare(aText,undefined,{numeric:true,sensitivity:"base"});
   });
 
   const pagedClientRows=sortedData.slice(indexOfFirstItem,indexOfLastItem);
@@ -649,6 +658,7 @@ function Clients() {
               <ul className="pagination justify-content-center mt-3">
                 <li className="page-item">
                   <button
+                    type="button"
                     className="page-link"
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
@@ -656,15 +666,16 @@ function Clients() {
                     Previous
                   </button>
                 </li>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                {visiblePageNumbers.map(page => (
                   <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
-                    <button className="page-link" onClick={() => setCurrentPage(page)}>
+                    <button type="button" className="page-link" aria-current={currentPage === page ? "page" : undefined} onClick={() => setCurrentPage(page)}>
                       {page}
                     </button>
                   </li>
                 ))}
                 <li className="page-item">
                   <button
+                    type="button"
                     className="page-link"
                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}

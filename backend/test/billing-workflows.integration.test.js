@@ -1272,6 +1272,36 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.ok(timelineReceiptTwo.payload.includes("20.00"), "The later receipt must include the earlier Credit Note adjustment.");
     assert.ok(timelineReceiptTwo.payload.includes("10.00"), "The later receipt must show the correct remaining due.");
 
+    const editedTimelineCreditNote = await request("/credit-notes/" + timelineCreditNoteId, {
+      method: "PUT",
+      body: {
+        creditNoteNumber: "TL" + suffix,
+        creditNoteDate: "2026-10-16T09:00:00.000Z",
+        reason: "Post Sale Discount",
+        creditMode: "AMOUNT",
+        manualCredit: { taxableAmount: 20, taxRate: 0 },
+        settlement: {
+          adjustmentType: "Outstanding",
+          adjustmentAmount: 10,
+          refundAmount: 10,
+          refundMethod: "Cash",
+          customerCreditAmount: 0
+        }
+      }
+    });
+    assert.equal(editedTimelineCreditNote.response.status, 200, JSON.stringify(editedTimelineCreditNote.payload));
+    const editedTimelineHistory = editedTimelineCreditNote.payload.creditNote.settlementHistory;
+    assert.equal(editedTimelineHistory.length, 2, "Editing a posted Credit Note must append a dated settlement snapshot.");
+    assert.equal(editedTimelineHistory[0].eventType, "posted");
+    assert.equal(editedTimelineHistory[1].eventType, "edited");
+
+    const timelineReceiptTwoAfterEdit = await request(
+      "/order/" + timelineInvoiceId + "/payments/" + timelinePaymentTwoId + "/invoice"
+    );
+    assert.equal(timelineReceiptTwoAfterEdit.response.status, 200);
+    assert.ok(timelineReceiptTwoAfterEdit.payload.includes("20.00"), "Editing a Credit Note later must preserve its earlier applied amount on an existing receipt.");
+    assert.ok(timelineReceiptTwoAfterEdit.payload.includes("10.00"));
+
     const timelineCreditNoteCancellation = await request("/credit-notes/" + timelineCreditNoteId + "/cancel", {
       method: "POST",
       body: { reason: "Timeline cancellation test" }

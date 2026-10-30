@@ -174,7 +174,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
         && Object.prototype.hasOwnProperty.call(update.$set, "financialSummaryVersion")
       ) {
         failedSummaryWrites += 1;
-        return Promise.resolve(null);
+        return { lean: () => Promise.resolve(null) };
       }
       return originalSummaryClientFindOneAndUpdate.apply(this, arguments);
     };

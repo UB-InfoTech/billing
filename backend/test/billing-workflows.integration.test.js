@@ -133,6 +133,117 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     const hiddenInvoice = await request(`/order/orders/${orderId}`, { token: otherOwnerToken });
     assert.equal(hiddenInvoice.response.status, 404, "Invoices must be isolated by business owner.");
 
+    // A saved payment must remain successful when the derived customer totals
+    // cannot be refreshed. The issue stays open until a real refresh succeeds.
+    const summaryRecoveryCustomerResponse = await request("/clients", {
+      method: "POST",
+      body: {
+        name: "Summary Recovery Customer " + suffix,
+        companyName: "Summary Recovery Business " + suffix,
+        phone: "9999999997"
+      }
+    });
+    assert.equal(summaryRecoveryCustomerResponse.response.status, 201, JSON.stringify(summaryRecoveryCustomerResponse.payload));
+    const summaryRecoveryClientId = summaryRecoveryCustomerResponse.payload._id;
+
+    const summaryRecoveryInvoiceResponse = await request("/order/orders/create", {
+      method: "POST",
+      body: {
+        clientId: summaryRecoveryClientId,
+        orderDate: "2026-10-01T11:00:00.000Z",
+        paymentTerms: "30",
+        taxPercentage: 0,
+        discountRate: 0,
+        subOrders: [{
+          orderName: "Summary recovery item",
+          qtyUnit: "PCS",
+          quantity: 2,
+          unitPrice: 10
+        }]
+      }
+    });
+    assert.equal(summaryRecoveryInvoiceResponse.response.status, 201, JSON.stringify(summaryRecoveryInvoiceResponse.payload));
+    const summaryRecoveryInvoiceId = summaryRecoveryInvoiceResponse.payload.order._id;
+
+    const originalSummaryClientFindOneAndUpdate = Client.findOneAndUpdate;
+    let failedSummaryWrites = 0;
+    Client.findOneAndUpdate = function (filter, update, options) {
+      if (
+        String(filter?._id || "") === String(summaryRecoveryClientId)
+        && update?.$set
+        && Object.prototype.hasOwnProperty.call(update.$set, "financialSummaryVersion")
+      ) {
+        failedSummaryWrites += 1;
+        return Promise.resolve(null);
+      }
+      return originalSummaryClientFindOneAndUpdate.apply(this, arguments);
+    };
+
+    let summaryRecoveryPayment;
+    let summaryRecoveryIssue;
+    try {
+      summaryRecoveryPayment = await request("/order/orders/" + summaryRecoveryInvoiceId + "/pay", {
+        method: "POST",
+        body: {
+          amount: 5,
+          method: "UPI",
+          amountReference: "ITSUMMARY-" + suffix,
+          paymentDate: "2026-10-01T12:00:00.000Z"
+        }
+      });
+      assert.equal(summaryRecoveryPayment.response.status, 200, JSON.stringify(summaryRecoveryPayment.payload));
+      assert.equal(round2(summaryRecoveryPayment.payload.order.paidAmount), 5);
+      assert.ok(failedSummaryWrites >= 2, "The customer summary write must be forced to fail through the automatic retries.");
+
+      const openSummaryIssues = await request("/financial-recovery-issues?status=Open");
+      assert.equal(openSummaryIssues.response.status, 200, JSON.stringify(openSummaryIssues.payload));
+      summaryRecoveryIssue = openSummaryIssues.payload.issues.find(issue =>
+        issue.operation === "customer-summary-sync"
+        && (issue.clientIds || []).some(id => String(id) === String(summaryRecoveryClientId))
+      );
+      assert.ok(summaryRecoveryIssue, "A failed customer summary refresh must create a durable recovery issue.");
+      assert.equal(summaryRecoveryIssue.status, "Open");
+
+      const hiddenSummaryIssue = await request("/financial-recovery-issues?status=All", { token: otherOwnerToken });
+      assert.equal(hiddenSummaryIssue.response.status, 200);
+      assert.equal(hiddenSummaryIssue.payload.issues.some(issue => String(issue._id) === String(summaryRecoveryIssue._id)), false);
+
+      const unsafeManualResolve = await request("/financial-recovery-issues/" + summaryRecoveryIssue._id + "/resolve", {
+        method: "PATCH",
+        body: { resolutionNote: "The payment itself was recorded successfully." }
+      });
+      assert.equal(unsafeManualResolve.response.status, 409, "A customer-summary issue must not be closed by a manual note alone.");
+
+      const hiddenSummaryRetry = await request("/financial-recovery-issues/" + summaryRecoveryIssue._id + "/retry-customer-sync", {
+        method: "POST",
+        token: otherOwnerToken
+      });
+      assert.equal(hiddenSummaryRetry.response.status, 404, "Customer summary recovery must be owner-scoped.");
+
+      const failedSummaryRetry = await request("/financial-recovery-issues/" + summaryRecoveryIssue._id + "/retry-customer-sync", {
+        method: "POST"
+      });
+      assert.equal(failedSummaryRetry.response.status, 503, JSON.stringify(failedSummaryRetry.payload));
+      const stillOpenSummaryIssue = await FinancialRecoveryIssue.findOne({ _id: summaryRecoveryIssue._id, createdBy: ownerId }).lean();
+      assert.equal(stillOpenSummaryIssue.status, "Open", "A failed retry must leave the recovery issue open.");
+    } finally {
+      Client.findOneAndUpdate = originalSummaryClientFindOneAndUpdate;
+    }
+
+    const successfulSummaryRetry = await request("/financial-recovery-issues/" + summaryRecoveryIssue._id + "/retry-customer-sync", {
+      method: "POST"
+    });
+    assert.equal(successfulSummaryRetry.response.status, 200, JSON.stringify(successfulSummaryRetry.payload));
+    assert.equal(successfulSummaryRetry.payload.issue.status, "Resolved");
+    assert.ok(successfulSummaryRetry.payload.issue.resolutionNote.includes("successfully rebuilt"));
+
+    const recoveredCustomer = await Client.findOne({ _id: summaryRecoveryClientId, createdBy: ownerId }).lean();
+    assert.equal(round2(recoveredCustomer.totalPaid), 5);
+    assert.equal(round2(recoveredCustomer.pendingPayments), 15);
+    assert.equal(round2(recoveredCustomer.outstanding_balance), 15);
+    assert.equal(recoveredCustomer.paymentHistory.length, 1);
+    assert.ok(recoveredCustomer.payments.some(id => String(id) === String(summaryRecoveryInvoiceId)));
+
     // Force two independent customer-credit mutations to read the same summary
     // revision. Exactly one may commit against that revision; the other must get
     // a retryable conflict, and persisted credit must match the winning writes.

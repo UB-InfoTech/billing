@@ -203,7 +203,7 @@ router.post("/orders/create",auth,async(req,res)=>{
     const order=new Order(body);
     await applyWorkflows({resource:"orders",event:"record_created",doc:order,createdBy:userId(req)});
     await order.save();
-    await syncClientDataSafely(order.clientId);
+    await syncClientDataSafely(order.clientId,"invoice creation",userId(req));
     res.status(201).json({success:true,order});
   }catch(error){res.status(400).json({success:false,message:error.message});}
 });
@@ -330,7 +330,7 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
     applyOrderSaveConcurrencyGuard(order,userId(req));
     await order.save();
     const newClient=String(order.clientId||"");
-    if(oldClient)await syncClientDataSafely(oldClient);if(newClient&&newClient!==oldClient)await syncClientDataSafely(newClient);
+    if(oldClient)await syncClientDataSafely(oldClient,"invoice update",userId(req));if(newClient&&newClient!==oldClient)await syncClientDataSafely(newClient,"invoice update",userId(req));
     res.json({success:true,message:"Order updated successfully",order});
   }catch(error){
     const staleSave=error?.name==="DocumentNotFoundError"||error?.name==="VersionError";
@@ -359,7 +359,7 @@ router.patch("/orders/:id/upd",auth,async(req,res)=>{
     await applyWorkflows({resource:"orders",event:"record_updated",doc:order,createdBy:userId(req)});
     applyOrderSaveConcurrencyGuard(order,userId(req));
     await order.save();
-    await syncClientDataSafely(order.clientId,"an invoice status update");
+    await syncClientDataSafely(order.clientId,"an invoice status update",userId(req));
     return res.json({message:"Order status updated",order});
   }catch(error){
     const staleSave=error?.name==="DocumentNotFoundError"||error?.name==="VersionError";
@@ -384,7 +384,7 @@ router.delete("/orders/:id/delete",auth,async(req,res)=>{
     const postedCredits=await CreditNote.countDocuments({originalOrderId:order._id,createdBy:userId(req),status:"Posted"});
     if(postedCredits>0)return res.status(409).json({message:"Cancel or reconcile posted Credit Notes before deleting this invoice."});
     await Order.deleteOne({_id:order._id,createdBy:userId(req)});
-    await syncClientDataSafely(order.clientId);
+    await syncClientDataSafely(order.clientId,"invoice deletion",userId(req));
     res.json({success:true,message:"Invoice deleted successfully"});
   }catch(error){res.status(500).json({success:false,message:error.message});}
 });
@@ -467,7 +467,7 @@ router.post("/orders/:id/pay",auth,async(req,res)=>{
 
     if(session)await session.commitTransaction();
     reservedReferenceId=null;
-    await syncClientDataSafely(updatedOrder.clientId,"a single-invoice payment");
+    await syncClientDataSafely(updatedOrder.clientId,"a single-invoice payment",userId(req));
 
     return res.json({success:true,message:"Payment recorded successfully.",order:updatedOrder});
   }catch(error){
@@ -597,7 +597,7 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
 
     if(session)await session.commitTransaction();
     newlyReservedReferenceId=null;
-    await syncClientDataSafely(updatedOrder.clientId,"a payment edit");
+    await syncClientDataSafely(updatedOrder.clientId,"a payment edit",userId(req));
     return res.json({success:true,message:"Payment updated successfully.",order:updatedOrder});
   }catch(error){
     if(session){
@@ -669,7 +669,7 @@ router.delete("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
     }
 
     if(session)await session.commitTransaction();
-    await syncClientDataSafely(updatedOrder.clientId,"a payment deletion");
+    await syncClientDataSafely(updatedOrder.clientId,"a payment deletion",userId(req));
     return res.json({success:true,message:"Payment deleted successfully.",order:updatedOrder});
   }catch(error){
     if(session){
@@ -844,7 +844,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
     reservedReferenceId=null;
 
     const clientIds=[...new Set(allocations.map(item=>String(item.order.clientId||"")).filter(Boolean))];
-    await Promise.allSettled(clientIds.map(clientId=>syncClientDataSafely(clientId,"a bulk payment")));
+    await Promise.allSettled(clientIds.map(clientId=>syncClientDataSafely(clientId,"a bulk payment",userId(req))));
 
     return res.json({
       success:true,

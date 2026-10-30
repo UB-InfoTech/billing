@@ -8,7 +8,8 @@ const OPERATION_LABELS = {
   "credit-note-create": "Credit Note creation",
   "credit-note-edit": "Credit Note edit",
   "credit-note-cancel": "Credit Note cancellation",
-  "bulk-payment": "Bulk payment"
+  "bulk-payment": "Bulk payment",
+  "customer-summary-sync": "Customer totals refresh"
 };
 
 const STEP_LABELS = {
@@ -19,7 +20,8 @@ const STEP_LABELS = {
   "restore-customer-credit": "Restore customer credit",
   "restore-stock": "Restore product stock",
   "remove-invoice-payment": "Remove the incomplete invoice payment",
-  "release-payment-reference": "Release the payment reference"
+  "release-payment-reference": "Release the payment reference",
+  "refresh-customer-financial-summary": "Refresh customer financial totals"
 };
 
 const RECORD_LABELS = {
@@ -56,6 +58,8 @@ export default function FinancialRecoveryIssues() {
   const [resolutionNote, setResolutionNote] = useState("");
   const [actionError, setActionError] = useState("");
   const [resolving, setResolving] = useState(false);
+  const [retryingIssueId, setRetryingIssueId] = useState("");
+  const [retryError, setRetryError] = useState({ issueId: "", message: "" });
   const [refreshToken, setRefreshToken] = useState(0);
 
   const loadIssues = useCallback(async () => {
@@ -92,6 +96,23 @@ export default function FinancialRecoveryIssues() {
     setResolutionNote("");
     setActionError("");
     setNotice("");
+  };
+
+  const retryCustomerSummary = async issue => {
+    setRetryingIssueId(issue._id);
+    setRetryError({ issueId: "", message: "" });
+    setNotice("");
+    try {
+      await api.post("/api/financial-recovery-issues/" + encodeURIComponent(issue._id) + "/retry-customer-sync");
+      setNotice("Customer totals were refreshed successfully from the saved invoices and posted Credit Notes.");
+      setExpandedIssue("");
+      setResolutionNote("");
+      setRefreshToken(value => value + 1);
+    } catch (retryFailure) {
+      setRetryError({ issueId: issue._id, message: errorMessage(retryFailure) });
+    } finally {
+      setRetryingIssueId("");
+    }
   };
 
   const resolveIssue = async event => {
@@ -131,7 +152,7 @@ export default function FinancialRecoveryIssues() {
           <div className="financial-recovery-eyebrow">Financial safety</div>
           <h1 className="financial-recovery-title">Recovery issues</h1>
           <p className="financial-recovery-subtitle">
-            Review transactions that could not be fully reversed automatically.
+            Review financial recovery alerts and refresh customer totals when an automatic summary update could not complete.
           </p>
         </div>
         <button
@@ -146,7 +167,7 @@ export default function FinancialRecoveryIssues() {
       </header>
 
       <div className="alert alert-warning financial-recovery-guidance" role="note">
-        <strong>Check before resolving.</strong> Compare the invoice, payment or Credit Note history and confirm any stock or customer-balance correction has actually been completed. Marking an issue resolved only closes the alert; it does not change financial records.
+        <strong>Check before resolving.</strong> For customer-total alerts, use the refresh action to rebuild the summary from saved invoices and posted Credit Notes. For other alerts, compare the affected records and confirm any correction has actually been completed. Closing an issue does not change financial records.
       </div>
 
       {notice && (
@@ -210,6 +231,8 @@ export default function FinancialRecoveryIssues() {
           <div className="financial-recovery-cards">
             {issues.map(issue => {
               const isExpanded = expandedIssue === issue._id;
+              const isCustomerSummaryIssue = issue.operation === "customer-summary-sync";
+              const isRetryingThisIssue = retryingIssueId === issue._id;
               const recordGroups = Object.entries(RECORD_LABELS)
                 .flatMap(([key, label]) => {
                   const ids = key === "creditNoteId"
@@ -240,13 +263,26 @@ export default function FinancialRecoveryIssues() {
                       <button
                         type="button"
                         className="btn btn-outline-primary btn-sm financial-recovery-review-button"
-                        onClick={() => startResolve(issue)}
-                        aria-expanded={isExpanded}
+                        onClick={() => isCustomerSummaryIssue ? retryCustomerSummary(issue) : startResolve(issue)}
+                        disabled={isRetryingThisIssue}
+                        aria-expanded={isCustomerSummaryIssue ? undefined : isExpanded}
                       >
-                        {isExpanded ? "Close form" : "Review issue"}
+                        {isCustomerSummaryIssue
+                          ? (isRetryingThisIssue ? "Refreshing totals…" : "Refresh customer totals")
+                          : (isExpanded ? "Close form" : "Review issue")}
                       </button>
                     )}
                   </div>
+
+                  {isCustomerSummaryIssue && (
+                    <p className="small text-secondary mb-3">
+                      The invoice or payment was already saved. This alert only concerns the customer summary; refreshing it does not create or change a transaction.
+                    </p>
+                  )}
+
+                  {retryError.issueId === issue._id && (
+                    <div className="alert alert-danger py-2" role="alert">{retryError.message}</div>
+                  )}
 
                   {issue.originalError && (
                     <div className="financial-recovery-cause">
@@ -299,7 +335,7 @@ export default function FinancialRecoveryIssues() {
                     </div>
                   )}
 
-                  {isExpanded && (
+                  {isExpanded && !isCustomerSummaryIssue && (
                     <form className="financial-recovery-resolve-form" onSubmit={resolveIssue}>
                       <h4 className="h6 mb-2">Record the reconciliation</h4>
                       <p className="small text-secondary">

@@ -187,7 +187,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
     reservedReferenceId=null;
 
     const clientIds=[...new Set(allocations.map(item=>String(item.order.clientId||"")).filter(Boolean))];
-    await Promise.allSettled(clientIds.map(clientId=>syncClientDataSafely(clientId,"a bulk payment")));
+    await Promise.allSettled(clientIds.map(clientId=>syncClientDataSafely(clientId,"a bulk payment",req.user.id)));
 
     return res.json({
       success:true,

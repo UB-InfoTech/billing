@@ -11,7 +11,7 @@ const financialRecoveryIssueSchema = new mongoose.Schema({
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
   operation: {
     type: String,
-    enum: ["credit-note-create", "credit-note-edit", "credit-note-cancel", "bulk-payment"],
+    enum: ["credit-note-create", "credit-note-edit", "credit-note-cancel", "bulk-payment", "customer-summary-sync"],
     required: true,
     index: true
   },

@@ -374,11 +374,12 @@ const OrdersTable = React.memo(({
   });
   const [sortKey] = useState('orderNumber');
   const [sortOrder] = useState('asc');
+  const hasActiveFilters = Object.values(filters).some(value => value.trim());
 
   if (orders.length === 0) {
     return (
       <div className="card p-3 mb-3 shadow-sm text-center">
-        <p className="mb-0">No orders available</p>
+        <p className="mb-0">No outstanding invoices are available for bulk payment.</p>
       </div>
     );
   }
@@ -462,9 +463,18 @@ const OrdersTable = React.memo(({
           />
         </div>
       </div>
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <span className="small text-secondary">{filteredOrders.length} matching invoice{filteredOrders.length === 1 ? "" : "s"}</span>
+        {hasActiveFilters && (
+          <button type="button" className="btn btn-sm btn-light border" onClick={() => setFilters({ billNo: "", challanNumber: "", clientName: "" })}>
+            Clear filters
+          </button>
+        )}
+      </div>
 
       <DynamicTable
         tableKey="bulk-payments.selection"
+        emptyText={hasActiveFilters ? "No invoices match these filters. Clear filters to see all available invoices." : "No outstanding invoices are available for bulk payment."}
         rows={sortedData}
         getRowKey={order=>order._id}
         selectable

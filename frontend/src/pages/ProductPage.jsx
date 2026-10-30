@@ -50,6 +50,7 @@ export default function ProductPage(){
   const [lowStock,setLowStock]=useState(false);
   const [currentPage,setCurrentPage]=useState(1);
   const [pagination,setPagination]=useState({page:1,pages:1,total:0});
+  const productLoadRequestRef=useRef(0);
   const visiblePageStart=Math.max(1,Math.min(currentPage-3,pagination.pages-6));
   const visiblePageNumbers=Array.from(
     {length:Math.min(7,pagination.pages)},
@@ -101,7 +102,8 @@ export default function ProductPage(){
     }
   },[searchParams,setSearchParams]);
 
-  const loadProducts=async()=>{
+  const loadProducts=useCallback(async()=>{
+    const requestId=++productLoadRequestRef.current;
     try{
       setLoading(true);
       setError("");
@@ -113,6 +115,11 @@ export default function ProductPage(){
         sort:"productName",
         order:"asc"
       });
+
+      // Search/filter requests can finish out of order. Only the newest
+      // request may update the visible list, pagination, or error state.
+      if(requestId!==productLoadRequestRef.current)return;
+
       const pageCount=Math.max(1,Number(response.data?.pages)||1);
       const total=Math.max(0,Number(response.data?.total)||0);
       setPagination({page:Math.min(currentPage,pageCount),pages:pageCount,total});
@@ -122,16 +129,23 @@ export default function ProductPage(){
       }
       setProducts(Array.isArray(response.data?.products)?response.data.products:[]);
     }catch(loadError){
-      setError(loadError.response?.data?.message||"Unable to load products.");
-    }finally{setLoading(false);}
-  };
+      if(requestId===productLoadRequestRef.current){
+        setError(loadError.response?.data?.message||"Unable to load products.");
+      }
+    }finally{
+      if(requestId===productLoadRequestRef.current)setLoading(false);
+    }
+  },[search,lowStock,currentPage]);
 
   useEffect(()=>{
     const timer=window.setTimeout(()=>{setCurrentPage(1);setSearch(searchInput.trim());},250);
     return()=>window.clearTimeout(timer);
   },[searchInput]);
 
-  useEffect(()=>{loadProducts();},[search,lowStock,currentPage]);
+  useEffect(()=>{
+    loadProducts();
+    return()=>{productLoadRequestRef.current+=1;};
+  },[loadProducts]);
 
   const handleEdit=useCallback(product=>{
     const hydrated=buildConfiguredDefaults(hydrateConfiguredValues(product,configuredFields),configuredFields);
@@ -287,6 +301,14 @@ export default function ProductPage(){
     return [...base,...custom];
   },[configuredFields]);
 
+  const hasActiveProductFilters=Boolean(searchInput.trim()||lowStock);
+  const clearProductFilters=()=>{
+    setSearchInput("");
+    setSearch("");
+    setLowStock(false);
+    setCurrentPage(1);
+  };
+
   return(
     <div className="container-fluid py-3">
       <BusinessPageHeader
@@ -383,7 +405,10 @@ export default function ProductPage(){
                 <span className="small">Low stock only</span>
               </label>
             </div>
-            <span className="small text-muted">{pagination.total} product{pagination.total===1?"":"s"} found</span>
+            <div className="d-flex flex-wrap align-items-center gap-2">
+              <span className="small text-muted">{pagination.total} product{pagination.total===1?"":"s"} found</span>
+              {hasActiveProductFilters&&<button type="button" className="btn btn-sm btn-light border" onClick={clearProductFilters}>Clear filters</button>}
+            </div>
           </div>
 
           <DynamicTable
@@ -392,7 +417,7 @@ export default function ProductPage(){
             rows={products}
             getRowKey={product=>product._id}
             loading={loading}
-            emptyText={search.trim()?"No products match your search. Clear the search to see all products.":lowStock?"No products are at or below the minimum stock level.":"No products yet. Add a product once and reuse its name and price on invoices."}
+            emptyText={hasActiveProductFilters?"No products match your current filters. Clear filters to see all products.":"No products yet. Add a product once and reuse its name and price on invoices."}
             columns={tableColumns}
             actionColumn={{
               label:"Actions",

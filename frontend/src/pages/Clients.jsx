@@ -50,6 +50,7 @@ function Clients() {
 
   // -----
   const [loading, setLoading] = useState(false);
+  const [clientsLoadError,setClientsLoadError]=useState("");
   const [formSaving,setFormSaving]=useState(false);
   const [formError,setFormError]=useState("");
   const [pageMessage,setPageMessage]=useState("");
@@ -130,6 +131,7 @@ function Clients() {
     const common={
       field:{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled||clientFormConfig.loading},
       value:clientValue(field),
+      autoFocus:field.key==="companyName",
       onChange:value=>updateClientField(field,value,null),
       onRecordChange:record=>updateClientField(field,record?.[field.dataSource?.valueField||"_id"]??"",record),
       lookupRecords:source,
@@ -173,6 +175,7 @@ function Clients() {
   const authConfig = { headers: { "x-auth-token": token || "" } };
   const fetchClients = async () => {
     setLoading(true);
+    setClientsLoadError("");
     try {
       const response = await axios.get(`${linkone}/api/clients`, {
         headers: {'x-auth-token': token}
@@ -184,7 +187,7 @@ function Clients() {
         window.location.reload();
         return;
       }
-      setPageMessage(error.response?.data?.message||"Customers could not be loaded. Refresh the page to try again.");
+      setClientsLoadError(error.response?.data?.message||"Customers could not be loaded. Refresh the page to try again.");
       console.error("Error fetching customers",error);
     } finally {
       setLoading(false);
@@ -407,9 +410,23 @@ function Clients() {
     });
   },[clients,search,filters]);
 
+  const hasActiveClientFilters=Boolean(
+    search.trim()||Object.values(filters).some(value=>String(value??"").trim())
+  );
+  const clearClientFilters=()=>{
+    setSearch("");
+    setFilters({businessType:"",accountStatus:"",minRevenue:"",maxRevenue:""});
+    setCurrentPage(1);
+  };
+
   const totalPages=Math.ceil(filteredClients.length/itemsPerPage);
   const indexOfLastItem=currentPage*itemsPerPage;
   const indexOfFirstItem=indexOfLastItem-itemsPerPage;
+  const pageWindowStart=Math.max(1,Math.min(currentPage-3,totalPages-6));
+  const visiblePageNumbers=Array.from(
+    {length:Math.min(7,totalPages)},
+    (_,index)=>pageWindowStart+index
+  );
 
   // If a delete or refreshed filter removes the last page, move to the last
   // available page instead of showing an empty list while other customers exist.
@@ -425,6 +442,7 @@ function Clients() {
       setSortKey(key);
       setSortClient('asc');
     }
+    setCurrentPage(1);
   };
 
   const sortedData = [...filteredClients].sort((a, b) => {
@@ -443,10 +461,13 @@ function Clients() {
       return sortClient === 'asc' ? aVal - bVal : bVal - aVal;
     }
 
-    // Default string comparison
+    // Missing values are treated as empty text so optional customer fields
+    // do not break sorting when some records have not filled them in.
+    const aText=String(aVal??"");
+    const bText=String(bVal??"");
     return sortClient === 'asc'
-      ? aVal?.toString().localeCompare(bVal?.toString())
-      : bVal?.toString().localeCompare(aVal?.toString());
+      ? aText.localeCompare(bText,undefined,{numeric:true,sensitivity:"base"})
+      : bText.localeCompare(aText,undefined,{numeric:true,sensitivity:"base"});
   });
 
   const pagedClientRows=sortedData.slice(indexOfFirstItem,indexOfLastItem);
@@ -457,6 +478,36 @@ function Clients() {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Clients');
     XLSX.writeFile(workbook, 'clients_report.xlsx');
+  };
+
+  const handleCustomerModalKeyDown = event => {
+    if (event.key === "Escape") {
+      if (!formSettingsOpen) {
+        event.preventDefault();
+        setShowModal(false);
+        setFormError("");
+      }
+      return;
+    }
+    if (event.key !== "Tab") return;
+
+    const focusable = Array.from(event.currentTarget.querySelectorAll(
+      'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    )).filter(element => element.getClientRects().length > 0);
+    if (!focusable.length) {
+      event.preventDefault();
+      return;
+    }
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
   };
 
   return (
@@ -472,6 +523,17 @@ function Clients() {
         </BusinessPageHeader>
 
         {pageMessage&&<div className="alert alert-info" role="status">{pageMessage}</div>}
+        {clientsLoadError&&(
+          <div className="alert alert-danger d-flex flex-wrap align-items-center gap-2" role="alert">
+            <div className="flex-grow-1">
+              <div className="fw-semibold">Customer list could not be refreshed.</div>
+              <div className="small">{clients.length?"Showing the last loaded customer records below.":"No customer records are available to display until loading succeeds."}</div>
+            </div>
+            <button type="button" className="btn btn-outline-danger btn-sm" onClick={fetchClients} disabled={loading}>
+              {loading?"Refreshing…":"Try again"}
+            </button>
+          </div>
+        )}
 
         <div className="customer-overview-grid mb-3">
           <div className="customer-overview-card">
@@ -522,19 +584,20 @@ function Clients() {
             <details className="filter-details mt-3">
               <summary><i className="bi bi-sliders me-2"></i>More filters <span className="text-secondary fw-normal">(optional)</span></summary>
               <div className="row g-2 align-items-end pt-3">
-                <div className="col-sm-5">
+                <div className="col-sm-6">
                   <label className="form-label small" htmlFor="customer-min-revenue">Minimum total sales (₹)</label>
                   <input id="customer-min-revenue" type="number" min="0" className="form-control" placeholder="No minimum" value={filters.minRevenue} onChange={event=>{setFilters(prev=>({...prev,minRevenue:event.target.value}));setCurrentPage(1);}}/>
                 </div>
-                <div className="col-sm-5">
+                <div className="col-sm-6">
                   <label className="form-label small" htmlFor="customer-max-revenue">Maximum total sales (₹)</label>
                   <input id="customer-max-revenue" type="number" min="0" className="form-control" placeholder="No maximum" value={filters.maxRevenue} onChange={event=>{setFilters(prev=>({...prev,maxRevenue:event.target.value}));setCurrentPage(1);}}/>
                 </div>
-                <div className="col-sm-2">
-                  <button type="button" className="btn btn-outline-secondary w-100" onClick={()=>{setSearch("");setFilters({businessType:"",accountStatus:"",minRevenue:"",maxRevenue:""});setCurrentPage(1);}}>Clear all</button>
-                </div>
               </div>
             </details>
+            <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+              <span className="small text-secondary">{filteredClients.length} customer{filteredClients.length===1?"":"s"}{hasActiveClientFilters?" match your filters":" in your records"}</span>
+              {hasActiveClientFilters&&<button type="button" className="btn btn-sm btn-light border" onClick={clearClientFilters}>Clear filters</button>}
+            </div>
           </div>
 
             {/* Table */}
@@ -543,7 +606,7 @@ function Clients() {
               tableKey="clients.list"
               rows={pagedClientRows}
               loading={loading}
-              emptyText={search.trim()||Object.values(filters).some(Boolean)?"No customers match these filters. Clear them to see everyone.":"No customers yet. Add a customer so their details are ready when you create an invoice."}
+              emptyText={clientsLoadError?"Customer records could not be loaded. Try again above.":hasActiveClientFilters?"No customers match these filters. Use Clear filters to see everyone.":"No customers yet. Add a customer so their details are ready when you create an invoice."}
               getRowKey={client => client._id}
               columns={[
                 { key:"__rowNumber", label:"#", locked:false, render:(_row,index)=>index+1 },
@@ -595,6 +658,7 @@ function Clients() {
               <ul className="pagination justify-content-center mt-3">
                 <li className="page-item">
                   <button
+                    type="button"
                     className="page-link"
                     onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                     disabled={currentPage === 1}
@@ -602,15 +666,16 @@ function Clients() {
                     Previous
                   </button>
                 </li>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                {visiblePageNumbers.map(page => (
                   <li key={page} className={`page-item ${currentPage === page ? 'active' : ''}`}>
-                    <button className="page-link" onClick={() => setCurrentPage(page)}>
+                    <button type="button" className="page-link" aria-current={currentPage === page ? "page" : undefined} onClick={() => setCurrentPage(page)}>
                       {page}
                     </button>
                   </li>
                 ))}
                 <li className="page-item">
                   <button
+                    type="button"
                     className="page-link"
                     onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                     disabled={currentPage === totalPages}
@@ -661,13 +726,21 @@ function Clients() {
           )}
 
           {showModal && (
-            <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}>
+            <div
+              className="modal show d-block"
+              tabIndex="-1"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="customer-form-title"
+              onKeyDown={handleCustomerModalKeyDown}
+              style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}
+            >
               <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable customer-a4-dialog">
                 <div className="modal-content customer-form-modal shadow-sm border-0">
                   <div className="modal-header bg-white text-dark p-3 border-bottom d-flex justify-content-between align-items-center">
                     <div className="d-flex align-items-center gap-2">
                       <div>
-                        <h5 className="modal-title fw-bold mb-1">{editingClient ? "Edit customer" : "Add a customer"}</h5>
+                        <h5 id="customer-form-title" className="modal-title fw-bold mb-1">{editingClient ? "Edit customer" : "Add a customer"}</h5>
                         <div className="small text-muted">Start with the customer or business name. Add contact details only when you need them.</div>
                       </div>
                     </div>

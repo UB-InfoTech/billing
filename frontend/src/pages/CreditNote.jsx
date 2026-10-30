@@ -116,7 +116,9 @@ export default function CreditNote() {
     const [editingNote, setEditingNote] = useState(null);
     const [profile, setProfile] = useState(null);
 
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [listError, setListError] = useState("");
+    const creditNoteListRequestRef = useRef(0);
     const [orderLoading, setOrderLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [cancellingId, setCancellingId] = useState(null);
@@ -172,36 +174,54 @@ export default function CreditNote() {
     }, [selectedOrder]);
 
     const loadCreditNotes = useCallback(async (nextFilters = filters) => {
+        const requestId = ++creditNoteListRequestRef.current;
         try {
             setLoading(true);
-            setError("");
+            setListError("");
+            const requestedPage = Math.max(1, Number(nextFilters.page) || 1);
             const params = {
                 search: nextFilters.search || undefined,
                 reason: nextFilters.reason || undefined,
                 status: nextFilters.status || undefined,
                 from: nextFilters.from || undefined,
                 to: nextFilters.to || undefined,
-                page: nextFilters.page || 1,
+                page: requestedPage,
                 limit: PAGE_SIZE,
             };
             const response = await axios.get(`${API_BASE}/api/credit-notes`, {
                 ...getAuthConfig(),
                 params,
             });
-            setCreditNotes(response.data?.creditNotes || []);
-            setPagination(response.data?.pagination || { page: 1, pages: 1, total: 0 });
+            if (requestId !== creditNoteListRequestRef.current) return;
+
+            const nextPagination = response.data?.pagination || { page: 1, pages: 1, total: 0 };
+            const pageCount = Math.max(1, Number(nextPagination.pages) || 1);
+            if (requestedPage > pageCount) {
+                // A deletion can remove the last page. Request the last page
+                // instead of replacing the list with an empty result.
+                setFilters(current => current.page === requestedPage
+                    ? { ...current, page: pageCount }
+                    : current
+                );
+                return;
+            }
+
+            setCreditNotes(Array.isArray(response.data?.creditNotes) ? response.data.creditNotes : []);
+            setPagination(nextPagination);
         } catch (error) {
+            if (requestId !== creditNoteListRequestRef.current) return;
             if (error?.response?.status === 401) {
                 localStorage.removeItem("token");
             }
-            setError(getErrorMessage(error));
+            setListError(getErrorMessage(error));
         } finally {
-            setLoading(false);
+            if (requestId === creditNoteListRequestRef.current) setLoading(false);
         }
     }, [filters]);
 
     useEffect(() => {
         loadCreditNotes(filters);
+        return () => { creditNoteListRequestRef.current += 1; };
     }, [loadCreditNotes, filters]);
 
     useEffect(() => {
@@ -692,6 +712,10 @@ export default function CreditNote() {
         }
     };
 
+    const hasActiveCreditNoteFilters = Boolean(
+        filters.search.trim() || filters.reason || filters.status || filters.from || filters.to
+    );
+
     return (
         <div className="container-fluid py-3">
             <style>{`
@@ -754,7 +778,18 @@ export default function CreditNote() {
                     </div>
                 </div>
 
-                {error && <div className="alert alert-danger alert-dismissible no-print"><strong>Error:</strong> {error}<button type="button" className="btn-close" onClick={() => setError("")} /></div>}
+                {error && <div className="alert alert-danger alert-dismissible no-print" role="alert"><strong>Error:</strong> {error}<button type="button" className="btn-close" aria-label="Dismiss error" onClick={() => setError("")} /></div>}
+                {view === "list" && listError && (
+                    <div className="alert alert-danger d-flex flex-wrap align-items-center gap-2 no-print" role="alert">
+                        <div className="flex-grow-1">
+                            <div className="fw-semibold">Credit Notes could not be refreshed.</div>
+                            <div className="small">{creditNotes.length ? "Your last loaded Credit Notes are still shown below." : listError}</div>
+                        </div>
+                        <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => loadCreditNotes(filters)} disabled={loading}>
+                            {loading ? "Refreshing…" : "Try again"}
+                        </button>
+                    </div>
+                )}
                 {success && <div className="alert alert-success no-print">{success}</div>}
 
                 {view === "list" && (
@@ -781,7 +816,7 @@ export default function CreditNote() {
                                 rows={creditNotes}
                                 getRowKey={note=>note._id}
                                 loading={loading}
-                                emptyText="No Credit Notes found."
+                                emptyText={listError && !creditNotes.length ? "Credit Notes could not be loaded. Try again above." : hasActiveCreditNoteFilters ? "No Credit Notes match these filters. Reset filters to see all records." : "No Credit Notes yet. Create a Credit Note when you need to record a return or adjustment."}
                                 columns={[
                                     {key:"creditNoteNumber",label:"CN No."},
                                     {key:"creditNoteDate",label:"Date",render:note=>formatDate(note.creditNoteDate)},
@@ -807,12 +842,12 @@ export default function CreditNote() {
                                 }}
                             />
 
-                            <div className="d-flex justify-content-between align-items-center mt-3 no-print">
-                                <small className="text-muted">Total records: {pagination.total || 0}</small>
-                                <div className="btn-group btn-group-sm">
-                                    <button className="btn btn-outline-secondary" disabled={(pagination.page || 1) <= 1} onClick={() => setFilters((f) => ({ ...f, page: Math.max(1, f.page - 1) }))}>Previous</button>
-                                    <button className="btn btn-outline-secondary" disabled>{pagination.page || 1} / {pagination.pages || 1}</button>
-                                    <button className="btn btn-outline-secondary" disabled={(pagination.page || 1) >= (pagination.pages || 1)} onClick={() => setFilters((f) => ({ ...f, page: f.page + 1 }))}>Next</button>
+                            <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3 no-print">
+                                <small className="text-muted">{pagination.total || 0} Credit Note{pagination.total === 1 ? "" : "s"} found</small>
+                                <div className="btn-group btn-group-sm" aria-label="Credit Note pages">
+                                    <button type="button" className="btn btn-outline-secondary" disabled={loading || (pagination.page || 1) <= 1} onClick={() => setFilters((f) => ({ ...f, page: Math.max(1, (pagination.page || f.page || 1) - 1) }))}>Previous</button>
+                                    <button type="button" className="btn btn-outline-secondary" disabled aria-live="polite">{pagination.page || 1} / {pagination.pages || 1}</button>
+                                    <button type="button" className="btn btn-outline-secondary" disabled={loading || (pagination.page || 1) >= (pagination.pages || 1)} onClick={() => setFilters((f) => ({ ...f, page: (pagination.page || f.page || 1) + 1 }))}>Next</button>
                                 </div>
                             </div>
                         </div>

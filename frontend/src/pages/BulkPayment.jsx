@@ -220,7 +220,6 @@ const PaymentForm = React.memo(({
   onFormChange,
   totalDue,
   totalAllocated,
-  onSubmit,
   submitting,
   onToggleModal,
   showModal,
@@ -349,7 +348,6 @@ const PaymentForm = React.memo(({
           type="submit"
           className="btn btn-outline-success w-100"
           disabled={submitting}
-          onClick={onSubmit}
           aria-label="Submit bulk payment"
         >
           {submitting ? "Processing..." : "Submit Payment"}
@@ -376,11 +374,12 @@ const OrdersTable = React.memo(({
   });
   const [sortKey] = useState('orderNumber');
   const [sortOrder] = useState('asc');
+  const hasActiveFilters = Object.values(filters).some(value => value.trim());
 
   if (orders.length === 0) {
     return (
       <div className="card p-3 mb-3 shadow-sm text-center">
-        <p className="mb-0">No orders available</p>
+        <p className="mb-0">No outstanding invoices are available for bulk payment.</p>
       </div>
     );
   }
@@ -464,9 +463,18 @@ const OrdersTable = React.memo(({
           />
         </div>
       </div>
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+        <span className="small text-secondary">{filteredOrders.length} matching invoice{filteredOrders.length === 1 ? "" : "s"}</span>
+        {hasActiveFilters && (
+          <button type="button" className="btn btn-sm btn-light border" onClick={() => setFilters({ billNo: "", challanNumber: "", clientName: "" })}>
+            Clear filters
+          </button>
+        )}
+      </div>
 
       <DynamicTable
         tableKey="bulk-payments.selection"
+        emptyText={hasActiveFilters ? "No invoices match these filters. Clear filters to see all available invoices." : "No outstanding invoices are available for bulk payment."}
         rows={sortedData}
         getRowKey={order=>order._id}
         selectable
@@ -607,8 +615,11 @@ export default function BulkPayment() {
   // State management
   const [orders, setOrders] = useState([]);
   const [selectedOrders, setSelectedOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [ordersLoadError, setOrdersLoadError] = useState("");
+  const [ordersReloadKey, setOrdersReloadKey] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const submissionLockRef = useRef(false);
   const [showModal, setShowModal] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
 
@@ -629,15 +640,18 @@ export default function BulkPayment() {
     const fetchOrders = async () => {
       try {
         setLoading(true);
+        setOrdersLoadError("");
         const allOrders = await fetchAllInvoiceOrders(apiClient, controller.signal);
         const availableOrders = allOrders.filter(
           order => order.status !== 'Cancelled' && Number(order.dueAmount || 0) > 0
         );
         setOrders(availableOrders);
+        setOrdersLoadError("");
       } catch (error) {
         if (!controller.signal.aborted) {
+          const message = error.response?.data?.message || error.message || "Unable to load invoices.";
           console.error('Failed to fetch orders:', error);
-          toast.error('Failed to load orders');
+          setOrdersLoadError(message);
         }
       } finally {
         if (!controller.signal.aborted) {
@@ -651,7 +665,7 @@ export default function BulkPayment() {
     return () => {
       controller.abort();
     };
-  }, []);
+  }, [ordersReloadKey]);
 
   // Memoized calculations for performance with proper decimal handling
   const selectedOrdersData = useMemo(() =>
@@ -776,22 +790,23 @@ export default function BulkPayment() {
 
     const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
-
-    if (selectedOrders.length === 0) {
-      toast.error("Please select at least one order");
-      return;
-    }
-
-    const isValid = await validateForm();
-    if (!isValid) {
-      toast.error("Please fix validation errors");
-      return;
-    }
+    if (submissionLockRef.current) return;
+    submissionLockRef.current = true;
 
     const controller = new AbortController();
 
     try {
       setSubmitting(true);
+      if (selectedOrders.length === 0) {
+        toast.error("Please select at least one order");
+        return;
+      }
+
+      const isValid = await validateForm();
+      if (!isValid) {
+        toast.error("Please fix validation errors");
+        return;
+      }
 
       // // Debug logging
       // console.log('🔍 Frontend Debug - Selected Orders:', {
@@ -861,10 +876,11 @@ export default function BulkPayment() {
           order => order.status !== 'Cancelled' && Number(order.dueAmount || 0) > 0
         );
         setOrders(availableOrders);
+        setOrdersLoadError("");
       } catch (refreshError) {
         if (!controller.signal.aborted) {
           console.error('Bulk payment was saved, but invoice refresh failed:', refreshError);
-          toast.warning('Payment was recorded successfully, but the invoice list could not refresh. Reload the page to see updated balances.');
+          setOrdersLoadError("The bulk payment was recorded, but invoice balances could not be refreshed. The displayed balances may be out of date. Refresh before recording another bulk payment.");
         }
       }
 
@@ -873,9 +889,8 @@ export default function BulkPayment() {
         toast.error(error.response?.data?.message || "Payment failed ❌");
       }
     } finally {
-      if (!controller.signal.aborted) {
-        setSubmitting(false);
-      }
+      submissionLockRef.current = false;
+      setSubmitting(false);
     }
   }, [form, selectedOrders, customSplits, orders, totalDue, selectedOrdersData]);
   const reportRef = useRef();
@@ -920,7 +935,6 @@ export default function BulkPayment() {
             onFormChange={handleFormChange}
             totalDue={totalDue}
             totalAllocated={totalAllocated}
-            onSubmit={handleSubmit}
             submitting={submitting}
             onToggleModal={toggleModal}
             showModal={showModal}
@@ -937,14 +951,26 @@ export default function BulkPayment() {
             />
           )}
 
-          <OrdersTable
-            orders={orders}
-            selectedOrders={selectedOrders}
-            onOrderSelect={handleOrderSelect}
-            splitType={form.splitType}
-            customSplits={customSplits}
-            onCustomAmountChange={handleCustomAmountChange}
-          />
+          {ordersLoadError ? (
+            <div className="alert alert-danger d-flex flex-wrap align-items-center gap-2 mt-3" role="alert">
+              <div className="flex-grow-1">
+                <div className="fw-semibold">Invoice balances are not available.</div>
+                <div className="small">{ordersLoadError}</div>
+              </div>
+              <button type="button" className="btn btn-outline-danger btn-sm" onClick={() => setOrdersReloadKey(key => key + 1)} disabled={loading}>
+                {loading ? "Refreshing…" : "Try again"}
+              </button>
+            </div>
+          ) : (
+            <OrdersTable
+              orders={orders}
+              selectedOrders={selectedOrders}
+              onOrderSelect={handleOrderSelect}
+              splitType={form.splitType}
+              customSplits={customSplits}
+              onCustomAmountChange={handleCustomAmountChange}
+            />
+          )}
         </form>
       </div>
     </ErrorBoundary>

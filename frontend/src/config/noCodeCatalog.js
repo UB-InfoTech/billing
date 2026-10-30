@@ -8,6 +8,7 @@ export const MODULE_CATALOG=[
   {key:"calendar",label:"Calendar",route:"/calendar",icon:"bi-calendar3",description:"Important dates and reminders"},
   {key:"bulk-payment",label:"Payments",route:"/bulk-payment",icon:"bi-cash-stack",description:"Receive and manage payments"},
   {key:"credit-notes",label:"Credit Notes",route:"/credit-notes",icon:"bi-file-earmark-minus",description:"Returns and adjustments"},
+  {key:"financial-recovery",label:"Recovery issues",route:"/financial-recovery",icon:"bi-shield-exclamation",description:"Review incomplete financial recovery"},
   {key:"settings",label:"Settings",route:"/settings",icon:"bi-sliders2",description:"Customize your software"},
 ];
 
@@ -53,9 +54,9 @@ export const ORDER_ITEM_FIELDS=[
 ];
 
 export const CLIENT_FORM_FIELDS=[
-  {key:"name",label:"Contact person (optional)",fieldType:"text",width:6,section:"basic",order:1,system:true},
-  {key:"email",label:"Email (optional)",fieldType:"text",width:6,section:"basic",order:3},
-  {key:"phone",label:"Phone (optional)",fieldType:"text",width:6,section:"basic",order:2},
+  {key:"name",label:"Contact person",fieldType:"text",width:6,section:"basic",order:1,system:true},
+  {key:"email",label:"Email",fieldType:"text",width:6,section:"basic",order:3},
+  {key:"phone",label:"Phone",fieldType:"text",width:6,section:"basic",order:2},
   {key:"address",label:"Address",fieldType:"textarea",width:6,section:"address",order:3},
   {key:"pinCode",label:"Pin Code",fieldType:"text",width:3,section:"address",order:4},
   {key:"stateCode",label:"State Code",fieldType:"text",width:3,section:"address",order:5},

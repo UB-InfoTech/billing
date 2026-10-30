@@ -113,6 +113,11 @@ function Order2() {
     const [payments, setPayments] = useState([]);
     const [editPayment, setEditPayment] = useState(null);
     const [newPayment, setNewPayment] = useState({ amount: "", method: "Cash", amountReference: "", paymentDate: formatDateInput(new Date()) });
+    const [paymentSubmitting,setPaymentSubmitting]=useState(false);
+    const [paymentFeedback,setPaymentFeedback]=useState(null);
+    const [paymentsLoading,setPaymentsLoading]=useState(false);
+    const [paymentsLoadError,setPaymentsLoadError]=useState("");
+    const paymentHistoryRequestRef=useRef(0);
     const authConfig = () => ({ headers: { "x-auth-token": localStorage.getItem("token") || "" } });
 
     // const date = new DateObject()
@@ -131,6 +136,7 @@ function Order2() {
     const [loading, setLoading] = useState(false);
     const [loadingOrders,setLoadingOrders]=useState(true);
     const [ordersError,setOrdersError]=useState("");
+    const ordersListRequestRef=useRef(0);
     const [ordersMessage,setOrdersMessage]=useState("");
     const [invoiceFormError,setInvoiceFormError]=useState("");
     const [orderSubmitting, setOrderSubmitting] = useState(false);
@@ -191,11 +197,13 @@ function Order2() {
         // fetchSuppliers();
         // fetchMachines();
 
+        return () => { ordersListRequestRef.current += 1; };
     }, []);
 
     const token = localStorage.getItem('token');
 
     const fetchOrders = async () => {
+        const requestId=++ordersListRequestRef.current;
         setLoadingOrders(true);
         setOrdersError("");
         try {
@@ -206,6 +214,7 @@ function Order2() {
                 headers,
                 params: { page: 1, limit: pageSize }
             });
+            if(requestId!==ordersListRequestRef.current)return;
             const allOrders = Array.isArray(firstResponse.data?.orders)
                 ? [...firstResponse.data.orders]
                 : [];
@@ -222,6 +231,7 @@ function Order2() {
                 const pageResponses = await Promise.all(pageNumbers.map(page =>
                     axios.get(endpoint, { headers, params: { page, limit: pageSize } })
                 ));
+                if(requestId!==ordersListRequestRef.current)return;
                 pageResponses.forEach(response => {
                     if (Array.isArray(response.data?.orders)) {
                         allOrders.push(...response.data.orders);
@@ -229,8 +239,10 @@ function Order2() {
                 });
             }
 
+            if(requestId!==ordersListRequestRef.current)return;
             setOrders(allOrders);
         } catch (error) {
+            if(requestId!==ordersListRequestRef.current)return;
             if (error.response?.data?.msg === "Token is not valid") {
                 localStorage.removeItem("token");
                 window.location.reload();
@@ -239,7 +251,7 @@ function Order2() {
             setOrdersError(error.response?.data?.message||"Invoices could not be loaded. Refresh the page to try again.");
             console.error("Error fetching invoices",error);
         } finally {
-            setLoadingOrders(false);
+            if(requestId===ordersListRequestRef.current)setLoadingOrders(false);
         }
     };
 
@@ -636,6 +648,27 @@ function Order2() {
         editingOrder?.creditAppliedAmount,
     ]);
 
+    const focusInvoiceField = (fieldKey, itemIndex = null) => {
+        if (!fieldKey) return;
+        window.requestAnimationFrame(() => {
+            const workspace = document.querySelector(".invoice-form-workspace");
+            if (!workspace) return;
+            const scope = itemIndex === null
+                ? workspace
+                : workspace.querySelectorAll(".order-config-item-row")[itemIndex];
+            if (!scope) return;
+            const fieldContainer = Array.from(scope.querySelectorAll(".form-config-field"))
+                .find(element => element.dataset.fieldKey === String(fieldKey));
+            const control = fieldContainer?.querySelector(
+                'input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled])'
+            );
+            if (control) {
+                fieldContainer.scrollIntoView({ behavior: "smooth", block: "center" });
+                control.focus({ preventScroll: true });
+            }
+        });
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
 
@@ -649,6 +682,7 @@ function Order2() {
         const missingOrderField=requiredOrderFields.find(field=>String(configuredOrderValue(field)??"").trim()==="");
         if(missingOrderField){
             setInvoiceFormError(`Please complete “${missingOrderField.label}” before saving.`);
+            focusInvoiceField(missingOrderField.key);
             return;
         }
 
@@ -665,6 +699,7 @@ function Order2() {
                 return state.visible&&state.required&&!state.disabled&&String(configuredItemValue(missingItem,field)??"").trim()==="";
             });
             setInvoiceFormError(`Please complete “${missingField?.label||"the item details"}” for the item before saving.`);
+            focusInvoiceField(missingField?.key, subOrders.findIndex(item => item === missingItem));
             return;
         }
 
@@ -690,14 +725,17 @@ function Order2() {
 
         if (editingOrder && !String(formData.orderNumber || "").trim()) {
             setInvoiceFormError("Invoice number is missing. Check the invoice number field.");
+            focusInvoiceField("orderNumber");
             return;
         }
         if (!String(formData.companyName || "").trim()) {
             setInvoiceFormError("Choose a customer before saving this invoice.");
+            focusInvoiceField("companyName");
             return;
         }
         if (!cleanItems.length || cleanItems.every(item => !String(item.orderName || "").trim())) {
             setInvoiceFormError("Add at least one item before saving this invoice.");
+            focusInvoiceField("orderName", 0);
             return;
         }
 
@@ -773,6 +811,10 @@ function Order2() {
         setEditingOrder(order);
         setFormData(order);
         setEditPayment(null);
+        setPaymentFeedback(null);
+        setPayments([]);
+        setPaymentsLoadError("");
+        paymentHistoryRequestRef.current += 1;
         setNewPayment({
             amount: "",
             method: "Cash",
@@ -816,76 +858,113 @@ function Order2() {
     }, [showPaymentModal]);
 
     const fetchPayments = async () => {
+        const currentOrderId = editingOrder?._id;
+        if (!currentOrderId) return false;
+        const requestId = ++paymentHistoryRequestRef.current;
+        setPaymentsLoading(true);
+        setPaymentsLoadError("");
         try {
-            const response = await axios.get(`${linkone}/api/order/orders/${editingOrder._id}/payments`, authConfig());
-            setPayments(response.data);
+            const response = await axios.get(`${linkone}/api/order/orders/${currentOrderId}/payments`, authConfig());
+            if (requestId !== paymentHistoryRequestRef.current) return false;
+            setPayments(Array.isArray(response.data) ? response.data : []);
+            return true;
         } catch (error) {
             const message = error.response?.data?.message || error.message || "Unable to load payment history.";
-            setOrdersMessage(message);
-            console.error("Error fetching payments:", message);
+            if (requestId === paymentHistoryRequestRef.current) {
+                setPaymentsLoadError(message);
+                console.error("Error fetching payments:", message);
+            }
+            return false;
+        } finally {
+            if (requestId === paymentHistoryRequestRef.current) setPaymentsLoading(false);
         }
     };
 
     const addPayment = async (orderId) => {
         const amount = Number(newPayment.amount);
         const due = Number(editingOrder?.dueAmount || 0);
+        const showPaymentError = message => setPaymentFeedback({type:"danger",message});
 
         if(editingOrder?.status==="Cancelled"){
-            alert("This invoice is cancelled. Change its status before recording another payment.");
+            showPaymentError("This invoice is cancelled. Change its status before recording another payment.");
             return;
         }
 
         if (!Number.isFinite(amount) || amount <= 0) {
-            alert("❌ Enter a valid payment amount.");
+            showPaymentError("Enter a payment amount greater than ₹0.00.");
             return;
         }
-        // Match the API's exact currency-cent validation. A one-paise
-        // tolerance here would only let the user submit a payment the server
-        // must reject.
+        // Keep the same cent-level limit as the API so a valid-looking
+        // payment is not submitted when it exceeds the current due balance.
         if (Math.round(amount * 100) > Math.round(due * 100)) {
-            alert(`Payment cannot exceed the current due balance of ₹${due.toFixed(2)}.`);
+            showPaymentError(`Payment cannot exceed the current due balance of ₹${due.toFixed(2)}.`);
+            return;
+        }
+        if (!newPayment.paymentDate) {
+            showPaymentError("Choose the date the payment was received.");
             return;
         }
 
+        setPaymentSubmitting(true);
+        setPaymentFeedback(null);
         try {
             const response = await axios.post(
                 `${linkone}/api/order/orders/${orderId}/pay`,
                 {
                     ...newPayment,
                     amount,
-                    paymentDate: newPayment.paymentDate || formatDateInput(new Date()),
+                    paymentDate: newPayment.paymentDate,
                 },
                 authConfig()
             );
-            await fetchPayments();
+            const historyLoaded = await fetchPayments();
             setEditingOrder(response.data?.order || editingOrder);
             setNewPayment({ amount: "", method: "Cash", amountReference: "", paymentDate: formatDateInput(new Date()) });
             await fetchOrders();
-            alert("✅ Payment added successfully.");
+            setPaymentFeedback(historyLoaded
+                ? {type:"success",message:"Payment recorded successfully."}
+                : {type:"warning",message:"Payment was recorded successfully, but payment history could not refresh. Use Refresh history to check the latest list."});
         } catch (error) {
-            alert("❌ " + (error.response?.data?.message || error.message || "Unable to add payment."));
+            showPaymentError(error.response?.data?.message || error.message || "Unable to record the payment. Please try again.");
+        } finally {
+            setPaymentSubmitting(false);
         }
     };
 
     const updatePayment = async () => {
         if (!editingOrder || !editPayment) return;
+        const amount=Number(editPayment.amount);
+        if(!Number.isFinite(amount)||amount<=0){
+            setPaymentFeedback({type:"danger",message:"Enter a payment amount greater than ₹0.00."});
+            return;
+        }
+        if(!editPayment.paymentDate){
+            setPaymentFeedback({type:"danger",message:"Choose the date the payment was received."});
+            return;
+        }
+        setPaymentSubmitting(true);
+        setPaymentFeedback(null);
         try {
             const response = await axios.put(
                 `${linkone}/api/order/orders/${editingOrder._id}/payments/${editPayment._id}`,
                 {
                     ...editPayment,
-                    amount: Number(editPayment.amount),
-                    paymentDate: editPayment.paymentDate || formatDateInput(new Date()),
+                    amount,
+                    paymentDate: editPayment.paymentDate,
                 },
                 authConfig()
             );
-            await fetchPayments();
+            const historyLoaded = await fetchPayments();
             setEditingOrder(response.data?.order || editingOrder);
             setEditPayment(null);
             await fetchOrders();
-            alert("✅ Payment updated successfully.");
+            setPaymentFeedback(historyLoaded
+                ? {type:"success",message:"Payment updated successfully."}
+                : {type:"warning",message:"Payment changes were saved, but payment history could not refresh. Use Refresh history to check the latest list."});
         } catch (error) {
-            alert("❌ Error updating payment: " + (error.response?.data?.message || error.message || "Unable to update payment."));
+            setPaymentFeedback({type:"danger",message:error.response?.data?.message || error.message || "Unable to update the payment. Please try again."});
+        } finally {
+            setPaymentSubmitting(false);
         }
     };
 
@@ -893,17 +972,23 @@ function Order2() {
         if (!editingOrder?._id || !paymentId) return;
         if (!window.confirm("Delete this payment? The invoice balance will be recalculated.")) return;
 
+        setPaymentSubmitting(true);
+        setPaymentFeedback(null);
         try {
             const response = await axios.delete(
                 `${linkone}/api/order/orders/${editingOrder._id}/payments/${paymentId}`,
                 authConfig()
             );
-            await fetchPayments();
+            const historyLoaded = await fetchPayments();
             setEditingOrder(response.data?.order || editingOrder);
             await fetchOrders();
-            alert("✅ Payment deleted successfully.");
+            setPaymentFeedback(historyLoaded
+                ? {type:"success",message:"Payment deleted and invoice balances recalculated."}
+                : {type:"warning",message:"Payment was deleted and balances recalculated, but history could not refresh. Use Refresh history to check the latest list."});
         } catch (error) {
-            alert("❌ Error deleting payment: " + (error.response?.data?.message || error.message || "Unable to delete payment."));
+            setPaymentFeedback({type:"danger",message:error.response?.data?.message || error.message || "Unable to delete the payment. Please try again."});
+        } finally {
+            setPaymentSubmitting(false);
         }
     };
 
@@ -1368,7 +1453,17 @@ const styles = {
                 </Link>
             </BusinessPageHeader>
 
-            {ordersError&&<div className="alert alert-danger" role="alert">{ordersError}</div>}
+            {ordersError&&(
+                <div className="alert alert-danger d-flex flex-wrap align-items-center gap-2" role="alert">
+                    <div className="flex-grow-1">
+                        <div className="fw-semibold">Invoices could not be refreshed.</div>
+                        <div className="small">{orders.length?"Your last loaded invoice records are still shown below.":ordersError}</div>
+                    </div>
+                    <button type="button" className="btn btn-outline-danger btn-sm" onClick={fetchOrders} disabled={loadingOrders}>
+                        {loadingOrders?"Refreshing…":"Try again"}
+                    </button>
+                </div>
+            )}
             {ordersMessage&&<div className="alert alert-success d-flex align-items-center gap-2" role="status"><i className="bi bi-check-circle-fill"></i><span>{ordersMessage}</span><button type="button" className="btn-close ms-auto" aria-label="Dismiss message" onClick={()=>setOrdersMessage("")}></button></div>}
 
             <div className="py-2">
@@ -1436,7 +1531,7 @@ const styles = {
                                     <input id="invoice-date-to" type="date" className="form-control" value={filters.endDate||""} onChange={event=>{setFilters(prev=>({...prev,endDate:event.target.value}));setCurrentPage(1);}}/>
                                 </div>
                                 <div className="col-md-2">
-                                    <button type="button" className="btn btn-light border w-100" onClick={()=>{setFilters(prev=>({...prev,status:"",startDate:"",endDate:"",dateRange:[]}));setCurrentPage(1);}}>Clear filters</button>
+                                    <button type="button" className="btn btn-light border w-100" onClick={()=>{setFilters(prev=>({...prev,status:"",startDate:"",endDate:"",dateRange:[]}));setCurrentPage(1);}}>Clear status &amp; dates</button>
                                 </div>
                             </div>
                         </details>
@@ -1460,7 +1555,7 @@ const styles = {
                         rows={currentOrders}
                         loading={loadingOrders}
                         getRowKey={order=>order._id}
-                        emptyText={hasActiveInvoiceFilters?"No invoices match these filters. Clear the filters to see all invoices.":"No invoices yet. Select New invoice to create your first invoice."}
+                        emptyText={ordersError&&!orders.length?"Invoice records could not be loaded. Try again above.":hasActiveInvoiceFilters?"No invoices match these filters. Clear the filters to see all invoices.":"No invoices yet. Select New invoice to create your first invoice."}
                         columns={[
                             {key:"__rowNumber",label:"#",visible:false,render:(_row,index)=>index+1},
                             {key:"orderDate",label:"Date",render:order=>order.orderDate?new Date(order.orderDate).toLocaleDateString("en-IN"):""},
@@ -1696,7 +1791,7 @@ const styles = {
             )}
 
             {showModal && (
-                <div className="modal show d-block invoice-modal-backdrop" tabIndex="-1" role="presentation">
+                <div className="modal show d-block invoice-modal-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="invoice-modal-title">
                     <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable invoice-a4-dialog">
                         <div className="modal-content invoice-create-modal border-0" ref={modalRef}>
                             <div className="modal-header invoice-create-header p-4">
@@ -1704,7 +1799,7 @@ const styles = {
                                     <div className="d-flex align-items-center gap-2">
                                         <div>
                                             <div className="small text-primary text-uppercase fw-semibold mb-1">INVOICE</div>
-                                            <h5 className="modal-title fw-bold mb-1">
+                                            <h5 id="invoice-modal-title" className="modal-title fw-bold mb-1">
                                                 {editingOrder ? "Edit invoice" : "Create an invoice"}
                                             </h5>
                                             <div className="small text-secondary">Fill in the invoice details, add the items sold, then review the total and save.</div>
@@ -1722,7 +1817,7 @@ const styles = {
                                     type="button"
                                     className="btn-close"
                                     onClick={() => setShowModal(false)}
-                                    aria-label="Close"
+                                    aria-label="Close invoice form"
                                 ></button>
                             </div>
                             <div className="modal-body p-4 invoice-create-body">
@@ -2006,53 +2101,102 @@ const styles = {
 
             {
                 showPaymentModal && (
-                    <div className="modal fade show d-block orders-fullscreen-backdrop payments-fullscreen" tabIndex="-1">
+                    <div className="modal fade show d-block orders-fullscreen-backdrop payments-fullscreen" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="payment-modal-title">
                         <div className="modal-dialog orders-fullscreen-dialog">
                             <div className="modal-content orders-fullscreen-content">
                                 <div className="modal-header">
-                                    <h5 className="modal-title">Manage Payments — {editingOrder?.companyName || "Customer"}</h5>
-                                    <button type="button" className="btn-close" onClick={() => setShowPaymentModal(false)}></button>
+                                    <h5 id="payment-modal-title" className="modal-title">Manage Payments — {editingOrder?.companyName || "Customer"}</h5>
+                                    <button type="button" className="btn-close" onClick={() => {if(!paymentSubmitting){setShowPaymentModal(false);setPaymentFeedback(null);}}} aria-label="Close payment manager" disabled={paymentSubmitting}></button>
                                 </div>
                                 <div className="modal-body orders-fullscreen-body">
 
-                                    <h6>Add Payment :</h6>
-                                    <div className="d-flex gap-2 mb-2 orders-payment-entry-row">
+                                    <section className="payment-entry-panel mb-4" aria-labelledby="payment-entry-title">
+                                        <div className="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
+                                            <div>
+                                                <h6 id="payment-entry-title" className="mb-1">Record a payment</h6>
+                                                <p className="small text-secondary mb-0">Enter the amount received and how it was paid.</p>
+                                            </div>
+                                            <div className="payment-due-summary" aria-live="polite">
+                                                <span>Amount still due</span>
+                                                <strong>₹{Number(editingOrder?.dueAmount || 0).toFixed(2)}</strong>
+                                            </div>
+                                        </div>
+                                        <div className="row g-3 orders-payment-entry-row">
+                                            <div className="col-12 col-md-4">
+                                                <label htmlFor="payment-amount" className="form-label">Amount received (₹)<span className="text-danger ms-1" aria-hidden="true">*</span></label>
+                                                <ArithmeticInput
+                                                    id="payment-amount"
+                                                    aria-describedby="payment-amount-help"
+                                                    value={newPayment.amount}
+                                                    onValueChange={value=>{setPaymentFeedback(null);setNewPayment(prev=>({...prev,amount:value}));}}
+                                                    className="form-control"
+                                                    placeholder="Enter amount"
+                                                    min="0.01"
+                                                    max={Number(editingOrder?.dueAmount || 0)}
+                                                    step="0.01"
+                                                    disabled={paymentSubmitting||editingOrder?.status==="Cancelled"||Number(editingOrder?.dueAmount||0)<=0}
+                                                    required
+                                                />
+                                                <div id="payment-amount-help" className="form-text">Cannot exceed the current due balance.</div>
+                                            </div>
+                                            <div className="col-12 col-md-4">
+                                                <label htmlFor="payment-method" className="form-label">Payment method</label>
+                                                <select id="payment-method" className="form-select" value={newPayment.method} onChange={(e) => {setPaymentFeedback(null);setNewPayment(prev => ({ ...prev, method: e.target.value }));}} disabled={paymentSubmitting}>
+                                                    <option>Cash</option>
+                                                    <option>Bank Transfer</option>
+                                                    <option>UPI</option>
+                                                    <option>Cheque</option>
+                                                </select>
+                                            </div>
+                                            <div className="col-12 col-md-4">
+                                                <label htmlFor="payment-reference" className="form-label">Reference (optional)</label>
+                                                <input id="payment-reference" type="text" className="form-control" placeholder="UPI ID, cheque no. or bank reference" maxLength="100" value={newPayment.amountReference} onChange={(e) => {setPaymentFeedback(null);setNewPayment(prev => ({ ...prev, amountReference: e.target.value }));}} disabled={paymentSubmitting} />
+                                            </div>
+                                            <div className="col-12 col-md-4">
+                                                <label htmlFor="payment-date" className="form-label">Date received</label>
+                                                <input id="payment-date" type="date" className="form-control" value={newPayment.paymentDate || ""} onChange={(e) => {setPaymentFeedback(null);setNewPayment(prev => ({ ...prev, paymentDate: e.target.value }));}} disabled={paymentSubmitting} required />
+                                            </div>
+                                        </div>
+                                        {paymentFeedback&&(
+                                            <div className={`alert alert-${paymentFeedback.type} mt-3 mb-0`} role={paymentFeedback.type==="danger"?"alert":"status"}>
+                                                {paymentFeedback.message}
+                                            </div>
+                                        )}
+                                        {editingOrder?.status==="Cancelled"&&(
+                                            <div className="alert alert-warning mt-3 mb-0" role="note">This invoice is cancelled. Change its status before recording another payment.</div>
+                                        )}
+                                        <button type="button" className="btn btn-primary mt-3" disabled={paymentSubmitting||editingOrder?.status==="Cancelled"||Number(editingOrder?.dueAmount || 0) <= 0 || !newPayment.amount || !newPayment.paymentDate} onClick={() => addPayment(editingOrder._id)}>
+                                            {paymentSubmitting?<><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving payment…</>:"Record payment"}
+                                        </button>
+                                    </section>
 
-                                        <div className="col-3">
-                                            <ArithmeticInput
-                                                value={newPayment.amount}
-                                                onValueChange={value=>setNewPayment(prev=>({...prev,amount:value}))}
-                                                className="form-control"
-                                                placeholder="Amount"
-                                                min="0.01"
-                                                max={Number(editingOrder?.dueAmount || 0)}
-                                                step="0.01"
-                                                disabled={editingOrder?.status==="Cancelled"||Number(editingOrder?.dueAmount||0)<=0}
-                                                required
-                                            />
-                                            <div className="small text-muted mt-1">Due: ₹{Number(editingOrder?.dueAmount || 0).toFixed(2)}</div>
-                                        </div>
-                                        <div className="col-3">
-                                            <select className="form-select" value={newPayment.method} onChange={(e) => setNewPayment({ ...newPayment, method: e.target.value })}>
-                                                <option>Cash</option>
-                                                <option>Bank Transfer</option>
-                                                <option>UPI</option>
-                                                <option>Cheque</option>
-                                            </select>
-                                        </div>
-                                        <div className="col-5" >
-                                            <input type="text" className="form-control" placeholder="Reference (optional)" maxLength="100" value={newPayment.amountReference} onChange={(e) => setNewPayment({ ...newPayment, amountReference: e.target.value })} />
-                                            <input type="date" className="form-control mt-2" value={newPayment.paymentDate || ""} onChange={(e) => setNewPayment({ ...newPayment, paymentDate: e.target.value })} />
-                                        </div>
-                                        {/* // <button className="btn btn-success" onClick={addPayment}>Add Payment</button> */}
+
+                                    <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
+                                        <h6 className="mb-0">Payment history</h6>
+                                        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={()=>{setPaymentFeedback(null);fetchPayments();}} disabled={paymentsLoading||paymentSubmitting}>
+                                            <i className={`bi ${paymentsLoading?"bi-arrow-repeat":"bi-arrow-clockwise"} me-1`} aria-hidden="true"></i>
+                                            {paymentsLoading?"Loading history…":"Refresh history"}
+                                        </button>
                                     </div>
-                                    <button className="btn btn-primary" disabled={editingOrder?.status==="Cancelled"||Number(editingOrder?.dueAmount || 0) <= 0 || !newPayment.amount} onClick={() => addPayment(editingOrder._id)}>Add Payment</button>
-                                    {editingOrder?.status==="Cancelled"&&(
-                                        <div className="small text-danger mt-2">This invoice is cancelled. Change its status before recording another payment.</div>
-                                    )}
-
-
-                                                                        <DynamicTable
+                                    {paymentsLoading?(
+                                        <div className="border rounded-3 bg-light text-center p-4" role="status">
+                                            <span className="spinner-border spinner-border-sm text-primary me-2" aria-hidden="true"></span>
+                                            Loading payment history…
+                                        </div>
+                                    ):paymentsLoadError?(
+                                        <div className="alert alert-danger" role="alert">
+                                            <div className="fw-semibold">Payment history could not be loaded.</div>
+                                            <div className="small mt-1">{paymentsLoadError}</div>
+                                            <button type="button" className="btn btn-sm btn-outline-danger mt-2" onClick={()=>fetchPayments()} disabled={paymentsLoading||paymentSubmitting}>Try again</button>
+                                        </div>
+                                    ):payments.length===0?(
+                                        <div className="border rounded-3 bg-light text-center p-4">
+                                            <i className="bi bi-receipt text-secondary fs-4 d-block mb-2" aria-hidden="true"></i>
+                                            <div className="fw-semibold">No payments recorded yet</div>
+                                            <div className="small text-secondary mt-1">Payments for this invoice will appear here.</div>
+                                        </div>
+                                    ):(
+                                        <DynamicTable
                                         tableKey="orders.payments"
                                         rows={payments}
                                         getRowKey={payment=>payment._id}
@@ -2067,9 +2211,9 @@ const styles = {
                                             locked:true,
                                             render:p=>(
                                                 <div className="d-flex gap-1 justify-content-end">
-                                                    <button className="btn btn-warning btn-sm" onClick={()=>setEditPayment(p)} title="Edit"><img src={editSVG} alt="Edit" /></button>
-                                                    <button className="btn btn-danger btn-sm" onClick={()=>deletePayment(p._id)} title="Delete"><img src={deleteSVG} alt="Delete" /></button>
-                                                    <button className="btn btn-info btn-sm" onClick={()=>printReceipt(p._id)} title="Receipt"><img src={receiptSVG} alt="Receipt" /></button>
+                                                    <button type="button" className="btn btn-warning btn-sm" onClick={()=>{setPaymentFeedback(null);setEditPayment(p);}} title="Edit payment" aria-label="Edit payment" disabled={paymentSubmitting}><img src={editSVG} alt="" /></button>
+                                                    <button type="button" className="btn btn-danger btn-sm" onClick={()=>deletePayment(p._id)} title="Delete payment" aria-label="Delete payment" disabled={paymentSubmitting}><img src={deleteSVG} alt="" /></button>
+                                                    <button type="button" className="btn btn-info btn-sm" onClick={()=>printReceipt(p._id)} title="Print receipt" aria-label="Print receipt" disabled={paymentSubmitting}><img src={receiptSVG} alt="" /></button>
                                                 </div>
                                             )
                                         }}
@@ -2086,32 +2230,45 @@ const styles = {
                                                 </tr>
                                             );
                                         }}
-                                    />
+                                        />
+                                    )}
 
                                     {editPayment && (
                                         <div>
-                                            <h6>Edit Payment</h6>
-
-                                            <ArithmeticInput
-                                                value={editPayment.amount}
-                                                onValueChange={value=>setEditPayment(prev=>({...prev,amount:value}))}
-                                                className="form-control mb-2"
-                                                min="0.01"
-                                                step="0.01"
-                                                placeholder="Payment amount"
-                                            />
-                                            <input type="date" className="form-control mb-2" value={formatDateInput(editPayment.paymentDate)} onChange={(e) => setEditPayment({ ...editPayment, paymentDate: e.target.value })} />
-                                            <select className="form-select mb-2" value={editPayment.method} onChange={(e) => setEditPayment({ ...editPayment, method: e.target.value })}>
-                                                <option>Cash</option>
-                                                <option>Bank Transfer</option>
-                                                <option>UPI</option>
-                                                <option>Cheque</option>
-                                            </select>
-                                            {/* <div className="col-5" > */}
-                                            <input type="text" className="form-control" placeholder="Reference" value={editPayment.amountReference} onChange={(e) => setEditPayment({ ...editPayment, amountReference: e.target.value })} />
-                                            {/* <input type="text" className="form-control" placeholder="Reference" value={newPayment.amountReference} onChange={(e) => setNewPayment({ ...newPayment, amountReference: e.target.value })} /> */}
-                                            {/* </div> */}
-                                            <button className="btn btn-info" onClick={updatePayment}>Update Payment</button>
+                                            <section className="payment-edit-panel mt-4" aria-labelledby="payment-edit-title">
+                                                <div className="d-flex align-items-start justify-content-between gap-2 mb-3">
+                                                    <h6 id="payment-edit-title" className="mb-0">Edit payment</h6>
+                                                    <button type="button" className="btn btn-sm btn-light border" disabled={paymentSubmitting} onClick={()=>setEditPayment(null)}>Cancel edit</button>
+                                                </div>
+                                                <div className="row g-3">
+                                                    <div className="col-12 col-md-4">
+                                                        <label htmlFor="edit-payment-amount" className="form-label">Amount (₹)</label>
+                                                        <ArithmeticInput id="edit-payment-amount" value={editPayment.amount} onValueChange={value=>setEditPayment(prev=>({...prev,amount:value}))} className="form-control" min="0.01" step="0.01" required />
+                                                    </div>
+                                                    <div className="col-12 col-md-4">
+                                                        <label htmlFor="edit-payment-date" className="form-label">Date received</label>
+                                                        <input id="edit-payment-date" type="date" className="form-control" value={formatDateInput(editPayment.paymentDate)} onChange={(e) => setEditPayment(prev => ({ ...prev, paymentDate: e.target.value }))} required />
+                                                    </div>
+                                                    <div className="col-12 col-md-4">
+                                                        <label htmlFor="edit-payment-method" className="form-label">Payment method</label>
+                                                        <select id="edit-payment-method" className="form-select" value={editPayment.method} onChange={(e) => setEditPayment(prev => ({ ...prev, method: e.target.value }))}>
+                                                            <option>Cash</option>
+                                                            <option>Bank Transfer</option>
+                                                            <option>UPI</option>
+                                                            <option>Cheque</option>
+                                                        </select>
+                                                    </div>
+                                                    <div className="col-12">
+                                                        <label htmlFor="edit-payment-reference" className="form-label">Reference (optional)</label>
+                                                        <input id="edit-payment-reference" type="text" className="form-control" maxLength="100" placeholder="UPI ID, cheque no. or bank reference" value={editPayment.amountReference||""} onChange={(e) => setEditPayment(prev => ({ ...prev, amountReference: e.target.value }))} />
+                                                    </div>
+                                                </div>
+                                                <div className="d-flex gap-2 mt-3">
+                                                    <button type="button" className="btn btn-info" onClick={updatePayment} disabled={paymentSubmitting||!editPayment.amount||!editPayment.paymentDate}>
+                                                        {paymentSubmitting?"Saving changes…":"Save changes"}
+                                                    </button>
+                                                </div>
+                                            </section>
                                         </div>
                                     )}
                                 </div>

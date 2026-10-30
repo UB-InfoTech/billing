@@ -3,6 +3,7 @@ const Client = require("../models/Client");
 const Order = require("../models/Order2");
 const CreditNote = require("../models/CreditNote");
 const { resolveClientCreditBalance, buildClientCreditBalanceSyncFilter } = require("./clientCreditBalance");
+const { recordFinancialRecoveryIssue } = require("./financialRecovery");
 
 function round2(value) {
   return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100;
@@ -113,7 +114,7 @@ async function syncClientData(clientId, attempt = 0) {
   throw new Error("Customer balance changed during summary refresh; retry the refresh.");
 }
 
-async function syncClientDataSafely(clientId, context = "a saved financial transaction") {
+async function syncClientDataSafely(clientId, context = "a saved financial transaction", createdBy = null) {
   try {
     return await syncClientData(clientId);
   } catch (firstError) {
@@ -121,10 +122,41 @@ async function syncClientDataSafely(clientId, context = "a saved financial trans
     try {
       return await syncClientData(clientId);
     } catch (retryError) {
-      // The invoice/payment/credit note was already saved. Do not turn a
-      // completed financial transaction into an apparent failure that users
-      // may retry and accidentally duplicate. A later transaction can resync.
-      console.error(`Customer totals refresh still failed after ${context}; totals may need a refresh.`, retryError);
+      // The financial transaction is already saved. Never report it as failed:
+      // users might retry it and accidentally create a duplicate payment.
+      console.error(`Customer totals refresh still failed after ${context}; recording a recovery issue.`, retryError);
+
+      let issueOwner = createdBy;
+      if (!mongoose.isValidObjectId(issueOwner)) {
+        try {
+          const client = await Client.findById(clientId).select("createdBy").lean();
+          issueOwner = client?.createdBy;
+        } catch (ownerLookupError) {
+          console.error("[CUSTOMER_SUMMARY_RECOVERY_OWNER_LOOKUP_FAILED]", ownerLookupError);
+        }
+      }
+
+      if (mongoose.isValidObjectId(issueOwner)) {
+        await recordFinancialRecoveryIssue({
+          createdBy: issueOwner,
+          operation: "customer-summary-sync",
+          summary: "A saved transaction is complete, but customer totals could not be refreshed automatically. Refresh customer totals before relying on this customer's balance.",
+          originalError: retryError,
+          clientIds: [clientId],
+          recoveryFailures: [{
+            step: "refresh-customer-financial-summary",
+            entityType: "client",
+            entityId: String(clientId),
+            message: retryError?.message || "Customer totals refresh failed after the automatic retries."
+          }]
+        });
+      } else {
+        console.error("[CUSTOMER_SUMMARY_RECOVERY_OWNER_UNAVAILABLE]", JSON.stringify({
+          clientId: String(clientId || ""),
+          context: String(context || "")
+        }));
+      }
+
       return null;
     }
   }

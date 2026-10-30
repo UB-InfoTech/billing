@@ -1,5 +1,5 @@
 import BusinessPageHeader from "../components/BusinessPageHeader";
-import React,{useEffect,useMemo,useState} from "react";
+import React,{useCallback,useEffect,useMemo,useRef,useState} from "react";
 import {getExpenses,getExpenseSummary,deleteExpense} from "../services/api";
 import {useNavigate,useSearchParams} from "react-router-dom";
 import DynamicTable from "../components/DynamicTable";
@@ -16,11 +16,14 @@ export default function Expenses(){
   const [searchParams,setSearchParams]=useSearchParams();
   const expenseFormConfig=useFormConfiguration("expenses.form",EXPENSE_FORM_FIELDS);
   const [expenses,setExpenses]=useState([]);
-  const [summary,setSummary]=useState({totalExpense:0,totalTax:0,totalSpent:0,expenseCount:0,averageExpense:0,averageTotalSpent:0});
+  const [summary,setSummary]=useState(null);
+  const [summaryError,setSummaryError]=useState("");
   const [filters,setFilters]=useState({search:"",category:"",startDate:"",endDate:""});
   const [searchInput,setSearchInput]=useState("");
   const [loading,setLoading]=useState(true);
-  const [error,setError]=useState("");
+  const [listError,setListError]=useState("");
+  const [actionError,setActionError]=useState("");
+  const expenseListRequestRef=useRef(0);
   const [tableCustomizeRequested,setTableCustomizeRequested]=useState(false);
   const [currentPage,setCurrentPage]=useState(1);
   const [pagination,setPagination]=useState({page:1,pages:1,total:0});
@@ -35,28 +38,44 @@ export default function Expenses(){
     }
   },[searchParams,setSearchParams]);
 
-  const load=async()=>{
-    try{
-      setLoading(true);
-      setError("");
-      const [list,stats]=await Promise.all([
-        getExpenses({...filters,page:currentPage,limit:EXPENSE_PAGE_SIZE}),
-        getExpenseSummary(filters)
-      ]);
+  const load=useCallback(async()=>{
+    const requestId=++expenseListRequestRef.current;
+    setLoading(true);
+    setListError("");
+
+    const [listResult,summaryResult]=await Promise.allSettled([
+      getExpenses({...filters,page:currentPage,limit:EXPENSE_PAGE_SIZE}),
+      getExpenseSummary(filters)
+    ]);
+
+    if(requestId!==expenseListRequestRef.current)return;
+
+    if(listResult.status==="fulfilled"){
+      const list=listResult.value;
       const pages=Math.max(1,Number(list.data?.pages)||1);
       const total=Math.max(0,Number(list.data?.total)||0);
       setPagination({page:Math.min(currentPage,pages),pages,total});
       if(currentPage>pages){
-        setExpenses([]);
+        // The current page may disappear after a delete or filter change.
+        // Keep the previously loaded rows until the corrected page is fetched.
         setCurrentPage(pages);
-        return;
+      }else{
+        setExpenses(Array.isArray(list.data?.expenses)?list.data.expenses:[]);
       }
-      setExpenses(Array.isArray(list.data?.expenses)?list.data.expenses:[]);
-      setSummary(stats.data||{totalExpense:0,totalTax:0,totalSpent:0,expenseCount:0,averageExpense:0,averageTotalSpent:0});
-    }catch(e){
-      setError(e.response?.data?.message||"Unable to load expenses.");
-    }finally{setLoading(false);}
-  };
+    }else{
+      const requestError=listResult.reason;
+      setListError(requestError.response?.data?.message||"Unable to load expenses.");
+    }
+
+    if(summaryResult.status==="fulfilled"){
+      setSummary(summaryResult.value.data||null);
+      setSummaryError("");
+    }else{
+      setSummaryError(summaryResult.reason?.response?.data?.message||"Expense summary could not be refreshed.");
+    }
+
+    setLoading(false);
+  },[filters,currentPage]);
 
   useEffect(()=>{
     const timer=window.setTimeout(()=>{
@@ -66,7 +85,10 @@ export default function Expenses(){
     return()=>window.clearTimeout(timer);
   },[searchInput]);
 
-  useEffect(()=>{load();},[filters,currentPage]);
+  useEffect(()=>{
+    load();
+    return()=>{expenseListRequestRef.current+=1;};
+  },[load]);
 
   useEffect(()=>{
     let cancelled=false;
@@ -85,17 +107,18 @@ export default function Expenses(){
   const remove=async expense=>{
     if(!window.confirm("Delete this expense?"))return;
     try{
+      setActionError("");
       await deleteExpense(expense._id);
       await load();
     }catch(e){
-      setError(e.response?.data?.message||"Unable to delete expense.");
+      setActionError(e.response?.data?.message||"Unable to delete expense.");
     }
   };
 
   const exportAllExpenses=async()=>{
     try{
       setExporting(true);
-      setError("");
+      setActionError("");
       const first=await getExpenses({...filters,page:1,limit:EXPENSE_EXPORT_PAGE_SIZE});
       const allExpenses=Array.isArray(first.data?.expenses)?[...first.data.expenses]:[];
       const pages=Math.max(1,Number(first.data?.pages)||1);
@@ -131,10 +154,19 @@ export default function Expenses(){
       XLSX.utils.book_append_sheet(workbook,worksheet,"Expenses");
       XLSX.writeFile(workbook,"expenses_report.xlsx");
     }catch(e){
-      setError(e.response?.data?.message||"Unable to export expenses.");
+      setActionError(e.response?.data?.message||"Unable to export expenses.");
     }finally{
       setExporting(false);
     }
+  };
+
+  const hasActiveExpenseFilters=Boolean(
+    filters.search.trim()||filters.category||filters.startDate||filters.endDate||searchInput.trim()
+  );
+  const clearExpenseFilters=()=>{
+    setSearchInput("");
+    setFilters({search:"",category:"",startDate:"",endDate:""});
+    setCurrentPage(1);
   };
 
   const customColumns=expenseFormConfig.fields.filter(field=>field.custom).map(field=>({
@@ -170,12 +202,24 @@ export default function Expenses(){
       <button type="button" className="btn btn-primary" onClick={()=>navigate("/add-expense")}><i className="bi bi-plus-lg me-2"></i>Add expense</button>
     </BusinessPageHeader>
 
-    {error&&<div className="alert alert-danger">{error}</div>}
+    {listError&&(
+      <div className="alert alert-danger d-flex flex-wrap align-items-center gap-2" role="alert">
+        <div className="flex-grow-1">
+          <div className="fw-semibold">Expenses could not be refreshed.</div>
+          <div className="small">{expenses.length?"Showing the last loaded expense records below.":listError}</div>
+        </div>
+        <button type="button" className="btn btn-outline-danger btn-sm" onClick={load} disabled={loading}>
+          {loading?"Refreshing…":"Try again"}
+        </button>
+      </div>
+    )}
+    {actionError&&<div className="alert alert-danger d-flex align-items-center gap-2" role="alert"><span className="flex-grow-1">{actionError}</span><button type="button" className="btn-close" aria-label="Dismiss message" onClick={()=>setActionError("")}/></div>}
+    {summaryError&&<div className="alert alert-warning" role="status">Expense summary figures could not be refreshed. Your expense list remains available.</div>}
 
     <div className="row g-3 mb-3">
-      <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Total spent (incl. tax)</div><div className="fs-4 fw-bold">{money(summary.totalSpent)}</div><div className="small text-muted">Expense amount plus recorded tax</div></div></div></div>
-      <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Number of expenses</div><div className="fs-4 fw-bold">{summary.expenseCount||0}</div></div></div></div>
-      <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Average total cost</div><div className="fs-4 fw-bold">{money(summary.averageTotalSpent)}</div><div className="small text-muted">Includes recorded tax</div></div></div></div>
+      <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Total spent (incl. tax)</div><div className="fs-4 fw-bold">{summary?money(summary.totalSpent):"—"}</div><div className="small text-muted">Expense amount plus recorded tax</div></div></div></div>
+      <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Number of expenses</div><div className="fs-4 fw-bold">{summary?summary.expenseCount||0:"—"}</div></div></div></div>
+      <div className="col-md-4"><div className="card border-0 shadow-sm h-100"><div className="card-body"><div className="text-muted small">Average total cost</div><div className="fs-4 fw-bold">{summary?money(summary.averageTotalSpent):"—"}</div><div className="small text-muted">Includes recorded tax</div></div></div></div>
     </div>
 
     <div className="card border-0 shadow-sm mb-3"><div className="card-body">
@@ -210,7 +254,10 @@ export default function Expenses(){
           </div>
         </div>
       </details>
-      {(Object.values(filters).some(Boolean)||searchInput)&&<div className="d-flex justify-content-end mt-3"><button type="button" className="btn btn-sm btn-light border" onClick={()=>{setSearchInput("");setFilters({search:"",category:"",startDate:"",endDate:""});setCurrentPage(1);}}>Clear all filters</button></div>}
+      {hasActiveExpenseFilters&&<div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+        <span className="small text-secondary">Filters are active</span>
+        <button type="button" className="btn btn-sm btn-light border" onClick={clearExpenseFilters}>Clear all filters</button>
+      </div>}
     </div></div>
 
     <div className="card border-0 shadow-sm"><div className="card-body">
@@ -222,7 +269,7 @@ export default function Expenses(){
         getRowKey={expense=>expense._id}
         columns={columns}
         loading={loading}
-        emptyText={Object.values(filters).some(Boolean)?"No expenses match these filters. Clear filters to see all expenses.":"No expenses yet. Add your first business cost to keep your spending up to date."}
+        emptyText={listError&&!expenses.length?"Expense records could not be loaded. Try again above.":hasActiveExpenseFilters?"No expenses match these filters. Clear filters to see all expenses.":"No expenses yet. Add your first business cost to keep your spending up to date."}
         actionColumn={{
           label:"Actions",
           locked:true,

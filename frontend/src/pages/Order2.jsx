@@ -1446,7 +1446,17 @@ const styles = {
                 </Link>
             </BusinessPageHeader>
 
-            {ordersError&&<div className="alert alert-danger" role="alert">{ordersError}</div>}
+            {ordersError&&(
+                <div className="alert alert-danger d-flex flex-wrap align-items-center gap-2" role="alert">
+                    <div className="flex-grow-1">
+                        <div className="fw-semibold">Invoices could not be refreshed.</div>
+                        <div className="small">{orders.length?"Your last loaded invoice records are still shown below.":ordersError}</div>
+                    </div>
+                    <button type="button" className="btn btn-outline-danger btn-sm" onClick={fetchOrders} disabled={loadingOrders}>
+                        {loadingOrders?"Refreshing…":"Try again"}
+                    </button>
+                </div>
+            )}
             {ordersMessage&&<div className="alert alert-success d-flex align-items-center gap-2" role="status"><i className="bi bi-check-circle-fill"></i><span>{ordersMessage}</span><button type="button" className="btn-close ms-auto" aria-label="Dismiss message" onClick={()=>setOrdersMessage("")}></button></div>}
 
             <div className="py-2">
@@ -1514,7 +1524,7 @@ const styles = {
                                     <input id="invoice-date-to" type="date" className="form-control" value={filters.endDate||""} onChange={event=>{setFilters(prev=>({...prev,endDate:event.target.value}));setCurrentPage(1);}}/>
                                 </div>
                                 <div className="col-md-2">
-                                    <button type="button" className="btn btn-light border w-100" onClick={()=>{setFilters(prev=>({...prev,status:"",startDate:"",endDate:"",dateRange:[]}));setCurrentPage(1);}}>Clear filters</button>
+                                    <button type="button" className="btn btn-light border w-100" onClick={()=>{setFilters(prev=>({...prev,status:"",startDate:"",endDate:"",dateRange:[]}));setCurrentPage(1);}}>Clear status &amp; dates</button>
                                 </div>
                             </div>
                         </details>
@@ -1538,7 +1548,7 @@ const styles = {
                         rows={currentOrders}
                         loading={loadingOrders}
                         getRowKey={order=>order._id}
-                        emptyText={hasActiveInvoiceFilters?"No invoices match these filters. Clear the filters to see all invoices.":"No invoices yet. Select New invoice to create your first invoice."}
+                        emptyText={ordersError&&!orders.length?"Invoice records could not be loaded. Try again above.":hasActiveInvoiceFilters?"No invoices match these filters. Clear the filters to see all invoices.":"No invoices yet. Select New invoice to create your first invoice."}
                         columns={[
                             {key:"__rowNumber",label:"#",visible:false,render:(_row,index)=>index+1},
                             {key:"orderDate",label:"Date",render:order=>order.orderDate?new Date(order.orderDate).toLocaleDateString("en-IN"):""},

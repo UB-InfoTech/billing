@@ -1603,14 +1603,16 @@ router.put("/:id", auth, async (req, res) => {
       });
     }
 
-    order.creditAppliedAmount = Math.max(
+    // Build the compare-and-set filter from the untouched persisted invoice
+    // snapshot. Mutating order.creditAppliedAmount first would make the filter
+    // compare against the replacement value instead of the stored value.
+    const invoiceWriteFilter = buildInvoiceCreditWriteFilter(order, userId);
+    const previousOtherCredit = Math.max(
       0,
       round2(Number(order.creditAppliedAmount || 0) - oldAdjustment)
     );
-
     const nextCreditApplied = round2(
-      Number(order.creditAppliedAmount || 0) +
-      prepared.finalSettlement.adjustmentAmount
+      previousOtherCredit + prepared.finalSettlement.adjustmentAmount
     );
 
     if (prepared.inventoryMovements.length) {
@@ -1630,7 +1632,7 @@ router.put("/:id", auth, async (req, res) => {
     }
 
     const updatedOrder = await Order.findOneAndUpdate(
-      buildInvoiceCreditWriteFilter(order, userId),
+      invoiceWriteFilter,
       { $set: { creditAppliedAmount: nextCreditApplied } },
       { new: true, runValidators: true, session }
     );

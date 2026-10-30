@@ -1341,9 +1341,12 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     );
     assert.ok(cancelledTimelineNote, "The customer feed must retain the cancelled Credit Note.");
     assert.equal(cancelledTimelineNote.status, "Cancelled");
-    assert.equal(round2(cancelledTimelineNote.adjustmentAmount), 20);
+    assert.equal(round2(cancelledTimelineNote.adjustmentAmount), 10);
+    assert.equal(round2(cancelledTimelineNote.refundAmount), 10);
     assert.ok(cancelledTimelineNote.cancelledAt, "The customer feed must show the cancellation date.");
-    assert.equal(cancelledTimelineNote.settlementHistory.length, 2);
+    assert.equal(cancelledTimelineNote.settlementHistory.length, 3);
+    assert.equal(cancelledTimelineNote.settlementHistory[1].eventType, "edited");
+    assert.equal(cancelledTimelineNote.settlementHistory[2].eventType, "cancelled");
 
     const stockProduct = await Product.create({
       productName: `Rollback Product ${suffix}`,

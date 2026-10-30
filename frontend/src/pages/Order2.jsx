@@ -136,6 +136,7 @@ function Order2() {
     const [loading, setLoading] = useState(false);
     const [loadingOrders,setLoadingOrders]=useState(true);
     const [ordersError,setOrdersError]=useState("");
+    const ordersListRequestRef=useRef(0);
     const [ordersMessage,setOrdersMessage]=useState("");
     const [invoiceFormError,setInvoiceFormError]=useState("");
     const [orderSubmitting, setOrderSubmitting] = useState(false);
@@ -196,11 +197,13 @@ function Order2() {
         // fetchSuppliers();
         // fetchMachines();
 
+        return () => { ordersListRequestRef.current += 1; };
     }, []);
 
     const token = localStorage.getItem('token');
 
     const fetchOrders = async () => {
+        const requestId=++ordersListRequestRef.current;
         setLoadingOrders(true);
         setOrdersError("");
         try {
@@ -211,6 +214,7 @@ function Order2() {
                 headers,
                 params: { page: 1, limit: pageSize }
             });
+            if(requestId!==ordersListRequestRef.current)return;
             const allOrders = Array.isArray(firstResponse.data?.orders)
                 ? [...firstResponse.data.orders]
                 : [];
@@ -227,6 +231,7 @@ function Order2() {
                 const pageResponses = await Promise.all(pageNumbers.map(page =>
                     axios.get(endpoint, { headers, params: { page, limit: pageSize } })
                 ));
+                if(requestId!==ordersListRequestRef.current)return;
                 pageResponses.forEach(response => {
                     if (Array.isArray(response.data?.orders)) {
                         allOrders.push(...response.data.orders);
@@ -234,8 +239,10 @@ function Order2() {
                 });
             }
 
+            if(requestId!==ordersListRequestRef.current)return;
             setOrders(allOrders);
         } catch (error) {
+            if(requestId!==ordersListRequestRef.current)return;
             if (error.response?.data?.msg === "Token is not valid") {
                 localStorage.removeItem("token");
                 window.location.reload();
@@ -244,7 +251,7 @@ function Order2() {
             setOrdersError(error.response?.data?.message||"Invoices could not be loaded. Refresh the page to try again.");
             console.error("Error fetching invoices",error);
         } finally {
-            setLoadingOrders(false);
+            if(requestId===ordersListRequestRef.current)setLoadingOrders(false);
         }
     };
 

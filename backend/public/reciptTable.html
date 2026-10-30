@@ -22,7 +22,7 @@ body{margin:0;background:#f3f4f6;color:#111827;font-family:Arial,Helvetica,sans-
 .words{margin-top:10px;padding-top:10px;border-top:1px dashed #cbd5e1;font-weight:700}
 .balance{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}.balance .box{text-align:center}.balance-value{font-size:17px;font-weight:900;margin-top:4px}
 .footer{display:flex;justify-content:space-between;gap:20px;margin-top:24px;padding-top:12px;border-top:1px solid #d1d5db}.signature{text-align:center;min-width:210px;padding-top:25px}
-.note{margin-top:15px;padding:10px 12px;background:#f8fafc;border-left:3px solid #111827}.muted{color:#6b7280}.small{font-size:10px}
+.note{margin-top:15px;padding:10px 12px;background:#f8fafc;border-left:3px solid #111827}.history-warning{margin-top:8px;color:#92400e;font-size:10px}.history-warning:empty{display:none}.muted{color:#6b7280}.small{font-size:10px}
 @media print{body{background:#fff}.sheet{width:auto;min-height:auto;margin:0;border:0;box-shadow:none;padding:0}.topbar{margin:0 0 16px}}
 </style>
 </head>
@@ -88,6 +88,7 @@ body{margin:0;background:#f3f4f6;color:#111827;font-family:Arial,Helvetica,sans-
 <div class="note">
   <strong>Payment Acknowledgment</strong><br>
   This receipt confirms that the payment shown above has been recorded against the referenced invoice. Please retain this document for your records.
+  <div class="history-warning">VcreditHistoryWarning</div>
 </div>
 
 <div class="footer">

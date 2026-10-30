@@ -14,6 +14,7 @@ const InvoiceConfiguration=require("../models/InvoiceConfiguration");
 const PaymentLog=require("../models/PaymentLog2");
 const auth=require("../middleware/auth");
 const {syncClientDataSafely,getInvoiceRevenue}=require("../utils/syncClientData");
+const {getCreditAppliedAmountAt}=require("../utils/creditNoteSettlementHistory");
 const {sanitizeOrderCreateInput,cleanCustomFields}=require("../utils/orderInput");
 const {numberToWords}=require("../utils/numberToWords");
 const {appendStatusTransition}=require("../utils/statusHistory");
@@ -1079,6 +1080,18 @@ router.get("/:orderId/payments/:paymentId/invoice",auth,async(req,res)=>{
 
     const paymentAmount=Number(payment.amount||0);
     const invoiceTotal=getInvoiceRevenue(order);
+    const paymentDate=new Date(payment.paymentDate||payment.createdAt||new Date());
+    const creditNotes=await CreditNote.find({
+      originalOrderId:order._id,
+      createdBy:userId(req)
+    }).select("settlement settlementHistory creditNoteDate createdAt updatedAt status cancelledAt").lean();
+    const historicalCredit=getCreditAppliedAmountAt(creditNotes,paymentDate);
+    const creditApplied=historicalCredit.reliable
+      ? historicalCredit.amount
+      : Math.max(0,Number(order.creditAppliedAmount||0));
+    const creditHistoryWarning=historicalCredit.reliable
+      ? ""
+      : "Some older Credit Notes may have been edited before settlement history was recorded. Previous due and remaining due are estimates; reconcile them against the invoice and Credit Note records.";
     const paymentTimeline=(order.payments||[]).map((entry,index)=>{
       const parsedDate=new Date(entry.paymentDate||entry.createdAt||0).getTime();
       return {entry,index,time:Number.isFinite(parsedDate)?parsedDate:Number.MAX_SAFE_INTEGER};
@@ -1087,10 +1100,8 @@ router.get("/:orderId/payments/:paymentId/invoice",auth,async(req,res)=>{
     const paidBefore=paymentTimeline
       .slice(0,Math.max(0,paymentPosition))
       .reduce((sum,item)=>sum+Math.max(0,Number(item.entry.amount||0)),0);
-    const creditApplied=Math.max(0,Number(order.creditAppliedAmount||0));
     const previousDue=Math.max(0,round2(invoiceTotal-paidBefore-creditApplied));
     const balanceAfter=Math.max(0,round2(previousDue-paymentAmount));
-    const paymentDate=new Date(payment.paymentDate||payment.createdAt||new Date());
     const receiptDate=paymentDate.toLocaleString("en-IN");
     const invoiceDate=new Date(order.orderDate||new Date()).toLocaleDateString("en-IN");
 
@@ -1113,6 +1124,7 @@ router.get("/:orderId/payments/:paymentId/invoice",auth,async(req,res)=>{
       VorderFinalRevenue:invoiceTotal.toFixed(2),
       VpreviousDue:previousDue.toFixed(2),
       VbalanceAfterPayment:balanceAfter.toFixed(2),
+      VcreditHistoryWarning:creditHistoryWarning,
       VtodayDate:paymentDate.toLocaleDateString("en-IN"),
       VcreatedAt:invoiceDate,
       VcompanyTitle:profile.headerTitle||"",

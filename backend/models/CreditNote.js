@@ -36,6 +36,21 @@ const creditNoteItemSchema = new mongoose.Schema(
   { _id: true }
 );
 
+const settlementHistorySchema = new mongoose.Schema({
+  eventType: {
+    type: String,
+    enum: ["posted", "edited", "cancelled", "legacy-snapshot"],
+    required: true
+  },
+  effectiveAt: { type: Date, required: true },
+  recordedAt: { type: Date, default: Date.now },
+  status: { type: String, enum: ["Posted", "Cancelled"], required: true },
+  adjustmentAmount: { type: Number, default: 0, min: 0 },
+  customerCreditAmount: { type: Number, default: 0, min: 0 },
+  refundAmount: { type: Number, default: 0, min: 0 },
+  reconstructed: { type: Boolean, default: false }
+}, { _id: false });
+
 const creditNoteSchema = new mongoose.Schema(
   {
     creditNoteNumber: {
@@ -157,6 +172,8 @@ const creditNoteSchema = new mongoose.Schema(
       default: "Unsettled",
       index: true,
     },
+    // Dated snapshots preserve the invoice credit that existed when each payment was received.
+    settlementHistory: { type: [settlementHistorySchema], default: [] },
 
     note: { type: String, trim: true, default: "" },
     cancellationReason: { type: String, trim: true, default: "" },

@@ -168,10 +168,37 @@ router.get("/:id/transactions",auth,async(req,res)=>{
     const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)}).select("_id");
     if(!client)return res.status(404).json({message:"Client not found"});
     const orders=await Order.find({clientId:client._id,createdBy:owner(req)}).sort({orderDate:-1}).lean();
+    const orderIds=orders.map(order=>order._id);
+    const creditNotes=await CreditNote.find({
+      createdBy:owner(req),
+      $or:[
+        {clientId:client._id},
+        {originalOrderId:{$in:orderIds}}
+      ]
+    }).sort({creditNoteDate:-1,createdAt:-1}).lean();
+
     const transactions=[];
     for(const order of orders){
-      transactions.push({type:"Invoice",orderId:order._id,orderNumber:order.orderNumber,date:order.orderDate,amount:getInvoiceRevenue(order),paid:Number(order.paidAmount||0),due:Number(order.dueAmount||0),status:order.paymentStatus});
+      transactions.push({type:"Invoice",orderId:order._id,orderNumber:order.orderNumber,date:order.orderDate,amount:getInvoiceRevenue(order),paid:Number(order.paidAmount||0),due:Number(order.dueAmount||0),status:order.paymentStatus,orderStatus:order.status});
       for(const payment of order.payments||[])transactions.push({type:"Payment",orderId:order._id,orderNumber:order.orderNumber,paymentId:payment._id,date:payment.paymentDate||payment.createdAt,amount:Number(payment.amount||0),method:payment.method,reference:payment.amountReference});
+    }
+    for(const creditNote of creditNotes){
+      transactions.push({
+        type:"Credit Note",
+        creditNoteId:creditNote._id,
+        creditNoteNumber:creditNote.creditNoteNumber,
+        orderId:creditNote.originalOrderId,
+        orderNumber:creditNote.originalInvoiceNumber,
+        date:creditNote.creditNoteDate||creditNote.createdAt,
+        amount:Number(creditNote.totals?.grandTotal||0),
+        adjustmentAmount:Number(creditNote.settlement?.adjustmentAmount||0),
+        refundAmount:Number(creditNote.settlement?.refundAmount||0),
+        customerCreditAmount:Number(creditNote.settlement?.customerCreditAmount||0),
+        status:creditNote.status,
+        settlementStatus:creditNote.settlementStatus,
+        cancelledAt:creditNote.cancelledAt||null,
+        settlementHistory:Array.isArray(creditNote.settlementHistory)?creditNote.settlementHistory:[]
+      });
     }
     res.json(transactions.sort((a,b)=>new Date(b.date)-new Date(a.date)));
   }catch(error){res.status(500).json({message:error.message});}

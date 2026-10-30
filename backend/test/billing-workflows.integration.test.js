@@ -624,6 +624,12 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
       "A failed concurrent payment must not leave a reserved payment reference."
     );
 
+    const clientBeforePayment = await Client.findOne({ _id: clientId, createdBy: ownerId }).lean();
+    assert.ok(clientBeforePayment, "The integration customer must exist before recording a payment.");
+    const totalPaidBeforePayment = round2(clientBeforePayment.totalPaid);
+    const outstandingBeforePayment = round2(clientBeforePayment.outstanding_balance);
+    const paymentHistoryCountBeforePayment = clientBeforePayment.paymentHistory.length;
+
     const payment = await request(`/order/orders/${orderId}/pay`, {
       method: "POST",
       body: {
@@ -653,10 +659,10 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
 
     const paymentId = payment.payload.order.payments[0]._id;
     const clientAfterPayment = await Client.findOne({ _id: clientId, createdBy: ownerId }).lean();
-    assert.equal(round2(clientAfterPayment.totalPaid), 60, "Customer paid total must include the posted payment.");
-    assert.equal(round2(clientAfterPayment.pendingPayments), 160, "Customer pending payments must match invoice due.");
-    assert.equal(round2(clientAfterPayment.outstanding_balance), 160, "Customer outstanding balance must match invoice due.");
-    assert.equal(clientAfterPayment.paymentHistory.length, 1, "Customer payment history must contain the posted payment.");
+    assert.equal(round2(clientAfterPayment.totalPaid), round2(totalPaidBeforePayment + 60), "Customer paid total must increase by the posted payment.");
+    assert.equal(round2(clientAfterPayment.pendingPayments), round2(outstandingBeforePayment - 60), "Customer pending payments must decrease by the payment amount.");
+    assert.equal(round2(clientAfterPayment.outstanding_balance), round2(outstandingBeforePayment - 60), "Customer outstanding balance must decrease by the payment amount.");
+    assert.equal(clientAfterPayment.paymentHistory.length, paymentHistoryCountBeforePayment + 1, "Customer payment history must include the new payment.");
     assert.ok(clientAfterPayment.payments.some(id => String(id) === String(orderId)), "Customer invoice links must remain available.");
 
     const paymentReceipt = await request(`/order/${orderId}/payments/${paymentId}/invoice`);
@@ -685,10 +691,10 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(round2(editedPayment.payload.order.paidAmount), 70);
     assert.equal(round2(editedPayment.payload.order.dueAmount), 150);
     const clientAfterPaymentEdit = await Client.findOne({ _id: clientId, createdBy: ownerId }).lean();
-    assert.equal(round2(clientAfterPaymentEdit.totalPaid), 70, "Editing a payment must refresh the customer paid total.");
-    assert.equal(round2(clientAfterPaymentEdit.pendingPayments), 150);
-    assert.equal(round2(clientAfterPaymentEdit.outstanding_balance), 150);
-    assert.equal(clientAfterPaymentEdit.paymentHistory.length, 1);
+    assert.equal(round2(clientAfterPaymentEdit.totalPaid), round2(totalPaidBeforePayment + 70), "Editing a payment must refresh the customer paid total.");
+    assert.equal(round2(clientAfterPaymentEdit.pendingPayments), round2(outstandingBeforePayment - 70));
+    assert.equal(round2(clientAfterPaymentEdit.outstanding_balance), round2(outstandingBeforePayment - 70));
+    assert.equal(clientAfterPaymentEdit.paymentHistory.length, paymentHistoryCountBeforePayment + 1);
     const editedPaymentReceipt = await request(`/order/${orderId}/payments/${paymentId}/invoice`);
     assert.equal(editedPaymentReceipt.response.status, 200);
     assert.ok(editedPaymentReceipt.payload.includes("70.00"), "Receipt must use the edited payment amount.");
@@ -703,10 +709,10 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(deletedPayment.payload.order.paymentStatus, "Unpaid");
     assert.equal(deletedPayment.payload.order.payments.length, 0);
     const clientAfterPaymentDelete = await Client.findOne({ _id: clientId, createdBy: ownerId }).lean();
-    assert.equal(round2(clientAfterPaymentDelete.totalPaid), 0, "Deleting a payment must remove it from the customer paid total.");
-    assert.equal(round2(clientAfterPaymentDelete.pendingPayments), 220);
-    assert.equal(round2(clientAfterPaymentDelete.outstanding_balance), 220);
-    assert.equal(clientAfterPaymentDelete.paymentHistory.length, 0, "Deleting a payment must remove it from the customer payment history.");
+    assert.equal(round2(clientAfterPaymentDelete.totalPaid), totalPaidBeforePayment, "Deleting a payment must restore the customer's prior paid total.");
+    assert.equal(round2(clientAfterPaymentDelete.pendingPayments), outstandingBeforePayment);
+    assert.equal(round2(clientAfterPaymentDelete.outstanding_balance), outstandingBeforePayment);
+    assert.equal(clientAfterPaymentDelete.paymentHistory.length, paymentHistoryCountBeforePayment, "Deleting a payment must restore the prior customer payment history.");
     const deletedPaymentReceipt = await request(`/order/${orderId}/payments/${paymentId}/invoice`);
     assert.equal(deletedPaymentReceipt.response.status, 404, "A deleted payment must not remain printable as a receipt.");
 
@@ -722,10 +728,10 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(replacementPayment.response.status, 200, JSON.stringify(replacementPayment.payload));
     assert.equal(round2(replacementPayment.payload.order.dueAmount), 160);
     const clientAfterReplacementPayment = await Client.findOne({ _id: clientId, createdBy: ownerId }).lean();
-    assert.equal(round2(clientAfterReplacementPayment.totalPaid), 60);
-    assert.equal(round2(clientAfterReplacementPayment.pendingPayments), 160);
-    assert.equal(round2(clientAfterReplacementPayment.outstanding_balance), 160);
-    assert.equal(clientAfterReplacementPayment.paymentHistory.length, 1);
+    assert.equal(round2(clientAfterReplacementPayment.totalPaid), round2(totalPaidBeforePayment + 60));
+    assert.equal(round2(clientAfterReplacementPayment.pendingPayments), round2(outstandingBeforePayment - 60));
+    assert.equal(round2(clientAfterReplacementPayment.outstanding_balance), round2(outstandingBeforePayment - 60));
+    assert.equal(clientAfterReplacementPayment.paymentHistory.length, paymentHistoryCountBeforePayment + 1);
 
     const secondInvoiceResponse = await request("/order/orders/create", {
       method: "POST",

@@ -661,9 +661,9 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
 
     const paymentReceipt = await request(`/order/${orderId}/payments/${paymentId}/invoice`);
     assert.equal(paymentReceipt.response.status, 200, String(paymentReceipt.payload).slice(0, 500));
-    assert.match(paymentReceipt.payload, /60\\.00/, "Receipt must show the recorded payment amount.");
-    assert.match(paymentReceipt.payload, /220\\.00/, "Receipt must show the invoice total.");
-    assert.match(paymentReceipt.payload, /160\\.00/, "Receipt must show the remaining balance after payment.");
+    assert.ok(paymentReceipt.payload.includes("60.00"), "Receipt must show the recorded payment amount.");
+    assert.ok(paymentReceipt.payload.includes("220.00"), "Receipt must show the invoice total.");
+    assert.ok(paymentReceipt.payload.includes("160.00"), "Receipt must show the remaining balance after payment.");
 
     const hiddenPaymentReceipt = await request(
       `/order/${orderId}/payments/${paymentId}/invoice`,
@@ -691,8 +691,8 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(clientAfterPaymentEdit.paymentHistory.length, 1);
     const editedPaymentReceipt = await request(`/order/${orderId}/payments/${paymentId}/invoice`);
     assert.equal(editedPaymentReceipt.response.status, 200);
-    assert.match(editedPaymentReceipt.payload, /70\\.00/, "Receipt must use the edited payment amount.");
-    assert.match(editedPaymentReceipt.payload, /150\\.00/, "Receipt must use the updated remaining invoice balance.");
+    assert.ok(editedPaymentReceipt.payload.includes("70.00"), "Receipt must use the edited payment amount.");
+    assert.ok(editedPaymentReceipt.payload.includes("150.00"), "Receipt must use the updated remaining invoice balance.");
 
     const deletedPayment = await request(`/order/orders/${orderId}/payments/${paymentId}`, {
       method: "DELETE"

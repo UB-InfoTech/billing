@@ -62,6 +62,8 @@ export const PAYMENT_FORM_FIELDS=[
  {key:"paymentDate",label:"Date received",fieldType:"date",width:3,section:"payment",required:true,order:3,system:true,locked:true}
 ];
 
+export const CREDIT_NOTE_FIELDS=[];
+
 export const CLIENT_FORM_FIELDS=[
   {key:"name",label:"Contact person",fieldType:"text",width:6,section:"basic",order:1,system:true},
   {key:"email",label:"Email",fieldType:"text",width:6,section:"basic",order:3},
@@ -173,6 +175,7 @@ export const FORM_CATALOG=[
   {key:"orders.form",label:"Bill information",page:"/orders",query:"form",description:"Arrange bill fields, add your own fields, links, rules and calculations.",fields:ORDER_FORM_FIELDS},
   {key:"orders.items",label:"Bill items",page:"/orders",query:"items",description:"Arrange item columns and create calculations such as quantity × rate.",fields:ORDER_ITEM_FIELDS},
   {key:"orders.payments",label:"Payment form",page:"/orders",query:"payments",description:"Add optional collection details to payment records while keeping payment amounts and balances protected.",fields:PAYMENT_FORM_FIELDS},
+  {key:"creditnotes.form",label:"Credit Note extra details",page:"/credit-notes",query:"form",description:"Add optional return and approval details to Credit Notes. Credit amounts, settlement, invoice links and stock stay protected.",fields:CREDIT_NOTE_FIELDS},
   {key:"clients.form",label:"Client form",page:"/clients",query:"form",description:"Customize customer details, linked records and conditional fields.",fields:CLIENT_FORM_FIELDS},
   {key:"products.form",label:"Product form",page:"/products",query:"form",description:"Customize product details, pricing, stock and your own business fields.",fields:PRODUCT_FORM_FIELDS},
   {key:"expenses.form",label:"Expense form",page:"/add-expense",query:"form",description:"Customize expense details, tax, links, recurring rules and your own business fields.",fields:EXPENSE_FORM_FIELDS},

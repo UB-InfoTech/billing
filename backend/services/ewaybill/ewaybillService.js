@@ -3,6 +3,7 @@ const Order=require("../../models/Order2");
 const Profile=require("../../models/Profile");
 const {getValidToken}=require("../../utils/ewaybill/tokenManager");
 const {buildEwaybillPayload}=require("./payloadBuilder");
+const {prepareEwaybillForm}=require("../../utils/ewaybillFormValidation");
 const {aspid,password,baseUrl}=require("../../config/ewaybillConfig");
 
 async function generateEWayBill(body){
@@ -13,7 +14,14 @@ async function generateEWayBill(body){
   const eWayUserName=profile.eWayUserName||process.env.TAXPRO_USERNAME;
   const eWayPassword=profile.eWayPassword||process.env.TAXPRO_EWAY_PASSWORD;
   const eWayProfile={...profile,eWayUserName,eWayPassword,gstin:profile.gstin||process.env.TAXPRO_GSTIN};
-  const payload=buildEwaybillPayload(order,body,eWayProfile);
+  // Validate saved form rules and fixed statutory code options before requesting
+  // a token or sending any data to the external E-Way Bill provider.
+  const configured=await prepareEwaybillForm({
+    ownerId:String(order.createdBy),
+    body
+  });
+  const ewaybillBody={...configured.values,customFields:configured.customFields};
+  const payload=buildEwaybillPayload(order,ewaybillBody,eWayProfile);
   const token=await getValidToken(eWayProfile);
 
   if(!aspid||!password)throw new Error("TaxPro ASP credentials are not configured.");
@@ -34,11 +42,7 @@ async function generateEWayBill(body){
     validTill:data.validUpto||data.validTill||"",
     status:"Generated",
     alert:data.alert||"",
-    customFields:new Map(Object.entries(
-      body.customFields&&typeof body.customFields==="object"&&!Array.isArray(body.customFields)
-        ?body.customFields
-        :{}
-    ).slice(0,100))
+    customFields:new Map(Object.entries(configured.customFields))
   };
   await order.save();
   return data;

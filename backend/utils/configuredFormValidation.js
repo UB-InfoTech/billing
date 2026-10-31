@@ -75,6 +75,7 @@ const getConfiguredFieldState=(field,values)=>{
   let visible=field?.visible!==false;
   let required=Boolean(field?.required);
   let disabled=Boolean(field?.disabled);
+  let readOnly=Boolean(field?.readOnly||field?.editable===false);
 
   const showRules=conditions.filter(condition=>condition.action==="show");
   const hideRules=conditions.filter(condition=>condition.action==="hide");
@@ -85,11 +86,12 @@ const getConfiguredFieldState=(field,values)=>{
     if(!conditionMatches(condition,values))return;
     if(condition.action==="require")required=true;
     if(condition.action==="optional")required=false;
+    if(condition.action==="readonly")readOnly=true;
     if(condition.action==="enable")disabled=false;
     if(condition.action==="disable")disabled=true;
   });
 
-  return {visible,required,disabled};
+  return {visible,required,disabled,readOnly};
 };
 
 const makeValidationError=(field,message)=>{
@@ -381,8 +383,10 @@ const preserveNonEditableFields=({
   const nextValues={...(values||{})};
   const nextCustomFields=plain(customFields);
   const autofilled=new Set(autoFillUpdates.map(update=>update.key));
+  const formValues={...nextValues,...nextCustomFields};
   for(const field of fields||[]){
-    const isNonEditable=field.editable===false||field.readOnly===true||field.disabled===true;
+    const state=getConfiguredFieldState(field,formValues);
+    const isNonEditable=!state.visible||state.readOnly||state.disabled;
     if(!isNonEditable||autofilled.has(field.key)||field.formula)continue;
     const existing=field.custom?existingCustomFields[field.key]:existingValues[field.key];
     const fallback=existing===undefined?field.defaultValue:existing;

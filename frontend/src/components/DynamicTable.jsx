@@ -848,7 +848,7 @@ export default function DynamicTable({
   const resetSettings=async()=>{
     const customFieldCount=draft.filter(column=>column.kind==="custom").length;
     const warning=customFieldCount
-      ? `Reset this list to its original columns? This will remove ${customFieldCount} custom column${customFieldCount===1?"":"s"} and permanently delete their saved values. Invoice, customer, product and other original records will not be deleted.`
+      ? `Reset this list to its original columns? This will remove ${customFieldCount} custom column${customFieldCount===1?"":"s"} from this layout. Their saved values will be kept safely, not deleted.`
       : "Reset this list's columns and visibility to the original defaults?";
     if(!window.confirm(warning))return;
 

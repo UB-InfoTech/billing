@@ -396,7 +396,7 @@ test("custom table values persist with correct types and enforce business owners
     assert.match(rejectedExpenseReference.data.message,/not found in this business/i);
     const expenseAfterRejectedReference=await request(`/expenses/${createdExpense.data._id}`);
     assert.equal(expenseAfterRejectedReference.status,200);
-    assert.equal(String(expenseAfterRejectedReference.data.clientId),String(ownerClientId));
+    assert.equal(String(expenseAfterRejectedReference.data.clientId?._id),String(ownerClientId));
 
     const tableKey="no-code-integration";
     const configured=await request(`/table-config/${tableKey}`,{

@@ -1043,6 +1043,7 @@ const SalesAnalytics = () => {
               {modalData.orders.length > 0 ? (
                 <DynamicTable
                       tableKey="sales-analytics.period-orders"
+                      autoOpenSettings={searchParams.get("customize")==="period-orders"}
                       rows={(modalData.orders||[]).filter(order=>order.orderNumber.toLowerCase().includes(searchTerm.toLowerCase()))}
                       getRowKey={order=>order._id}
                       columns={[

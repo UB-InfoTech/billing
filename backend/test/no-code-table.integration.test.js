@@ -7,6 +7,7 @@ process.env.JWT_SECRET||="billing-integration-tests-only-secret";
 const app=require("../server");
 const Client=require("../models/Client");
 const Order=require("../models/Order2");
+const PaymentLog=require("../models/PaymentLog2");
 const Product=require("../models/Product");
 const Expense=require("../models/Expense");
 const CalendarEvent=require("../models/Calendar");
@@ -30,7 +31,7 @@ test("custom table values persist with correct types and enforce business owners
 
   try{
     await mongoose.connect(mongoUri,{serverSelectionTimeoutMS:10000});
-    await Promise.all([Client.init(),Order.init(),Product.init(),Expense.init(),CalendarEvent.init(),Profile.init(),TableConfiguration.init(),TableCustomValue.init(),FormConfiguration.init()]);
+    await Promise.all([Client.init(),Order.init(),PaymentLog.init(),Product.init(),Expense.init(),CalendarEvent.init(),Profile.init(),TableConfiguration.init(),TableCustomValue.init(),FormConfiguration.init()]);
 
     ownerId=new mongoose.Types.ObjectId();
     otherOwnerId=new mongoose.Types.ObjectId();
@@ -355,6 +356,42 @@ test("custom table values persist with correct types and enforce business owners
     const unchangedPayment=paymentAfterRejectedUpdate.payments.find(item=>String(item._id)===String(createdPaymentRecord._id));
     assert.equal(unchangedPayment.amount,6);
     assert.equal(unchangedPayment.customFields.collectorPhone,"9999999999");
+
+    const createdBulkPayment=await request("/order/orders/payments/bulk",{
+      method:"PUT",
+      body:{
+        method:"Bank",
+        amountReference:"META-BULK-1",
+        amount:2,
+        splitType:"proportional",
+        paymentDate:"2026-10-31",
+        updates:[{orderId:String(createdOrder.data.order._id)}],
+        customFields:{
+          collectionShift:"Evening",
+          collectionEstimate:999,
+          collector:String(ownerClientId),
+          collectorPhone:"forged bulk phone"
+        }
+      }
+    });
+    assert.equal(createdBulkPayment.status,200,JSON.stringify(createdBulkPayment.data));
+    const orderAfterBulkPayment=await Order.findOne({
+      _id:createdOrder.data.order._id,
+      createdBy:ownerId
+    }).lean();
+    const bulkPaymentRecord=orderAfterBulkPayment.payments.at(-1);
+    assert.equal(bulkPaymentRecord.method,"Bank");
+    assert.equal(bulkPaymentRecord.customFields.collectionShift,"Evening");
+    assert.equal(bulkPaymentRecord.customFields.collectionEstimate,0.02);
+    assert.equal(bulkPaymentRecord.customFields.collector,String(ownerClientId));
+    assert.equal(bulkPaymentRecord.customFields.collectorPhone,"9999999999");
+    const bulkPaymentLog=await PaymentLog.findOne({
+      userId:ownerId,
+      reference:"META-BULK-1"
+    }).lean();
+    assert.ok(bulkPaymentLog);
+    assert.equal(bulkPaymentLog.customFields.collectionShift,"Evening");
+    assert.equal(bulkPaymentLog.customFields.collectionEstimate,0.02);
 
     await FormConfiguration.create([
       {

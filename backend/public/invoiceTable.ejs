@@ -72,6 +72,12 @@
         <% if(invoiceConfig.header.showPhones){ %><span class="nowrap">+91-<%= profilePhoneNumber2 %></span><% } else { %><span></span><% } %>
       </div>
     <% } %>
+    <% if(profileEmailAddress || profileWebsite) { %>
+      <div class="contact-extra">
+        <% if(profileEmailAddress) { %><span>Email: <%= profileEmailAddress %></span><% } %>
+        <% if(profileWebsite) { %><span><%= profileWebsite %></span><% } %>
+      </div>
+    <% } %>
   </div>
 
   <div class="doc-title"># <%= invoiceConfig.invoiceTitle %> #</div>

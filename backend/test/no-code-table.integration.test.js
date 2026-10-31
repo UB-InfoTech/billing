@@ -8,6 +8,7 @@ const app=require("../server");
 const Client=require("../models/Client");
 const Product=require("../models/Product");
 const Expense=require("../models/Expense");
+const CalendarEvent=require("../models/Calendar");
 const TableConfiguration=require("../models/TableConfiguration");
 const TableCustomValue=require("../models/TableCustomValue");
 const FormConfiguration=require("../models/FormConfiguration");
@@ -26,7 +27,7 @@ test("custom table values persist with correct types and enforce business owners
 
   try{
     await mongoose.connect(mongoUri,{serverSelectionTimeoutMS:10000});
-    await Promise.all([Client.init(),Product.init(),Expense.init(),TableConfiguration.init(),TableCustomValue.init(),FormConfiguration.init()]);
+    await Promise.all([Client.init(),Product.init(),Expense.init(),CalendarEvent.init(),TableConfiguration.init(),TableCustomValue.init(),FormConfiguration.init()]);
 
     ownerId=new mongoose.Types.ObjectId();
     otherOwnerId=new mongoose.Types.ObjectId();
@@ -263,6 +264,42 @@ test("custom table values persist with correct types and enforce business owners
       },
       {
         createdBy:ownerId,
+      {
+        createdBy:ownerId,
+        formKey:"calendar.event",
+        fields:[
+          {key:"title",label:"Event title",fieldType:"text",required:true},
+          {key:"start",label:"Start",fieldType:"datetime",required:true},
+          {key:"end",label:"End",fieldType:"datetime",required:true},
+          {key:"color",label:"Color",fieldType:"text"},
+          {key:"eventKind",label:"Event type",custom:true,fieldType:"select",options:["Meeting","Delivery"]},
+          {
+            key:"driverName",
+            label:"Driver name",
+            custom:true,
+            fieldType:"text",
+            conditions:[
+              {action:"show",fieldKey:"eventKind",operator:"equals",value:"Delivery"},
+              {action:"require",fieldKey:"eventKind",operator:"equals",value:"Delivery"}
+            ]
+          },
+          {key:"units",label:"Units",custom:true,fieldType:"number"},
+          {key:"unitRate",label:"Rate",custom:true,fieldType:"currency"},
+          {key:"estimatedLoad",label:"Estimated load",custom:true,fieldType:"currency",formula:"units * unitRate",editable:false},
+          {
+            key:"customer",
+            label:"Customer",
+            custom:true,
+            fieldType:"reference",
+            dataSource:{
+              type:"lookup",resource:"clients",valueField:"_id",labelField:"companyName",searchField:"companyName",
+              autoFill:[{targetKey:"customerPhone",sourceKey:"phone"}]
+            }
+          },
+          {key:"customerPhone",label:"Customer phone",custom:true,fieldType:"phone",editable:false},
+          {key:"internalNote",label:"Internal note",custom:true,fieldType:"text",visible:false,defaultValue:"Business-only event note"}
+        ]
+      },
         formKey:"expenses.form",
         fields:[
           {key:"date",label:"Date",fieldType:"date",required:true},
@@ -431,6 +468,82 @@ test("custom table values persist with correct types and enforce business owners
     assert.equal(expenseAfterRejectedReference.status,200);
     assert.equal(String(expenseAfterRejectedReference.data.clientId?._id),String(ownerClientId));
 
+    const missingConditionalEventField=await request("/events",{
+      method:"POST",
+      body:{
+        title:"Delivery event missing driver",
+        start:"2026-10-31T03:30:00.000Z",
+        end:"2026-10-31T04:00:00.000Z",
+        customFields:{eventKind:"Delivery"}
+      }
+    });
+    assert.equal(missingConditionalEventField.status,400);
+    assert.match(missingConditionalEventField.data.message,/Driver name/i);
+
+    const invalidCalendarChoice=await request("/events",{
+      method:"POST",
+      body:{
+        title:"Event with invalid type",
+        start:"2026-10-31T03:30:00.000Z",
+        end:"2026-10-31T04:00:00.000Z",
+        customFields:{eventKind:"Not an event type"}
+      }
+    });
+    assert.equal(invalidCalendarChoice.status,400);
+    assert.match(invalidCalendarChoice.data.message,/available option/i);
+
+    const createdCalendarEvent=await request("/events",{
+      method:"POST",
+      body:{
+        title:"Configured delivery event",
+        start:"2026-10-31T03:30:00.000Z",
+        end:"2026-10-31T04:00:00.000Z",
+        color:"#ff9800",
+        customFields:{
+          eventKind:"Delivery",
+          driverName:"Ravi",
+          units:2,
+          unitRate:5,
+          estimatedLoad:999,
+          customer:String(ownerClientId),
+          customerPhone:"1111111111",
+          internalNote:"Forged hidden note"
+        }
+      }
+    });
+    assert.equal(createdCalendarEvent.status,201,JSON.stringify(createdCalendarEvent.data));
+    assert.equal(createdCalendarEvent.data.customFields.estimatedLoad,10);
+    assert.equal(createdCalendarEvent.data.customFields.customer,String(ownerClientId));
+    assert.equal(createdCalendarEvent.data.customFields.customerPhone,"9999999999");
+    assert.equal(createdCalendarEvent.data.customFields.internalNote,"Business-only event note");
+
+    const updatedCalendarEvent=await request(`/events/${createdCalendarEvent.data._id}`,{
+      method:"PUT",
+      body:{
+        customFields:{
+          units:3,
+          unitRate:4,
+          estimatedLoad:999,
+          customerPhone:"2222222222",
+          internalNote:"Updated browser forgery"
+        }
+      }
+    });
+    assert.equal(updatedCalendarEvent.status,200,JSON.stringify(updatedCalendarEvent.data));
+    assert.equal(updatedCalendarEvent.data.customFields.estimatedLoad,12);
+    assert.equal(updatedCalendarEvent.data.customFields.customerPhone,"9999999999");
+    assert.equal(updatedCalendarEvent.data.customFields.internalNote,"Business-only event note");
+
+    const rejectedCalendarReference=await request(`/events/${createdCalendarEvent.data._id}`,{
+      method:"PUT",
+      body:{customFields:{customer:String(otherClientId)}}
+    });
+    assert.equal(rejectedCalendarReference.status,400);
+    assert.match(rejectedCalendarReference.data.message,/not found in this business/i);
+    const calendarEventAfterRejectedUpdate=await CalendarEvent.findById(createdCalendarEvent.data._id).lean();
+    assert.equal(String(calendarEventAfterRejectedUpdate.customFields.customer),String(ownerClientId));
+    assert.equal(calendarEventAfterRejectedUpdate.customFields.customerPhone,"9999999999");
+
     const tableKey="no-code-integration";
     const configured=await request(`/table-config/${tableKey}`,{
       method:"PUT",
@@ -519,7 +632,8 @@ test("custom table values persist with correct types and enforce business owners
           FormConfiguration.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
           Client.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
           Product.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
-          Expense.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}})
+          Expense.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
+          CalendarEvent.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}})
         ]);
       }
       await mongoose.disconnect();

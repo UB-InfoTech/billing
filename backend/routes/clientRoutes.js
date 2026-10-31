@@ -12,6 +12,7 @@ const {buildCustomerStatement}=require("../utils/customerStatement");
 const auth=require("../middleware/auth");
 const {escapeRegex}=require("../utils/escapeRegex");
 const {loadConfiguredFormFields,calculateConfiguredCustomFields,hasConfiguredCustomCalculations}=require("../utils/customFieldCalculations");
+const {prepareConfiguredFormValues,validateConfiguredFormValues}=require("../utils/configuredFormValidation");
 
 const router=express.Router();
 const owner=req=>req.user.id;
@@ -86,18 +87,39 @@ router.post("/",auth,async(req,res)=>{
     allowed.forEach(key=>{
       if(input[key]!==undefined)body[key]=input[key];
     });
-    body.createdBy=owner(req);
     const configuredFields=await loadConfiguredFormFields(owner(req),"clients.form");
-    if(hasConfiguredCustomCalculations(configuredFields)){
-      body.customFields=calculateConfiguredCustomFields(
-        configuredFields,
-        body,
-        cleanCustomFields(body.customFields)
-      );
-    }
+    const prepared=await prepareConfiguredFormValues({
+      ownerId:owner(req),
+      fields:configuredFields,
+      values:body,
+      customFields:cleanCustomFields(body.customFields),
+      isNewRecord:true
+    });
+    Object.assign(body,prepared.values);
+    body.customFields=prepared.customFields;
+    body.createdBy=owner(req);
     if(body.gstNumber)body.gstNumber=String(body.gstNumber).trim().toUpperCase();
     const client=new Client(body);
     await applyWorkflows({resource:"clients",event:"record_created",doc:client,createdBy:owner(req)});
+    if(hasConfiguredCustomCalculations(configuredFields)){
+      client.customFields=calculateConfiguredCustomFields(
+        configuredFields,
+        client.toObject({depopulate:true}),
+        cleanCustomFields(client.customFields)
+      );
+    }
+    const validated=validateConfiguredFormValues({
+      fields:configuredFields,
+      values:client.toObject({depopulate:true}),
+      customFields:cleanCustomFields(client.customFields),
+      validateAllValues:true
+    });
+    configuredFields.filter(field=>!field.custom).forEach(field=>{
+      if(Object.prototype.hasOwnProperty.call(validated.values,field.key)){
+        client.set(field.key,validated.values[field.key]);
+      }
+    });
+    client.customFields=validated.customFields;
     assertClientIdentity(client);
     await client.save();
     res.status(201).json(client);
@@ -110,6 +132,8 @@ router.patch("/:id",auth,async(req,res)=>{
     const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)});
     if(!client)return res.status(404).json({message:"Client not found"});
     const hadClientIdentity=hasClientIdentity(client);
+    const originalValues=client.toObject({depopulate:true});
+    const originalCustomFields=cleanCustomFields(client.customFields);
     const allowed=["name","email","phone","address","state","city","pinCode","stateCode","gstNumber","companyName","businessType","paymentTerms","loyaltyPoints","discountRate","accountStatus","notes","customFields"];
     for(const key of allowed){
       if(req.body?.[key]===undefined)continue;
@@ -123,6 +147,21 @@ router.patch("/:id",auth,async(req,res)=>{
       }
     }
     const configuredFields=await loadConfiguredFormFields(owner(req),"clients.form");
+    const prepared=await prepareConfiguredFormValues({
+      ownerId:owner(req),
+      fields:configuredFields,
+      values:client.toObject({depopulate:true}),
+      customFields:cleanCustomFields(client.customFields),
+      existingValues:originalValues,
+      existingCustomFields:originalCustomFields,
+      onlyChangedLookups:true
+    });
+    prepared.updates.filter(update=>!update.custom).forEach(update=>{
+      client.set(update.key,prepared.values[update.key]);
+    });
+    client.customFields=prepared.customFields;
+    if(client.gstNumber)client.gstNumber=String(client.gstNumber).trim().toUpperCase();
+    await applyWorkflows({resource:"clients",event:"record_updated",doc:client,createdBy:owner(req)});
     if(hasConfiguredCustomCalculations(configuredFields)){
       client.customFields=calculateConfiguredCustomFields(
         configuredFields,
@@ -130,8 +169,19 @@ router.patch("/:id",auth,async(req,res)=>{
         cleanCustomFields(client.customFields)
       );
     }
-    if(client.gstNumber)client.gstNumber=String(client.gstNumber).trim().toUpperCase();
-    await applyWorkflows({resource:"clients",event:"record_updated",doc:client,createdBy:owner(req)});
+    const validated=validateConfiguredFormValues({
+      fields:configuredFields,
+      values:client.toObject({depopulate:true}),
+      customFields:cleanCustomFields(client.customFields),
+      existingValues:originalValues,
+      existingCustomFields:originalCustomFields
+    });
+    configuredFields.filter(field=>!field.custom).forEach(field=>{
+      if(Object.prototype.hasOwnProperty.call(validated.values,field.key)){
+        client.set(field.key,validated.values[field.key]);
+      }
+    });
+    client.customFields=validated.customFields;
     if(hadClientIdentity||req.body?.name!==undefined||req.body?.companyName!==undefined){
       assertClientIdentity(client);
     }

@@ -2074,6 +2074,17 @@ const styles = {
             )}
 
             <FormConfigurator
+                open={paymentFormSettingsOpen}
+                onClose={()=>setPaymentFormSettingsOpen(false)}
+                title="Customize payment form"
+                subtitle="Add your own collection details, set choices, defaults and rules. Payment amount, method, reference and date stay protected."
+                fields={paymentFormConfig.fields}
+                saving={paymentFormConfig.saving}
+                onSave={paymentFormConfig.save}
+                onReset={async()=>{const defaults=await paymentFormConfig.reset();paymentFormConfig.setFields(defaults);setPaymentFormSettingsOpen(false);}}
+            />
+
+            <FormConfigurator
                 open={itemSettingsOpen}
                 onClose={()=>setItemSettingsOpen(false)}
                 title="Customize Bill Information"
@@ -2229,6 +2240,7 @@ const styles = {
                                                     <option>Bank Transfer</option>
                                                     <option>UPI</option>
                                                     <option>Cheque</option>
+                                                    <option>Bank</option>
                                                 </select>
                                             </div>
                                             <div className="col-12 col-md-4">
@@ -2239,6 +2251,19 @@ const styles = {
                                                 <label htmlFor="payment-date" className="form-label">Date received</label>
                                                 <input id="payment-date" type="date" className="form-control" value={newPayment.paymentDate || ""} onChange={(e) => {setPaymentFeedback(null);setNewPayment(prev => ({ ...prev, paymentDate: e.target.value }));}} disabled={paymentSubmitting} required />
                                             </div>
+                                        </div>
+                                        {paymentFormConfig.loading
+                                            ? <div className="small text-muted mt-3"><span className="spinner-border spinner-border-sm me-2"></span>Loading your extra payment fields…</div>
+                                            : renderPaymentCustomFields(newPayment,setNewPayment,paymentSubmitting).some(Boolean)&&(
+                                                <div className="row g-3 mt-1">
+                                                    {renderPaymentCustomFields(newPayment,setNewPayment,paymentSubmitting)}
+                                                </div>
+                                            )}
+                                        <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+                                            <button type="button" className="btn btn-sm btn-light border" onClick={()=>setPaymentFormSettingsOpen(true)}>
+                                                <i className="bi bi-sliders me-1"></i>Customize payment form
+                                            </button>
+                                            <span className="small text-muted">Extra details are saved with this payment only.</span>
                                         </div>
                                         {paymentFeedback&&(
                                             <div className={`alert alert-${paymentFeedback.type} mt-3 mb-0`} role={paymentFeedback.type==="danger"?"alert":"status"}>
@@ -2294,7 +2319,7 @@ const styles = {
                                             locked:true,
                                             render:p=>(
                                                 <div className="d-flex gap-1 justify-content-end">
-                                                    <button type="button" className="btn btn-warning btn-sm" onClick={()=>{setPaymentFeedback(null);setEditPayment(p);}} title="Edit payment" aria-label="Edit payment" disabled={paymentSubmitting}><img src={editSVG} alt="" /></button>
+                                                    <button type="button" className="btn btn-warning btn-sm" onClick={()=>{setPaymentFeedback(null);setEditPayment(hydrateConfiguredValues(p,paymentFormConfig.fields));}} title="Edit payment" aria-label="Edit payment" disabled={paymentSubmitting}><img src={editSVG} alt="" /></button>
                                                     <button type="button" className="btn btn-danger btn-sm" onClick={()=>deletePayment(p._id)} title="Delete payment" aria-label="Delete payment" disabled={paymentSubmitting}><img src={deleteSVG} alt="" /></button>
                                                     <button type="button" className="btn btn-info btn-sm" onClick={()=>printReceipt(p._id)} title="Print receipt" aria-label="Print receipt" disabled={paymentSubmitting}><img src={receiptSVG} alt="" /></button>
                                                 </div>
@@ -2345,6 +2370,17 @@ const styles = {
                                                         <label htmlFor="edit-payment-reference" className="form-label">Reference (optional)</label>
                                                         <input id="edit-payment-reference" type="text" className="form-control" maxLength="100" placeholder="UPI ID, cheque no. or bank reference" value={editPayment.amountReference||""} onChange={(e) => setEditPayment(prev => ({ ...prev, amountReference: e.target.value }))} />
                                                     </div>
+                                                </div>
+                                                {renderPaymentCustomFields(editPayment,setEditPayment,paymentSubmitting).some(Boolean)&&(
+                                                    <div className="row g-3 mt-1">
+                                                        {renderPaymentCustomFields(editPayment,setEditPayment,paymentSubmitting)}
+                                                    </div>
+                                                )}
+                                                <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+                                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>setPaymentFormSettingsOpen(true)}>
+                                                        <i className="bi bi-sliders me-1"></i>Customize payment form
+                                                    </button>
+                                                    <span className="small text-muted">Extra details do not change invoice balances.</span>
                                                 </div>
                                                 <div className="d-flex gap-2 mt-3">
                                                     <button type="button" className="btn btn-info" onClick={updatePayment} disabled={paymentSubmitting||!editPayment.amount||!editPayment.paymentDate}>

@@ -19,6 +19,7 @@ const {sanitizeOrderCreateInput,cleanCustomFields}=require("../utils/orderInput"
 const {numberToWords}=require("../utils/numberToWords");
 const {appendStatusTransition}=require("../utils/statusHistory");
 const {hasInvoiceSensitiveChanges,wouldReduceTotalBelowApplied}=require("../utils/orderEditPolicy");
+const {buildInvoiceFinancialSnapshot}=require("../utils/invoiceFinancialHistory");
 const router=express.Router();
 
 const STATUSES=["Pending","In Process","Completed","Cancelled","Dispatched"];
@@ -54,6 +55,16 @@ function applyOrderSaveConcurrencyGuard(order,createdBy){
 }
 const userId=req=>req.user.id;
 const idOrNull=v=>v&&mongoose.isValidObjectId(v)?v:null;
+
+function paymentAuditSnapshot(payment={}) {
+  return {
+    amount:round2(payment.amount),
+    paymentDate:payment.paymentDate?new Date(payment.paymentDate):null,
+    method:payment.method||"Cash",
+    amountReference:String(payment.amountReference||""),
+    processedBy:payment.processedBy||null
+  };
+}
 
 async function validateProductReferences(items,createdBy){
   const productIds=[...new Set((Array.isArray(items)?items:[])
@@ -203,6 +214,14 @@ router.post("/orders/create",auth,async(req,res)=>{
     body.createdBy=userId(req);
     const order=new Order(body);
     await applyWorkflows({resource:"orders",event:"record_created",doc:order,createdBy:userId(req)});
+    const invoiceCreatedAt=new Date();
+    order.financialHistory.push({
+      eventType:"created",
+      effectiveAt:order.orderDate||invoiceCreatedAt,
+      recordedAt:invoiceCreatedAt,
+      actor:userId(req),
+      next:buildInvoiceFinancialSnapshot(order,Order.calculateFinancials(order).roundOffFinalRevenue)
+    });
     await order.save();
     await syncClientDataSafely(order.clientId,"invoice creation",userId(req));
     res.status(201).json({success:true,order});
@@ -326,6 +345,18 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
           message:"The revised invoice total cannot be lower than payments already received plus customer credit already applied. Keep the current total or record a separate refund/credit adjustment."
         });
       }
+
+      const auditRecordedAt=new Date();
+      order.financialHistory=Array.isArray(order.financialHistory)?order.financialHistory:[];
+      order.financialHistory.push({
+        eventType:"edited",
+        effectiveAt:auditRecordedAt,
+        recordedAt:auditRecordedAt,
+        actor:userId(req),
+        previous:buildInvoiceFinancialSnapshot(originalOrder,previousInvoiceTotal),
+        next:buildInvoiceFinancialSnapshot(proposedOrder,nextFinancials.roundOffFinalRevenue),
+        reconstructedBaseline:!Array.isArray(originalOrder.financialHistory)||originalOrder.financialHistory.length===0
+      });
     }
 
     applyOrderSaveConcurrencyGuard(order,userId(req));
@@ -439,19 +470,33 @@ router.post("/orders/:id/pay",auth,async(req,res)=>{
 
     // The conditional write protects the balance observed above from concurrent
     // payments, credits, or invoice edits.
+    const paymentId=new mongoose.Types.ObjectId();
+    const paymentRecordedAt=new Date();
+    const paymentData={
+      _id:paymentId,
+      amount,
+      paymentDate,
+      createdAt:paymentRecordedAt,
+      method,
+      amountReference:reference,
+      processedBy:uid
+    };
+    const paymentHistoryEvent={
+      action:"added",
+      paymentId,
+      effectiveAt:paymentDate,
+      recordedAt:paymentRecordedAt,
+      actor:uid,
+      after:paymentAuditSnapshot(paymentData)
+    };
     const paymentOperation=buildPaymentAppendOperation({
       orderId:order._id,
       createdBy:uid,
       amount,
       expectedDueAmount:Number(order.dueAmount||0),
-      payment:{
-        amount,
-        paymentDate,
-        method,
-        amountReference:reference,
-        processedBy:uid
-      },
-      paymentDate
+      payment:paymentData,
+      paymentDate,
+      paymentHistoryEvent
     });
     const paymentUpdate=Order.findOneAndUpdate(
       paymentOperation.filter,
@@ -576,6 +621,17 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
       amountReference:reference,
       paymentDate
     }:item);
+    const nextPayment=nextPayments[paymentIndex];
+    const paymentRecordedAt=new Date();
+    const paymentHistoryEvent={
+      action:"edited",
+      paymentId:currentPayment._id,
+      effectiveAt:paymentRecordedAt,
+      recordedAt:paymentRecordedAt,
+      actor:uid,
+      before:paymentAuditSnapshot(currentPayment),
+      after:paymentAuditSnapshot(nextPayment)
+    };
     const wasLastRecordedPayment=paymentIndex===currentPayments.length-1;
     const lastPaymentDate=wasLastRecordedPayment?paymentDate:(order.lastPaymentDate||null);
     const operation=buildPaymentArrayMutationOperation({
@@ -585,7 +641,8 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
       expectedPayments:order.payments,
       expectedUpdatedAt:order.updatedAt,
       nextPayments,
-      lastPaymentDate
+      lastPaymentDate,
+      paymentHistoryEvent
     });
     const updateQuery=Order.findOneAndUpdate(operation.filter,operation.update,operation.options);
     if(session)updateQuery.session(session);
@@ -645,6 +702,15 @@ router.delete("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
     }
 
     const nextPayments=currentPayments.filter((_,index)=>index!==paymentIndex);
+    const paymentRecordedAt=new Date();
+    const paymentHistoryEvent={
+      action:"deleted",
+      paymentId:currentPayment._id,
+      effectiveAt:paymentRecordedAt,
+      recordedAt:paymentRecordedAt,
+      actor:uid,
+      before:paymentAuditSnapshot(currentPayment)
+    };
     const wasLastRecordedPayment=paymentIndex===currentPayments.length-1;
     const remainingLastPayment=nextPayments[nextPayments.length-1];
     const lastPaymentDate=wasLastRecordedPayment
@@ -658,7 +724,8 @@ router.delete("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
       expectedPayments:order.payments,
       expectedUpdatedAt:order.updatedAt,
       nextPayments,
-      lastPaymentDate
+      lastPaymentDate,
+      paymentHistoryEvent
     });
     const updateQuery=Order.findOneAndUpdate(operation.filter,operation.update,operation.options);
     if(session)updateQuery.session(session);
@@ -784,12 +851,24 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
     if(allocatedCents!==Math.round(amount*100))throw new Error("Payment allocation must equal payment amount.");
 
     for(const item of allocations){
+      const paymentId=new mongoose.Types.ObjectId();
+      const paymentRecordedAt=new Date();
       const paymentData={
+        _id:paymentId,
         amount:item.appliedAmount,
         paymentDate:parsedDate,
+        createdAt:paymentRecordedAt,
         method,
         amountReference:reference,
         processedBy:userId(req)
+      };
+      const paymentHistoryEvent={
+        action:"added",
+        paymentId,
+        effectiveAt:parsedDate,
+        recordedAt:paymentRecordedAt,
+        actor:userId(req),
+        after:paymentAuditSnapshot(paymentData)
       };
       const operation=buildPaymentAppendOperation({
         orderId:item.order._id,
@@ -797,7 +876,8 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
         amount:item.appliedAmount,
         expectedDueAmount:Number(item.order.dueAmount||0),
         payment:paymentData,
-        paymentDate:parsedDate
+        paymentDate:parsedDate,
+        paymentHistoryEvent
       });
       const paymentWrite=Order.findOneAndUpdate(
         operation.filter,
@@ -899,7 +979,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
                 "payments._id":item.paymentId,
                 dueAmount:expectedDue
               },
-              {$pull:{payments:{_id:item.paymentId}}},
+              {$pull:{payments:{_id:item.paymentId},paymentHistory:{paymentId:item.paymentId}}},
               {new:true}
             );
             if(restored){

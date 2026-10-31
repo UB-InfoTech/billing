@@ -207,8 +207,15 @@ router.get("/:id/statement",auth,async(req,res)=>{
       return res.status(400).json({message:"Statement start date must be on or before the end date."});
     }
 
-    const orders=await Order.find({clientId:client._id,createdBy:owner(req)})
-      .select("orderNumber orderDate createdAt status roundOffFinalRevenue totalAmount finalRevenue payments")
+    const orders=await Order.find({
+      createdBy:owner(req),
+      $or:[
+        {clientId:client._id},
+        {"financialHistory.previous.clientId":client._id},
+        {"financialHistory.next.clientId":client._id}
+      ]
+    })
+      .select("orderNumber orderDate createdAt status clientId roundOffFinalRevenue totalAmount finalRevenue payments paymentHistory financialHistory")
       .sort({orderDate:1,createdAt:1})
       .lean();
     const orderIds=orders.map(order=>order._id);

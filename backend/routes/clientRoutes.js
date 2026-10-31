@@ -120,7 +120,7 @@ router.put("/:id/credit",auth,async(req,res)=>{
       return res.status(400).json({message:"Enter a valid non-zero credit adjustment."});
     }
     const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)})
-      .select("creditBalance creditBalanceAdjustment createdBy +financialSummaryVersion")
+      .select("creditBalance creditBalanceAdjustment creditBalanceHistory createdBy +financialSummaryVersion")
       .lean();
     if(!client)return res.status(404).json({message:"Client not found"});
 
@@ -148,8 +148,17 @@ router.put("/:id/credit",auth,async(req,res)=>{
       return res.status(400).json({message:error.message});
     }
 
-    // Balance and its manual component are changed by one compare-and-set write.
-    // The revision also prevents a concurrent summary refresh from overwriting it.
+    // Save the signed manual adjustment and its resulting wallet balance in the
+    // same atomic write as the balance itself, so statement history cannot drift.
+    const reason=String(req.body?.reason||"Manual adjustment").trim().slice(0,160)||"Manual adjustment";
+    mutation.update.$push={
+      creditBalanceHistory:{
+        amount:Math.round((amount+Number.EPSILON)*100)/100,
+        balanceAfter:mutation.nextBalance,
+        effectiveAt:new Date(),
+        reason
+      }
+    };
     const updated=await Client.findOneAndUpdate(
       mutation.filter,
       mutation.update,

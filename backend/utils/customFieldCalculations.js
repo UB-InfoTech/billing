@@ -96,7 +96,7 @@ const evaluateArithmeticExpression=(expression,variables={})=>{
 
 const toPlainObject=value=>{
   if(!value||typeof value!=="object"||Array.isArray(value))return {};
-  if(value instanceof Map)return Object.fromEntries(value.entries());
+  if(value instanceof Map||value.$isMongooseMap===true||(typeof value.entries==="function"&&typeof value.get==="function"))return Object.fromEntries(value.entries());
   if(typeof value.toObject==="function")return value.toObject();
   return {...value};
 };

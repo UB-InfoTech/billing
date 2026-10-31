@@ -699,7 +699,7 @@ test("custom table values persist with correct types and enforce business owners
         vehicleType:"R",
         transDistance:4
       }}),
-      /cannot be less than 5/i
+      /must be at least 5/i
     );
     await assert.rejects(
       ()=>prepareEwaybillForm({ownerId,body:{

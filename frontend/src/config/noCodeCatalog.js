@@ -155,7 +155,7 @@ export const PROFILE_FORM_FIELDS=[
  {key:"billNoSuffix",label:"Bill Number Suffix",fieldType:"text",width:4,section:"billing",order:29},
  {key:"eWayUserName",label:"E-Way Bill User Name",fieldType:"text",width:6,section:"ewaybill",order:30},
  {key:"eWayPassword",label:"E-Way Bill Password",fieldType:"text",width:6,section:"ewaybill",order:31,helpText:"Used only by the server when generating E-Way Bills."}
-];;
+];
 
 export const CALENDAR_EVENT_FIELDS=[
  {key:"title",label:"Event Title",fieldType:"text",width:6,section:"event",required:true,order:0,system:true,locked:true},

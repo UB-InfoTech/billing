@@ -25,7 +25,7 @@ const ADVANCED_FIELD_TYPES=FIELD_TYPES.filter(type=>!COMMON_FIELD_TYPES.some(ite
 const DATA_SOURCES=[
   {value:"none",label:"Enter it manually",fields:[]},
   {value:"clients",label:"Customer records",fields:[
-    ["_id","Client ID"],["name","Contact person"],["companyName","Customer / business name"],["phone","Phone"],["email","Email"],["gstNumber","GST Number"],["state","State"],["city","City"],["paymentTerms","Payment Terms"],["discountRate","Discount Rate"]
+    ["_id","Record ID"],["name","Contact person"],["companyName","Customer / business name"],["phone","Phone"],["email","Email"],["address","Address"],["pinCode","Pin Code"],["stateCode","State Code"],["gstNumber","GST Number"],["state","State"],["city","City"],["paymentTerms","Payment Terms"],["discountRate","Discount Rate"]
   ]},
   {value:"products",label:"Product records",fields:[
     ["_id","Product ID"],["productName","Product Name"],["productCode","Product Code"],["designNo","Design No."],["rate","Rate"],["quantity","Stock"],["purchasePrice","Purchase Price"],["barcode","Barcode"]

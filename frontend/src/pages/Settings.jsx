@@ -124,12 +124,17 @@ export default function Settings(){
   useEffect(()=>{
     if(configuration?.navigation){
       const legacyDefaultLabels={orders:"Bills",clients:"Clients"};
-      setNavigationDraft(configuration.navigation.slice().sort((a,b)=>a.order-b.order).map(item=>{
+      const savedNavigation=configuration.navigation.slice().sort((a,b)=>a.order-b.order).map(item=>{
         const fallback=MODULE_CATALOG.find(module=>module.key===item.key);
         const savedLabel=String(item.label||"").trim();
         const isOldDefault=savedLabel&&savedLabel===legacyDefaultLabels[item.key];
         return {...item,label:!savedLabel||isOldDefault?(fallback?.label||item.label):savedLabel};
-      }));
+      });
+      const organizationProfile=MODULE_CATALOG.find(module=>module.key==="organization-profile");
+      if(organizationProfile&&!configuration.navigation.some(item=>item.key==="organization-profile")){
+        savedNavigation.push({...organizationProfile,visible:true,order:savedNavigation.length});
+      }
+      setNavigationDraft(savedNavigation);
     }
   },[configuration]);
 

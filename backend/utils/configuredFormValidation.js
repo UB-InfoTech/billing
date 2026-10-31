@@ -253,9 +253,9 @@ const applyConfiguredAutoFill=async({
     if(field.fieldType==="reference"&&field.custom){
       nextCustomFields[field.key]=String(record._id);
     }
-    if(field.fieldType==="reference"&&!field.custom&&sourceConfig.valueField==="_id"){
-      // The visible field may be a label field (for example invoice customer).
-      // Its display text is populated through the configured auto-fill mapping.
+    if(field.fieldType==="reference"&&!field.custom&&idMapping){
+      // The visible field keeps its friendly label; the linked record ID is
+      // stored in the mapped hidden field (for example clientId/productId).
     }
   }
 
@@ -388,7 +388,9 @@ const preserveNonEditableFields=({
     if(field.custom){
       if(existing===undefined)delete nextCustomFields[field.key];
       else nextCustomFields[field.key]=existing;
-    }else if(existing!==undefined){
+    }else if(existing===undefined){
+      delete nextValues[field.key];
+    }else{
       nextValues[field.key]=existing;
     }
   }
@@ -411,7 +413,11 @@ const validateConfiguredFormValues=({
 
   for(const field of fields||[]){
     const state=getConfiguredFieldState(field,formValues);
-    const value=readFieldValue(field,nextValues,nextCustomFields);
+    let value=readFieldValue(field,nextValues,nextCustomFields);
+    if(field.fieldType==="reference"&&!field.custom&&field.dataSource?.type==="lookup"){
+      const idMapping=(field.dataSource.autoFill||[]).find(mapping=>mapping.sourceKey==="_id");
+      if(idMapping)value=readTargetValue(idMapping.targetKey,fields,nextValues,nextCustomFields);
+    }
     if(state.visible&&state.required&&!state.disabled&&isEmpty(value)){
       throw makeValidationError(field,`Please complete “${field.label||"this field"}” before saving.`);
     }

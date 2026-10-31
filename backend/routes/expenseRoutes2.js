@@ -91,8 +91,13 @@ function plainCustomFields(value){
 
 function normalizeExpenseTags(value){
   if(value===undefined||value===null||value==="")return [];
+  if(!Array.isArray(value)&&typeof value!=="string"){
+    throw referenceError("Enter valid expense tags.");
+  }
   const values=Array.isArray(value)?value:String(value).split(",");
-  if(values.some(item=>item&&typeof item==="object"))throw referenceError("Enter valid expense tags.");
+  if(values.some(item=>item&&typeof item==="object")){
+    throw referenceError("Enter valid expense tags.");
+  }
   return [...new Set(values.map(item=>String(item??"").trim()).filter(Boolean))].slice(0,50);
 }
 

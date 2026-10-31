@@ -121,8 +121,8 @@ function formatDate(date) {
 }
 
 export default function CreditNote() {
-    const [searchParams]=useSearchParams();
-    const [view, setView] = useState("list");
+    const [searchParams,setSearchParams]=useSearchParams();
+    const [view, setView] = useState(()=>searchParams.get("customize")==="items"?"create":"list");
     const [orders, setOrders] = useState([]);
     const [creditNotes, setCreditNotes] = useState([]);
     const [selectedOrder, setSelectedOrder] = useState(null);
@@ -450,6 +450,7 @@ export default function CreditNote() {
     };
 
     const startNew = () => {
+        setSearchParams(previous=>{const next=new URLSearchParams(previous);next.delete("customize");return next;});
         setView("create");
         setSelectedOrder(null);
         setItems([]);
@@ -1053,6 +1054,37 @@ export default function CreditNote() {
                                 </div>
                             </div>
 
+                            {!selectedOrder&&searchParams.get("customize")==="items"&&(
+                                <div className="card border mb-3">
+                                    <div className="card-body">
+                                        <div className="fw-semibold mb-1">Credit Note item table</div>
+                                        <div className="small text-muted mb-3">You can customize the item columns here. Choose an original invoice to load its creditable quantities.</div>
+                                        <DynamicTable
+                                            tableKey="credit-notes.items"
+                                            autoOpenSettings
+                                            rows={[]}
+                                            emptyText="Choose an invoice above to load its items."
+                                            columns={[
+                                                {key:"designNumber",label:"Design"},
+                                                {key:"orderName",label:"Item"},
+                                                {key:"hsnCode",label:"HSN"},
+                                                {key:"qtyUnit",label:"Unit"},
+                                                {key:"billedQuantity",label:"Invoice Qty"},
+                                                {key:"previouslyCreditedQuantity",label:"Previous Credit"},
+                                                {key:"availableCreditQty",label:"Available"},
+                                                {key:"creditQuantity",label:"Credit Qty",locked:true},
+                                                {key:"unitPrice",label:"Rate"},
+                                                {key:"discountRate",label:"Disc %"},
+                                                {key:"taxRate",label:"Tax %"},
+                                                {key:"taxable",label:"Taxable"},
+                                                {key:"tax",label:"Tax"},
+                                                {key:"total",label:"Total"}
+                                            ]}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
                             {selectedOrder && (
                                 <>
                                     <div className="card border mb-3">
@@ -1092,7 +1124,6 @@ export default function CreditNote() {
                                         <div className="table-responsive border rounded mb-3">
                                                                                         <DynamicTable
                                                 tableKey="credit-notes.items"
-                                                autoOpenSettings={searchParams.get("customize")==="items"}
                                                 rows={items}
                                                 getRowKey={item=>item._id}
                                                 emptyText="No creditable items found."

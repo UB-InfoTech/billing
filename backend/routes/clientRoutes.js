@@ -156,8 +156,13 @@ router.patch("/:id",auth,async(req,res)=>{
       existingCustomFields:originalCustomFields,
       onlyChangedLookups:true
     });
-    prepared.updates.filter(update=>!update.custom).forEach(update=>{
-      client.set(update.key,prepared.values[update.key]);
+    configuredFields.filter(field=>!field.custom).forEach(field=>{
+      const nextValue=prepared.values[field.key];
+      const currentValue=client.get(field.key);
+      if(Object.prototype.hasOwnProperty.call(prepared.values,field.key)
+        &&JSON.stringify(nextValue??null)!==JSON.stringify(currentValue??null)){
+        client.set(field.key,nextValue);
+      }
     });
     client.customFields=prepared.customFields;
     if(client.gstNumber)client.gstNumber=String(client.gstNumber).trim().toUpperCase();

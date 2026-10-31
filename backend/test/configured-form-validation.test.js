@@ -79,6 +79,8 @@ test("server validates numbers, dates, email, phone and website values",()=>{
   assert.equal(normalizeConfiguredFieldValue({key:"rate",label:"Rate",custom:true,fieldType:"currency",validation:{min:0,max:100}}, "12.345"),12.35);
   assert.throws(()=>normalizeConfiguredFieldValue({key:"rate",label:"Rate",fieldType:"currency",validation:{min:0,max:100}},"101"),/cannot be more than 100/i);
   assert.equal(normalizeConfiguredFieldValue({key:"billDate",label:"Bill date",fieldType:"date"},"2026-10-31"),"2026-10-31");
+  assert.equal(normalizeConfiguredFieldValue({key:"billDate",label:"Bill date",fieldType:"date"},new Date("2026-10-31T00:00:00.000Z")).toISOString(),"2026-10-31T00:00:00.000Z");
+  assert.equal(normalizeConfiguredFieldValue({key:"deliveryTime",label:"Delivery time",fieldType:"datetime"},new Date("2026-10-31T05:30:00.000Z")).toISOString(),"2026-10-31T05:30:00.000Z");
   assert.throws(()=>normalizeConfiguredFieldValue({key:"billDate",label:"Bill date",fieldType:"date"},"2026-02-30"),/valid date/i);
   assert.equal(normalizeConfiguredFieldValue({key:"email",label:"Email",custom:true,fieldType:"email"},"OWNER@EXAMPLE.COM"),"owner@example.com");
   assert.throws(()=>normalizeConfiguredFieldValue({key:"email",label:"Email",fieldType:"email"},"not-an-email"),/valid email/i);

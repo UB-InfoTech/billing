@@ -11,6 +11,7 @@ const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
 const {normalizePaymentUpdates}=require("../utils/bulkPaymentAllocations");
 const {buildPaymentAppendOperation}=require("../utils/paymentAppendOperation");
 const {reservePaymentReference,releasePaymentReference}=require("../utils/paymentReferenceReservation");
+const {preparePaymentCustomFields}=require("../utils/paymentFormValidation");
 
 const isReplicaSetAvailable=()=>{
   const client=mongoose.connection.getClient?.();
@@ -47,6 +48,13 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
     if(!["proportional","custom"].includes(splitType))throw new Error("Invalid split type.");
     if(!Array.isArray(updates)||!updates.length)throw new Error("updates[] is required.");
     if(!paymentDate||Number.isNaN(parsedDate.getTime()))throw new Error("Valid paymentDate is required.");
+
+    const configuredPayment=await preparePaymentCustomFields({
+      ownerId:req.user.id,
+      values:{amount,method,amountReference:reference,paymentDate:parsedDate},
+      customFields:req.body?.customFields,
+      isNewRecord:true
+    });
 
     const normalized=normalizePaymentUpdates(
       updates,
@@ -131,7 +139,8 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
         paymentDate:parsedDate,
         method,
         amountReference:reference,
-        processedBy:req.user.id
+        processedBy:req.user.id,
+        customFields:new Map(Object.entries(configuredPayment.customFields))
       };
       const operation=buildPaymentAppendOperation({
         orderId:item.order._id,
@@ -179,7 +188,8 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
       })),
       skippedOrders:skipped,
       transactionMetadata:{batchSize:ids.length},
-      status:skipped.length?"partially_completed":"completed"
+      status:skipped.length?"partially_completed":"completed",
+      customFields:new Map(Object.entries(configuredPayment.customFields))
     });
     await log.save(session?{session}:undefined);
 

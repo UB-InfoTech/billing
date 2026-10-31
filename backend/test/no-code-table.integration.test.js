@@ -823,6 +823,20 @@ test("custom table values persist with correct types and enforce business owners
     assert.equal(missingConditionalProfileGst.status,400);
     assert.match(missingConditionalProfileGst.data.message,/GSTIN/i);
 
+    const invalidOrganizationEmail=await request("/profile",{
+      method:"PUT",
+      body:{companyName:"Invalid email business",emailAddress:"not-an-email"}
+    });
+    assert.equal(invalidOrganizationEmail.status,400);
+    assert.match(invalidOrganizationEmail.data.message,/valid organization email/i);
+
+    const invalidOrganizationWebsite=await request("/profile",{
+      method:"PUT",
+      body:{companyName:"Invalid website business",website:"not a website"}
+    });
+    assert.equal(invalidOrganizationWebsite.status,400);
+    assert.match(invalidOrganizationWebsite.data.message,/valid organization website/i);
+
     const invalidInvoiceSequence=await request("/profile",{
       method:"PUT",
       body:{companyName:"Invalid sequence business",billNoSequence:"1.5"}

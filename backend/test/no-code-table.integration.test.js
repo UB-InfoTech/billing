@@ -34,7 +34,8 @@ test("custom table values persist with correct types and enforce business owners
     const ownerClient=await Client.create({
       createdBy:ownerId,
       name:"No-code integration customer",
-      companyName:"Owner business"
+      companyName:"Owner business",
+      phone:"9999999999"
     });
     ownerClientId=ownerClient._id;
 
@@ -58,7 +59,26 @@ test("custom table values persist with correct types and enforce business owners
       fields:[
         {key:"quantity",label:"Quantity",custom:true,fieldType:"number"},
         {key:"rate",label:"Rate",custom:true,fieldType:"currency"},
-        {key:"amount",label:"Calculated amount",custom:true,fieldType:"currency",formula:"quantity * rate",editable:false}
+        {key:"amount",label:"Calculated amount",custom:true,fieldType:"currency",formula:"quantity * rate",editable:false},
+        {
+          key:"customerType",label:"Customer type",custom:true,fieldType:"select",
+          options:[{value:"Individual",label:"Individual"},{value:"Business",label:"Business"}]
+        },
+        {
+          key:"gstBusiness",label:"GST number",custom:true,fieldType:"text",
+          conditions:[
+            {action:"show",fieldKey:"customerType",operator:"equals",value:"Business"},
+            {action:"require",fieldKey:"customerType",operator:"equals",value:"Business"}
+          ]
+        },
+        {
+          key:"referralClient",label:"Referred by customer",custom:true,fieldType:"reference",
+          dataSource:{
+            type:"lookup",resource:"clients",valueField:"_id",labelField:"companyName",searchField:"companyName",
+            autoFill:[{targetKey:"referralPhone",sourceKey:"phone"}]
+          }
+        },
+        {key:"referralPhone",label:"Referral phone",custom:true,fieldType:"phone",editable:false}
       ]
     });
 
@@ -103,11 +123,53 @@ test("custom table values persist with correct types and enforce business owners
       body:{
         name:"Calculated customer",
         companyName:"Calculation Test Business",
-        customFields:{quantity:4,rate:25,amount:999}
+        customFields:{
+          quantity:4,
+          rate:25,
+          amount:999,
+          customerType:"Individual",
+          referralClient:String(ownerClientId),
+          referralPhone:"1111111111"
+        }
       }
     });
     assert.equal(formulaClient.status,201,JSON.stringify(formulaClient.data));
     assert.equal(formulaClient.data.customFields.amount,100);
+    assert.equal(formulaClient.data.customFields.referralClient,String(ownerClientId));
+    assert.equal(formulaClient.data.customFields.referralPhone,"9999999999","The server must replace browser-submitted auto-fill values with the selected customer's saved phone.");
+
+    const missingBusinessGst=await request("/clients",{
+      method:"POST",
+      body:{
+        name:"Business without GST",
+        companyName:"Conditional GST Test",
+        customFields:{customerType:"Business",gstBusiness:""}
+      }
+    });
+    assert.equal(missingBusinessGst.status,400);
+    assert.match(missingBusinessGst.data.message,/GST number/i);
+
+    const invalidCustomerType=await request("/clients",{
+      method:"POST",
+      body:{
+        name:"Invalid customer type",
+        companyName:"Invalid Type Test",
+        customFields:{customerType:"Not an available option"}
+      }
+    });
+    assert.equal(invalidCustomerType.status,400);
+    assert.match(invalidCustomerType.data.message,/available option/i);
+
+    const crossBusinessFormReference=await request("/clients",{
+      method:"POST",
+      body:{
+        name:"Cross-business referral",
+        companyName:"Cross Business Test",
+        customFields:{customerType:"Individual",referralClient:String(otherClientId)}
+      }
+    });
+    assert.equal(crossBusinessFormReference.status,400);
+    assert.match(crossBusinessFormReference.data.message,/not found in this business/i);
 
     const updatedFormulaClient=await request(`/clients/${formulaClient.data._id}`,{
       method:"PATCH",
@@ -115,6 +177,17 @@ test("custom table values persist with correct types and enforce business owners
     });
     assert.equal(updatedFormulaClient.status,200,JSON.stringify(updatedFormulaClient.data));
     assert.equal(updatedFormulaClient.data.customFields.amount,60);
+
+    const crossBusinessUpdate=await request(`/clients/${formulaClient.data._id}`,{
+      method:"PATCH",
+      body:{customFields:{referralClient:String(otherClientId),referralPhone:"forged"}}
+    });
+    assert.equal(crossBusinessUpdate.status,400);
+    assert.match(crossBusinessUpdate.data.message,/not found in this business/i);
+    const formulaClientAfterRejectedUpdate=await request(`/clients/${formulaClient.data._id}`);
+    assert.equal(formulaClientAfterRejectedUpdate.status,200);
+    assert.equal(formulaClientAfterRejectedUpdate.data.customFields.referralClient,String(ownerClientId));
+    assert.equal(formulaClientAfterRejectedUpdate.data.customFields.referralPhone,"9999999999");
 
     const createdOrder=await request("/order/orders/create",{
       method:"POST",

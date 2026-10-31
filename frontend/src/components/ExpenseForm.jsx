@@ -215,9 +215,8 @@ export default function ExpenseForm({onSubmit,onCancel,initialData=EMPTY_INITIAL
               <div className="row g-3">{primaryFields.map(renderExpenseField)}</div>
             </section>
 
-            {additionalFields.some(field=>getFieldState(field,fieldStateValues).visible)&&(
-              <details className="expense-additional-details mt-3">
-                <summary><i className="bi bi-plus-circle me-2"></i>More details <span>Short title, payment method, GST, customer links and other optional information</span></summary>
+            <details className="expense-additional-details mt-3">
+                <summary><i className="bi bi-plus-circle me-2"></i>More details and receipt <span>Payment method, GST, customer links, notes and supporting receipt</span></summary>
                 <div className="expense-additional-details-body">
                   {sectionNames.map(section=>{
                     const sectionFields=additionalFields.filter(field=>(field.section||"General")===section);
@@ -242,8 +241,7 @@ export default function ExpenseForm({onSubmit,onCancel,initialData=EMPTY_INITIAL
                     }}>View uploaded receipt</a>}
                   </div>
                 </div>
-              </details>
-            )}
+            </details>
           </>
         )}
         </div>

@@ -14,8 +14,10 @@ const {
   validateConfiguredFormValues
 }=require("../utils/configuredFormValidation");
 const PROFILE_FORM_KEYS=[
-  "headerTitle","companyName","companyAddress","phoneNumber1","phoneNumber2",
-  "gstin","pan","bankName","accountNo","branchName","ifsc","pinCode","stateCode",
+  "headerTitle","companyName","legalName","organizationType","industry","contactPerson",
+  "emailAddress","website","companyAddress","addressLine2","city","district","state","country",
+  "phoneNumber1","phoneNumber2","gstin","pan","cin","tan","udyamNumber",
+  "bankName","accountNo","branchName","ifsc","pinCode","stateCode",
   "billNoPrefix","billNoSequence","billNoSuffix","eWayUserName","eWayPassword"
 ];
 
@@ -37,7 +39,7 @@ const cleanCustomFields=(value,current={})=>{
   let parsed=value;
   if(typeof parsed==="string"){
     try{parsed=JSON.parse(parsed||"{}");}
-    catch{throw profileError("Custom company fields are not valid.");}
+    catch{throw profileError("Custom organization fields are not valid.");}
   }
   if(parsed===undefined)return {...current};
   if(parsed instanceof Map||parsed?.$isMongooseMap===true
@@ -45,10 +47,10 @@ const cleanCustomFields=(value,current={})=>{
     parsed=Object.fromEntries(parsed.entries());
   }
   if(!parsed||typeof parsed!=="object"||Array.isArray(parsed)){
-    throw profileError("Custom company fields are not valid.");
+    throw profileError("Custom organization fields are not valid.");
   }
   const entries=Object.entries(parsed);
-  if(entries.length>100)throw profileError("A company profile can have no more than 100 custom fields.");
+  if(entries.length>100)throw profileError("A organization profile can have no more than 100 custom fields.");
   const result={...current};
   for(const [rawKey,value] of entries){
     const key=String(rawKey).trim();
@@ -84,11 +86,25 @@ router.get('/', auth, async (req, res) => {
       profile = await Profile.create({
         headerTitle: '',
         companyName: '',
+        legalName: '',
+        organizationType: '',
+        industry: '',
+        contactPerson: '',
+        emailAddress: '',
+        website: '',
         companyAddress: '',
+        addressLine2: '',
+        city: '',
+        district: '',
+        state: '',
+        country: 'India',
         phoneNumber1: '',
         phoneNumber2: '',
         gstin: '',
         pan: '',
+        cin: '',
+        tan: '',
+        udyamNumber: '',
         bankName: '',
         accountNo: '',
         branchName: '',

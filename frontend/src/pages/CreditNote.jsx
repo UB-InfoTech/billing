@@ -544,6 +544,11 @@ export default function CreditNote() {
     };
 
     const save = async () => {
+        const customMessage=creditNoteCustomFieldError(preparedCreditNoteForm);
+        if(customMessage){
+            setError(customMessage);
+            return;
+        }
         const message = validateClient();
         if (message) {
             setError(message);
@@ -573,6 +578,7 @@ export default function CreditNote() {
                         taxRate: r2(form.manualTaxRate),
                     } : undefined,
                     note: form.note.trim(),
+                    customFields:preparedCreditNoteForm.customFields||{},
                     items: form.creditMode === "ITEM" ? items
                         .filter((item) => getCreditQty(item) > 0)
                         .map((item) => ({
@@ -651,6 +657,7 @@ export default function CreditNote() {
                 manualTaxableAmount: n(fullNote.manualCredit?.taxableAmount),
                 manualTaxRate: n(fullNote.manualCredit?.taxRate ?? fullNote.originalOrder?.taxPercentage ?? 5),
                 note: fullNote.note || "",
+                customFields:fullNote.customFields||{}
             });
 
             setView("edit");
@@ -667,6 +674,11 @@ export default function CreditNote() {
     const updateNote = async () => {
         if (!editingNote?._id) return;
 
+        const customMessage=creditNoteCustomFieldError(preparedCreditNoteForm);
+        if(customMessage){
+            setError(customMessage);
+            return;
+        }
         const message = validateClient();
         if (message) {
             setError(message);
@@ -700,6 +712,7 @@ export default function CreditNote() {
                         }
                         : undefined,
                     note: form.note.trim(),
+                    customFields:preparedCreditNoteForm.customFields||{},
                     items: form.creditMode === "ITEM"
                         ? items.filter((item) => getCreditQty(item) > 0).map((item) => ({
                             sourceSubOrderId: item._id,
@@ -862,9 +875,14 @@ export default function CreditNote() {
                         <h3 className="mb-1 fw-bold">Credit Note Management</h3>
                         <div className="text-muted small">Create, track, print and cancel invoice-linked Credit Notes.</div>
                     </div>
-                    <div className="btn-group">
-                        <button className={`btn ${view === "list" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setView("list")}>Credit Notes</button>
-                        <button className={`btn ${view === "create" ? "btn-primary" : "btn-outline-primary"}`} onClick={startNew}>+ Create Credit Note</button>
+                    <div className="d-flex flex-wrap gap-2">
+                        <button type="button" className="btn btn-light border" onClick={()=>setCustomFormSettingsOpen(true)}>
+                            <i className="bi bi-sliders me-1"></i>Customize extra details
+                        </button>
+                        <div className="btn-group">
+                            <button className={`btn ${view === "list" ? "btn-primary" : "btn-outline-primary"}`} onClick={() => setView("list")}>Credit Notes</button>
+                            <button className={`btn ${view === "create" ? "btn-primary" : "btn-outline-primary"}`} onClick={startNew}>+ Create Credit Note</button>
+                        </div>
                     </div>
                 </div>
 
@@ -1100,6 +1118,30 @@ export default function CreditNote() {
                                         </div>
                                     )}
 
+                                    <div className="card border mb-3">
+                                        <div className="card-body">
+                                            <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                                                <div>
+                                                    <h6 className="fw-bold mb-1">Additional Credit Note details</h6>
+                                                    <div className="small text-muted">Optional return, inspection and approval information. These details do not change credit totals or settlement.</div>
+                                                </div>
+                                                <button type="button" className="btn btn-sm btn-light border" onClick={()=>setCustomFormSettingsOpen(true)}>
+                                                    <i className="bi bi-sliders me-1"></i>Customize fields
+                                                </button>
+                                            </div>
+                                            {creditNoteFormConfig.loading?(
+                                                <div className="small text-muted"><span className="spinner-border spinner-border-sm me-2"></span>Loading extra fields…</div>
+                                            ):creditNoteCustomFieldNodes.length?(
+                                                <div className="row g-3">{creditNoteCustomFieldNodes}</div>
+                                            ):(
+                                                <div className="border rounded-3 bg-light p-3 small text-muted">
+                                                    Add fields such as return condition, inspected by, warehouse location or approval notes using “Customize fields”
+                                                </div>
+                                            )}
+                                            {error&&error.includes("Additional Credit Note")&&<div className="small text-danger mt-2">{error}</div>}
+                                        </div>
+                                    </div>
+
                                     <div className="row g-3">
                                         <div className="col-lg-7">
                                             <div className="card border h-100">
@@ -1185,14 +1227,28 @@ export default function CreditNote() {
 
                 {view === "preview" && previewNote && <div className="credit-note-print">
                     <div className="d-flex justify-content-end gap-2 mb-3 no-print"><button className="btn btn-outline-secondary" onClick={() => setView("list")}>Back</button>{previewNote.status === "Posted" && <><button className="btn btn-outline-warning" onClick={() => startEditNote(previewNote)}>Edit</button><button className="btn btn-outline-danger" onClick={() => deleteNote(previewNote._id)}>Cancel</button></>}<button className="btn btn-primary" onClick={print}>Print / Save PDF</button></div>
-                    <CreditNotePrint note={previewNote} profile={profile} />
+                    <CreditNotePrint note={previewNote} profile={profile} customFields={creditNoteFormConfig.fields} />
                 </div>}
+                <FormConfigurator
+                    open={customFormSettingsOpen}
+                    onClose={()=>setCustomFormSettingsOpen(false)}
+                    title="Customize Credit Note extra details"
+                    subtitle="Add optional return, inspection, warehouse and approval information. Credit amounts, settlements, invoice links and stock movements are not editable here."
+                    fields={creditNoteFormConfig.fields}
+                    onSave={creditNoteFormConfig.save}
+                    onReset={async()=>{
+                        const defaults=await creditNoteFormConfig.reset();
+                        creditNoteFormConfig.setFields(defaults);
+                        setCustomFormSettingsOpen(false);
+                    }}
+                    saving={creditNoteFormConfig.saving}
+                />
             </div>
         </div>
     );
 }
 
-function CreditNotePrint({ note, profile }) {
+function CreditNotePrint({ note, profile, customFields=[] }) {
     const original = note?.originalOrder || {};
     const items = Array.isArray(note?.items) ? note.items : [];
     const totals = note?.totals || {};

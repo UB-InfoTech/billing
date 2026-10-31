@@ -17,6 +17,7 @@ const {syncClientDataSafely,getInvoiceRevenue}=require("../utils/syncClientData"
 const {getCreditAppliedAmountAt}=require("../utils/creditNoteSettlementHistory");
 const {sanitizeOrderCreateInput,cleanCustomFields}=require("../utils/orderInput");
 const {loadConfiguredFormFields,calculateConfiguredCustomFields,hasConfiguredCustomCalculations}=require("../utils/customFieldCalculations");
+const {prepareConfiguredFormValues,validateConfiguredFormValues}=require("../utils/configuredFormValidation");
 const {numberToWords}=require("../utils/numberToWords");
 const {appendStatusTransition}=require("../utils/statusHistory");
 const {hasInvoiceSensitiveChanges,wouldReduceTotalBelowApplied}=require("../utils/orderEditPolicy");
@@ -236,27 +237,70 @@ router.post("/orders/create",auth,async(req,res)=>{
       loadConfiguredFormFields(userId(req),"orders.items")
     ]);
 
-    // Recalculate only user-created fields on the server. Built-in invoice and
-    // item financial calculations remain governed by Order.calculateFinancials.
-    if(hasConfiguredCustomCalculations(orderFields)){
-      body.customFields=calculateConfiguredCustomFields(
-        orderFields,
-        body,
-        body.customFields
-      );
-    }
-    if(hasConfiguredCustomCalculations(itemFields)){
-      body.subOrders.forEach(item=>{
-        item.customFields=calculateConfiguredCustomFields(
-          itemFields,
-          item,
-          item.customFields
-        );
+    // Resolve linked records and auto-filled values on the server. Invoice
+    // totals and other built-in financial calculations remain unchanged.
+    const preparedOrder=await prepareConfiguredFormValues({
+      ownerId:userId(req),
+      fields:orderFields,
+      values:body,
+      customFields:body.customFields,
+      isNewRecord:true
+    });
+    Object.assign(body,preparedOrder.values);
+    body.customFields=preparedOrder.customFields;
+
+    const preparedItems=[];
+    for(const rawItem of body.subOrders){
+      const preparedItem=await prepareConfiguredFormValues({
+        ownerId:userId(req),
+        fields:itemFields,
+        values:rawItem,
+        customFields:rawItem.customFields,
+        isNewRecord:true
       });
+      let itemValues={...preparedItem.values};
+      let itemCustomFields=preparedItem.customFields;
+      if(hasConfiguredCustomCalculations(itemFields)){
+        itemCustomFields=calculateConfiguredCustomFields(itemFields,itemValues,itemCustomFields);
+      }
+      const validatedItem=validateConfiguredFormValues({
+        fields:itemFields,
+        values:itemValues,
+        customFields:itemCustomFields,
+        validateAllValues:true
+      });
+      preparedItems.push({...validatedItem.values,customFields:validatedItem.customFields});
     }
+    body.subOrders=preparedItems;
+
+    if(hasConfiguredCustomCalculations(orderFields)){
+      body.customFields=calculateConfiguredCustomFields(orderFields,body,body.customFields);
+    }
+    const validatedOrder=validateConfiguredFormValues({
+      fields:orderFields,
+      values:body,
+      customFields:body.customFields,
+      validateAllValues:true
+    });
+    Object.assign(body,validatedOrder.values);
+    body.customFields=validatedOrder.customFields;
 
     const order=new Order(body);
     await applyWorkflows({resource:"orders",event:"record_created",doc:order,createdBy:userId(req)});
+    if(hasConfiguredCustomCalculations(orderFields)){
+      order.customFields=calculateConfiguredCustomFields(
+        orderFields,
+        order.toObject({depopulate:true}),
+        cleanCustomFields(order.customFields)
+      );
+    }
+    const finalValidation=validateConfiguredFormValues({
+      fields:orderFields,
+      values:order.toObject({depopulate:true}),
+      customFields:cleanCustomFields(order.customFields),
+      validateAllValues:true
+    });
+    order.customFields=finalValidation.customFields;
     const invoiceCreatedAt=new Date();
     order.financialHistory.push({
       eventType:"created",

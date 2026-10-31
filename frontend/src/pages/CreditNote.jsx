@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import {useSearchParams} from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import DynamicTable from "../components/DynamicTable";
 import FormConfigurator from "../components/FormConfigurator";
@@ -120,6 +121,7 @@ function formatDate(date) {
 }
 
 export default function CreditNote() {
+    const [searchParams]=useSearchParams();
     const [view, setView] = useState("list");
     const [orders, setOrders] = useState([]);
     const [creditNotes, setCreditNotes] = useState([]);
@@ -932,6 +934,7 @@ export default function CreditNote() {
 
                                                         <DynamicTable
                                 tableKey="credit-notes.list"
+                                autoOpenSettings={searchParams.get("customize")==="list"}
                                 rows={creditNotes}
                                 getRowKey={note=>note._id}
                                 loading={loading}
@@ -1089,6 +1092,7 @@ export default function CreditNote() {
                                         <div className="table-responsive border rounded mb-3">
                                                                                         <DynamicTable
                                                 tableKey="credit-notes.items"
+                                                autoOpenSettings={searchParams.get("customize")==="items"}
                                                 rows={items}
                                                 getRowKey={item=>item._id}
                                                 emptyText="No creditable items found."

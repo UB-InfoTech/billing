@@ -396,7 +396,7 @@ const OrdersTable = React.memo(({
   const [sortOrder] = useState('asc');
   const hasActiveFilters = Object.values(filters).some(value => value.trim());
 
-  if (orders.length === 0) {
+  if (orders.length === 0 && searchParams.get("customize") !== "selection") {
     return (
       <div className="card p-3 mb-3 shadow-sm text-center">
         <p className="mb-0">No outstanding invoices are available for bulk payment.</p>
@@ -635,6 +635,7 @@ class ErrorBoundary extends React.Component {
 
 // Main BulkPayment Component
 export default function BulkPayment() {
+  const [searchParams]=useSearchParams();
   // State management
   const [orders, setOrders] = useState([]);
   const [selectedOrders, setSelectedOrders] = useState([]);
@@ -1036,7 +1037,7 @@ export default function BulkPayment() {
             onCustomize={()=>setPaymentFormSettingsOpen(true)}
           />
 
-          {showModal && (
+          {(showModal || searchParams.get("customize")==="allocation-preview") && (
             <AllocationPreview
               allocatedPreview={allocatedPreview}
               totalDue={totalDue}

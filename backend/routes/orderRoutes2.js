@@ -55,7 +55,13 @@ const ORDER_SAVE_GUARD_FIELDS=["updatedAt","dueAmount","paidAmount","creditAppli
 // Payments and Credit Notes update these values atomically, so a stale form save
 // must conflict instead of recalculating the due from old payment history.
 function applyOrderSaveConcurrencyGuard(order,createdBy){
-  const guard={createdBy};
+  // Document.$where is merged into Mongoose's save filter; normalize the
+  // owner value explicitly because the persisted field is an ObjectId.
+  const guard={
+    createdBy:mongoose.isValidObjectId(createdBy)
+      ?new mongoose.Types.ObjectId(createdBy)
+      :createdBy
+  };
   for(const field of ORDER_SAVE_GUARD_FIELDS){
     const defaulted=field!=="updatedAt"
       &&typeof order.$isDefault==="function"

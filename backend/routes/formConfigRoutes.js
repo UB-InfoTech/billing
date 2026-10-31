@@ -6,13 +6,15 @@ const auth=require("../middleware/auth");
 const router=express.Router();
 
 const FIELD_TYPES=["text","textarea","number","currency","date","datetime","select","multiselect","boolean","email","phone","url","reference"];
-const SOURCES=["none","clients","products","orders","expenses","users"];
+const SOURCES=["none",...Object.keys(FORM_LOOKUP_SOURCES)];
 const OPERATORS=["equals","not_equals","contains","not_contains","greater_than","less_than","empty","not_empty"];
 const {
   FORM_CONDITION_ACTIONS,
   findRemovedFieldDependency,
   validateFieldReferences
 }=require("../utils/formConfigValidation");
+
+const {FORM_LOOKUP_SOURCES,getFormLookupSource}=require("../utils/formLookupPolicy");
 
 const ACTIONS=FORM_CONDITION_ACTIONS;
 const owner=req=>String(req.user.id);
@@ -78,8 +80,12 @@ const sanitizeFields=fields=>{
     const configuredResource=SOURCES.includes(requestedResource)?requestedResource:"";
     const resource=configuredResource==="none"?"":configuredResource;
     const dataSourceType=raw?.dataSource?.type==="lookup"&&resource?"lookup":"none";
+    const lookupSource=dataSourceType==="lookup"?getFormLookupSource(resource):null;
     if(fieldType==="reference"&&dataSourceType!=="lookup"){
       throw new Error(`Choose a list for “${label}” before saving the form.`);
+    }
+    if(dataSourceType==="lookup"&&!lookupSource){
+      throw new Error(`The linked list for “${label}” is not available to this business.`);
     }
     if(["select","multiselect"].includes(fieldType)&&dataSourceType!=="lookup"&&options.length===0){
       throw new Error(`Add at least one choice for “${label}”.`);
@@ -116,7 +122,9 @@ const sanitizeFields=fields=>{
       dataSource:{
         type:dataSourceType,
         resource,
-        valueField:cleanString(raw?.dataSource?.valueField||"_id",100),
+        // Linked business records are always saved by their stable record ID.
+        // The display field is configured separately and remains human-readable.
+        valueField:dataSourceType==="lookup"?"_id":"_id",
         labelField:cleanString(raw?.dataSource?.labelField,100),
         searchField:cleanString(raw?.dataSource?.searchField,100),
         multiple:Boolean(raw?.dataSource?.multiple),
@@ -146,6 +154,24 @@ const sanitizeFields=fields=>{
     const incompleteMapping=(field.dataSource?.autoFill||[]).find(mapping=>!mapping.targetKey||!mapping.sourceKey);
     if(incompleteMapping){
       throw new Error(`Complete every auto-fill mapping for “${field.label}” or remove the unfinished mapping.`);
+    }
+    if(field.dataSource?.type==="lookup"){
+      const source=getFormLookupSource(field.dataSource.resource);
+      const invalidMapping=(field.dataSource.autoFill||[]).find(mapping=>
+        mapping.sourceKey!=="_id"&&!source?.fields.includes(mapping.sourceKey)
+      );
+      if(invalidMapping){
+        throw new Error(`“${invalidMapping.sourceKey}” is not available in the selected list for “${field.label}”.`);
+      }
+      const invalidLabelField=field.dataSource.labelField
+        &&field.dataSource.labelField!=="_id"
+        &&!source?.fields.includes(field.dataSource.labelField);
+      const invalidSearchField=field.dataSource.searchField
+        &&field.dataSource.searchField!=="_id"
+        &&!source?.fields.includes(field.dataSource.searchField);
+      if(invalidLabelField||invalidSearchField){
+        throw new Error(`Choose display and search information that is available in the selected list for “${field.label}”.`);
+      }
     }
     const min=field.validation?.min;
     const max=field.validation?.max;

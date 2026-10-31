@@ -1,9 +1,10 @@
-import React,{useEffect,useState} from "react";
+import React,{useEffect,useMemo,useState} from "react";
 import axios from "axios";
 import FormConfigurator from "./FormConfigurator";
 import ConfiguredField from "./ConfiguredField";
 import {EWAY_BILL_FIELDS} from "../config/noCodeCatalog";
-import {applyFormulas,buildConfiguredDefaults,getFieldState,hydrateConfiguredValues,syncConfiguredCustomFields,useFormConfiguration} from "../hooks/useFormConfiguration";
+import {applyAutoFill,applyFormulas,buildConfiguredDefaults,getFieldState,hydrateConfiguredValues,syncConfiguredCustomFields,useFormConfiguration} from "../hooks/useFormConfiguration";
+import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const DEFAULT_VALUES={
@@ -34,6 +35,11 @@ export default function EWayBillForm({orderId,customizeOnly=false,onClose}){
   },[customizeOnly]);
 
   const eventFields=fields||EWAY_BILL_FIELDS;
+  const linkedResources=useMemo(
+    ()=>Array.from(new Set(eventFields.map(field=>field.dataSource?.resource).filter(Boolean))),
+    [eventFields]
+  );
+  const {records:linkedRecords,searchRecords:searchLinkedRecords}=useNoCodeDataSources(linkedResources);
 
   // Apply configured defaults even when the form's saved definition arrives
   // after the screen first renders. Existing values are preserved.
@@ -41,11 +47,18 @@ export default function EWayBillForm({orderId,customizeOnly=false,onClose}){
     setFormData(previous=>buildConfiguredDefaults({...previous,customFields:{...(previous.customFields||{})}},eventFields));
   },[eventFields]);
 
-  const updateValue=(key,value)=>{
-    setFormData(previous=>applyFormulas(
-      eventFields,
-      syncConfiguredCustomFields({...previous,[key]:value},eventFields)
-    ));
+  const updateValue=(field,value,record=null)=>{
+    setFormData(previous=>{
+      let next={
+        ...previous,
+        [field.key]:value,
+        customFields:{...(previous.customFields||{})}
+      };
+      if(field.custom)next.customFields[field.key]=value;
+      if(field.dataSource?.autoFill?.length)next=applyAutoFill(field,record,next);
+      next=applyFormulas(eventFields,next);
+      return syncConfiguredCustomFields(next,eventFields);
+    });
   };
 
   const resetValues=()=>{
@@ -119,8 +132,16 @@ export default function EWayBillForm({orderId,customizeOnly=false,onClose}){
                     <div className={`col-md-${Math.min(12,Math.max(1,Number(field.width)||6))}`} key={field.key}>
                       <ConfiguredField
                         field={field}
-                        value={formData[field.key]}
-                        onChange={value=>updateValue(field.key,value)}
+                        value={formData[field.key]??formData.customFields?.[field.key]}
+                        onChange={value=>updateValue(field,value)}
+                        onRecordChange={record=>updateValue(
+                          field,
+                          record?.[field.dataSource?.valueField||"_id"]??"",
+                          record
+                        )}
+                        lookupRecords={field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[]}
+                        onLookupSearch={searchLinkedRecords}
+                        options={field.options||[]}
                         required={state.required}
                         readOnly={state.readOnly}
                         disabled={state.disabled}

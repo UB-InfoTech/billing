@@ -101,6 +101,13 @@ const toPlainObject=value=>{
   return {...value};
 };
 
+const hasConfiguredCustomCalculations=fields=>
+  (Array.isArray(fields)?fields:[]).some(field=>
+    field?.custom===true
+    &&String(field.formula||"").trim()
+    &&["number","currency"].includes(field.fieldType)
+  );
+
 const calculateConfiguredCustomFields=(fields,recordValues={},customFields={})=>{
   const result=toPlainObject(customFields);
   const formulas=(Array.isArray(fields)?fields:[]).filter(field=>
@@ -141,5 +148,6 @@ module.exports={
   tokenize,
   evaluateArithmeticExpression,
   calculateConfiguredCustomFields,
-  loadConfiguredFormFields
+  loadConfiguredFormFields,
+  hasConfiguredCustomCalculations
 };

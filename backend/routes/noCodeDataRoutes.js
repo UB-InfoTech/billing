@@ -21,7 +21,8 @@ const SOURCES={
     searchFields:["name","companyName","phone","gstNumber"],
     fields:[
       ["name","Client Name"],["companyName","Company Name"],["phone","Phone"],
-      ["email","Email"],["gstNumber","GST Number"],["state","State"],["city","City"],
+      ["email","Email"],["address","Address"],["pinCode","Pin Code"],["stateCode","State Code"],
+      ["gstNumber","GST Number"],["state","State"],["city","City"],
       ["paymentTerms","Payment Terms"],["discountRate","Discount Rate"],["accountStatus","Account Status"]
     ]
   },

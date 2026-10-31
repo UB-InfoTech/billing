@@ -11,7 +11,7 @@ const {getInvoiceRevenue}=require("../utils/syncClientData");
 const {buildCustomerStatement}=require("../utils/customerStatement");
 const auth=require("../middleware/auth");
 const {escapeRegex}=require("../utils/escapeRegex");
-const {loadConfiguredFormFields,calculateConfiguredCustomFields}=require("../utils/customFieldCalculations");
+const {loadConfiguredFormFields,calculateConfiguredCustomFields,hasConfiguredCustomCalculations}=require("../utils/customFieldCalculations");
 
 const router=express.Router();
 const owner=req=>req.user.id;
@@ -88,11 +88,13 @@ router.post("/",auth,async(req,res)=>{
     });
     body.createdBy=owner(req);
     const configuredFields=await loadConfiguredFormFields(owner(req),"clients.form");
-    body.customFields=calculateConfiguredCustomFields(
-      configuredFields,
-      body,
-      cleanCustomFields(body.customFields)
-    );
+    if(hasConfiguredCustomCalculations(configuredFields)){
+      body.customFields=calculateConfiguredCustomFields(
+        configuredFields,
+        body,
+        cleanCustomFields(body.customFields)
+      );
+    }
     if(body.gstNumber)body.gstNumber=String(body.gstNumber).trim().toUpperCase();
     const client=new Client(body);
     await applyWorkflows({resource:"clients",event:"record_created",doc:client,createdBy:owner(req)});
@@ -121,11 +123,13 @@ router.patch("/:id",auth,async(req,res)=>{
       }
     }
     const configuredFields=await loadConfiguredFormFields(owner(req),"clients.form");
-    client.customFields=calculateConfiguredCustomFields(
-      configuredFields,
-      client.toObject({depopulate:true}),
-      cleanCustomFields(client.customFields)
-    );
+    if(hasConfiguredCustomCalculations(configuredFields)){
+      client.customFields=calculateConfiguredCustomFields(
+        configuredFields,
+        client.toObject({depopulate:true}),
+        cleanCustomFields(client.customFields)
+      );
+    }
     if(client.gstNumber)client.gstNumber=String(client.gstNumber).trim().toUpperCase();
     await applyWorkflows({resource:"clients",event:"record_updated",doc:client,createdBy:owner(req)});
     if(hadClientIdentity||req.body?.name!==undefined||req.body?.companyName!==undefined){

@@ -10,7 +10,7 @@ const SUB_ORDER_INPUT_FIELDS=Object.freeze([
 ]);
 
 function cleanCustomFields(value){
-  if(value instanceof Map){
+  if(value instanceof Map||value?.$isMongooseMap===true||(typeof value?.entries==="function"&&typeof value?.get==="function")){
     return Object.fromEntries(
       [...value.entries()].slice(0,100)
         .map(([key,item])=>[String(key).slice(0,100),item])

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useReactToPrint } from "react-to-print";
+import {useSearchParams} from "react-router-dom";
 import axios from "axios";
 import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -492,6 +493,7 @@ const OrdersTable = React.memo(({
 
       <DynamicTable
         tableKey="bulk-payments.selection"
+        autoOpenSettings={searchParams.get("customize")==="selection"}
         emptyText={hasActiveFilters ? "No invoices match these filters. Clear filters to see all available invoices." : "No outstanding invoices are available for bulk payment."}
         rows={sortedData}
         getRowKey={order=>order._id}
@@ -553,6 +555,7 @@ const AllocationPreview = React.memo(({
 
             <DynamicTable
         tableKey="bulk-payments.allocation-preview"
+        autoOpenSettings={searchParams.get("customize")==="allocation-preview"}
         rows={allocatedPreview.map(allocation=>({
           ...allocation,
           remaining:parseDecimal(allocation.dueAmount-allocation.allocated)
@@ -630,6 +633,7 @@ class ErrorBoundary extends React.Component {
 
 // Main BulkPayment Component
 export default function BulkPayment() {
+  const [searchParams]=useSearchParams();
   // State management
   const [orders, setOrders] = useState([]);
   const [selectedOrders, setSelectedOrders] = useState([]);

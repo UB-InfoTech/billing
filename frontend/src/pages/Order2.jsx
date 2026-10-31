@@ -2222,7 +2222,7 @@ const styles = {
                                                     id="payment-amount"
                                                     aria-describedby="payment-amount-help"
                                                     value={newPayment.amount}
-                                                    onValueChange={value=>{setPaymentFeedback(null);setNewPayment(prev=>({...prev,amount:value}));}}
+                                                    onValueChange={value=>{setPaymentFeedback(null);setNewPayment(prev=>preparedPaymentValues({...prev,amount:value}));}}
                                                     className="form-control"
                                                     placeholder="Enter amount"
                                                     min="0.01"
@@ -2235,7 +2235,7 @@ const styles = {
                                             </div>
                                             <div className="col-12 col-md-4">
                                                 <label htmlFor="payment-method" className="form-label">Payment method</label>
-                                                <select id="payment-method" className="form-select" value={newPayment.method} onChange={(e) => {setPaymentFeedback(null);setNewPayment(prev => ({ ...prev, method: e.target.value }));}} disabled={paymentSubmitting}>
+                                                <select id="payment-method" className="form-select" value={newPayment.method} onChange={(e) => {setPaymentFeedback(null);setNewPayment(prev => preparedPaymentValues({ ...prev, method: e.target.value }));}} disabled={paymentSubmitting}>
                                                     <option>Cash</option>
                                                     <option>Bank Transfer</option>
                                                     <option>UPI</option>
@@ -2245,11 +2245,11 @@ const styles = {
                                             </div>
                                             <div className="col-12 col-md-4">
                                                 <label htmlFor="payment-reference" className="form-label">Reference (optional)</label>
-                                                <input id="payment-reference" type="text" className="form-control" placeholder="UPI ID, cheque no. or bank reference" maxLength="100" value={newPayment.amountReference} onChange={(e) => {setPaymentFeedback(null);setNewPayment(prev => ({ ...prev, amountReference: e.target.value }));}} disabled={paymentSubmitting} />
+                                                <input id="payment-reference" type="text" className="form-control" placeholder="UPI ID, cheque no. or bank reference" maxLength="100" value={newPayment.amountReference} onChange={(e) => {setPaymentFeedback(null);setNewPayment(prev => preparedPaymentValues({ ...prev, amountReference: e.target.value }));}} disabled={paymentSubmitting} />
                                             </div>
                                             <div className="col-12 col-md-4">
                                                 <label htmlFor="payment-date" className="form-label">Date received</label>
-                                                <input id="payment-date" type="date" className="form-control" value={newPayment.paymentDate || ""} onChange={(e) => {setPaymentFeedback(null);setNewPayment(prev => ({ ...prev, paymentDate: e.target.value }));}} disabled={paymentSubmitting} required />
+                                                <input id="payment-date" type="date" className="form-control" value={newPayment.paymentDate || ""} onChange={(e) => {setPaymentFeedback(null);setNewPayment(prev => preparedPaymentValues({ ...prev, paymentDate: e.target.value }));}} disabled={paymentSubmitting} required />
                                             </div>
                                         </div>
                                         {paymentFormConfig.loading
@@ -2319,7 +2319,7 @@ const styles = {
                                             locked:true,
                                             render:p=>(
                                                 <div className="d-flex gap-1 justify-content-end">
-                                                    <button type="button" className="btn btn-warning btn-sm" onClick={()=>{setPaymentFeedback(null);setEditPayment(hydrateConfiguredValues(p,paymentFormConfig.fields));}} title="Edit payment" aria-label="Edit payment" disabled={paymentSubmitting}><img src={editSVG} alt="" /></button>
+                                                    <button type="button" className="btn btn-warning btn-sm" onClick={()=>{setPaymentFeedback(null);setEditPayment(preparedPaymentValues(hydrateConfiguredValues(p,paymentFormConfig.fields)));}} title="Edit payment" aria-label="Edit payment" disabled={paymentSubmitting}><img src={editSVG} alt="" /></button>
                                                     <button type="button" className="btn btn-danger btn-sm" onClick={()=>deletePayment(p._id)} title="Delete payment" aria-label="Delete payment" disabled={paymentSubmitting}><img src={deleteSVG} alt="" /></button>
                                                     <button type="button" className="btn btn-info btn-sm" onClick={()=>printReceipt(p._id)} title="Print receipt" aria-label="Print receipt" disabled={paymentSubmitting}><img src={receiptSVG} alt="" /></button>
                                                 </div>
@@ -2351,15 +2351,15 @@ const styles = {
                                                 <div className="row g-3">
                                                     <div className="col-12 col-md-4">
                                                         <label htmlFor="edit-payment-amount" className="form-label">Amount (₹)</label>
-                                                        <ArithmeticInput id="edit-payment-amount" value={editPayment.amount} onValueChange={value=>setEditPayment(prev=>({...prev,amount:value}))} className="form-control" min="0.01" step="0.01" required />
+                                                        <ArithmeticInput id="edit-payment-amount" value={editPayment.amount} onValueChange={value=>setEditPayment(prev=>preparedPaymentValues({...prev,amount:value}))} className="form-control" min="0.01" step="0.01" required />
                                                     </div>
                                                     <div className="col-12 col-md-4">
                                                         <label htmlFor="edit-payment-date" className="form-label">Date received</label>
-                                                        <input id="edit-payment-date" type="date" className="form-control" value={formatDateInput(editPayment.paymentDate)} onChange={(e) => setEditPayment(prev => ({ ...prev, paymentDate: e.target.value }))} required />
+                                                        <input id="edit-payment-date" type="date" className="form-control" value={formatDateInput(editPayment.paymentDate)} onChange={(e) => setEditPayment(prev => preparedPaymentValues({ ...prev, paymentDate: e.target.value }))} required />
                                                     </div>
                                                     <div className="col-12 col-md-4">
                                                         <label htmlFor="edit-payment-method" className="form-label">Payment method</label>
-                                                        <select id="edit-payment-method" className="form-select" value={editPayment.method} onChange={(e) => setEditPayment(prev => ({ ...prev, method: e.target.value }))}>
+                                                        <select id="edit-payment-method" className="form-select" value={editPayment.method} onChange={(e) => setEditPayment(prev => preparedPaymentValues({ ...prev, method: e.target.value }))}>
                                                             <option>Cash</option>
                                                             <option>Bank Transfer</option>
                                                             <option>UPI</option>
@@ -2368,7 +2368,7 @@ const styles = {
                                                     </div>
                                                     <div className="col-12">
                                                         <label htmlFor="edit-payment-reference" className="form-label">Reference (optional)</label>
-                                                        <input id="edit-payment-reference" type="text" className="form-control" maxLength="100" placeholder="UPI ID, cheque no. or bank reference" value={editPayment.amountReference||""} onChange={(e) => setEditPayment(prev => ({ ...prev, amountReference: e.target.value }))} />
+                                                        <input id="edit-payment-reference" type="text" className="form-control" maxLength="100" placeholder="UPI ID, cheque no. or bank reference" value={editPayment.amountReference||""} onChange={(e) => setEditPayment(prev => preparedPaymentValues({ ...prev, amountReference: e.target.value }))} />
                                                     </div>
                                                 </div>
                                                 {renderPaymentCustomFields(editPayment,setEditPayment,paymentSubmitting).some(Boolean)&&(

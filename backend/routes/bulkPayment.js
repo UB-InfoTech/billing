@@ -140,7 +140,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
         method,
         amountReference:reference,
         processedBy:req.user.id,
-        customFields:new Map(Object.entries(configuredPayment.customFields))
+        customFields:configuredPayment.customFields
       };
       const operation=buildPaymentAppendOperation({
         orderId:item.order._id,
@@ -189,7 +189,7 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
       skippedOrders:skipped,
       transactionMetadata:{batchSize:ids.length},
       status:skipped.length?"partially_completed":"completed",
-      customFields:new Map(Object.entries(configuredPayment.customFields))
+      customFields:configuredPayment.customFields
     });
     await log.save(session?{session}:undefined);
 

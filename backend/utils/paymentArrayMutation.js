@@ -13,7 +13,8 @@ function buildPaymentArrayMutationOperation({
   expectedPayments,
   expectedUpdatedAt,
   nextPayments,
-  lastPaymentDate
+  lastPaymentDate,
+  paymentHistoryEvent
 }) {
   if (!orderId || createdBy === undefined || createdBy === null) {
     throw new TypeError("Invoice ID and business ownership are required.");
@@ -53,14 +54,17 @@ function buildPaymentArrayMutationOperation({
       : expectedPayments;
   }
 
+  const update = {
+    $set: {
+      payments: nextPayments,
+      lastPaymentDate: lastPaymentDate ?? null
+    }
+  };
+  if (paymentHistoryEvent) update.$push = { paymentHistory: paymentHistoryEvent };
+
   return {
     filter,
-    update: {
-      $set: {
-        payments: nextPayments,
-        lastPaymentDate: lastPaymentDate ?? null
-      }
-    },
+    update,
     options: { new: true, runValidators: true }
   };
 }

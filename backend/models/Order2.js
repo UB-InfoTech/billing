@@ -67,6 +67,43 @@ const paymentSchema=new mongoose.Schema({
   processedBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",default:null}
 },{_id:false});
 
+const invoiceFinancialSnapshotSchema=new mongoose.Schema({
+  invoiceTotal:{type:Number,required:true,min:0},
+  clientId:{type:mongoose.Schema.Types.ObjectId,ref:"Client",default:null},
+  orderDate:{type:Date,default:null},
+  orderNumber:{type:String,trim:true,default:""},
+  taxPercentage:{type:Number,default:0,min:0,max:100},
+  discountRate:{type:Number,default:0,min:0,max:100}
+},{_id:false});
+
+const invoiceFinancialHistorySchema=new mongoose.Schema({
+  eventType:{type:String,enum:["created","edited"],required:true},
+  effectiveAt:{type:Date,required:true},
+  recordedAt:{type:Date,default:Date.now},
+  actor:{type:mongoose.Schema.Types.ObjectId,ref:"User",default:null},
+  previous:{type:invoiceFinancialSnapshotSchema,default:undefined},
+  next:{type:invoiceFinancialSnapshotSchema,required:true},
+  reconstructedBaseline:{type:Boolean,default:false}
+},{_id:false});
+
+const paymentAuditSnapshotSchema=new mongoose.Schema({
+  amount:{type:Number,required:true,min:0},
+  paymentDate:{type:Date,default:null},
+  method:{type:String,enum:PAYMENT_METHODS,default:"Cash"},
+  amountReference:{type:String,trim:true,default:""},
+  processedBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",default:null}
+},{_id:false});
+
+const paymentHistorySchema=new mongoose.Schema({
+  action:{type:String,enum:["added","edited","deleted"],required:true},
+  paymentId:{type:mongoose.Schema.Types.ObjectId,required:true},
+  effectiveAt:{type:Date,required:true},
+  recordedAt:{type:Date,default:Date.now},
+  actor:{type:mongoose.Schema.Types.ObjectId,ref:"User",default:null},
+  before:{type:paymentAuditSnapshotSchema,default:undefined},
+  after:{type:paymentAuditSnapshotSchema,default:undefined}
+},{_id:false});
+
 const subOrderSchema=new mongoose.Schema({
   productId:{type:mongoose.Schema.Types.ObjectId,ref:"Product",default:null},
   designNumber:{type:String,trim:true,default:""},
@@ -100,6 +137,8 @@ const orderSchema=new mongoose.Schema({
   statusHistory:[{status:{type:String,enum:STATUSES},timestamp:{type:Date,default:Date.now}}],
   paymentStatus:{type:String,enum:["Unpaid","Partial","Paid"],default:"Unpaid",index:true},
   payments:{type:[paymentSchema],default:[]},
+  paymentHistory:{type:[paymentHistorySchema],default:[]},
+  financialHistory:{type:[invoiceFinancialHistorySchema],default:[]},
   taxPercentage:{type:Number,default:5,min:0,max:100},
   taxAmount:{type:Number,default:0,min:0},
   discountRate:{type:Number,default:0,min:0,max:100},

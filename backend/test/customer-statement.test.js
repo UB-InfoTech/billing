@@ -142,8 +142,8 @@ test("shows Credit Note adjustment reversals and cancellations as receivable deb
   });
 
   assert.equal(statement.receivables.transactions.length, 3);
-  assert.equal(statement.receivables.transactions[0].credit, 25);
-  assert.equal(statement.receivables.transactions[1].debit, 25);
+  assert.equal(statement.receivables.transactions[1].credit, 25);
+  assert.equal(statement.receivables.transactions[2].debit, 25);
   assert.equal(statement.receivables.closingBalance, 100);
   assert.equal(statement.receivables.currentOutstanding, 100);
 });

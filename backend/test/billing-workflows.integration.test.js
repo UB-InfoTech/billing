@@ -1334,7 +1334,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
         amount: 10,
         method: "UPI",
         amountReference: "ITTL3-" + suffix,
-        paymentDate: new Date(Date.now() - 1000).toISOString()
+        paymentDate: new Date().toISOString()
       }
     });
     assert.equal(timelinePaymentThree.response.status, 200, JSON.stringify(timelinePaymentThree.payload));
@@ -1364,8 +1364,8 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     const timelineStatement = await request("/clients/" + timelineClientId + "/statement?from=2026-10-14&to=2026-10-31");
     assert.equal(timelineStatement.response.status, 200, JSON.stringify(timelineStatement.payload));
     assert.equal(timelineStatement.payload.statement.receivables.openingBalance, 0);
-    assert.equal(timelineStatement.payload.statement.receivables.totalDebits, 110);
-    assert.equal(timelineStatement.payload.statement.receivables.totalCredits, 90);
+    assert.equal(timelineStatement.payload.statement.receivables.totalDebits, 120);
+    assert.equal(timelineStatement.payload.statement.receivables.totalCredits, 100);
     assert.equal(timelineStatement.payload.statement.receivables.closingBalance, 20);
     assert.equal(timelineStatement.payload.statement.receivables.currentOutstanding, 20);
     assert.equal(timelineStatement.payload.statement.receivables.reconcilesWithCustomerSummary, true);

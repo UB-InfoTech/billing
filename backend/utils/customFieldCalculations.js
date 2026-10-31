@@ -29,7 +29,7 @@ const tokenize=expression=>{
     }
     throw new Error("Unsupported character in calculation.");
   }
-  if(tokens.length>200)throw new Error("Calculation contains too many parts.");
+  if(tokens.length>300)throw new Error("Calculation contains too many parts.");
   return tokens;
 };
 

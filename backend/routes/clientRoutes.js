@@ -8,6 +8,7 @@ const Expense=require("../models/Expense");
 const {buildClientCreditBalanceMutation}=require("../utils/clientCreditBalance");
 const {assertClientIdentity,hasClientIdentity}=require("../utils/clientIdentity");
 const {getInvoiceRevenue}=require("../utils/syncClientData");
+const {buildCustomerStatement}=require("../utils/customerStatement");
 const auth=require("../middleware/auth");
 const {escapeRegex}=require("../utils/escapeRegex");
 
@@ -169,6 +170,70 @@ router.put("/:id/credit",auth,async(req,res)=>{
     }
     return res.json(updated);
   }catch(error){res.status(400).json({message:error.message});}
+});
+
+function parseStatementDate(value,endOfDay=false){
+  const raw=String(value||"").trim();
+  if(!raw)return null;
+  const dateOnly=/^\\d{4}-\\d{2}-\\d{2}$/.test(raw);
+  const normalized=dateOnly
+    ? raw+"T"+(endOfDay?"23:59:59.999":"00:00:00.000")+"+05:30"
+    : raw;
+  const parsed=new Date(normalized);
+  return Number.isNaN(parsed.getTime())?null:parsed;
+}
+
+router.get("/:id/statement",auth,async(req,res)=>{
+  try{
+    if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid customer ID."});
+    const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)}).lean();
+    if(!client)return res.status(404).json({message:"Customer not found."});
+
+    const from=parseStatementDate(req.query.from,false)||client.createdAt||new Date(0);
+    const to=parseStatementDate(req.query.to,true)||new Date();
+    if(Number.isNaN(new Date(from).getTime())||Number.isNaN(new Date(to).getTime())){
+      return res.status(400).json({message:"Enter valid statement dates."});
+    }
+    if(new Date(from).getTime()>new Date(to).getTime()){
+      return res.status(400).json({message:"Statement start date must be on or before the end date."});
+    }
+
+    const orders=await Order.find({clientId:client._id,createdBy:owner(req)})
+      .sort({orderDate:1,createdAt:1})
+      .lean();
+    const orderIds=orders.map(order=>order._id);
+    const creditNotes=await CreditNote.find({
+      createdBy:owner(req),
+      $or:[
+        {clientId:client._id},
+        {originalOrderId:{$in:orderIds}}
+      ]
+    }).sort({creditNoteDate:1,createdAt:1}).lean();
+
+    const statement=buildCustomerStatement({
+      client,
+      orders,
+      creditNotes,
+      fromDate:from,
+      toDate:to
+    });
+
+    return res.json({
+      customer:{
+        _id:client._id,
+        name:client.name||"",
+        companyName:client.companyName||"",
+        phone:client.phone||"",
+        email:client.email||""
+      },
+      statement
+    });
+  }catch(error){
+    console.error("Customer statement error:",error);
+    return res.status(error instanceof RangeError?400:500).json({
+      message:error.message||"Unable to prepare customer statement."
+    });
+  }
 });
 
 router.get("/:id/transactions",auth,async(req,res)=>{

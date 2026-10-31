@@ -2,6 +2,7 @@ const express=require("express");
 const mongoose=require("mongoose");
 const FormConfiguration=require("../models/FormConfiguration");
 const auth=require("../middleware/auth");
+const {FORM_LOOKUP_SOURCES,getFormLookupSource}=require("../utils/formLookupPolicy");
 
 const router=express.Router();
 
@@ -13,8 +14,6 @@ const {
   findRemovedFieldDependency,
   validateFieldReferences
 }=require("../utils/formConfigValidation");
-
-const {FORM_LOOKUP_SOURCES,getFormLookupSource}=require("../utils/formLookupPolicy");
 
 const ACTIONS=FORM_CONDITION_ACTIONS;
 const owner=req=>String(req.user.id);

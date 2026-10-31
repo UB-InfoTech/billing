@@ -123,11 +123,11 @@ export const EXPENSE_FORM_FIELDS=[
 ];
 
 export const PROFILE_FORM_FIELDS=[
- {key:"headerTitle",label:"Invoice Header Title",fieldType:"text",width:6,section:"organization",order:0},
- {key:"companyName",label:"Organization / Trade Name",helpText:"The name customers recognize and the name shown on your invoices.",fieldType:"text",width:6,section:"organization",required:true,order:1},
- {key:"legalName",label:"Registered Legal Name",fieldType:"text",width:6,section:"organization",order:2},
- {key:"organizationType",label:"Type of Organization",fieldType:"select",width:6,section:"organization",order:3,options:["Proprietorship","Partnership","Limited Liability Partnership (LLP)","Private Limited Company","Public Limited Company","Trust","Society","Other"]},
- {key:"industry",label:"Industry / Business Activity",fieldType:"text",width:6,section:"organization",order:4},
+ {key:"headerTitle",label:"Invoice Header Title",fieldType:"text",width:6,section:"company",order:0},
+ {key:"companyName",label:"Organization / Trade Name",helpText:"The name customers recognize and the name shown on your invoices.",fieldType:"text",width:6,section:"company",required:true,order:1},
+ {key:"legalName",label:"Registered Legal Name",fieldType:"text",width:6,section:"company",order:2},
+ {key:"organizationType",label:"Type of Organization",fieldType:"select",width:6,section:"company",order:3,options:["Proprietorship","Partnership","Limited Liability Partnership (LLP)","Private Limited Company","Public Limited Company","Trust","Society","Other"]},
+ {key:"industry",label:"Industry / Business Activity",fieldType:"text",width:6,section:"company",order:4},
  {key:"contactPerson",label:"Contact Person",fieldType:"text",width:6,section:"contact",order:5},
  {key:"emailAddress",label:"Business Email",fieldType:"email",width:6,section:"contact",order:6},
  {key:"phoneNumber1",label:"Primary Phone Number",fieldType:"phone",width:6,section:"contact",order:7},

@@ -834,6 +834,21 @@ test("custom table values persist with correct types and enforce business owners
       method:"PUT",
       body:{
         companyName:"Configured company",
+        legalName:"Configured Legal Private Limited",
+        organizationType:"Private Limited Company",
+        industry:"Textile manufacturing",
+        contactPerson:"Accounts Team",
+        emailAddress:"accounts@example.com",
+        website:"https://example.com",
+        companyAddress:"Plot 12, Industrial Estate",
+        addressLine2:"Near Main Road",
+        city:"Vadodara",
+        district:"Vadodara",
+        state:"Gujarat",
+        country:"India",
+        cin:"U12345GJ2026PTC123456",
+        tan:"ABCD12345E",
+        udyamNumber:"UDYAM-GJ-00-0012345",
         gstin:"24ABCDE1234F1Z5",
         billNoSequence:"12",
         eWayUserName:"integration-user",
@@ -850,6 +865,20 @@ test("custom table values persist with correct types and enforce business owners
     });
     assert.equal(savedProfile.status,200,JSON.stringify(savedProfile.data));
     assert.equal(savedProfile.data.companyName,"Configured company");
+    assert.equal(savedProfile.data.legalName,"Configured Legal Private Limited");
+    assert.equal(savedProfile.data.organizationType,"Private Limited Company");
+    assert.equal(savedProfile.data.industry,"Textile manufacturing");
+    assert.equal(savedProfile.data.contactPerson,"Accounts Team");
+    assert.equal(savedProfile.data.emailAddress,"accounts@example.com");
+    assert.equal(savedProfile.data.website,"https://example.com");
+    assert.equal(savedProfile.data.addressLine2,"Near Main Road");
+    assert.equal(savedProfile.data.city,"Vadodara");
+    assert.equal(savedProfile.data.district,"Vadodara");
+    assert.equal(savedProfile.data.state,"Gujarat");
+    assert.equal(savedProfile.data.country,"India");
+    assert.equal(savedProfile.data.cin,"U12345GJ2026PTC123456");
+    assert.equal(savedProfile.data.tan,"ABCD12345E");
+    assert.equal(savedProfile.data.udyamNumber,"UDYAM-GJ-00-0012345");
     assert.equal(savedProfile.data.billNoSequence,12);
     assert.equal(savedProfile.data.customFields.annualValue,750);
     assert.equal(savedProfile.data.customFields.protectedNote,"Profile-controlled note");
@@ -874,6 +903,8 @@ test("custom table values persist with correct types and enforce business owners
     });
     assert.equal(updatedProfile.status,200,JSON.stringify(updatedProfile.data));
     assert.equal(updatedProfile.data.companyName,"Configured company updated");
+    assert.equal(updatedProfile.data.legalName,"Configured Legal Private Limited","A partial profile update must retain unchanged organization details.");
+    assert.equal(updatedProfile.data.emailAddress,"accounts@example.com","A partial profile update must retain contact information.");
     assert.equal(updatedProfile.data.billNoSequence,13);
     assert.equal(updatedProfile.data.customFields.annualValue,400);
     assert.equal(updatedProfile.data.customFields.protectedNote,"Profile-controlled note");

@@ -28,6 +28,30 @@ test("reports when a password is not configured without exposing one", () => {
   assert.equal(result.eWayPassword, "");
 });
 
+test("returns organization profile details while preserving existing public profile behavior", () => {
+  const result = toPublicProfile({
+    companyName: "Trade Name",
+    legalName: "Registered Legal Name",
+    organizationType: "Private Limited Company",
+    emailAddress: "accounts@example.com",
+    website: "https://example.com",
+    city: "Vadodara",
+    state: "Gujarat",
+    eWayPassword: "must-not-leak"
+  });
+
+  assert.equal(result.companyName, "Trade Name");
+  assert.equal(result.legalName, "Registered Legal Name");
+  assert.equal(result.organizationType, "Private Limited Company");
+  assert.equal(result.emailAddress, "accounts@example.com");
+  assert.equal(result.website, "https://example.com");
+  assert.equal(result.city, "Vadodara");
+  assert.equal(result.state, "Gujarat");
+  assert.equal(result.eWayPassword, "");
+  assert.equal(result.hasEWayPassword, true);
+  assert.equal(JSON.stringify(result).includes("must-not-leak"), false);
+});
+
 test("supports plain objects returned by lean database queries", () => {
   const result = toPublicProfile({
     _id: "profile-id",

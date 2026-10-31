@@ -18,7 +18,7 @@ const LOOKUP_MODELS={
 const LOOKUP_RESOURCES=Object.keys(LOOKUP_MODELS);
 
 const isValidCalendarDate=value=>{
-  const match=String(value||"").match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);
+  const match=String(value||"").match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if(!match)return false;
   const year=Number(match[1]),month=Number(match[2]),day=Number(match[3]);
   const date=new Date(Date.UTC(year,month-1,day));
@@ -75,8 +75,8 @@ const normalizeCustomValue=(field,value)=>{
     }
     case "datetime":{
       const raw=cleanString(value,80);
-      const localMatch=raw.match(/^(\\d{4}-\\d{2}-\\d{2})[T ]([01]\\d|2[0-3]):([0-5]\\d)(?::([0-5]\\d)(?:\\.(\\d{1,3}))?)?$/);
-      const zonedMatch=raw.match(/^(\\d{4}-\\d{2}-\\d{2})T\\d{2}:\\d{2}(?::\\d{2}(?:\\.\\d{1,3})?)?(?:Z|[+-](?:0\\d|1\\d|2[0-3]):[0-5]\\d)$/i);
+      const localMatch=raw.match(/^(\d{4}-\d{2}-\d{2})[T ]([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d)(?:\.(\d{1,3}))?)?$/);
+      const zonedMatch=raw.match(/^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-](?:0\d|1\d|2[0-3]):[0-5]\d)$/i);
       if((!localMatch&&!zonedMatch)
         ||!isValidCalendarDate((localMatch||zonedMatch)[1])
         ||Number.isNaN(new Date(raw).getTime())){
@@ -259,3 +259,4 @@ router.put("/:tableKey/values",auth,async(req,res)=>{
 
 module.exports=router;
 module.exports.sanitizeColumns=sanitizeColumns;
+module.exports.normalizeCustomValue=normalizeCustomValue;

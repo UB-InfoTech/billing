@@ -385,26 +385,15 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
       loadConfiguredFormFields(userId(req),"orders.form"),
       loadConfiguredFormFields(userId(req),"orders.items")
     ]);
-    const calculateItemFields=hasConfiguredCustomCalculations(itemFields);
+    const originalCustomFields=cleanCustomFields(originalOrder.customFields);
     const allowed=["challanNumber","lrNo","orderDate","subOrders","Address","State","City","pinCode","stateCode","gstNumber","companyName","status","paymentTerms","taxPercentage","discountRate","note","customFields"];
     for(const key of allowed){
-      if(req.body?.[key]===undefined)continue;
+      if(req.body?.[key]===undefined||key==="subOrders")continue;
       if(key==="customFields"){
         order.customFields={
           ...cleanCustomFields(order.customFields),
           ...cleanCustomFields(req.body.customFields)
         };
-      }else if(key==="subOrders"&&calculateItemFields){
-        // Calculate against plain request data before attaching the array to
-        // the Mongoose document; this keeps its normal single array update.
-        order.subOrders=req.body.subOrders.map(item=>({
-          ...item,
-          customFields:calculateConfiguredCustomFields(
-            itemFields,
-            item,
-            cleanCustomFields(item.customFields)
-          )
-        }));
       }else{
         order[key]=req.body[key];
       }
@@ -424,6 +413,81 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
         order.discountRate=Number(selectedClient.discountRate??order.discountRate??0);
       }
     }
+
+    const preparedOrder=await prepareConfiguredFormValues({
+      ownerId:userId(req),
+      fields:orderFields,
+      values:order.toObject({depopulate:true}),
+      customFields:cleanCustomFields(order.customFields),
+      existingValues:originalOrder,
+      existingCustomFields:originalCustomFields,
+      onlyChangedLookups:true
+    });
+    orderFields.filter(field=>!field.custom).forEach(field=>{
+      const nextValue=preparedOrder.values[field.key];
+      const currentValue=order.get(field.key);
+      if(Object.prototype.hasOwnProperty.call(preparedOrder.values,field.key)
+        &&JSON.stringify(nextValue??null)!==JSON.stringify(currentValue??null)){
+        order.set(field.key,nextValue);
+      }
+    });
+    order.customFields=preparedOrder.customFields;
+
+    if(req.body?.subOrders!==undefined){
+      const existingItems=new Map((originalOrder.subOrders||[]).map(item=>[String(item._id),item]));
+      const preparedItems=[];
+      for(const rawItem of req.body.subOrders){
+        const submittedId=String(rawItem?._id||"");
+        const existingItem=submittedId?existingItems.get(submittedId):null;
+        if(submittedId&&!existingItem){
+          return res.status(400).json({message:"One of the invoice items is no longer available. Refresh the invoice and try again."});
+        }
+        const candidate={...(existingItem||{})};
+        const allowedItemKeys=["productId","designNumber","orderName","hsnCode","qtyUnit","quantity","cut","MTR","unitPrice","shortPcs"];
+        allowedItemKeys.forEach(key=>{
+          if(rawItem?.[key]!==undefined)candidate[key]=rawItem[key];
+        });
+        const existingItemCustom=cleanCustomFields(existingItem?.customFields);
+        candidate.customFields={
+          ...existingItemCustom,
+          ...cleanCustomFields(rawItem?.customFields)
+        };
+        if(existingItem?._id)candidate._id=existingItem._id;
+
+        const preparedItem=await prepareConfiguredFormValues({
+          ownerId:userId(req),
+          fields:itemFields,
+          values:candidate,
+          customFields:candidate.customFields,
+          existingValues:existingItem||{},
+          existingCustomFields:existingItemCustom,
+          isNewRecord:!existingItem,
+          onlyChangedLookups:Boolean(existingItem)
+        });
+        let itemValues=preparedItem.values;
+        let itemCustomFields=preparedItem.customFields;
+        if(hasConfiguredCustomCalculations(itemFields)){
+          itemCustomFields=calculateConfiguredCustomFields(itemFields,itemValues,itemCustomFields);
+        }
+        const validatedItem=validateConfiguredFormValues({
+          fields:itemFields,
+          values:itemValues,
+          customFields:itemCustomFields,
+          existingValues:existingItem||null,
+          existingCustomFields:existingItemCustom,
+          validateAllValues:!existingItem
+        });
+        const cleanItem={};
+        ["_id","productId","designNumber","orderName","hsnCode","qtyUnit","quantity","cut","MTR","unitPrice","shortPcs"].forEach(key=>{
+          if(validatedItem.values[key]!==undefined)cleanItem[key]=validatedItem.values[key];
+        });
+        cleanItem.customFields=validatedItem.customFields;
+        preparedItems.push(cleanItem);
+      }
+      await validateProductReferences(preparedItems,userId(req));
+      order.subOrders=preparedItems;
+    }
+
     if(hasConfiguredCustomCalculations(orderFields)){
       order.customFields=calculateConfiguredCustomFields(
         orderFields,
@@ -432,6 +496,26 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
       );
     }
     await applyWorkflows({resource:"orders",event:"record_updated",doc:order,createdBy:userId(req)});
+    if(hasConfiguredCustomCalculations(orderFields)){
+      order.customFields=calculateConfiguredCustomFields(
+        orderFields,
+        order.toObject({depopulate:true}),
+        cleanCustomFields(order.customFields)
+      );
+    }
+    const validatedOrder=validateConfiguredFormValues({
+      fields:orderFields,
+      values:order.toObject({depopulate:true}),
+      customFields:cleanCustomFields(order.customFields),
+      existingValues:originalOrder,
+      existingCustomFields:originalCustomFields
+    });
+    orderFields.filter(field=>!field.custom).forEach(field=>{
+      if(Object.prototype.hasOwnProperty.call(validatedOrder.values,field.key)){
+        order.set(field.key,validatedOrder.values[field.key]);
+      }
+    });
+    order.customFields=validatedOrder.customFields;
     if(String(order.status||"")!==String(oldStatus||"")){
       order.statusHistory=appendStatusTransition(
         order.statusHistory,

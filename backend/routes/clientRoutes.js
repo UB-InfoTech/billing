@@ -175,10 +175,14 @@ router.put("/:id/credit",auth,async(req,res)=>{
 function parseStatementDate(value,endOfDay=false){
   const raw=String(value||"").trim();
   if(!raw)return null;
-  const dateOnly=/^\d{4}-\d{2}-\d{2}$/.test(raw);
-  const normalized=dateOnly
-    ? raw+"T"+(endOfDay?"23:59:59.999":"00:00:00.000")+"+05:30"
-    : raw;
+  const dateOnly=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  let normalized=raw;
+  if(dateOnly){
+    const year=Number(dateOnly[1]),month=Number(dateOnly[2]),day=Number(dateOnly[3]);
+    const calendarDate=new Date(Date.UTC(year,month-1,day));
+    if(calendarDate.getUTCFullYear()!==year||calendarDate.getUTCMonth()+1!==month||calendarDate.getUTCDate()!==day)return null;
+    normalized=raw+"T"+(endOfDay?"23:59:59.999":"00:00:00.000")+"+05:30";
+  }
   const parsed=new Date(normalized);
   return Number.isNaN(parsed.getTime())?null:parsed;
 }
@@ -204,6 +208,7 @@ router.get("/:id/statement",auth,async(req,res)=>{
     }
 
     const orders=await Order.find({clientId:client._id,createdBy:owner(req)})
+      .select("orderNumber orderDate createdAt status roundOffFinalRevenue totalAmount finalRevenue payments")
       .sort({orderDate:1,createdAt:1})
       .lean();
     const orderIds=orders.map(order=>order._id);
@@ -213,7 +218,9 @@ router.get("/:id/statement",auth,async(req,res)=>{
         {clientId:client._id},
         {originalOrderId:{$in:orderIds}}
       ]
-    }).sort({creditNoteDate:1,createdAt:1}).lean();
+    }).select("creditNoteNumber clientId originalOrderId settlement settlementHistory creditNoteDate createdAt updatedAt status cancelledAt")
+      .sort({creditNoteDate:1,createdAt:1})
+      .lean();
 
     const statement=buildCustomerStatement({
       client,

@@ -19,7 +19,19 @@ const {sanitizeOrderCreateInput,cleanCustomFields}=require("../utils/orderInput"
 const {numberToWords}=require("../utils/numberToWords");
 const {appendStatusTransition}=require("../utils/statusHistory");
 const {hasInvoiceSensitiveChanges,wouldReduceTotalBelowApplied}=require("../utils/orderEditPolicy");
-const {buildInvoiceFinancialSnapshot}=require("../utils/invoiceFinancialHistory");
+function buildInvoiceFinancialSnapshot(order={},invoiceTotal) {
+  const total=invoiceTotal===undefined
+    ?(order.roundOffFinalRevenue??order.totalAmount??order.finalRevenue??0)
+    :invoiceTotal;
+  return {
+    invoiceTotal:Math.max(0,round2(total)),
+    clientId:order.clientId?._id||order.clientId||null,
+    orderDate:order.orderDate?new Date(order.orderDate):null,
+    orderNumber:String(order.orderNumber||""),
+    taxPercentage:round2(order.taxPercentage),
+    discountRate:round2(order.discountRate)
+  };
+}
 const router=express.Router();
 
 const STATUSES=["Pending","In Process","Completed","Cancelled","Dispatched"];

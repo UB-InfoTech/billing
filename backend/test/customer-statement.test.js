@@ -197,3 +197,99 @@ test("rejects a date range that ends before it starts", () => {
     toDate: date("2026-01-05T00:00:00.000Z")
   }), /start date must be on or before/);
 });
+
+test("replays invoice edits as dated adjustments without rewriting the original invoice line", () => {
+  const editedInvoice = {
+    ...order, roundOffFinalRevenue: 120, totalAmount: 120, payments: [],
+    financialHistory: [
+      {
+        eventType: "created", effectiveAt: date("2026-01-01T09:00:00.000Z"),
+        recordedAt: date("2026-01-01T09:00:00.000Z"),
+        next: { invoiceTotal: 100, clientId: "customer-1", orderDate: date("2026-01-01T09:00:00.000Z"), orderNumber: "INV-001" }
+      },
+      {
+        eventType: "edited", effectiveAt: date("2026-01-06T09:00:00.000Z"),
+        recordedAt: date("2026-01-06T09:00:00.000Z"),
+        previous: { invoiceTotal: 100, clientId: "customer-1", orderDate: date("2026-01-01T09:00:00.000Z"), orderNumber: "INV-001" },
+        next: { invoiceTotal: 120, clientId: "customer-1", orderDate: date("2026-01-01T09:00:00.000Z"), orderNumber: "INV-001" }
+      }
+    ]
+  };
+  const statement = buildCustomerStatement({
+    client: { ...client, outstanding_balance: 120, creditBalance: 3, creditBalanceAdjustment: 3, creditBalanceHistory: [] },
+    orders: [editedInvoice], creditNotes: [],
+    fromDate: date("2026-01-01T00:00:00.000Z"), toDate: date("2026-01-06T23:59:59.999Z"),
+    now: date("2026-01-07T00:00:00.000Z")
+  });
+  assert.equal(statement.receivables.totalDebits, 120);
+  assert.equal(statement.receivables.totalCredits, 0);
+  assert.equal(statement.receivables.closingBalance, 120);
+  assert.equal(statement.receivables.transactions[0].debit, 100);
+  assert.equal(statement.receivables.transactions[1].debit, 20);
+  assert.equal(statement.receivables.transactions[1].type, "Invoice adjustment");
+  assert.equal(statement.receivables.reconcilesWithCustomerSummary, true);
+});
+
+test("records payment edits and deletions as dated adjustments while retaining prior payment events", () => {
+  const changedOrder = {
+    ...order, roundOffFinalRevenue: 100, totalAmount: 100, payments: [],
+    paymentHistory: [
+      {
+        action: "added", paymentId: "payment-old",
+        effectiveAt: date("2026-01-02T10:00:00.000Z"), recordedAt: date("2026-01-02T10:00:00.000Z"),
+        after: { amount: 30, paymentDate: date("2026-01-02T10:00:00.000Z"), method: "UPI", amountReference: "UPI-OLD" }
+      },
+      {
+        action: "edited", paymentId: "payment-old",
+        effectiveAt: date("2026-01-05T10:00:00.000Z"), recordedAt: date("2026-01-05T10:00:00.000Z"),
+        before: { amount: 30, paymentDate: date("2026-01-02T10:00:00.000Z"), method: "UPI", amountReference: "UPI-OLD" },
+        after: { amount: 25, paymentDate: date("2026-01-04T10:00:00.000Z"), method: "Cash", amountReference: "RCPT-NEW" }
+      },
+      {
+        action: "deleted", paymentId: "payment-old",
+        effectiveAt: date("2026-01-06T10:00:00.000Z"), recordedAt: date("2026-01-06T10:00:00.000Z"),
+        before: { amount: 25, paymentDate: date("2026-01-04T10:00:00.000Z"), method: "Cash", amountReference: "RCPT-NEW" }
+      }
+    ]
+  };
+  const statement = buildCustomerStatement({
+    client: { ...client, outstanding_balance: 100, creditBalance: 3, creditBalanceAdjustment: 3, creditBalanceHistory: [] },
+    orders: [changedOrder], creditNotes: [],
+    fromDate: date("2026-01-01T00:00:00.000Z"), toDate: date("2026-01-06T23:59:59.999Z"),
+    now: date("2026-01-07T00:00:00.000Z")
+  });
+  assert.equal(statement.receivables.currentOutstanding, 100);
+  assert.equal(statement.receivables.closingBalance, 100);
+  assert.equal(statement.receivables.transactions.find(row => row.type === "Payment adjustment").debit, 30);
+  assert.equal(statement.receivables.transactions.find(row => row.type === "Payment adjustment").credit, 25);
+  assert.equal(statement.receivables.transactions.find(row => row.type === "Payment reversal").debit, 25);
+});
+
+test("moves invoice receivables from the previous customer to the new customer at edit time", () => {
+  const transferOrder = {
+    ...order, clientId: "customer-2", payments: [],
+    financialHistory: [
+      {
+        eventType: "created", effectiveAt: date("2026-01-01T09:00:00.000Z"),
+        next: { invoiceTotal: 100, clientId: "customer-1", orderDate: date("2026-01-01T09:00:00.000Z"), orderNumber: "INV-001" }
+      },
+      {
+        eventType: "edited", effectiveAt: date("2026-01-06T09:00:00.000Z"), recordedAt: date("2026-01-06T09:00:00.000Z"),
+        previous: { invoiceTotal: 100, clientId: "customer-1", orderDate: date("2026-01-01T09:00:00.000Z"), orderNumber: "INV-001" },
+        next: { invoiceTotal: 100, clientId: "customer-2", orderDate: date("2026-01-01T09:00:00.000Z"), orderNumber: "INV-001" }
+      }
+    ]
+  };
+  const formerCustomer = buildCustomerStatement({
+    client: { ...client, outstanding_balance: 0, creditBalance: 3, creditBalanceAdjustment: 3, creditBalanceHistory: [] },
+    orders: [transferOrder], fromDate: date("2026-01-01T00:00:00.000Z"), toDate: date("2026-01-07T00:00:00.000Z"),
+    now: date("2026-01-07T00:00:00.000Z")
+  });
+  const newCustomer = buildCustomerStatement({
+    client: { ...client, _id: "customer-2", outstanding_balance: 100, creditBalance: 3, creditBalanceAdjustment: 3, creditBalanceHistory: [] },
+    orders: [transferOrder], fromDate: date("2026-01-01T00:00:00.000Z"), toDate: date("2026-01-07T00:00:00.000Z"),
+    now: date("2026-01-07T00:00:00.000Z")
+  });
+  assert.equal(formerCustomer.receivables.closingBalance, 0);
+  assert.equal(newCustomer.receivables.closingBalance, 100);
+});

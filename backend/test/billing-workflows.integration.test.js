@@ -755,6 +755,9 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(round2(payment.payload.order.dueAmount), 160);
     assert.equal(payment.payload.order.paymentStatus, "Partial");
     assert.equal(payment.payload.order.payments.length, 1);
+    assert.equal(payment.payload.order.financialHistory[0].eventType, "created");
+    assert.equal(payment.payload.order.paymentHistory.length, 1);
+    assert.equal(payment.payload.order.paymentHistory[0].action, "added");
 
     const overpayment = await request(`/order/orders/${orderId}/pay`, {
       method: "POST",
@@ -801,6 +804,10 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(editedPayment.response.status, 200, JSON.stringify(editedPayment.payload));
     assert.equal(round2(editedPayment.payload.order.paidAmount), 70);
     assert.equal(round2(editedPayment.payload.order.dueAmount), 150);
+    assert.equal(editedPayment.payload.order.paymentHistory.length, 2);
+    assert.equal(editedPayment.payload.order.paymentHistory[1].action, "edited");
+    assert.equal(round2(editedPayment.payload.order.paymentHistory[1].before.amount), 60);
+    assert.equal(round2(editedPayment.payload.order.paymentHistory[1].after.amount), 70);
     const clientAfterPaymentEdit = await Client.findOne({ _id: clientId, createdBy: ownerId }).lean();
     assert.equal(round2(clientAfterPaymentEdit.totalPaid), round2(totalPaidBeforePayment + 70), "Editing a payment must refresh the customer paid total.");
     assert.equal(round2(clientAfterPaymentEdit.pendingPayments), round2(outstandingBeforePayment - 70));
@@ -819,6 +826,9 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(round2(deletedPayment.payload.order.dueAmount), 220);
     assert.equal(deletedPayment.payload.order.paymentStatus, "Unpaid");
     assert.equal(deletedPayment.payload.order.payments.length, 0);
+    assert.equal(deletedPayment.payload.order.paymentHistory.length, 3);
+    assert.equal(deletedPayment.payload.order.paymentHistory[2].action, "deleted");
+    assert.equal(round2(deletedPayment.payload.order.paymentHistory[2].before.amount), 70);
     const clientAfterPaymentDelete = await Client.findOne({ _id: clientId, createdBy: ownerId }).lean();
     assert.equal(round2(clientAfterPaymentDelete.totalPaid), totalPaidBeforePayment, "Deleting a payment must restore the customer's prior paid total.");
     assert.equal(round2(clientAfterPaymentDelete.pendingPayments), outstandingBeforePayment);
@@ -975,6 +985,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     ]);
     for (const order of [fallbackOrderOne, fallbackOrderTwo]) {
       assert.equal(order.payments.length, 0, "Standalone compensation must remove each partial allocation.");
+      assert.equal((order.paymentHistory||[]).length, 0, "Compensated payments must not leave audit events.");
       assert.equal(round2(order.paidAmount), 0);
       assert.equal(round2(order.dueAmount), 100);
       assert.equal(order.paymentStatus, "Unpaid");

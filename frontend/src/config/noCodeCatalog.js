@@ -9,6 +9,7 @@ export const MODULE_CATALOG=[
   {key:"bulk-payment",label:"Payments",route:"/bulk-payment",icon:"bi-cash-stack",description:"Receive and manage payments"},
   {key:"credit-notes",label:"Credit Notes",route:"/credit-notes",icon:"bi-file-earmark-minus",description:"Returns and adjustments"},
   {key:"financial-recovery",label:"Recovery issues",route:"/financial-recovery",icon:"bi-shield-exclamation",description:"Review incomplete financial recovery"},
+  {key:"organization-profile",label:"Organization Profile",route:"/profile",icon:"bi-building",description:"Legal, contact, address and tax details for your business"},
   {key:"settings",label:"Settings",route:"/settings",icon:"bi-sliders2",description:"Customize your software"},
 ];
 
@@ -122,25 +123,39 @@ export const EXPENSE_FORM_FIELDS=[
 ];
 
 export const PROFILE_FORM_FIELDS=[
- {key:"headerTitle",label:"Invoice Header Title",fieldType:"text",width:6,section:"company",order:0},
- {key:"companyName",label:"Company Name",fieldType:"text",width:6,section:"company",required:true,order:1},
- {key:"companyAddress",label:"Company Address",fieldType:"textarea",width:12,section:"company",order:2},
- {key:"phoneNumber1",label:"Phone Number",fieldType:"phone",width:6,section:"company",order:3},
- {key:"phoneNumber2",label:"Alternate Phone",fieldType:"phone",width:6,section:"company",order:4},
- {key:"gstin",label:"GSTIN",fieldType:"text",width:6,section:"tax",order:5},
- {key:"pan",label:"PAN",fieldType:"text",width:6,section:"tax",order:6},
- {key:"pinCode",label:"Pin Code",fieldType:"text",width:4,section:"address",order:7},
- {key:"stateCode",label:"State Code",fieldType:"number",width:4,section:"address",order:8},
- {key:"bankName",label:"Bank Name",fieldType:"text",width:4,section:"bank",order:9},
- {key:"accountNo",label:"Account Number",fieldType:"text",width:4,section:"bank",order:10},
- {key:"branchName",label:"Branch Name",fieldType:"text",width:4,section:"bank",order:11},
- {key:"ifsc",label:"IFSC",fieldType:"text",width:4,section:"bank",order:12},
- {key:"billNoPrefix",label:"Bill Number Prefix",fieldType:"text",width:4,section:"billing",order:13},
- {key:"billNoSequence",label:"Next Bill Number",fieldType:"number",width:4,section:"billing",defaultValue:1,validation:{min:0},order:14},
- {key:"billNoSuffix",label:"Bill Number Suffix",fieldType:"text",width:4,section:"billing",order:15},
- {key:"eWayUserName",label:"E-Way Bill User Name",fieldType:"text",width:6,section:"ewaybill",order:16},
- {key:"eWayPassword",label:"E-Way Bill Password",fieldType:"text",width:6,section:"ewaybill",order:17,helpText:"Used only by the server when generating E-Way Bills."}
-];
+ {key:"headerTitle",label:"Invoice Header Title",fieldType:"text",width:6,section:"organization",order:0},
+ {key:"companyName",label:"Organization / Trade Name",helpText:"The name customers recognize and the name shown on your invoices.",fieldType:"text",width:6,section:"organization",required:true,order:1},
+ {key:"legalName",label:"Registered Legal Name",fieldType:"text",width:6,section:"organization",order:2},
+ {key:"organizationType",label:"Type of Organization",fieldType:"select",width:6,section:"organization",order:3,options:["Proprietorship","Partnership","Limited Liability Partnership (LLP)","Private Limited Company","Public Limited Company","Trust","Society","Other"]},
+ {key:"industry",label:"Industry / Business Activity",fieldType:"text",width:6,section:"organization",order:4},
+ {key:"contactPerson",label:"Contact Person",fieldType:"text",width:6,section:"contact",order:5},
+ {key:"emailAddress",label:"Business Email",fieldType:"email",width:6,section:"contact",order:6},
+ {key:"phoneNumber1",label:"Primary Phone Number",fieldType:"phone",width:6,section:"contact",order:7},
+ {key:"phoneNumber2",label:"Alternate Phone Number",fieldType:"phone",width:6,section:"contact",order:8},
+ {key:"website",label:"Website",fieldType:"url",width:6,section:"contact",order:9},
+ {key:"companyAddress",label:"Address Line 1",fieldType:"textarea",width:12,section:"address",order:10},
+ {key:"addressLine2",label:"Address Line 2",fieldType:"text",width:12,section:"address",order:11},
+ {key:"city",label:"City",fieldType:"text",width:4,section:"address",order:12},
+ {key:"district",label:"District",fieldType:"text",width:4,section:"address",order:13},
+ {key:"state",label:"State",fieldType:"text",width:4,section:"address",order:14},
+ {key:"country",label:"Country",fieldType:"text",width:4,section:"address",defaultValue:"India",order:15},
+ {key:"pinCode",label:"PIN / Postal Code",fieldType:"text",width:4,section:"address",order:16},
+ {key:"stateCode",label:"GST State Code",fieldType:"number",width:4,section:"address",order:17},
+ {key:"gstin",label:"GSTIN",fieldType:"text",width:6,section:"tax",order:18},
+ {key:"pan",label:"PAN",fieldType:"text",width:6,section:"tax",order:19},
+ {key:"tan",label:"TAN",fieldType:"text",width:6,section:"tax",order:20},
+ {key:"cin",label:"CIN / LLPIN",fieldType:"text",width:6,section:"tax",order:21},
+ {key:"udyamNumber",label:"Udyam Registration Number",fieldType:"text",width:6,section:"tax",order:22},
+ {key:"bankName",label:"Bank Name",fieldType:"text",width:4,section:"bank",order:23},
+ {key:"accountNo",label:"Account Number",fieldType:"text",width:4,section:"bank",order:24},
+ {key:"branchName",label:"Branch Name",fieldType:"text",width:4,section:"bank",order:25},
+ {key:"ifsc",label:"IFSC",fieldType:"text",width:4,section:"bank",order:26},
+ {key:"billNoPrefix",label:"Bill Number Prefix",fieldType:"text",width:4,section:"billing",order:27},
+ {key:"billNoSequence",label:"Next Bill Number",fieldType:"number",width:4,section:"billing",defaultValue:1,validation:{min:0},order:28},
+ {key:"billNoSuffix",label:"Bill Number Suffix",fieldType:"text",width:4,section:"billing",order:29},
+ {key:"eWayUserName",label:"E-Way Bill User Name",fieldType:"text",width:6,section:"ewaybill",order:30},
+ {key:"eWayPassword",label:"E-Way Bill Password",fieldType:"text",width:6,section:"ewaybill",order:31,helpText:"Used only by the server when generating E-Way Bills."}
+];;
 
 export const CALENDAR_EVENT_FIELDS=[
  {key:"title",label:"Event Title",fieldType:"text",width:6,section:"event",required:true,order:0,system:true,locked:true},
@@ -181,7 +196,7 @@ export const FORM_CATALOG=[
   {key:"expenses.form",label:"Expense form",page:"/add-expense",query:"form",description:"Customize expense details, tax, links, recurring rules and your own business fields.",fields:EXPENSE_FORM_FIELDS},
   {key:"calendar.event",label:"Calendar event form",page:"/calendar",query:"form",description:"Customize event details and add your own event information.",fields:CALENDAR_EVENT_FIELDS},
   {key:"ewaybill.form",label:"E-Way Bill form",page:"/orders",query:"ewaybill",description:"Customize transport and compliance details used when generating an E-Way Bill.",fields:EWAY_BILL_FIELDS},
-  {key:"profile.form",label:"Company profile form",page:"/profile",query:"form",description:"Customize company details, bank information, bill numbering and other business settings.",fields:PROFILE_FORM_FIELDS},
+  {key:"profile.form",label:"Organization profile form",page:"/profile",query:"form",description:"Customize organization identity, contact details, address, registrations, bank information and invoice numbering.",fields:PROFILE_FORM_FIELDS},
 ];
 
 export const TABLE_CATALOG=[

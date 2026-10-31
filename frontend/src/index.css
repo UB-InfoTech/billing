@@ -5999,3 +5999,156 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
     padding: 14px;
   }
 }
+
+/* ---------- Customer account statement ---------- */
+.customer-statement-dialog{
+  width:calc(100% - 2rem);
+  max-width:1240px;
+}
+.customer-statement-modal{
+  width:100%;
+  max-height:calc(100vh - 2rem);
+  background:#f6f8fb;
+}
+.customer-statement-toolbar{
+  align-items:center;
+  gap:16px;
+  padding:16px 20px;
+}
+.customer-statement-toolbar > div:first-child{min-width:0}
+.customer-statement-body{
+  min-width:0;
+  padding:18px;
+  overflow-x:hidden;
+  overflow-y:auto;
+  background:#f6f8fb;
+}
+.customer-statement-filter{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:end;
+  gap:12px;
+  margin-bottom:16px;
+  padding:12px;
+  border:1px solid #e0e7ef;
+  border-radius:10px;
+  background:#fff;
+}
+.customer-statement-filter > div:not(.small){width:min(180px,100%)}
+.customer-statement-heading{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:16px;
+  padding:14px 16px;
+  border:1px solid #e0e7ef;
+  border-radius:10px;
+  background:#fff;
+}
+.customer-statement-section{
+  min-width:0;
+  margin-bottom:16px;
+  padding:16px;
+  border:1px solid #e0e7ef;
+  border-radius:10px;
+  background:#fff;
+}
+.customer-statement-section h6{color:#20364d}
+.customer-statement-total{
+  height:100%;
+  min-width:0;
+  padding:11px 12px;
+  border:1px solid #e5ebf2;
+  border-radius:8px;
+  background:#f9fbfd;
+}
+.customer-statement-total span{
+  display:block;
+  color:#65768a;
+  font-size:11px;
+  margin-bottom:5px;
+}
+.customer-statement-total strong{
+  display:block;
+  color:#22364b;
+  font-size:clamp(13px,1.5vw,17px);
+  overflow-wrap:anywhere;
+}
+.customer-statement-total.is-closing{
+  border-color:#b8cde3;
+  background:#eef5fc;
+}
+.customer-statement-table-wrap{
+  max-width:100%;
+  overflow-x:auto;
+}
+.customer-statement-table{
+  width:100%;
+  min-width:740px;
+  margin-bottom:0;
+  font-size:12px;
+}
+.customer-statement-table th{
+  color:#53677e;
+  font-size:10px;
+  font-weight:700;
+  text-transform:uppercase;
+  letter-spacing:.035em;
+  white-space:nowrap;
+  border-bottom-color:#dce4ed;
+}
+.customer-statement-table td{
+  max-width:360px;
+  overflow-wrap:anywhere;
+  color:#354b62;
+}
+.customer-statement-notes{
+  padding:14px;
+  border:1px solid #e4e9ef;
+  border-radius:10px;
+  background:#fff;
+}
+.customer-statement-footer{
+  gap:8px;
+}
+@media(max-width:767.98px){
+  .customer-statement-dialog{width:100%;max-width:100%;margin:0}
+  .customer-statement-modal{max-height:100vh;min-height:100vh;border-radius:0!important}
+  .customer-statement-toolbar,.customer-statement-body,.customer-statement-footer{padding:12px!important}
+  .customer-statement-heading{align-items:flex-start;flex-direction:column}
+  .customer-statement-heading .text-end{text-align:left!important}
+  .customer-statement-filter > div:not(.small){flex:1 1 130px;width:auto}
+  .customer-statement-section{padding:12px}
+  .customer-statement-footer{align-items:stretch;flex-wrap:wrap}
+  .customer-statement-footer .btn{flex:1 1 140px}
+}
+@media print{
+  body *{visibility:hidden!important}
+  .customer-statement-modal,.customer-statement-modal *{visibility:visible!important}
+  .customer-statement-modal{
+    position:absolute!important;
+    inset:0 auto auto 0!important;
+    width:100%!important;
+    max-height:none!important;
+    min-height:0!important;
+    overflow:visible!important;
+    border:0!important;
+    border-radius:0!important;
+    box-shadow:none!important;
+    background:#fff!important;
+  }
+  .customer-statement-toolbar,.customer-statement-footer,.customer-statement-filter{display:none!important}
+  .customer-statement-body{
+    display:block!important;
+    width:100%!important;
+    max-height:none!important;
+    overflow:visible!important;
+    padding:10mm!important;
+    background:#fff!important;
+  }
+  .customer-statement-section,.customer-statement-notes{break-inside:avoid;border-color:#ccd4dd}
+  .customer-statement-table{min-width:0!important;font-size:9px!important}
+  .customer-statement-table th,.customer-statement-table td{padding:4px!important}
+  .customer-statement-table-wrap{overflow:visible!important}
+}

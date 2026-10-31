@@ -29,6 +29,13 @@ function Clients() {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [viewingClient,setViewingClient]=useState(null);
+  const [statementFor,setStatementFor]=useState(null);
+  const [statementData,setStatementData]=useState(null);
+  const [statementLoading,setStatementLoading]=useState(false);
+  const [statementError,setStatementError]=useState("");
+  const [statementFrom,setStatementFrom]=useState("");
+  const [statementTo,setStatementTo]=useState("");
+  const statementRequestRef=useRef(0);
   const [newClient, setNewClient] = useState({
     name: '',
     email: '',
@@ -173,6 +180,50 @@ function Clients() {
 
   const token = localStorage.getItem('token');
   const authConfig = { headers: { "x-auth-token": token || "" } };
+  const fetchCustomerStatement=async(client,from=statementFrom,to=statementTo)=>{
+    if(!client?._id)return;
+    const requestId=++statementRequestRef.current;
+    setStatementLoading(true);
+    setStatementError("");
+    try{
+      const params={};
+      if(from)params.from=from;
+      if(to)params.to=to;
+      const response=await axios.get(`${linkone}/api/clients/${client._id}/statement`,{
+        headers:{"x-auth-token":token||""},
+        params
+      });
+      if(requestId===statementRequestRef.current)setStatementData(response.data?.statement||null);
+    }catch(error){
+      if(requestId===statementRequestRef.current){
+        setStatementData(null);
+        setStatementError(error.response?.data?.message||"The customer statement could not be prepared. Try again.");
+      }
+    }finally{
+      if(requestId===statementRequestRef.current)setStatementLoading(false);
+    }
+  };
+  const openCustomerStatement=client=>{
+    setStatementFor(client);
+    setStatementData(null);
+    setStatementError("");
+    setStatementFrom("");
+    setStatementTo("");
+    setViewingClient(null);
+    fetchCustomerStatement(client,"","");
+  };
+  const closeCustomerStatement=()=>{
+    statementRequestRef.current+=1;
+    setStatementFor(null);
+    setStatementData(null);
+    setStatementError("");
+    if(statementFor)setViewingClient(statementFor);
+  };
+  const statementMoney=value=>`₹${Number(value||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+  const statementDate=value=>{
+    const parsed=value?new Date(value):null;
+    return parsed&&!Number.isNaN(parsed.getTime())?parsed.toLocaleDateString("en-IN"):"—";
+  };
   const fetchClients = async () => {
     setLoading(true);
     setClientsLoadError("");
@@ -719,7 +770,126 @@ function Clients() {
                       <div className="row g-3"><div className="col-6"><div className="customer-record-field"><div className="customer-record-label">Orders</div><div className="customer-record-value">{Number(viewingClient.orderCount||0)}</div></div></div><div className="col-6"><div className="customer-record-field"><div className="customer-record-label">Total billed</div><div className="customer-record-value">₹{Number(viewingClient.totalRevenue||0).toFixed(2)}</div></div></div></div>
                     </article>
                   </div>
-                  <div className="modal-footer customer-view-footer"><button type="button" className="btn btn-light border" onClick={()=>setViewingClient(null)}>Close</button><button type="button" className="btn btn-primary" onClick={()=>window.print()}><i className="bi bi-printer me-2"></i>Print details</button></div>
+                  <div className="modal-footer customer-view-footer"><button type="button" className="btn btn-outline-primary" onClick={()=>openCustomerStatement(viewingClient)}><i className="bi bi-journal-text me-2"></i>Account statement</button><button type="button" className="btn btn-light border" onClick={()=>setViewingClient(null)}>Close</button><button type="button" className="btn btn-primary" onClick={()=>window.print()}><i className="bi bi-printer me-2"></i>Print details</button></div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {statementFor&&(
+            <div className="modal show d-block customer-view-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-label="Customer account statement">
+              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable customer-statement-dialog">
+                <div className="modal-content customer-view-modal customer-statement-modal border-0">
+                  <div className="modal-header customer-view-toolbar customer-statement-toolbar">
+                    <div className="min-w-0">
+                      <div className="small text-primary text-uppercase fw-semibold mb-1">CUSTOMER ACCOUNT</div>
+                      <h5 className="modal-title fw-bold mb-1">Account statement</h5>
+                      <div className="small text-secondary">{statementFor.companyName||statementFor.name||"Customer"}{statementFor.phone?" · "+statementFor.phone:""}</div>
+                    </div>
+                    <div className="d-flex flex-wrap gap-2">
+                      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={()=>fetchCustomerStatement(statementFor)} disabled={statementLoading}><i className="bi bi-arrow-clockwise me-1"></i>Refresh</button>
+                      <button type="button" className="btn-close" aria-label="Close account statement" onClick={closeCustomerStatement}/>
+                    </div>
+                  </div>
+                  <div className="modal-body customer-statement-body">
+                    <div className="customer-statement-filter">
+                      <div>
+                        <label className="form-label small fw-semibold" htmlFor="statement-from">From date</label>
+                        <input id="statement-from" className="form-control form-control-sm" type="date" value={statementFrom} onChange={event=>setStatementFrom(event.target.value)}/>
+                      </div>
+                      <div>
+                        <label className="form-label small fw-semibold" htmlFor="statement-to">To date</label>
+                        <input id="statement-to" className="form-control form-control-sm" type="date" value={statementTo} onChange={event=>setStatementTo(event.target.value)}/>
+                      </div>
+                      <button type="button" className="btn btn-primary btn-sm align-self-end" onClick={()=>fetchCustomerStatement(statementFor)} disabled={statementLoading}>
+                        {statementLoading?"Loading...":"Apply dates"}
+                      </button>
+                      <div className="small text-secondary align-self-end">Dates use India time (IST).</div>
+                    </div>
+                    {statementError&&<div className="alert alert-danger py-2" role="alert">{statementError}</div>}
+                    {statementLoading&&!statementData&&<div className="text-center py-5"><div className="spinner-border text-primary" role="status"/><div className="small text-secondary mt-2">Preparing the account statement...</div></div>}
+                    {statementData&&(
+                      <>
+                        <div className="customer-statement-heading">
+                          <div><div className="small text-secondary">STATEMENT PERIOD</div><strong>{statementDate(statementData.period.from)} – {statementDate(statementData.period.to)}</strong></div>
+                          <div className="text-end"><div className="small text-secondary">CUSTOMER</div><strong>{statementFor.companyName||statementFor.name||"Customer"}</strong></div>
+                        </div>
+                        <section className="customer-statement-section">
+                          <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                            <div><h6 className="mb-1 fw-bold">Invoice balance</h6><div className="small text-secondary">Invoices increase the amount due. Payments and Credit Note adjustments reduce it.</div></div>
+                            <div className="small text-secondary">Current outstanding: <strong className="text-dark">{statementMoney(statementData.receivables.currentOutstanding)}</strong></div>
+                          </div>
+                          <div className="row g-2 mb-3">
+                            <div className="col-6 col-lg-4"><div className="customer-statement-total"><span>Opening balance</span><strong>{statementMoney(statementData.receivables.openingBalance)}</strong></div></div>
+                            <div className="col-6 col-lg-4"><div className="customer-statement-total"><span>Invoices</span><strong>{statementMoney(statementData.totals.invoiceDebits)}</strong></div></div>
+                            <div className="col-6 col-lg-4"><div className="customer-statement-total"><span>Payments received</span><strong>{statementMoney(statementData.totals.paymentCredits)}</strong></div></div>
+                            <div className="col-6 col-lg-4"><div className="customer-statement-total"><span>Credit Note reductions</span><strong>{statementMoney(statementData.totals.creditNoteCredits)}</strong></div></div>
+                            <div className="col-6 col-lg-4"><div className="customer-statement-total"><span>Credit Note reversals</span><strong>{statementMoney(statementData.totals.creditNoteReversals)}</strong></div></div>
+                            <div className="col-6 col-lg-4"><div className="customer-statement-total is-closing"><span>Closing balance</span><strong>{statementMoney(statementData.receivables.closingBalance)}</strong></div></div>
+                          </div>
+                          <div className="table-responsive customer-statement-table-wrap">
+                            <table className="table table-sm align-middle customer-statement-table">
+                              <thead><tr><th>Date</th><th>Details</th><th>Reference</th><th className="text-end">Debit</th><th className="text-end">Credit</th><th className="text-end">Balance</th></tr></thead>
+                              <tbody>
+                                {statementData.receivables.transactions.map((row,index)=>(
+                                  <tr key={row.type+"-"+row.reference+"-"+index}>
+                                    <td className="text-nowrap">{statementDate(row.date)}</td>
+                                    <td>{row.description}</td>
+                                    <td className="text-break">{row.reference||"—"}</td>
+                                    <td className="text-end text-nowrap">{Number(row.debit||0)>0?statementMoney(row.debit):"—"}</td>
+                                    <td className="text-end text-nowrap">{Number(row.credit||0)>0?statementMoney(row.credit):"—"}</td>
+                                    <td className="text-end text-nowrap fw-semibold">{statementMoney(row.balanceAfter)}</td>
+                                  </tr>
+                                ))}
+                                {!statementData.receivables.transactions.length&&<tr><td colSpan="6" className="text-center text-secondary py-4">No invoice transactions in this period.</td></tr>}
+                              </tbody>
+                            </table>
+                          </div>
+                        </section>
+                        <section className="customer-statement-section">
+                          <div className="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                            <div><h6 className="mb-1 fw-bold">Available customer credit</h6><div className="small text-secondary">Credit Note credits and manual adjustments held on the customer account.</div></div>
+                            <div className="text-end"><div className="small text-secondary">Current available credit</div><strong>{statementMoney(statementData.customerCredit.currentBalance)}</strong></div>
+                          </div>
+                          <div className="row g-2 mb-3">
+                            <div className="col-6 col-lg-3"><div className="customer-statement-total"><span>Opening credit</span><strong>{statementMoney(statementData.customerCredit.openingBalance)}</strong></div></div>
+                            <div className="col-6 col-lg-3"><div className="customer-statement-total"><span>Added</span><strong>{statementMoney(statementData.customerCredit.additions)}</strong></div></div>
+                            <div className="col-6 col-lg-3"><div className="customer-statement-total"><span>Deducted</span><strong>{statementMoney(statementData.customerCredit.deductions)}</strong></div></div>
+                            <div className="col-6 col-lg-3"><div className="customer-statement-total is-closing"><span>Closing credit</span><strong>{statementMoney(statementData.customerCredit.closingBalance)}</strong></div></div>
+                          </div>
+                          <div className="table-responsive customer-statement-table-wrap">
+                            <table className="table table-sm align-middle customer-statement-table">
+                              <thead><tr><th>Date</th><th>Details</th><th>Reference</th><th className="text-end">Added</th><th className="text-end">Deducted</th><th className="text-end">Balance</th></tr></thead>
+                              <tbody>
+                                {statementData.customerCredit.transactions.map((row,index)=>(
+                                  <tr key={row.type+"-"+row.reference+"-"+index}>
+                                    <td className="text-nowrap">{statementDate(row.date)}</td>
+                                    <td>{row.description}</td>
+                                    <td className="text-break">{row.reference||"—"}</td>
+                                    <td className="text-end text-nowrap">{Number(row.credit||0)>0?statementMoney(row.credit):"—"}</td>
+                                    <td className="text-end text-nowrap">{Number(row.debit||0)>0?statementMoney(row.debit):"—"}</td>
+                                    <td className="text-end text-nowrap fw-semibold">{statementMoney(row.balanceAfter)}</td>
+                                  </tr>
+                                ))}
+                                {!statementData.customerCredit.transactions.length&&<tr><td colSpan="6" className="text-center text-secondary py-4">No customer-credit movements in this period.</td></tr>}
+                              </tbody>
+                            </table>
+                          </div>
+                        </section>
+                        {(statementData.warnings.length>0||statementData.limitations.length>0)&&(
+                          <section className="customer-statement-notes">
+                            <h6 className="fw-bold mb-2">Reconciliation notes</h6>
+                            {statementData.warnings.map((warning,index)=><div className="alert alert-warning py-2 mb-2" key={"warning-"+index}>{warning}</div>)}
+                            {statementData.limitations.map((limitation,index)=><div className="small text-secondary mb-1" key={"limitation-"+index}>• {limitation}</div>)}
+                          </section>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <div className="modal-footer customer-view-footer customer-statement-footer">
+                    <button type="button" className="btn btn-light border" onClick={closeCustomerStatement}>Back to customer</button>
+                    <button type="button" className="btn btn-primary" onClick={()=>window.print()} disabled={!statementData||statementLoading}><i className="bi bi-printer me-2"></i>Print statement</button>
+                  </div>
                 </div>
               </div>
             </div>

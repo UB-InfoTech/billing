@@ -225,6 +225,10 @@ router.post("/orders/create",auth,async(req,res)=>{
     }
     body.orderNumber=await nextOrderNumber(userId(req));
     body.createdBy=userId(req);
+    const [orderFields,itemFields]=await Promise.all([
+      loadConfiguredFormFields(userId(req),"orders.form"),
+      loadConfiguredFormFields(userId(req),"orders.items")
+    ]);
 
     // Recalculate only user-created fields on the server. Built-in invoice and
     // item financial calculations remain governed by Order.calculateFinancials.

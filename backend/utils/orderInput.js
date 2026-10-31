@@ -10,6 +10,12 @@ const SUB_ORDER_INPUT_FIELDS=Object.freeze([
 ]);
 
 function cleanCustomFields(value){
+  if(value instanceof Map){
+    return Object.fromEntries(
+      [...value.entries()].slice(0,100)
+        .map(([key,item])=>[String(key).slice(0,100),item])
+    );
+  }
   if(!value||typeof value!=="object"||Array.isArray(value))return {};
   return Object.fromEntries(
     Object.entries(value)

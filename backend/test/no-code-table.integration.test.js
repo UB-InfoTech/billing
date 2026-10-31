@@ -107,6 +107,30 @@ test("custom table values persist with correct types and enforce business owners
           {key:"extraRate",label:"Extra rate",custom:true,fieldType:"currency"},
           {key:"extraTotal",label:"Extra total",custom:true,fieldType:"currency",formula:"extraUnits * extraRate",editable:false}
         ]
+      },
+      {
+        createdBy:ownerId,
+        formKey:"orders.payments",
+        fields:[
+          {key:"amount",label:"Amount received",fieldType:"currency",required:true,locked:true,system:true,validation:{min:0.01}},
+          {key:"method",label:"Payment method",fieldType:"select",required:true,locked:true,system:true,options:["Cash","Bank Transfer","UPI","Cheque","Bank"]},
+          {key:"amountReference",label:"Reference",fieldType:"text",locked:true,system:true},
+          {key:"paymentDate",label:"Date received",fieldType:"date",required:true,locked:true,system:true},
+          {key:"collectionShift",label:"Collection shift",custom:true,fieldType:"select",options:["Morning","Evening"]},
+          {key:"collectionEstimate",label:"Collection estimate",custom:true,fieldType:"currency",formula:"amount * 0.01",editable:false},
+          {
+            key:"collector",
+            label:"Collector",
+            custom:true,
+            fieldType:"reference",
+            dataSource:{
+              type:"lookup",resource:"clients",valueField:"_id",labelField:"companyName",searchField:"companyName",
+              autoFill:[{targetKey:"collectorPhone",sourceKey:"phone"}]
+            }
+          },
+          {key:"collectorPhone",label:"Collector phone",custom:true,fieldType:"phone",editable:false},
+          {key:"internalNote",label:"Internal payment note",custom:true,fieldType:"text",visible:false,defaultValue:"Internal note controlled by the business"}
+        ]
       }
     ]);
 
@@ -238,6 +262,95 @@ test("custom table values persist with correct types and enforce business owners
     assert.equal(updatedOrder.status,200,JSON.stringify(updatedOrder.data));
     assert.equal(updatedOrder.data.order.customFields.packingCharge,20);
     assert.equal(updatedOrder.data.order.subOrders[0].customFields.extraTotal,21,"Unchanged invoice items retain their saved custom calculations.");
+
+    const createdPayment=await request(`/order/orders/${createdOrder.data.order._id}/pay`,{
+      method:"POST",
+      body:{
+        amount:5,
+        method:"UPI",
+        amountReference:"META-RECEIPT-1",
+        paymentDate:"2026-10-31",
+        customFields:{
+          collectionShift:"Morning",
+          collectionEstimate:999,
+          collector:String(ownerClientId),
+          collectorPhone:"1111111111",
+          internalNote:"Browser forgery"
+        }
+      }
+    });
+    assert.equal(createdPayment.status,200,JSON.stringify(createdPayment.data));
+    const createdPaymentRecord=createdPayment.data.order.payments.at(-1);
+    assert.equal(createdPaymentRecord.amount,5);
+    assert.equal(createdPaymentRecord.customFields.collectionShift,"Morning");
+    assert.equal(createdPaymentRecord.customFields.collectionEstimate,0.05);
+    assert.equal(createdPaymentRecord.customFields.collector,String(ownerClientId));
+    assert.equal(createdPaymentRecord.customFields.collectorPhone,"9999999999");
+    assert.equal(createdPaymentRecord.customFields.internalNote,"Internal note controlled by the business");
+    const createdPaymentAudit=createdPayment.data.order.paymentHistory.at(-1);
+    assert.equal(createdPaymentAudit.after.customFields.collectionEstimate,0.05);
+
+    const invalidPaymentMetadata=await request(`/order/orders/${createdOrder.data.order._id}/pay`,{
+      method:"POST",
+      body:{
+        amount:1,
+        method:"Cash",
+        amountReference:"META-RECEIPT-INVALID",
+        paymentDate:"2026-10-31",
+        customFields:{collectionShift:"Night"}
+      }
+    });
+    assert.equal(invalidPaymentMetadata.status,400);
+    assert.match(invalidPaymentMetadata.data.message,/available option/i);
+
+    const updatedPayment=await request(
+      `/order/orders/${createdOrder.data.order._id}/payments/${createdPaymentRecord._id}`,
+      {
+        method:"PUT",
+        body:{
+          amount:6,
+          method:"UPI",
+          amountReference:"META-RECEIPT-1",
+          paymentDate:"2026-10-31",
+          customFields:{
+            collectionShift:"Evening",
+            collectionEstimate:999,
+            collectorPhone:"2222222222",
+            internalNote:"Changed browser forgery"
+          }
+        }
+      }
+    );
+    assert.equal(updatedPayment.status,200,JSON.stringify(updatedPayment.data));
+    const updatedPaymentRecord=updatedPayment.data.order.payments.find(item=>String(item._id)===String(createdPaymentRecord._id));
+    assert.equal(updatedPaymentRecord.amount,6);
+    assert.equal(updatedPaymentRecord.customFields.collectionShift,"Evening");
+    assert.equal(updatedPaymentRecord.customFields.collectionEstimate,0.06);
+    assert.equal(updatedPaymentRecord.customFields.collectorPhone,"9999999999");
+    assert.equal(updatedPaymentRecord.customFields.internalNote,"Internal note controlled by the business");
+    const updatedPaymentAudit=updatedPayment.data.order.paymentHistory.at(-1);
+    assert.equal(updatedPaymentAudit.before.customFields.collectionEstimate,0.05);
+    assert.equal(updatedPaymentAudit.after.customFields.collectionEstimate,0.06);
+
+    const rejectedPaymentReference=await request(
+      `/order/orders/${createdOrder.data.order._id}/payments/${createdPaymentRecord._id}`,
+      {
+        method:"PUT",
+        body:{
+          amount:6,
+          method:"UPI",
+          amountReference:"META-RECEIPT-1",
+          paymentDate:"2026-10-31",
+          customFields:{collector:String(otherClientId)}
+        }
+      }
+    );
+    assert.equal(rejectedPaymentReference.status,400);
+    assert.match(rejectedPaymentReference.data.message,/not found in this business/i);
+    const paymentAfterRejectedUpdate=await request(`/order/orders/${createdOrder.data.order._id}`);
+    assert.equal(paymentAfterRejectedUpdate.status,200);
+    assert.equal(paymentAfterRejectedUpdate.data.order.payments.at(-1).amount,6);
+    assert.equal(paymentAfterRejectedUpdate.data.order.payments.at(-1).customFields.collectorPhone,"9999999999");
 
     await FormConfiguration.create([
       {

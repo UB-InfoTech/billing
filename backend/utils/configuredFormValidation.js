@@ -326,9 +326,17 @@ const normalizeConfiguredFieldValue=(field,value)=>{
       return selected;
     }
     case "date":
+      if(value instanceof Date){
+        if(Number.isNaN(value.getTime()))throw makeValidationError(field,`Enter a valid date for “${label}”.`);
+        return field.custom?value.toISOString().slice(0,10):value;
+      }
       if(!isValidCalendarDate(value))throw makeValidationError(field,`Enter a valid date for “${label}”.`);
       return value;
     case "datetime":
+      if(value instanceof Date){
+        if(Number.isNaN(value.getTime()))throw makeValidationError(field,`Enter a valid date and time for “${label}”.`);
+        return field.custom?value.toISOString():value;
+      }
       if(!isValidDateTime(value))throw makeValidationError(field,`Enter a valid date and time for “${label}”.`);
       return value;
     case "email":{

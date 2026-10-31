@@ -18,6 +18,7 @@ const {getCreditAppliedAmountAt}=require("../utils/creditNoteSettlementHistory")
 const {sanitizeOrderCreateInput,cleanCustomFields}=require("../utils/orderInput");
 const {loadConfiguredFormFields,calculateConfiguredCustomFields,hasConfiguredCustomCalculations}=require("../utils/customFieldCalculations");
 const {prepareConfiguredFormValues,validateConfiguredFormValues}=require("../utils/configuredFormValidation");
+const {preparePaymentCustomFields}=require("../utils/paymentFormValidation");
 const {numberToWords}=require("../utils/numberToWords");
 const {appendStatusTransition}=require("../utils/statusHistory");
 const {hasInvoiceSensitiveChanges,wouldReduceTotalBelowApplied}=require("../utils/orderEditPolicy");
@@ -77,12 +78,18 @@ const userId=req=>req.user.id;
 const idOrNull=v=>v&&mongoose.isValidObjectId(v)?v:null;
 
 function paymentAuditSnapshot(payment={}) {
+  const customFields=payment.customFields instanceof Map
+    ?Object.fromEntries(payment.customFields.entries())
+    :payment.customFields&&typeof payment.customFields==="object"&&!Array.isArray(payment.customFields)
+      ?{...payment.customFields}
+      :{};
   return {
     amount:round2(payment.amount),
     paymentDate:payment.paymentDate?new Date(payment.paymentDate):null,
     method:payment.method||"Cash",
     amountReference:String(payment.amountReference||""),
-    processedBy:payment.processedBy||null
+    processedBy:payment.processedBy||null,
+    ...(Object.keys(customFields).length?{customFields}:{})
   };
 }
 
@@ -643,6 +650,13 @@ router.post("/orders/:id/pay",auth,async(req,res)=>{
     if(Number.isNaN(paymentDate.getTime()))return res.status(400).json({success:false,message:"Invalid payment date."});
     if(reference.length>100)return res.status(400).json({success:false,message:"Payment reference must be at most 100 characters."});
 
+    const configuredPayment=await preparePaymentCustomFields({
+      ownerId:uid,
+      values:{amount,method,amountReference:reference,paymentDate},
+      customFields:req.body?.customFields,
+      isNewRecord:true
+    });
+
     if(session)session.startTransaction();
 
     const findOrder=Order.findOne({_id:req.params.id,createdBy:uid});
@@ -683,7 +697,8 @@ router.post("/orders/:id/pay",auth,async(req,res)=>{
       createdAt:paymentRecordedAt,
       method,
       amountReference:reference,
-      processedBy:uid
+      processedBy:uid,
+      customFields:new Map(Object.entries(configuredPayment.customFields))
     };
     const paymentHistoryEvent={
       action:"added",
@@ -818,12 +833,27 @@ router.put("/orders/:orderId/payments/:paymentId",auth,async(req,res)=>{
       });
     }
 
+    const configuredPayment=await preparePaymentCustomFields({
+      ownerId:uid,
+      values:{amount,method,amountReference:reference,paymentDate},
+      customFields:req.body?.customFields,
+      existingValues:{
+        amount:currentPayment.amount,
+        method:currentPayment.method,
+        amountReference:currentPayment.amountReference,
+        paymentDate:currentPayment.paymentDate
+      },
+      existingCustomFields:currentPayment.customFields,
+      isNewRecord:false
+    });
+
     const nextPayments=currentPayments.map((item,index)=>index===paymentIndex?{
       ...item,
       amount,
       method,
       amountReference:reference,
-      paymentDate
+      paymentDate,
+      customFields:new Map(Object.entries(configuredPayment.customFields))
     }:item);
     const nextPayment=nextPayments[paymentIndex];
     const paymentRecordedAt=new Date();

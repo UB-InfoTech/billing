@@ -385,13 +385,14 @@ const preserveNonEditableFields=({
     const isNonEditable=field.editable===false||field.readOnly===true||field.disabled===true;
     if(!isNonEditable||autofilled.has(field.key)||field.formula)continue;
     const existing=field.custom?existingCustomFields[field.key]:existingValues[field.key];
+    const fallback=existing===undefined?field.defaultValue:existing;
     if(field.custom){
-      if(existing===undefined)delete nextCustomFields[field.key];
-      else nextCustomFields[field.key]=existing;
-    }else if(existing===undefined){
+      if(fallback===undefined)delete nextCustomFields[field.key];
+      else nextCustomFields[field.key]=fallback;
+    }else if(fallback===undefined){
       delete nextValues[field.key];
     }else{
-      nextValues[field.key]=existing;
+      nextValues[field.key]=fallback;
     }
   }
   return {values:nextValues,customFields:nextCustomFields};

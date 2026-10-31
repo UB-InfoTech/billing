@@ -386,6 +386,7 @@ const OrdersTable = React.memo(({
   customSplits,
   onCustomAmountChange
 }) => {
+  const [searchParams]=useSearchParams();
   const [filters, setFilters] = useState({
     billNo: '',
     challanNumber: '',
@@ -539,6 +540,7 @@ const AllocationPreview = React.memo(({
   paymentAmount,
   paymentDate
 }) => {
+  const [searchParams]=useSearchParams();
   const paymentAmountNum = parseDecimal(paymentAmount || 0);
   const isAmountMismatch = Math.round(paymentAmountNum * 100) !== Math.round(totalAllocated * 100);
 
@@ -633,7 +635,6 @@ class ErrorBoundary extends React.Component {
 
 // Main BulkPayment Component
 export default function BulkPayment() {
-  const [searchParams]=useSearchParams();
   // State management
   const [orders, setOrders] = useState([]);
   const [selectedOrders, setSelectedOrders] = useState([]);

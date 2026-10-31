@@ -41,3 +41,16 @@ test("supports plain objects returned by lean database queries", () => {
   assert.equal(result.eWayPassword, "");
   assert.equal(JSON.stringify(result).includes("secret"), false);
 });
+
+test("serializes custom profile fields stored in a Mongoose-style map",()=>{
+  const result=toPublicProfile({
+    companyName:"Configured company",
+    customFields:new Map([["annualValue",750],["gstRegistered",true]]),
+    eWayPassword:"hidden-secret"
+  });
+
+  assert.deepEqual(result.customFields,{annualValue:750,gstRegistered:true});
+  assert.equal(result.eWayPassword,"");
+  assert.equal(result.hasEWayPassword,true);
+  assert.equal(JSON.stringify(result).includes("hidden-secret"),false);
+});

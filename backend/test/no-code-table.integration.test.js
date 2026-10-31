@@ -264,8 +264,6 @@ test("custom table values persist with correct types and enforce business owners
       },
       {
         createdBy:ownerId,
-      {
-        createdBy:ownerId,
         formKey:"calendar.event",
         fields:[
           {key:"title",label:"Event title",fieldType:"text",required:true},
@@ -300,6 +298,8 @@ test("custom table values persist with correct types and enforce business owners
           {key:"internalNote",label:"Internal note",custom:true,fieldType:"text",visible:false,defaultValue:"Business-only event note"}
         ]
       },
+      {
+        createdBy:ownerId,
         formKey:"expenses.form",
         fields:[
           {key:"date",label:"Date",fieldType:"date",required:true},

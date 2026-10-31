@@ -1007,6 +1007,13 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
     if(!Array.isArray(updates)||!updates.length)throw new Error("updates[] is required.");
     if(!paymentDate||Number.isNaN(parsedDate.getTime()))throw new Error("Valid paymentDate is required.");
 
+    const configuredPayment=await preparePaymentCustomFields({
+      ownerId:userId(req),
+      values:{amount,method,amountReference:reference,paymentDate:parsedDate},
+      customFields:req.body?.customFields,
+      isNewRecord:true
+    });
+
     const normalized=normalizePaymentUpdates(
       updates,
       value=>mongoose.isValidObjectId(value)
@@ -1094,7 +1101,8 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
         createdAt:paymentRecordedAt,
         method,
         amountReference:reference,
-        processedBy:userId(req)
+        processedBy:userId(req),
+        customFields:configuredPayment.customFields
       };
       const paymentHistoryEvent={
         action:"added",
@@ -1151,7 +1159,8 @@ router.put("/orders/payments/bulk",auth,async(req,res)=>{
       })),
       skippedOrders:skipped,
       transactionMetadata:{batchSize:ids.length},
-      status:skipped.length?"partially_completed":"completed"
+      status:skipped.length?"partially_completed":"completed",
+      customFields:configuredPayment.customFields
     });
     await log.save(session?{session}:undefined);
 

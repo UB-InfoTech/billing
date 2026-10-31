@@ -14,6 +14,7 @@ const Expense=require("../models/Expense");
 const CalendarEvent=require("../models/Calendar");
 const Profile=require("../models/Profile");
 const {prepareEwaybillForm}=require("../utils/ewaybillFormValidation");
+const {prepareCreditNoteCustomFields}=require("../utils/creditNoteFormValidation");
 const TableConfiguration=require("../models/TableConfiguration");
 const TableCustomValue=require("../models/TableCustomValue");
 const FormConfiguration=require("../models/FormConfiguration");
@@ -113,6 +114,28 @@ test("custom table values persist with correct types and enforce business owners
       },
       {
         createdBy:ownerId,
+        formKey:"creditnotes.form",
+        fields:[
+          {key:"returnCondition",label:"Returned item condition",custom:true,fieldType:"select",options:["Good","Damaged","Unused"]},
+          {key:"inspectedUnits",label:"Inspected units",custom:true,fieldType:"number"},
+          {key:"unitCost",label:"Unit cost",custom:true,fieldType:"currency"},
+          {key:"estimatedLoss",label:"Estimated loss",custom:true,fieldType:"currency",formula:"inspectedUnits * unitCost",editable:false},
+          {
+            key:"reviewedBy",
+            label:"Reviewed by",
+            custom:true,
+            fieldType:"reference",
+            dataSource:{
+              type:"lookup",resource:"clients",valueField:"_id",labelField:"companyName",searchField:"companyName",
+              autoFill:[{targetKey:"reviewerPhone",sourceKey:"phone"}]
+            }
+          },
+          {key:"reviewerPhone",label:"Reviewer phone",custom:true,fieldType:"phone",editable:false},
+          {key:"internalNote",label:"Internal note",custom:true,fieldType:"text",visible:false,defaultValue:"Credit note internal default"}
+        ]
+      },
+      {
+        createdBy:ownerId,
         formKey:"orders.payments",
         fields:[
           {key:"amount",label:"Amount received",fieldType:"currency",required:true,locked:true,system:true,validation:{min:0.01}},
@@ -136,6 +159,53 @@ test("custom table values persist with correct types and enforce business owners
         ]
       }
     ]);
+
+    const creditNoteCustomFields=await prepareCreditNoteCustomFields({
+      ownerId,
+      value:{
+        returnCondition:"Damaged",
+        inspectedUnits:3,
+        unitCost:12,
+        estimatedLoss:999,
+        reviewedBy:String(ownerClientId),
+        reviewerPhone:"1111111111",
+        internalNote:"Browser-submitted internal note"
+      },
+      isNewRecord:true
+    });
+    assert.equal(creditNoteCustomFields.returnCondition,"Damaged");
+    assert.equal(creditNoteCustomFields.estimatedLoss,36);
+    assert.equal(creditNoteCustomFields.reviewedBy,String(ownerClientId));
+    assert.equal(creditNoteCustomFields.reviewerPhone,"9999999999");
+    assert.equal(creditNoteCustomFields.internalNote,"Credit note internal default");
+
+    const updatedCreditNoteCustomFields=await prepareCreditNoteCustomFields({
+      ownerId,
+      value:{inspectedUnits:4,unitCost:10,estimatedLoss:999,reviewerPhone:"2222222222"},
+      existingCustomFields:creditNoteCustomFields,
+      isNewRecord:false
+    });
+    assert.equal(updatedCreditNoteCustomFields.returnCondition,"Damaged");
+    assert.equal(updatedCreditNoteCustomFields.estimatedLoss,40);
+    assert.equal(updatedCreditNoteCustomFields.reviewerPhone,"9999999999");
+    assert.equal(updatedCreditNoteCustomFields.internalNote,"Credit note internal default");
+
+    await assert.rejects(
+      ()=>prepareCreditNoteCustomFields({
+        ownerId,
+        value:{returnCondition:"Not an available condition"},
+        isNewRecord:true
+      }),
+      /available option/i
+    );
+    await assert.rejects(
+      ()=>prepareCreditNoteCustomFields({
+        ownerId,
+        value:{reviewedBy:String(otherClientId)},
+        isNewRecord:true
+      }),
+      /not found in this business/i
+    );
 
     async function request(path,{method="GET",body,token=ownerToken}={}){
       const response=await fetch(`${baseUrl}${path}`,{

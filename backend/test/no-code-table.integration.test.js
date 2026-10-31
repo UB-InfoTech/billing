@@ -62,6 +62,27 @@ test("custom table values persist with correct types and enforce business owners
       ]
     });
 
+    await FormConfiguration.create([
+      {
+        createdBy:ownerId,
+        formKey:"orders.form",
+        fields:[
+          {key:"packingCount",label:"Packing count",custom:true,fieldType:"number"},
+          {key:"packingRate",label:"Packing rate",custom:true,fieldType:"currency"},
+          {key:"packingCharge",label:"Packing charge",custom:true,fieldType:"currency",formula:"packingCount * packingRate",editable:false}
+        ]
+      },
+      {
+        createdBy:ownerId,
+        formKey:"orders.items",
+        fields:[
+          {key:"extraUnits",label:"Extra units",custom:true,fieldType:"number"},
+          {key:"extraRate",label:"Extra rate",custom:true,fieldType:"currency"},
+          {key:"extraTotal",label:"Extra total",custom:true,fieldType:"currency",formula:"extraUnits * extraRate",editable:false}
+        ]
+      }
+    ]);
+
     async function request(path,{method="GET",body,token=ownerToken}={}){
       const response=await fetch(`${baseUrl}${path}`,{
         method,
@@ -94,6 +115,46 @@ test("custom table values persist with correct types and enforce business owners
     });
     assert.equal(updatedFormulaClient.status,200,JSON.stringify(updatedFormulaClient.data));
     assert.equal(updatedFormulaClient.data.customFields.amount,60);
+
+    const createdOrder=await request("/orders/create",{
+      method:"POST",
+      body:{
+        clientId:String(ownerClientId),
+        orderDate:"2026-10-31",
+        customFields:{packingCount:2,packingRate:5,packingCharge:999},
+        subOrders:[{
+          orderName:"No-code integration item",
+          quantity:2,
+          cut:0,
+          MTR:0,
+          unitPrice:10,
+          qtyUnit:"PCS",
+          customFields:{extraUnits:3,extraRate:7,extraTotal:999}
+        }]
+      }
+    });
+    assert.equal(createdOrder.status,201,JSON.stringify(createdOrder.data));
+    assert.equal(createdOrder.data.order.customFields.packingCharge,10);
+    assert.equal(createdOrder.data.order.subOrders[0].customFields.extraTotal,21);
+
+    const updatedOrder=await request(`/orders/${createdOrder.data.order._id}/update`,{
+      method:"PUT",
+      body:{
+        customFields:{packingCount:4,packingRate:5,packingCharge:999},
+        subOrders:[{
+          orderName:"No-code integration item",
+          quantity:2,
+          cut:0,
+          MTR:0,
+          unitPrice:10,
+          qtyUnit:"PCS",
+          customFields:{extraUnits:2,extraRate:12,extraTotal:999}
+        }]
+      }
+    });
+    assert.equal(updatedOrder.status,200,JSON.stringify(updatedOrder.data));
+    assert.equal(updatedOrder.data.order.customFields.packingCharge,20);
+    assert.equal(updatedOrder.data.order.subOrders[0].customFields.extraTotal,24);
 
     const tableKey="no-code-integration";
     const configured=await request(`/table-config/${tableKey}`,{

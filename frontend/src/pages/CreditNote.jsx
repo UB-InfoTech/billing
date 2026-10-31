@@ -2,6 +2,19 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import axios from "axios";
 import "bootstrap/dist/css/bootstrap.min.css";
 import DynamicTable from "../components/DynamicTable";
+import FormConfigurator from "../components/FormConfigurator";
+import ConfiguredField from "../components/ConfiguredField";
+import {CREDIT_NOTE_FIELDS} from "../config/noCodeCatalog";
+import {
+    applyAutoFill,
+    applyFormulas,
+    buildConfiguredDefaults,
+    getFieldState,
+    hydrateConfiguredValues,
+    syncConfiguredCustomFields,
+    useFormConfiguration
+} from "../hooks/useFormConfiguration";
+import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import {formatDateInput} from "../utils/dateInput";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
@@ -71,6 +84,7 @@ function emptyForm() {
         manualTaxableAmount: 0,
         manualTaxRate: 5,
         note: "",
+        customFields:{}
     };
 }
 
@@ -115,6 +129,13 @@ export default function CreditNote() {
     const [previewNote, setPreviewNote] = useState(null);
     const [editingNote, setEditingNote] = useState(null);
     const [profile, setProfile] = useState(null);
+    const [customFormSettingsOpen,setCustomFormSettingsOpen]=useState(false);
+    const creditNoteFormConfig=useFormConfiguration("creditnotes.form",CREDIT_NOTE_FIELDS);
+    const creditNoteLookupResources=useMemo(
+        ()=>Array.from(new Set(creditNoteFormConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean))),
+        [creditNoteFormConfig.fields]
+    );
+    const {records:creditNoteLookupRecords,searchRecords:searchCreditNoteLookupRecords}=useNoCodeDataSources(creditNoteLookupResources);
 
     const [loading, setLoading] = useState(true);
     const [listError, setListError] = useState("");
@@ -139,6 +160,75 @@ export default function CreditNote() {
         page: 1,
     });
     const [pagination, setPagination] = useState({ page: 1, pages: 1, total: 0 });
+
+    useEffect(()=>{
+        setForm(previous=>{
+            const next=buildConfiguredDefaults({
+                ...previous,
+                customFields:{...(previous.customFields||{})}
+            },creditNoteFormConfig.fields);
+            return syncConfiguredCustomFields(
+                applyFormulas(creditNoteFormConfig.fields,next),
+                creditNoteFormConfig.fields
+            );
+        });
+    },[creditNoteFormConfig.fields]);
+
+    const updateCreditNoteCustomField=(field,value,record=null)=>{
+        setForm(previous=>{
+            let next={
+                ...previous,
+                [field.key]:value,
+                customFields:{...(previous.customFields||{})}
+            };
+            if(field.custom)next.customFields[field.key]=value;
+            if(field.dataSource?.autoFill?.length)next=applyAutoFill(field,record,next);
+            next=applyFormulas(creditNoteFormConfig.fields,next);
+            return syncConfiguredCustomFields(next,creditNoteFormConfig.fields);
+        });
+    };
+
+    const preparedCreditNoteForm=useMemo(()=>syncConfiguredCustomFields(
+        applyFormulas(creditNoteFormConfig.fields,form),
+        creditNoteFormConfig.fields
+    ),[form,creditNoteFormConfig.fields]);
+
+    const creditNoteCustomFieldNodes=creditNoteFormConfig.fields.filter(field=>field.custom).map(field=>{
+        const state=getFieldState(field,{...preparedCreditNoteForm,...(preparedCreditNoteForm.customFields||{})});
+        if(!state.visible)return null;
+        return(
+            <div className={`col-md-${Math.min(12,Math.max(1,Number(field.width)||6))}`} key={field.key}>
+                <ConfiguredField
+                    field={field}
+                    value={preparedCreditNoteForm.customFields?.[field.key]??preparedCreditNoteForm[field.key]??field.defaultValue??""}
+                    onChange={value=>updateCreditNoteCustomField(field,value)}
+                    onRecordChange={record=>updateCreditNoteCustomField(
+                        field,
+                        record?.[field.dataSource?.valueField||"_id"]??"",
+                        record
+                    )}
+                    lookupRecords={field.dataSource?.resource?creditNoteLookupRecords[field.dataSource.resource]||[]:[]}
+                    onLookupSearch={searchCreditNoteLookupRecords}
+                    options={field.options||[]}
+                    required={state.required}
+                    readOnly={state.readOnly}
+                    disabled={state.disabled||saving}
+                    help={field.helpText}
+                />
+            </div>
+        );
+    }).filter(Boolean);
+
+    const creditNoteCustomFieldError=values=>{
+        const formValues={...(values||{}),...((values||{}).customFields||{})};
+        const missing=creditNoteFormConfig.fields.filter(field=>field.custom&&!field.formula).find(field=>{
+            const state=getFieldState(field,formValues);
+            if(!state.visible||!state.required||state.disabled)return false;
+            const value=values?.customFields?.[field.key]??values?.[field.key];
+            return value===undefined||value===null||String(value).trim()==="";
+        });
+        return missing?`Please complete “${missing.label}” before saving the Credit Note.`:"";
+    };
 
     const totals = useMemo(() => {
         if (form.creditMode === "AMOUNT") {

@@ -271,7 +271,11 @@ test("custom table values persist with correct types and enforce business owners
           {key:"category",label:"Category",fieldType:"select",required:true,options:[{value:"Operational",label:"Operational"},{value:"Production",label:"Production"}]},
           {key:"taxRate",label:"Tax rate",fieldType:"number"},
           {key:"taxAmount",label:"Tax amount",fieldType:"currency",formula:"amount * taxRate / 100",editable:false},
-          {key:"tags",label:"Tags",fieldType:"text"},
+          {key:"taxDeductible",label:"Tax deductible",fieldType:"boolean"},
+          {key:"isRecurring",label:"Recurring expense",fieldType:"boolean"},
+          {key:"recurringInterval",label:"Recurring interval",fieldType:"select",options:["Daily","Weekly","Monthly","Yearly"],conditions:[{action:"show",fieldKey:"isRecurring",operator:"equals",value:"true"}]},
+          {key:"recurringEndDate",label:"Recurring end date",fieldType:"date",conditions:[{action:"show",fieldKey:"isRecurring",operator:"equals",value:"true"}]},
+          {key:"tags",label:"Tags",fieldType:"multiselect",options:["packing","urgent","fragile"]},
           {
             key:"clientId",
             label:"Customer",
@@ -339,6 +343,31 @@ test("custom table values persist with correct types and enforce business owners
     assert.equal(productAfterRejectedReference.data.customFields.supplier,String(ownerClientId));
     assert.equal(productAfterRejectedReference.data.customFields.supplierPhone,"9999999999");
 
+    const invalidExpenseCategory=await request("/expenses",{
+      method:"POST",
+      body:{
+        date:"2026-10-31",
+        description:"Invalid category expense",
+        amount:10,
+        category:"Not an expense category"
+      }
+    });
+    assert.equal(invalidExpenseCategory.status,400);
+    assert.match(invalidExpenseCategory.data.message,/available option/i);
+
+    const recurringWithoutInterval=await request("/expenses",{
+      method:"POST",
+      body:{
+        date:"2026-10-31",
+        description:"Recurring expense without an interval",
+        amount:10,
+        category:"Operational",
+        isRecurring:true
+      }
+    });
+    assert.equal(recurringWithoutInterval.status,400);
+    assert.match(recurringWithoutInterval.data.message,/recurring interval/i);
+
     const createdExpense=await request("/expenses",{
       method:"POST",
       body:{
@@ -348,6 +377,8 @@ test("custom table values persist with correct types and enforce business owners
         category:"Operational",
         taxRate:18,
         taxAmount:999,
+        taxDeductible:"false",
+        isRecurring:"false",
         tags:["packing","urgent"],
         clientId:String(ownerClientId),
         customFields:{
@@ -364,6 +395,8 @@ test("custom table values persist with correct types and enforce business owners
     assert.equal(createdExpense.data.amount,100);
     assert.equal(createdExpense.data.taxAmount,18,"Expense tax is recalculated by the server, not trusted from the browser.");
     assert.deepEqual(createdExpense.data.tags,["packing","urgent"]);
+    assert.equal(createdExpense.data.taxDeductible,false);
+    assert.equal(createdExpense.data.isRecurring,false,"String false must not be treated as a recurring expense.");
     assert.equal(String(createdExpense.data.createdBy),String(ownerId));
     assert.equal(String(createdExpense.data.user),String(ownerId));
     assert.equal(createdExpense.data.customFields.customTotal,10);

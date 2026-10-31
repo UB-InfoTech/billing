@@ -175,6 +175,8 @@ const creditNoteSchema = new mongoose.Schema(
     // Dated snapshots preserve the invoice credit that existed when each payment was received.
     settlementHistory: { type: [settlementHistorySchema], default: [] },
 
+    customFields: { type: Map, of: mongoose.Schema.Types.Mixed, default: {} },
+
     note: { type: String, trim: true, default: "" },
     cancellationReason: { type: String, trim: true, default: "" },
     cancelledAt: { type: Date, default: null },

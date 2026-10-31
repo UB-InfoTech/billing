@@ -78,7 +78,9 @@ test("custom table values persist with correct types and enforce business owners
             autoFill:[{targetKey:"referralPhone",sourceKey:"phone"}]
           }
         },
-        {key:"referralPhone",label:"Referral phone",custom:true,fieldType:"phone",editable:false}
+        {key:"referralPhone",label:"Referral phone",custom:true,fieldType:"phone",editable:false},
+        {key:"protectedField",label:"Protected note",custom:true,fieldType:"text",editable:false,defaultValue:"Server-controlled"},
+        {key:"hiddenField",label:"Hidden note",custom:true,fieldType:"text",visible:false,defaultValue:"Hidden default"}
       ]
     });
 
@@ -129,7 +131,9 @@ test("custom table values persist with correct types and enforce business owners
           amount:999,
           customerType:"Individual",
           referralClient:String(ownerClientId),
-          referralPhone:"1111111111"
+          referralPhone:"1111111111",
+          protectedField:"browser forgery",
+          hiddenField:"browser forgery"
         }
       }
     });
@@ -137,6 +141,8 @@ test("custom table values persist with correct types and enforce business owners
     assert.equal(formulaClient.data.customFields.amount,100);
     assert.equal(formulaClient.data.customFields.referralClient,String(ownerClientId));
     assert.equal(formulaClient.data.customFields.referralPhone,"9999999999","The server must replace browser-submitted auto-fill values with the selected customer's saved phone.");
+    assert.equal(formulaClient.data.customFields.protectedField,"Server-controlled","A non-editable custom field must use its saved default, not browser input.");
+    assert.equal(formulaClient.data.customFields.hiddenField,"Hidden default","A hidden custom field must not accept a value submitted by the browser.");
 
     const missingBusinessGst=await request("/clients",{
       method:"POST",
@@ -173,10 +179,18 @@ test("custom table values persist with correct types and enforce business owners
 
     const updatedFormulaClient=await request(`/clients/${formulaClient.data._id}`,{
       method:"PATCH",
-      body:{customFields:{quantity:3,rate:20,amount:999}}
+      body:{customFields:{
+        quantity:3,
+        rate:20,
+        amount:999,
+        protectedField:"updated forgery",
+        hiddenField:"updated forgery"
+      }}
     });
     assert.equal(updatedFormulaClient.status,200,JSON.stringify(updatedFormulaClient.data));
     assert.equal(updatedFormulaClient.data.customFields.amount,60);
+    assert.equal(updatedFormulaClient.data.customFields.protectedField,"Server-controlled");
+    assert.equal(updatedFormulaClient.data.customFields.hiddenField,"Hidden default");
 
     const crossBusinessUpdate=await request(`/clients/${formulaClient.data._id}`,{
       method:"PATCH",

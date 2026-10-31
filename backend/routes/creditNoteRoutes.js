@@ -11,6 +11,7 @@ const { buildInvoiceCreditWriteFilter, buildPreviouslyCreditedFilter } = require
 const { buildClientCreditBalanceMutation } = require("../utils/clientCreditBalance");
 const { recordFinancialRecoveryIssue } = require("../utils/financialRecovery");
 const { createSettlementHistoryEvent, appendSettlementHistoryEvent } = require("../utils/creditNoteSettlementHistory");
+const { prepareCreditNoteCustomFields, plainCustomFields } = require("../utils/creditNoteFormValidation");
 
 
 const router = express.Router();
@@ -824,6 +825,15 @@ router.post("/", auth, async (req, res) => {
       throw new Error("Invalid original invoice.");
     }
 
+    // Additional metadata is validated before touching invoice balances,
+    // customer credit or product stock. Financial fields never come from this
+    // configurable metadata channel.
+    const preparedCustomFields=await prepareCreditNoteCustomFields({
+      ownerId:userId,
+      value:req.body?.customFields,
+      isNewRecord:true
+    });
+
     const order = await Order.findOne({ _id: originalOrderId, createdBy: userId }).session(session);
     if (!order) throw new Error("Original invoice not found.");
     orderForRollback = order;
@@ -1156,6 +1166,7 @@ router.post("/", auth, async (req, res) => {
       settlementStatus:
         meetsCurrencyTarget(settled, grandTotal) ? "Settled" : "Partially Settled",
       note: String(note || "").trim(),
+      customFields: preparedCustomFields,
       createdBy: userId,
     });
 
@@ -1477,6 +1488,15 @@ router.put("/:id", auth, async (req, res) => {
     if (!note) throw new Error("Credit note not found.");
     if (note.status !== "Posted") throw new Error("Only posted Credit Notes can be edited.");
 
+    // Custom metadata may be edited, but it cannot participate in posting,
+    // settlement, inventory or customer-balance calculations.
+    const preparedCustomFields=await prepareCreditNoteCustomFields({
+      ownerId:userId,
+      value:req.body?.customFields,
+      existingCustomFields:plainCustomFields(note.customFields),
+      isNewRecord:false
+    });
+
     // The original invoice link is kept fixed because the document is an issued
     // financial reference. All Credit Note content, amounts, quantities and
     // settlement information can be changed and are recalculated server-side.
@@ -1684,6 +1704,7 @@ router.put("/:id", auth, async (req, res) => {
     note.settlementStatus =
       meetsCurrencyTarget(prepared.settled, prepared.grandTotal) ? "Settled" : "Partially Settled";
     note.note = String(req.body?.note ?? note.note ?? "").trim().slice(0, 1000);
+    note.customFields = preparedCustomFields;
 
     const noteUpdateFields = {
       creditNoteNumber: note.creditNoteNumber,
@@ -1701,6 +1722,7 @@ router.put("/:id", auth, async (req, res) => {
       manualCredit: note.manualCredit,
       settlementStatus: note.settlementStatus,
       note: note.note,
+      customFields: note.customFields,
     };
     const savedNote = await CreditNote.findOneAndUpdate(
       {
@@ -1754,7 +1776,7 @@ router.put("/:id", auth, async (req, res) => {
             "creditNoteNumber", "creditNoteDate", "reason", "creditMode",
             "stockAffecting", "inventoryStatus", "inventoryMovements",
             "settlement", "settlementHistory", "items", "totals", "originalInvoiceTotal",
-            "manualCredit", "settlementStatus", "note"
+            "manualCredit", "settlementStatus", "note", "customFields"
           ].forEach(key => { restoreNoteFields[key] = previousNote[key]; });
           const restoredNote = await CreditNote.findOneAndUpdate(
             { _id: req.params.id, createdBy: userId, status: "Posted", updatedAt: noteAfterWrite.updatedAt },

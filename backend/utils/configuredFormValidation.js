@@ -173,17 +173,19 @@ const applyConfiguredAutoFill=async({
     const mappings=Array.isArray(sourceConfig.autoFill)?sourceConfig.autoFill:[];
     const idMapping=mappings.find(mapping=>mapping.sourceKey==="_id");
     const selectedValue=readFieldValue(field,nextValues,nextCustomFields);
+    const previousSelectedValue=readFieldValue(field,previousValues,previousCustomFields);
     const selectedId=idMapping
       ?readTargetValue(idMapping.targetKey,fieldList,nextValues,nextCustomFields)
       :sourceConfig.valueField==="_id"?selectedValue:"";
+    const legacyDisplayWithoutId=Boolean(idMapping&&isEmpty(selectedId)&&!isEmpty(selectedValue));
 
     const referenceChanged=!sameValue(
       selectedValue,
-      readFieldValue(field,previousValues,previousCustomFields)
+      previousSelectedValue
     )||Boolean(idMapping&&!sameValue(
       readTargetValue(idMapping.targetKey,fieldList,nextValues,nextCustomFields),
       readTargetValue(idMapping.targetKey,fieldList,previousValues,previousCustomFields)
-    ));
+    ))||legacyDisplayWithoutId;
 
     if(onlyChanged&&!referenceChanged)continue;
 
@@ -222,6 +224,24 @@ const applyConfiguredAutoFill=async({
     let record=null;
     if(!isEmpty(selectedId)){
       record=await getLookupRecord(sourceConfig.resource,selectedId,ownerId);
+    }else if(sourceConfig.valueField==="_id"&&idMapping&&!isEmpty(selectedValue)){
+      // Older invoices may contain a display name but no saved record ID.
+      // Recover the link only when exactly one matching record belongs to
+      // this business; never guess between duplicate names.
+      const legacyDisplayField=sourceConfig.labelField||sourceConfig.searchField;
+      if(legacyDisplayField&&legacyDisplayField!=="_id"){
+        record=await findLookupRecordByValue(
+          sourceConfig.resource,
+          legacyDisplayField,
+          selectedValue,
+          ownerId
+        );
+      }
+      if(!record&&onlyChanged&&sameValue(selectedValue,previousSelectedValue)){
+        // Preserve a historical text value if the linked product was removed.
+        // The user may still edit other invoice details without losing history.
+        continue;
+      }
     }else if(sourceConfig.valueField==="_id"){
       record=await getLookupRecord(sourceConfig.resource,selectedValue,ownerId);
     }else{

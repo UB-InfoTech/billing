@@ -316,7 +316,8 @@ router.put("/:id",auth,receiveProductImages,async(req,res)=>{
       }
     });
     values.productCode=String(values.productCode||"").trim().toUpperCase();
-    values.barcode=String(values.barcode||values.productCode||"").trim();
+    values.barcode=String(values.barcode??"").trim();
+    if(req.body?.barcode!==undefined&&!values.barcode)values.barcode=values.productCode;
     values.serialNumber=String(values.serialNumber||"").trim();
     values.designNo=String(values.designNo||"").trim();
     values.productName=String(values.productName||"").trim();

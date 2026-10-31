@@ -1075,11 +1075,15 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
 
     const manualAdjustment = await request(`/clients/${clientId}/credit`, {
       method: "PUT",
-      body: { amount: 10 }
+      body: { amount: 10, reason: "Customer relationship adjustment" }
     });
     assert.equal(manualAdjustment.response.status, 200, JSON.stringify(manualAdjustment.payload));
     assert.equal(round2(manualAdjustment.payload.creditBalance), 76);
     assert.equal(round2(manualAdjustment.payload.creditBalanceAdjustment), 10);
+    assert.equal(manualAdjustment.payload.creditBalanceHistory.length, 1);
+    assert.equal(round2(manualAdjustment.payload.creditBalanceHistory[0].amount), 10);
+    assert.equal(round2(manualAdjustment.payload.creditBalanceHistory[0].balanceAfter), 76);
+    assert.equal(manualAdjustment.payload.creditBalanceHistory[0].reason, "Customer relationship adjustment");
 
     const secondCreditNoteNumber = `S${suffix}`;
     const secondPosted = await request("/credit-notes", {
@@ -1179,6 +1183,15 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(storedOrder.creditNoteCount, 0);
     assert.equal(round2(storedOrder.paidAmount), 110);
     assert.equal(round2(storedOrder.dueAmount), 110);
+
+    const customerStatement = await request("/clients/" + clientId + "/statement?from=2026-10-01&to=2026-10-31");
+    assert.equal(customerStatement.response.status, 200, JSON.stringify(customerStatement.payload));
+    assert.equal(customerStatement.payload.statement.receivables.currentOutstanding, round2(storedClient.outstanding_balance));
+    assert.equal(customerStatement.payload.statement.receivables.reconcilesWithCustomerSummary, true);
+    assert.equal(customerStatement.payload.statement.customerCredit.currentBalance, 10);
+    assert.equal(customerStatement.payload.statement.customerCredit.closingBalance, 10);
+    const hiddenCustomerStatement = await request("/clients/" + clientId + "/statement", { token: otherOwnerToken });
+    assert.equal(hiddenCustomerStatement.response.status, 404, "Customer statements must be isolated by business owner.");
 
     // A Credit Note posted after a payment must not rewrite the earlier receipt.
     // A later payment sees the credit; cancellation only affects payments after cancellation.
@@ -1321,7 +1334,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
         amount: 10,
         method: "UPI",
         amountReference: "ITTL3-" + suffix,
-        paymentDate: new Date(Date.now() + 1000).toISOString()
+        paymentDate: new Date(Date.now() - 1000).toISOString()
       }
     });
     assert.equal(timelinePaymentThree.response.status, 200, JSON.stringify(timelinePaymentThree.payload));
@@ -1347,6 +1360,16 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(cancelledTimelineNote.settlementHistory.length, 3);
     assert.equal(cancelledTimelineNote.settlementHistory[1].eventType, "edited");
     assert.equal(cancelledTimelineNote.settlementHistory[2].eventType, "cancelled");
+
+    const timelineStatement = await request("/clients/" + timelineClientId + "/statement?from=2026-10-14&to=2026-10-31");
+    assert.equal(timelineStatement.response.status, 200, JSON.stringify(timelineStatement.payload));
+    assert.equal(timelineStatement.payload.statement.receivables.openingBalance, 0);
+    assert.equal(timelineStatement.payload.statement.receivables.totalDebits, 110);
+    assert.equal(timelineStatement.payload.statement.receivables.totalCredits, 90);
+    assert.equal(timelineStatement.payload.statement.receivables.closingBalance, 20);
+    assert.equal(timelineStatement.payload.statement.receivables.currentOutstanding, 20);
+    assert.equal(timelineStatement.payload.statement.receivables.reconcilesWithCustomerSummary, true);
+    assert.equal(timelineStatement.payload.statement.customerCredit.currentBalance, 0);
 
     const stockProduct = await Product.create({
       productName: `Rollback Product ${suffix}`,

@@ -189,10 +189,15 @@ router.get("/:id/statement",auth,async(req,res)=>{
     const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)}).lean();
     if(!client)return res.status(404).json({message:"Customer not found."});
 
-    const from=parseStatementDate(req.query.from,false)||client.createdAt||new Date(0);
-    const to=parseStatementDate(req.query.to,true)||new Date();
-    if(Number.isNaN(new Date(from).getTime())||Number.isNaN(new Date(to).getTime())){
+    const requestedFrom=req.query.from?parseStatementDate(req.query.from,false):null;
+    const requestedTo=req.query.to?parseStatementDate(req.query.to,true):null;
+    if((req.query.from&&!requestedFrom)||(req.query.to&&!requestedTo)){
       return res.status(400).json({message:"Enter valid statement dates."});
+    }
+    const from=requestedFrom||client.createdAt||new Date(0);
+    const to=requestedTo||new Date();
+    if(Number.isNaN(new Date(from).getTime())||Number.isNaN(new Date(to).getTime())){
+      return res.status(400).json({message:"Customer account dates are invalid. Review the customer record."});
     }
     if(new Date(from).getTime()>new Date(to).getTime()){
       return res.status(400).json({message:"Statement start date must be on or before the end date."});

@@ -49,6 +49,13 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
         if(!recoveryWasConfigured&&byKey.has(recoveryKey)){
           next.push(byKey.get(recoveryKey));
         }
+        // Existing businesses may have saved their menu before this module
+        // existed. Add it once by default, but respect an explicit hidden choice.
+        const organizationProfileKey="organization-profile";
+        const organizationProfileWasConfigured=saved.some(item=>item.key===organizationProfileKey);
+        if(!organizationProfileWasConfigured&&byKey.has(organizationProfileKey)){
+          next.push(byKey.get(organizationProfileKey));
+        }
         if(next.length)setMenuItems(next);
       }catch{
         if(!cancelled)setMenuItems(MENU_ITEMS);

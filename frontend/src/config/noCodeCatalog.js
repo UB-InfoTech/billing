@@ -23,8 +23,9 @@ export const ORDER_FORM_FIELDS=[
  {key:"pinCode",label:"Pin Code",fieldType:"text",width:4,section:"shipping",order:7},
  {key:"stateCode",label:"State Code",fieldType:"text",width:4,section:"shipping",order:8},
  {key:"status",label:"Status",fieldType:"select",width:4,section:"shipping",order:9,options:["Pending","In Process","Completed","Cancelled","Dispatched"],system:true},
- {key:"companyName",label:"Customer",fieldType:"reference",width:6,section:"invoice",required:true,order:0,system:true,dataSource:{type:"lookup",resource:"clients",valueField:"companyName",labelField:"companyName",searchField:"companyName",multiple:false,autoFill:[
+ {key:"companyName",label:"Customer",fieldType:"reference",width:6,section:"invoice",required:true,order:0,system:true,dataSource:{type:"lookup",resource:"clients",valueField:"_id",labelField:"companyName",searchField:"companyName",multiple:false,autoFill:[
   {targetKey:"clientId",sourceKey:"_id"},
+  {targetKey:"companyName",sourceKey:"companyName"},
   {targetKey:"Address",sourceKey:"address"},
   {targetKey:"State",sourceKey:"state"},
   {targetKey:"City",sourceKey:"city"},
@@ -43,7 +44,8 @@ export const ORDER_FORM_FIELDS=[
 
 export const ORDER_ITEM_FIELDS=[
  {key:"designNumber",label:"Design No.",fieldType:"text",width:3,section:"details",order:1},
- {key:"orderName",label:"Product",fieldType:"reference",width:4,section:"items",order:0,dataSource:{type:"lookup",resource:"products",valueField:"productName",labelField:"productName",searchField:"productName",multiple:false,autoFill:[{targetKey:"designNumber",sourceKey:"designNo"},{targetKey:"unitPrice",sourceKey:"rate"}]}},
+ {key:"productId",label:"Product link",fieldType:"text",width:1,section:"items",order:999,visible:false,locked:true,system:true,editable:false,readOnly:true},
+ {key:"orderName",label:"Product",fieldType:"reference",width:4,section:"items",order:0,dataSource:{type:"lookup",resource:"products",valueField:"_id",labelField:"productName",searchField:"productName",multiple:false,autoFill:[{targetKey:"productId",sourceKey:"_id"},{targetKey:"orderName",sourceKey:"productName"},{targetKey:"designNumber",sourceKey:"designNo"},{targetKey:"unitPrice",sourceKey:"rate"}]}},
  {key:"hsnCode",label:"HSN Code",fieldType:"number",width:3,section:"details",order:2},
  {key:"quantity",label:"Quantity",fieldType:"number",width:2,section:"items",order:2},
  {key:"cut",label:"Cut",fieldType:"number",width:2,section:"items",order:3},

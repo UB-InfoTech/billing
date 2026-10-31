@@ -442,20 +442,6 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
     res.json({success:true,message:"Order updated successfully",order});
   }catch(error){
     const staleSave=error?.name==="DocumentNotFoundError"||error?.name==="VersionError";
-    if(staleSave){
-      let currentSnapshot=null;
-      try{
-        currentSnapshot=await Order.findOne({_id:req.params.id,createdBy:userId(req)})
-          .select("_id createdBy updatedAt dueAmount paidAmount creditAppliedAmount creditNoteCount __v")
-          .lean();
-      }catch(snapshotError){
-        console.error("Unable to read invoice after a concurrency conflict:",snapshotError);
-      }
-      console.error("Invoice update concurrency conflict:",{
-        error,
-        currentSnapshot
-      });
-    }
     return res.status(error.status||(staleSave?409:400)).json({
       success:false,
       message:staleSave

@@ -809,10 +809,9 @@ export default function FormConfigurator({
                                   </select>
                                 </div>
                                 <div className="col-md-4">
-                                  <label className="form-label">What should be saved?</label>
-                                  <select className="form-select" value={field.dataSource?.valueField||"_id"} onChange={event=>update(field.key,{dataSource:{...(field.dataSource||{}),type:"lookup",valueField:event.target.value}})}>
-                                    {sourceFields(sourceCatalog,field.dataSource.resource).map(([value,label])=><option key={value} value={value}>{label}</option>)}
-                                  </select>
+                                  <div className="form-label">How the link is saved</div>
+                                  <div className="form-control bg-light text-secondary" aria-readonly="true">Unique record ID</div>
+                                  <div className="form-text">The record name is shown to people; the unique ID keeps the link reliable.</div>
                                 </div>
                               </>
                             )}

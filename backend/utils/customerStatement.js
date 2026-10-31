@@ -74,10 +74,12 @@ function sortTransactions(events) {
   );
 }
 
-function calculateRunningBalance(events, openingBalance, field) {
+function calculateRunningBalance(events, openingBalance, debitField, creditField) {
   let balance = round2(openingBalance);
   return events.map(event => {
-    balance = round2(balance + Number(event[field] || 0));
+    balance = round2(
+      balance + Number(event[debitField] || 0) - Number(event[creditField] || 0)
+    );
     return { ...event, balanceAfter: balance };
   });
 }
@@ -262,19 +264,19 @@ function buildCustomerStatement({
   const receivableRows = calculateRunningBalance(
     periodReceivableEvents,
     receivableOpening,
-    "debit"
+    "debit",
+    "credit"
   ).map(row => ({
     ...row,
-    balanceAfter: round2(row.balanceAfter - Number(row.credit || 0)),
     date: row.date.toISOString()
   }));
   const walletRows = calculateRunningBalance(
     periodWalletEvents,
     walletOpening,
-    "credit"
+    "credit",
+    "debit"
   ).map(row => ({
     ...row,
-    balanceAfter: round2(row.balanceAfter - Number(row.debit || 0)),
     date: row.date.toISOString()
   }));
 

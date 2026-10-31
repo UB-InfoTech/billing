@@ -833,12 +833,7 @@ function Order2() {
         setPayments([]);
         setPaymentsLoadError("");
         paymentHistoryRequestRef.current += 1;
-        setNewPayment({
-            amount: "",
-            method: "Cash",
-            amountReference: "",
-            paymentDate: formatDateInput(new Date()),
-        });
+        setNewPayment(emptyPaymentRecord());
         setShowPaymentModal(true);
     };
 
@@ -898,6 +893,66 @@ function Order2() {
         }
     };
 
+    const updatePaymentField=(setter,field,value,record=null)=>{
+        setter(previous=>{
+            let next={
+                ...previous,
+                [field.key]:value,
+                customFields:{...(previous.customFields||{})}
+            };
+            if(field.custom)next.customFields[field.key]=value;
+            if(field.dataSource?.autoFill?.length)next=applyAutoFill(field,record,next);
+            next=applyFormulas(paymentFormConfig.fields,next);
+            return syncConfiguredCustomFields(next,paymentFormConfig.fields);
+        });
+    };
+
+    const renderPaymentCustomFields=(values,setter,disabled=false)=>{
+        const formValues={...(values||{}),...((values||{}).customFields||{})};
+        return paymentFormConfig.fields.filter(field=>field.custom).map(field=>{
+            const state=getFieldState(field,formValues);
+            if(!state.visible)return null;
+            return(
+                <div className={`col-md-${Math.min(12,Math.max(1,Number(field.width)||6))}`} key={field.key}>
+                    <ConfiguredField
+                        field={field}
+                        value={values?.[field.key]??values?.customFields?.[field.key]??field.defaultValue??""}
+                        onChange={value=>updatePaymentField(setter,field,value)}
+                        onRecordChange={record=>updatePaymentField(
+                            setter,
+                            field,
+                            record?.[field.dataSource?.valueField||"_id"]??"",
+                            record
+                        )}
+                        lookupRecords={field.dataSource?.resource?linkedRecords[field.dataSource.resource]||[]:[]}
+                        onLookupSearch={searchLinkedRecords}
+                        options={field.options||[]}
+                        required={state.required}
+                        readOnly={state.readOnly}
+                        disabled={disabled||state.disabled}
+                        help={field.helpText}
+                    />
+                </div>
+            );
+        });
+    };
+
+    const getPaymentCustomFieldError=values=>{
+        const formValues={...(values||{}),...((values||{}).customFields||{})};
+        const missing=paymentFormConfig.fields.filter(field=>field.custom&&!field.formula).find(field=>{
+            const state=getFieldState(field,formValues);
+            if(!state.visible||!state.required||state.disabled)return false;
+            const value=values?.customFields?.[field.key]??values?.[field.key];
+            return value===undefined||value===null||String(value).trim()==="";
+        });
+        return missing? `Please complete “${missing.label}” before saving the payment.`:"";
+    };
+
+    const preparedPaymentValues=values=>applyFormulas(
+        paymentFormConfig.fields,
+        syncConfiguredCustomFields(values,paymentFormConfig.fields)
+    );
+
     const addPayment = async (orderId) => {
         const amount = Number(newPayment.amount);
         const due = Number(editingOrder?.dueAmount || 0);
@@ -922,6 +977,11 @@ function Order2() {
             showPaymentError("Choose the date the payment was received.");
             return;
         }
+        const customFieldError=getPaymentCustomFieldError(newPayment);
+        if(customFieldError){
+            showPaymentError(customFieldError);
+            return;
+        }
 
         setPaymentSubmitting(true);
         setPaymentFeedback(null);
@@ -929,7 +989,7 @@ function Order2() {
             const response = await axios.post(
                 `${linkone}/api/order/orders/${orderId}/pay`,
                 {
-                    ...newPayment,
+                    ...preparedPaymentValues(newPayment),
                     amount,
                     paymentDate: newPayment.paymentDate,
                 },
@@ -937,7 +997,7 @@ function Order2() {
             );
             const historyLoaded = await fetchPayments();
             setEditingOrder(response.data?.order || editingOrder);
-            setNewPayment({ amount: "", method: "Cash", amountReference: "", paymentDate: formatDateInput(new Date()) });
+            setNewPayment(emptyPaymentRecord());
             await fetchOrders();
             setPaymentFeedback(historyLoaded
                 ? {type:"success",message:"Payment recorded successfully."}
@@ -960,13 +1020,18 @@ function Order2() {
             setPaymentFeedback({type:"danger",message:"Choose the date the payment was received."});
             return;
         }
+        const customFieldError=getPaymentCustomFieldError(editPayment);
+        if(customFieldError){
+            setPaymentFeedback({type:"danger",message:customFieldError});
+            return;
+        }
         setPaymentSubmitting(true);
         setPaymentFeedback(null);
         try {
             const response = await axios.put(
                 `${linkone}/api/order/orders/${editingOrder._id}/payments/${editPayment._id}`,
                 {
-                    ...editPayment,
+                    ...preparedPaymentValues(editPayment),
                     amount,
                     paymentDate: editPayment.paymentDate,
                 },

@@ -639,14 +639,28 @@ export default function BulkPayment() {
   const submissionLockRef = useRef(false);
   const [showModal, setShowModal] = useState(false);
   const [validationErrors, setValidationErrors] = useState({});
-
-  const [form, setForm] = useState({
-    method: "Cash",
-    amountReference: "",
-    amount: "",
-    splitType: "proportional",
-    paymentDate: getTodayDate()
-  });
+  const [paymentFormSettingsOpen,setPaymentFormSettingsOpen]=useState(false);
+  const paymentFormConfig=useFormConfiguration("orders.payments",PAYMENT_FORM_FIELDS);
+  const emptyPaymentForm=()=>buildConfiguredDefaults({
+    method:"Cash",
+    amountReference:"",
+    amount:"",
+    splitType:"proportional",
+    paymentDate:getTodayDate(),
+    customFields:{}
+  },paymentFormConfig.fields);
+  const [form,setForm]=useState(()=>emptyPaymentForm());
+  const paymentLookupResources=useMemo(
+    ()=>Array.from(new Set(paymentFormConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean))),
+    [paymentFormConfig.fields]
+  );
+  const {records:paymentLookupRecords,searchRecords:searchPaymentLookupRecords}=useNoCodeDataSources(paymentLookupResources);
+  useEffect(()=>{
+    setForm(previous=>buildConfiguredDefaults({
+      ...previous,
+      customFields:{...(previous.customFields||{})}
+    },paymentFormConfig.fields));
+  },[paymentFormConfig.fields]);
 
   const [customSplits, setCustomSplits] = useState({});
 
@@ -732,6 +746,57 @@ export default function BulkPayment() {
     );
   }, []);
 
+  const updatePaymentCustomField=(field,value,record=null)=>{
+    setForm(previous=>{
+      let next={
+        ...previous,
+        [field.key]:value,
+        customFields:{...(previous.customFields||{})}
+      };
+      if(field.custom)next.customFields[field.key]=value;
+      if(field.dataSource?.autoFill?.length)next=applyAutoFill(field,record,next);
+      next=applyFormulas(paymentFormConfig.fields,next);
+      return syncConfiguredCustomFields(next,paymentFormConfig.fields);
+    });
+  };
+
+  const paymentCustomFieldError=values=>{
+    const formValues={...(values||{}),...((values||{}).customFields||{})};
+    const missing=paymentFormConfig.fields.filter(field=>field.custom&&!field.formula).find(field=>{
+      const state=getFieldState(field,formValues);
+      if(!state.visible||!state.required||state.disabled)return false;
+      const value=values?.customFields?.[field.key]??values?.[field.key];
+      return value===undefined||value===null||String(value).trim()==="";
+    });
+    return missing?`Please complete “${missing.label}” before saving the payment.`:"";
+  };
+
+  const paymentCustomFieldNodes=paymentFormConfig.fields.filter(field=>field.custom).map(field=>{
+    const state=getFieldState(field,{...form,...(form.customFields||{})});
+    if(!state.visible)return null;
+    return(
+      <div className={`col-md-${Math.min(12,Math.max(1,Number(field.width)||6))}`} key={field.key}>
+        <ConfiguredField
+          field={field}
+          value={form[field.key]??form.customFields?.[field.key]??field.defaultValue??""}
+          onChange={value=>updatePaymentCustomField(field,value)}
+          onRecordChange={record=>updatePaymentCustomField(
+            field,
+            record?.[field.dataSource?.valueField||"_id"]??"",
+            record
+          )}
+          lookupRecords={field.dataSource?.resource?paymentLookupRecords[field.dataSource.resource]||[]:[]}
+          onLookupSearch={searchPaymentLookupRecords}
+          options={field.options||[]}
+          required={state.required}
+          readOnly={state.readOnly}
+          disabled={state.disabled||submitting}
+          help={field.helpText}
+        />
+      </div>
+    );
+  }).filter(Boolean);
+
   const handleFormChange = useCallback((field, value) => {
     let sanitizedValue = value;
 
@@ -752,7 +817,7 @@ export default function BulkPayment() {
       sanitizedValue = sanitizeInput(value);
     }
 
-    setForm(prev => ({ ...prev, [field]: sanitizedValue }));
+    setForm(prev => syncConfiguredCustomFields(applyFormulas(paymentFormConfig.fields,{ ...prev, [field]: sanitizedValue }),paymentFormConfig.fields));
 
     if (validationErrors[field]) {
       setValidationErrors(prev => {
@@ -777,6 +842,12 @@ export default function BulkPayment() {
         setValidationErrors({
           _total: `Payment amount cannot exceed selected invoice dues of ₹${totalDue.toFixed(2)}`
         });
+        return false;
+      }
+
+      const customFieldMessage=paymentCustomFieldError(form);
+      if(customFieldMessage){
+        setValidationErrors({_custom:customFieldMessage});
         return false;
       }
 
@@ -839,12 +910,17 @@ export default function BulkPayment() {
       //   orderIds: orders.map(o => ({ id: o._id, number: o.orderNumber }))
       // });
 
+      const preparedForm=applyFormulas(
+        paymentFormConfig.fields,
+        syncConfiguredCustomFields(form,paymentFormConfig.fields)
+      );
       let payload = {
-        method: form.method,
-        amountReference: form.amountReference,
-        amount: parseDecimal(form.amount),
-        splitType: form.splitType,
-        paymentDate: form.paymentDate,
+        method: preparedForm.method,
+        amountReference: preparedForm.amountReference,
+        amount: parseDecimal(preparedForm.amount),
+        splitType: preparedForm.splitType,
+        paymentDate: preparedForm.paymentDate,
+        customFields:preparedForm.customFields||{},
         // updates: form.splitType === "proportional"
         //   ? selectedOrders // Send as array of strings for proportional
         //   : selectedOrders.map(orderId => ({
@@ -873,13 +949,7 @@ export default function BulkPayment() {
       toast.success(`Bulk Payment Successful for ${new Date(form.paymentDate).toLocaleDateString()} ✅`);
 
       // Reset form
-      setForm({
-        method: "Cash",
-        amountReference: "",
-        amount: "",
-        splitType: "proportional",
-        paymentDate: getTodayDate()
-      });
+      setForm(emptyPaymentForm());
       setSelectedOrders([]);
       setCustomSplits({});
       setValidationErrors({});

@@ -1,6 +1,7 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
 const mongoose=require("mongoose");
+const plainMap=value=>value instanceof Map?Object.fromEntries(value.entries()):value&&typeof value==="object"?{...value}:{};
 const jwt=require("jsonwebtoken");
 
 process.env.JWT_SECRET||="billing-integration-tests-only-secret";
@@ -380,18 +381,20 @@ test("custom table values persist with correct types and enforce business owners
       createdBy:ownerId
     }).lean();
     const bulkPaymentRecord=orderAfterBulkPayment.payments.at(-1);
+    const bulkPaymentCustomFields=plainMap(bulkPaymentRecord.customFields);
     assert.equal(bulkPaymentRecord.method,"Bank");
-    assert.equal(bulkPaymentRecord.customFields.collectionShift,"Evening");
-    assert.equal(bulkPaymentRecord.customFields.collectionEstimate,0.02);
-    assert.equal(bulkPaymentRecord.customFields.collector,String(ownerClientId));
-    assert.equal(bulkPaymentRecord.customFields.collectorPhone,"9999999999");
+    assert.equal(bulkPaymentCustomFields.collectionShift,"Evening");
+    assert.equal(bulkPaymentCustomFields.collectionEstimate,0.02);
+    assert.equal(bulkPaymentCustomFields.collector,String(ownerClientId));
+    assert.equal(bulkPaymentCustomFields.collectorPhone,"9999999999");
     const bulkPaymentLog=await PaymentLog.findOne({
       userId:ownerId,
       reference:"META-BULK-1"
     }).lean();
     assert.ok(bulkPaymentLog);
-    assert.equal(bulkPaymentLog.customFields.collectionShift,"Evening");
-    assert.equal(bulkPaymentLog.customFields.collectionEstimate,0.02);
+    const bulkLogCustomFields=plainMap(bulkPaymentLog.customFields);
+    assert.equal(bulkLogCustomFields.collectionShift,"Evening");
+    assert.equal(bulkLogCustomFields.collectionEstimate,0.02);
 
     await FormConfiguration.create([
       {

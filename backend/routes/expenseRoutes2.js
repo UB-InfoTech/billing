@@ -13,6 +13,15 @@ const {normalizeExpenseFinancials}=require("../utils/expenseFinancials");
 const {getSafeUploadExtension,isAllowedUploadType}=require("../utils/uploadFileTypes");
 const {getExpenseReceiptFilename,isExpenseReceiptOwnedBy}=require("../utils/expenseReceiptAccess");
 const {escapeRegex}=require("../utils/escapeRegex");
+const {
+  loadConfiguredFormFields,
+  calculateConfiguredCustomFields,
+  hasConfiguredCustomCalculations
+}=require("../utils/customFieldCalculations");
+const {
+  prepareConfiguredFormValues,
+  validateConfiguredFormValues
+}=require("../utils/configuredFormValidation");
 const router=express.Router();
 const uploadDir=path.join(__dirname,"../public/uploads/expenses");
 fs.mkdirSync(uploadDir,{recursive:true});
@@ -39,6 +48,76 @@ const upload=multer({
 });
 const owner=req=>req.user.id;
 const round2=v=>Math.round((Number(v||0)+Number.EPSILON)*100)/100;
+
+const EXPENSE_FORM_KEYS=[
+  "title","description","amount","category","subCategory","tags","paymentMethod",
+  "currency","vendor","gstNo","taxDeductible","taxRate","clientId","orderId",
+  "date","isRecurring","recurringInterval","recurringEndDate","notes",
+  "attachments","receipt"
+];
+
+function cleanCustomFields(value,current={}){
+  let parsed=value;
+  if(typeof parsed==="string"){
+    try{parsed=JSON.parse(parsed||"{}");}
+    catch{throw referenceError("Custom expense fields are not valid.");}
+  }
+  if(parsed===undefined)return {...current};
+  if(parsed instanceof Map||parsed?.$isMongooseMap===true
+    ||(typeof parsed?.entries==="function"&&typeof parsed?.get==="function")){
+    parsed=Object.fromEntries(parsed.entries());
+  }
+  if(!parsed||typeof parsed!=="object"||Array.isArray(parsed)){
+    throw referenceError("Custom expense fields are not valid.");
+  }
+  const entries=Object.entries(parsed);
+  if(entries.length>100)throw referenceError("An expense can have no more than 100 custom fields.");
+  const result={...current};
+  for(const [rawKey,fieldValue] of entries){
+    const key=String(rawKey).trim();
+    if(!key||key.length>100)throw referenceError("A custom expense field name is not valid.");
+    result[key]=fieldValue;
+  }
+  return result;
+}
+
+function plainCustomFields(value){
+  if(value instanceof Map||value?.$isMongooseMap===true
+    ||(typeof value?.entries==="function"&&typeof value?.get==="function")){
+    return Object.fromEntries(value.entries());
+  }
+  return value&&typeof value==="object"&&!Array.isArray(value)?{...value}:{};
+}
+
+function normalizeExpenseTags(value){
+  if(value===undefined||value===null||value==="")return [];
+  const values=Array.isArray(value)?value:String(value).split(",");
+  if(values.some(item=>item&&typeof item==="object"))throw referenceError("Enter valid expense tags.");
+  return [...new Set(values.map(item=>String(item??"").trim()).filter(Boolean))].slice(0,50);
+}
+
+function valuesForExpenseValidation(values){
+  return {
+    ...(values||{}),
+    tags:Array.isArray(values?.tags)?values.tags.join(", "):values?.tags??""
+  };
+}
+
+function applyValidatedExpenseValues(expense,values,customFields,fields){
+  for(const field of fields||[]){
+    if(field?.custom||!field?.key)continue;
+    if(Object.prototype.hasOwnProperty.call(values,field.key)){
+      expense.set(field.key,values[field.key]);
+    }
+  }
+  expense.customFields=customFields;
+}
+
+function validateRecurringExpense(values){
+  if(values?.isRecurring&&!values?.recurringInterval){
+    throw referenceError("Choose a recurring interval.");
+  }
+}
 
 async function discardExpenseUpload(file){
   if(!file?.path)return;
@@ -243,22 +322,67 @@ router.get("/:id",auth,async(req,res)=>{
 
 router.post("/",auth,async(req,res)=>{
   try{
-    const body=req.body||{};
-    if(!body.description||!String(body.description).trim()){
-      return res.status(400).json({message:"Description is required."});
-    }
-    await validateReferenceOwnership(body,owner(req));
-    body.receipt=await validateExpenseReceiptReference(body.receipt,owner(req));
-    const financials=normalizeExpenseFinancials(body.amount,body.taxRate);
+    const input={};
+    EXPENSE_FORM_KEYS.forEach(key=>{
+      if(req.body?.[key]!==undefined)input[key]=req.body[key];
+    });
+    const configuredFields=await loadConfiguredFormFields(owner(req),"expenses.form");
+    const incomingCustomFields=cleanCustomFields(req.body?.customFields);
+    const prepared=await prepareConfiguredFormValues({
+      ownerId:owner(req),
+      fields:configuredFields,
+      values:input,
+      customFields:incomingCustomFields,
+      isNewRecord:true
+    });
+    const values={...prepared.values};
+    values.tags=normalizeExpenseTags(values.tags);
+    values.clientId=String(values.clientId??"").trim()||null;
+    values.orderId=String(values.orderId??"").trim()||null;
+    values.recurringInterval=values.isRecurring?values.recurringInterval||null:null;
+    values.recurringEndDate=values.isRecurring?values.recurringEndDate||null:null;
+
+    await validateReferenceOwnership(values,owner(req));
+    values.receipt=await validateExpenseReceiptReference(values.receipt,owner(req));
+    validateRecurringExpense(values);
+
     const expense=new Expense({
-      ...body,
-      ...financials,
-      title:String(body.title||body.description||"").trim(),
+      ...values,
+      ...normalizeExpenseFinancials(values.amount,values.taxRate),
+      title:String(values.title||values.description||"").trim(),
       createdBy:owner(req),
       updatedBy:owner(req),
-      user:owner(req)
+      user:owner(req),
+      customFields:prepared.customFields
     });
     await applyWorkflows({resource:"expenses",event:"record_created",doc:expense,createdBy:owner(req)});
+    Object.assign(expense,normalizeExpenseFinancials(expense.amount,expense.taxRate));
+    if(hasConfiguredCustomCalculations(configuredFields)){
+      expense.customFields=calculateConfiguredCustomFields(
+        configuredFields,
+        expense.toObject({depopulate:true}),
+        plainCustomFields(expense.customFields)
+      );
+    }
+    const validationValues=valuesForExpenseValidation(expense.toObject({depopulate:true}));
+    const validated=validateConfiguredFormValues({
+      fields:configuredFields,
+      values:validationValues,
+      customFields:plainCustomFields(expense.customFields),
+      validateAllValues:true
+    });
+    applyValidatedExpenseValues(expense,validated.values,validated.customFields,configuredFields);
+    expense.tags=normalizeExpenseTags(validated.values.tags);
+    expense.clientId=String(expense.clientId??"").trim()||null;
+    expense.orderId=String(expense.orderId??"").trim()||null;
+    expense.recurringInterval=expense.isRecurring?expense.recurringInterval||null:null;
+    expense.recurringEndDate=expense.isRecurring?expense.recurringEndDate||null:null;
+    await validateReferenceOwnership({
+      clientId:expense.clientId,
+      orderId:expense.orderId
+    },owner(req));
+    validateRecurringExpense(expense);
+
     Object.assign(expense,normalizeExpenseFinancials(expense.amount,expense.taxRate));
     await expense.save();
     res.status(201).json(expense);
@@ -275,27 +399,75 @@ router.put("/:id",auth,async(req,res)=>{
     const expense=await Expense.findOne({_id:req.params.id,createdBy:owner(req)});
     if(!expense)return res.status(404).json({message:"Expense not found."});
 
-    const body=req.body||{};
-    await validateReferenceOwnership(
-      {clientId:body.clientId,orderId:body.orderId},
-      owner(req)
-    );
-    if(body.receipt!==undefined){
-      body.receipt=await validateExpenseReceiptReference(body.receipt,owner(req),expense.receipt);
+    const originalValues=expense.toObject({depopulate:true});
+    const originalCustomFields=plainCustomFields(expense.customFields);
+    const values={...originalValues};
+    EXPENSE_FORM_KEYS.forEach(key=>{
+      if(req.body?.[key]!==undefined)values[key]=req.body[key];
+    });
+    const nextCustomFields=cleanCustomFields(req.body?.customFields,originalCustomFields);
+    const configuredFields=await loadConfiguredFormFields(owner(req),"expenses.form");
+    const prepared=await prepareConfiguredFormValues({
+      ownerId:owner(req),
+      fields:configuredFields,
+      values,
+      customFields:nextCustomFields,
+      existingValues:originalValues,
+      existingCustomFields:originalCustomFields,
+      onlyChangedLookups:true
+    });
+    const preparedValues={...prepared.values};
+    preparedValues.tags=normalizeExpenseTags(preparedValues.tags);
+    preparedValues.clientId=String(preparedValues.clientId??"").trim()||null;
+    preparedValues.orderId=String(preparedValues.orderId??"").trim()||null;
+    preparedValues.recurringInterval=preparedValues.isRecurring?preparedValues.recurringInterval||null:null;
+    preparedValues.recurringEndDate=preparedValues.isRecurring?preparedValues.recurringEndDate||null:null;
+    if(req.body?.receipt!==undefined){
+      preparedValues.receipt=await validateExpenseReceiptReference(
+        preparedValues.receipt,
+        owner(req),
+        expense.receipt
+      );
     }
-    const allowed=[
-      "title","description","amount","category","subCategory","tags",
-      "paymentMethod","currency","vendor","gstNo","taxDeductible","taxRate",
-      "clientId","orderId","date","isRecurring","recurringInterval",
-      "recurringEndDate","notes","attachments","receipt","customFields"
-    ];
-    for(const key of allowed){
-      if(body[key]!==undefined)expense[key]=body[key];
-    }
+    await validateReferenceOwnership(preparedValues,owner(req));
+    validateRecurringExpense(preparedValues);
 
-    Object.assign(expense,normalizeExpenseFinancials(expense.amount,expense.taxRate));
+    EXPENSE_FORM_KEYS.forEach(key=>{
+      if(Object.prototype.hasOwnProperty.call(preparedValues,key)){
+        expense.set(key,preparedValues[key]);
+      }
+    });
+    expense.customFields=prepared.customFields;
     expense.updatedBy=owner(req);
+    Object.assign(expense,normalizeExpenseFinancials(expense.amount,expense.taxRate));
     await applyWorkflows({resource:"expenses",event:"record_updated",doc:expense,createdBy:owner(req)});
+    Object.assign(expense,normalizeExpenseFinancials(expense.amount,expense.taxRate));
+    if(hasConfiguredCustomCalculations(configuredFields)){
+      expense.customFields=calculateConfiguredCustomFields(
+        configuredFields,
+        expense.toObject({depopulate:true}),
+        plainCustomFields(expense.customFields)
+      );
+    }
+    const validationValues=valuesForExpenseValidation(expense.toObject({depopulate:true}));
+    const validated=validateConfiguredFormValues({
+      fields:configuredFields,
+      values:validationValues,
+      customFields:plainCustomFields(expense.customFields),
+      existingValues:originalValues,
+      existingCustomFields:originalCustomFields
+    });
+    applyValidatedExpenseValues(expense,validated.values,validated.customFields,configuredFields);
+    expense.tags=normalizeExpenseTags(validated.values.tags);
+    expense.clientId=String(expense.clientId??"").trim()||null;
+    expense.orderId=String(expense.orderId??"").trim()||null;
+    expense.recurringInterval=expense.isRecurring?expense.recurringInterval||null:null;
+    expense.recurringEndDate=expense.isRecurring?expense.recurringEndDate||null:null;
+    await validateReferenceOwnership({
+      clientId:expense.clientId,
+      orderId:expense.orderId
+    },owner(req));
+    validateRecurringExpense(expense);
     Object.assign(expense,normalizeExpenseFinancials(expense.amount,expense.taxRate));
     await expense.save();
     res.json(expense);

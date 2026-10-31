@@ -5,6 +5,11 @@ import { ToastContainer, toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import * as Yup from 'yup';
 import DynamicTable from "../components/DynamicTable";
+import FormConfigurator from "../components/FormConfigurator";
+import ConfiguredField from "../components/ConfiguredField";
+import {PAYMENT_FORM_FIELDS} from "../config/noCodeCatalog";
+import {applyAutoFill,applyFormulas,buildConfiguredDefaults,getFieldState,syncConfiguredCustomFields,useFormConfiguration} from "../hooks/useFormConfiguration";
+import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 
 // Configuration constants
 const API_CONFIG = {
@@ -223,7 +228,9 @@ const PaymentForm = React.memo(({
   submitting,
   onToggleModal,
   showModal,
-  validationErrors
+  validationErrors,
+  customFieldNodes,
+  onCustomize
 }) => (
   <div className="card p-3 mb-3 shadow-sm">
     <div className="row">
@@ -327,6 +334,16 @@ const PaymentForm = React.memo(({
         </button>
       </div>
     </div>
+
+    <div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+      <span className="small text-muted">Optional details are saved with every invoice allocation in this batch.</span>
+      <button type="button" className="btn btn-sm btn-light border" onClick={onCustomize}>
+        <i className="bi bi-sliders me-1"></i>Customize payment form
+      </button>
+    </div>
+    {customFieldNodes&&customFieldNodes.length>0&&(
+      <div className="row g-3 mt-1">{customFieldNodes}</div>
+    )}
 
     <div className="row d-flex justify-content-between align-items-center">
       <div className="col-md-2">

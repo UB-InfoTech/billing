@@ -9,6 +9,7 @@ const Client=require("../models/Client");
 const Product=require("../models/Product");
 const Expense=require("../models/Expense");
 const CalendarEvent=require("../models/Calendar");
+const Profile=require("../models/Profile");
 const TableConfiguration=require("../models/TableConfiguration");
 const TableCustomValue=require("../models/TableCustomValue");
 const FormConfiguration=require("../models/FormConfiguration");
@@ -27,7 +28,7 @@ test("custom table values persist with correct types and enforce business owners
 
   try{
     await mongoose.connect(mongoUri,{serverSelectionTimeoutMS:10000});
-    await Promise.all([Client.init(),Product.init(),Expense.init(),CalendarEvent.init(),TableConfiguration.init(),TableCustomValue.init(),FormConfiguration.init()]);
+    await Promise.all([Client.init(),Product.init(),Expense.init(),CalendarEvent.init(),Profile.init(),TableConfiguration.init(),TableCustomValue.init(),FormConfiguration.init()]);
 
     ownerId=new mongoose.Types.ObjectId();
     otherOwnerId=new mongoose.Types.ObjectId();
@@ -300,6 +301,24 @@ test("custom table values persist with correct types and enforce business owners
       },
       {
         createdBy:ownerId,
+        formKey:"profile.form",
+        fields:[
+          {key:"companyName",label:"Company name",fieldType:"text",required:true},
+          {key:"gstin",label:"GSTIN",fieldType:"text",conditions:[
+            {action:"show",fieldKey:"gstRegistered",operator:"equals",value:"true"},
+            {action:"require",fieldKey:"gstRegistered",operator:"equals",value:"true"}
+          ]},
+          {key:"billNoSequence",label:"Next bill number",fieldType:"number",validation:{min:0}},
+          {key:"eWayPassword",label:"E-Way Bill password",fieldType:"text"},
+          {key:"gstRegistered",label:"GST registered",custom:true,fieldType:"boolean"},
+          {key:"users",label:"Users",custom:true,fieldType:"number"},
+          {key:"annualRate",label:"Annual rate",custom:true,fieldType:"currency"},
+          {key:"annualValue",label:"Annual value",custom:true,fieldType:"currency",formula:"users * annualRate",editable:false},
+          {key:"protectedNote",label:"Protected note",custom:true,fieldType:"text",editable:false,defaultValue:"Profile-controlled note"}
+        ]
+      },
+      {
+        createdBy:ownerId,
         formKey:"expenses.form",
         fields:[
           {key:"date",label:"Date",fieldType:"date",required:true},
@@ -544,6 +563,74 @@ test("custom table values persist with correct types and enforce business owners
     assert.equal(String(calendarEventAfterRejectedUpdate.customFields.customer),String(ownerClientId));
     assert.equal(calendarEventAfterRejectedUpdate.customFields.customerPhone,"9999999999");
 
+    const missingConditionalProfileGst=await request("/profile",{
+      method:"PUT",
+      body:{
+        companyName:"GST registered business",
+        customFields:{gstRegistered:true}
+      }
+    });
+    assert.equal(missingConditionalProfileGst.status,400);
+    assert.match(missingConditionalProfileGst.data.message,/GSTIN/i);
+
+    const invalidInvoiceSequence=await request("/profile",{
+      method:"PUT",
+      body:{companyName:"Invalid sequence business",billNoSequence:"1.5"}
+    });
+    assert.equal(invalidInvoiceSequence.status,400);
+    assert.match(invalidInvoiceSequence.data.message,/whole number/i);
+
+    const savedProfile=await request("/profile",{
+      method:"PUT",
+      body:{
+        companyName:"Configured company",
+        gstin:"24ABCDE1234F1Z5",
+        billNoSequence:"12",
+        eWayUserName:"integration-user",
+        eWayPassword:"integration-secret-password",
+        customFields:{
+          gstRegistered:true,
+          users:3,
+          annualRate:250,
+          annualValue:999,
+          protectedNote:"Forged profile note"
+        },
+        createdBy:String(otherOwnerId)
+      }
+    });
+    assert.equal(savedProfile.status,200,JSON.stringify(savedProfile.data));
+    assert.equal(savedProfile.data.companyName,"Configured company");
+    assert.equal(savedProfile.data.billNoSequence,12);
+    assert.equal(savedProfile.data.customFields.annualValue,750);
+    assert.equal(savedProfile.data.customFields.protectedNote,"Profile-controlled note");
+    assert.equal(savedProfile.data.createdBy,String(ownerId));
+    assert.equal(savedProfile.data.eWayPassword,"");
+    assert.equal(savedProfile.data.hasEWayPassword,true);
+    assert.equal(JSON.stringify(savedProfile.data).includes("integration-secret-password"),false);
+
+    const updatedProfile=await request("/profile",{
+      method:"PUT",
+      body:{
+        companyName:"Configured company updated",
+        billNoSequence:13,
+        eWayPassword:"",
+        customFields:{
+          users:4,
+          annualRate:100,
+          annualValue:999,
+          protectedNote:"Updated forged profile note"
+        }
+      }
+    });
+    assert.equal(updatedProfile.status,200,JSON.stringify(updatedProfile.data));
+    assert.equal(updatedProfile.data.companyName,"Configured company updated");
+    assert.equal(updatedProfile.data.billNoSequence,13);
+    assert.equal(updatedProfile.data.customFields.annualValue,400);
+    assert.equal(updatedProfile.data.customFields.protectedNote,"Profile-controlled note");
+    assert.equal(updatedProfile.data.hasEWayPassword,true);
+    const storedProfile=await Profile.findOne({createdBy:String(ownerId)}).lean();
+    assert.equal(storedProfile.eWayPassword,"integration-secret-password","An empty update must keep the saved E-Way Bill password.");
+
     const tableKey="no-code-integration";
     const configured=await request(`/table-config/${tableKey}`,{
       method:"PUT",
@@ -633,7 +720,8 @@ test("custom table values persist with correct types and enforce business owners
           Client.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
           Product.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
           Expense.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
-          CalendarEvent.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}})
+          CalendarEvent.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
+          Profile.deleteMany({createdBy:{$in:[String(ownerId),String(otherOwnerId)]}})
         ]);
       }
       await mongoose.disconnect();

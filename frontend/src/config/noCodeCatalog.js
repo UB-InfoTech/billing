@@ -192,11 +192,11 @@ export const TABLE_CATALOG=[
   {key:"calendar.events",label:"Calendar events",page:"/calendar",description:"Choose the columns shown in the event list and add custom columns."},
   {key:"sales-analytics.orders",label:"Report order list",page:"/analytics",description:"Choose the columns shown in the report order list and add custom columns."},
   {key:"sales-analytics.state-cities",label:"State city list",page:"/analytics",query:"state-table",description:"Choose the columns shown when you open a state on the sales map."},
-  {key:"sales-analytics.period-orders",label:"Report period bill details",page:"/analytics",description:"Choose the columns shown when opening a reporting period."},
-  {key:"credit-notes.list",label:"Credit Notes list",page:"/credit-notes",description:"Choose the Credit Note list columns and keep the important reference details visible."},
-  {key:"credit-notes.items",label:"Credit Note item details",page:"/credit-notes",description:"Arrange the item details shown when preparing a Credit Note."},
-  {key:"bulk-payments.selection",label:"Bulk payment invoice selection",page:"/bulk-payment",description:"Choose the invoice details shown when selecting bills for a bulk payment."},
-  {key:"bulk-payments.allocation-preview",label:"Bulk payment allocation preview",page:"/bulk-payment",description:"Arrange the allocation summary columns before confirming a bulk payment."},
+  {key:"sales-analytics.period-orders",label:"Report period bill details",page:"/analytics",query:"period-orders",description:"Choose the columns shown when opening a reporting period."},
+  {key:"credit-notes.list",label:"Credit Notes list",page:"/credit-notes",query:"list",description:"Choose the Credit Note list columns and keep the important reference details visible."},
+  {key:"credit-notes.items",label:"Credit Note item details",page:"/credit-notes",query:"items",description:"Arrange the item details shown when preparing a Credit Note."},
+  {key:"bulk-payments.selection",label:"Bulk payment invoice selection",page:"/bulk-payment",query:"selection",description:"Choose the invoice details shown when selecting bills for a bulk payment."},
+  {key:"bulk-payments.allocation-preview",label:"Bulk payment allocation preview",page:"/bulk-payment",query:"allocation-preview",description:"Arrange the allocation summary columns before confirming a bulk payment."},
 ];
 
 export const WORKFLOW_RESOURCES=[

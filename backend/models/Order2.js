@@ -64,7 +64,8 @@ const paymentSchema=new mongoose.Schema({
   createdAt:{type:Date,default:Date.now},
   method:{type:String,enum:PAYMENT_METHODS,default:"Cash"},
   amountReference:{type:String,trim:true,default:""},
-  processedBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",default:null}
+  processedBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",default:null},
+  customFields:{type:Map,of:mongoose.Schema.Types.Mixed,default:{}}
 },{_id:false});
 
 const invoiceFinancialSnapshotSchema=new mongoose.Schema({
@@ -91,7 +92,8 @@ const paymentAuditSnapshotSchema=new mongoose.Schema({
   paymentDate:{type:Date,default:null},
   method:{type:String,enum:PAYMENT_METHODS,default:"Cash"},
   amountReference:{type:String,trim:true,default:""},
-  processedBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",default:null}
+  processedBy:{type:mongoose.Schema.Types.ObjectId,ref:"User",default:null},
+  customFields:{type:Map,of:mongoose.Schema.Types.Mixed,default:undefined}
 },{_id:false});
 
 const paymentHistorySchema=new mongoose.Schema({

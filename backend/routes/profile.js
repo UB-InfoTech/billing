@@ -4,6 +4,75 @@ const Profile = require('../models/Profile');
 const auth = require('../middleware/auth');
 const {toPublicProfile}=require('../utils/publicProfile');
 const {normalizeInvoiceSequence}=require("../utils/invoiceSequence");
+const {
+  loadConfiguredFormFields,
+  calculateConfiguredCustomFields,
+  hasConfiguredCustomCalculations
+}=require("../utils/customFieldCalculations");
+const {
+  prepareConfiguredFormValues,
+  validateConfiguredFormValues
+}=require("../utils/configuredFormValidation");
+const PROFILE_FORM_KEYS=[
+  "headerTitle","companyName","companyAddress","phoneNumber1","phoneNumber2",
+  "gstin","pan","bankName","accountNo","branchName","ifsc","pinCode","stateCode",
+  "billNoPrefix","billNoSequence","billNoSuffix","eWayUserName","eWayPassword"
+];
+
+const profileError=message=>{
+  const error=new Error(message);
+  error.status=400;
+  return error;
+};
+
+const plainCustomFields=value=>{
+  if(value instanceof Map||value?.$isMongooseMap===true
+    ||(typeof value?.entries==="function"&&typeof value?.get==="function")){
+    return Object.fromEntries(value.entries());
+  }
+  return value&&typeof value==="object"&&!Array.isArray(value)?{...value}:{};
+};
+
+const cleanCustomFields=(value,current={})=>{
+  let parsed=value;
+  if(typeof parsed==="string"){
+    try{parsed=JSON.parse(parsed||"{}");}
+    catch{throw profileError("Custom company fields are not valid.");}
+  }
+  if(parsed===undefined)return {...current};
+  if(parsed instanceof Map||parsed?.$isMongooseMap===true
+    ||(typeof parsed?.entries==="function"&&typeof parsed?.get==="function")){
+    parsed=Object.fromEntries(parsed.entries());
+  }
+  if(!parsed||typeof parsed!=="object"||Array.isArray(parsed)){
+    throw profileError("Custom company fields are not valid.");
+  }
+  const entries=Object.entries(parsed);
+  if(entries.length>100)throw profileError("A company profile can have no more than 100 custom fields.");
+  const result={...current};
+  for(const [rawKey,value] of entries){
+    const key=String(rawKey).trim();
+    if(!key||key.length>100||["__proto__","prototype","constructor"].includes(key)){
+      throw profileError("A custom company field name is not valid.");
+    }
+    result[key]=value;
+  }
+  return result;
+};
+
+const applyProfileValues=(profile,values,customFields,fields)=>{
+  for(const field of fields||[]){
+    if(field?.custom||!field?.key||!PROFILE_FORM_KEYS.includes(field.key))continue;
+    if(Object.prototype.hasOwnProperty.call(values,field.key)){
+      profile.set(field.key,values[field.key]);
+    }
+  }
+  for(const key of PROFILE_FORM_KEYS){
+    if(Object.prototype.hasOwnProperty.call(values,key))profile.set(key,values[key]);
+  }
+  profile.customFields=customFields;
+};
+
 
 // Get profile
 router.get('/', auth, async (req, res) => {
@@ -68,38 +137,71 @@ router.get('/', auth, async (req, res) => {
 // Update profile
 router.put('/', auth, async (req, res) => {
   try {
-    const allowedFields=[
-      "headerTitle","companyName","companyAddress","phoneNumber1","phoneNumber2",
-      "gstin","pan","bankName","accountNo","branchName","ifsc","pinCode","stateCode",
-      "billNoPrefix","billNoSequence","billNoSuffix","eWayUserName","eWayPassword","customFields"
-    ];
     const nextBody={};
-    for(const key of allowedFields){
+    for(const key of PROFILE_FORM_KEYS.concat("customFields")){
       if(req.body?.[key]===undefined)continue;
-      // An empty password means "leave the saved integration password alone".
-      // The password itself is never sent back in profile API responses.
       if(key==="eWayPassword"&&(req.body[key]===null||String(req.body[key])===""))continue;
       nextBody[key]=req.body[key];
     }
-    if(nextBody.billNoSequence!==undefined){
-      nextBody.billNoSequence=normalizeInvoiceSequence(nextBody.billNoSequence);
-    }
-    if(nextBody.customFields&&typeof nextBody.customFields==="object"&&!Array.isArray(nextBody.customFields)){
-      nextBody.customFields=Object.fromEntries(
-        Object.entries(nextBody.customFields).slice(0,100).map(([key,value])=>[String(key).slice(0,100),value])
-      );
-    }else{
-      delete nextBody.customFields;
+
+    let profile=await Profile.findOne({createdBy:req.user.id});
+    const isNewRecord=!profile;
+    if(!profile){
+      profile=new Profile({
+        createdBy:req.user.id,
+        billNoPrefix:"INV-",
+        billNoSequence:1
+      });
     }
 
-    const profile = await Profile.findOneAndUpdate(
-      { createdBy: req.user.id },
-      {$set:nextBody},
-      {new:true,upsert:true,setDefaultsOnInsert:true,runValidators:true}
-    ).lean();
+    const originalValues=profile.toObject({depopulate:true});
+    const originalCustomFields=plainCustomFields(profile.customFields);
+    const values={...originalValues};
+    PROFILE_FORM_KEYS.forEach(key=>{
+      if(nextBody[key]!==undefined)values[key]=nextBody[key];
+    });
+    if(values.billNoSequence!==undefined&&values.billNoSequence!==null&&values.billNoSequence!==""){
+      values.billNoSequence=normalizeInvoiceSequence(values.billNoSequence);
+    }
+
+    const configuredFields=await loadConfiguredFormFields(req.user.id,"profile.form");
+    const prepared=await prepareConfiguredFormValues({
+      ownerId:req.user.id,
+      fields:configuredFields,
+      values,
+      customFields:cleanCustomFields(nextBody.customFields,originalCustomFields),
+      existingValues:originalValues,
+      existingCustomFields:originalCustomFields,
+      isNewRecord
+    });
+
+    const nextValues={...prepared.values};
+    if(nextValues.billNoSequence!==undefined&&nextValues.billNoSequence!==null&&nextValues.billNoSequence!==""){
+      nextValues.billNoSequence=normalizeInvoiceSequence(nextValues.billNoSequence);
+    }
+
+    let nextCustomFields=prepared.customFields;
+    if(hasConfiguredCustomCalculations(configuredFields)){
+      nextCustomFields=calculateConfiguredCustomFields(
+        configuredFields,
+        nextValues,
+        nextCustomFields
+      );
+    }
+    const validated=validateConfiguredFormValues({
+      fields:configuredFields,
+      values:nextValues,
+      customFields:nextCustomFields,
+      existingValues:originalValues,
+      existingCustomFields:originalCustomFields,
+      validateAllValues:false
+    });
+    applyProfileValues(profile,validated.values,validated.customFields,configuredFields);
+    profile.createdBy=String(req.user.id);
+    await profile.save();
     res.json(toPublicProfile(profile));
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    res.status(err.status||400).json({ message: err.message });
   }
 });
 

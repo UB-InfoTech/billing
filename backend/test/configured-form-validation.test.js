@@ -125,3 +125,63 @@ test("server validation does not require a field hidden or disabled by its rules
     validateAllValues:true
   }),/Please complete “GST Number”/i);
 });
+
+
+test("server marks fields read-only when a business condition is met",()=>{
+  const field={
+    key:"completionNote",
+    label:"Completion note",
+    custom:true,
+    fieldType:"text",
+    conditions:[{action:"readonly",fieldKey:"status",operator:"equals",value:"Completed"}]
+  };
+  assert.equal(getConfiguredFieldState(field,{status:"Pending"}).readOnly,false);
+  assert.equal(getConfiguredFieldState(field,{status:"Completed"}).readOnly,true);
+});
+
+test("server preserves saved values when a field is conditionally read-only or hidden",()=>{
+  const fields=[
+    {
+      key:"completionNote",
+      label:"Completion note",
+      custom:true,
+      fieldType:"text",
+      conditions:[{action:"readonly",fieldKey:"status",operator:"equals",value:"Completed"}]
+    },
+    {
+      key:"personalNote",
+      label:"Personal note",
+      custom:true,
+      fieldType:"text",
+      conditions:[{action:"hide",fieldKey:"customerType",operator:"equals",value:"Business"}]
+    }
+  ];
+  const preserved=require("../utils/configuredFormValidation").preserveNonEditableFields({
+    fields,
+    values:{status:"Completed",customerType:"Business"},
+    customFields:{completionNote:"Forged completion note",personalNote:"Forged hidden note"},
+    existingValues:{status:"Completed",customerType:"Business"},
+    existingCustomFields:{completionNote:"Manager approved",personalNote:"Keep historical note"}
+  });
+  assert.equal(preserved.customFields.completionNote,"Manager approved");
+  assert.equal(preserved.customFields.personalNote,"Keep historical note");
+});
+
+test("server preserves a non-editable field's configured default on new records",()=>{
+  const fields=[{
+    key:"origin",
+    label:"Origin",
+    custom:true,
+    fieldType:"text",
+    editable:false,
+    defaultValue:"Created in billing"
+  }];
+  const preserved=require("../utils/configuredFormValidation").preserveNonEditableFields({
+    fields,
+    values:{},
+    customFields:{origin:"Forged origin"},
+    existingValues:{},
+    existingCustomFields:{}
+  });
+  assert.equal(preserved.customFields.origin,"Created in billing");
+});

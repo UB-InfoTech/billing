@@ -50,12 +50,12 @@ const cleanCustomFields=(value,current={})=>{
     throw profileError("Custom organization fields are not valid.");
   }
   const entries=Object.entries(parsed);
-  if(entries.length>100)throw profileError("A organization profile can have no more than 100 custom fields.");
+  if(entries.length>100)throw profileError("An organization profile can have no more than 100 custom fields.");
   const result={...current};
   for(const [rawKey,value] of entries){
     const key=String(rawKey).trim();
     if(!key||key.length>100||["__proto__","prototype","constructor"].includes(key)){
-      throw profileError("A custom company field name is not valid.");
+      throw profileError("A custom organization field name is not valid.");
     }
     result[key]=value;
   }
@@ -81,7 +81,7 @@ router.get('/', auth, async (req, res) => {
   try {
     let profile = await Profile.findOne({ createdBy: req.user.id });
     if (!profile) {
-      // New accounts start with blank company details so demo information is
+      // New accounts start with blank organization details so demo information is
       // never accidentally printed on a real customer's invoice.
       profile = await Profile.create({
         headerTitle: '',
@@ -178,6 +178,22 @@ router.put('/', auth, async (req, res) => {
     });
     if(values.billNoSequence!==undefined&&values.billNoSequence!==null&&values.billNoSequence!==""){
       values.billNoSequence=normalizeInvoiceSequence(values.billNoSequence);
+    }
+    const emailAddress=String(values.emailAddress||"").trim();
+    if(emailAddress&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailAddress)){
+      throw profileError("Enter a valid organization email address.");
+    }
+    const website=String(values.website||"").trim();
+    if(website){
+      let parsedWebsite;
+      try{
+        parsedWebsite=new URL(/^https?:\/\//i.test(website)?website:`https://${website}`);
+      }catch{
+        throw profileError("Enter a valid organization website, such as example.com.");
+      }
+      if(!["http:","https:"].includes(parsedWebsite.protocol)||!parsedWebsite.hostname.includes(".")){
+        throw profileError("Enter a valid organization website, such as example.com.");
+      }
     }
 
     const configuredFields=await loadConfiguredFormFields(req.user.id,"profile.form");

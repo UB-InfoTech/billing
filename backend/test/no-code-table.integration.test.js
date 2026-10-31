@@ -142,6 +142,7 @@ test("custom table values persist with correct types and enforce business owners
       body:{
         customFields:{packingCount:4,packingRate:5,packingCharge:999},
         subOrders:[{
+          _id:createdOrder.data.order.subOrders[0]._id,
           orderName:"No-code integration item",
           quantity:2,
           cut:0,

@@ -16,7 +16,7 @@ const {loadConfiguredFormFields,calculateConfiguredCustomFields}=require("../uti
 const router=express.Router();
 const owner=req=>req.user.id;
 const cleanCustomFields=value=>{
-  if(value instanceof Map)return Object.fromEntries([...value.entries()].slice(0,100).map(([key,val])=>[String(key).slice(0,100),val]));
+  if(value instanceof Map||value?.$isMongooseMap===true||(typeof value?.entries==="function"&&typeof value?.get==="function"))return Object.fromEntries([...value.entries()].slice(0,100).map(([key,val])=>[String(key).slice(0,100),val]));
   if(!value||typeof value!=="object"||Array.isArray(value))return {};
   return Object.fromEntries(Object.entries(value).slice(0,100).map(([key,val])=>[String(key).slice(0,100),val]));
 };

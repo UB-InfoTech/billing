@@ -228,10 +228,6 @@ router.post("/orders/create",auth,async(req,res)=>{
 
     // Recalculate only user-created fields on the server. Built-in invoice and
     // item financial calculations remain governed by Order.calculateFinancials.
-    const [orderFields,itemFields]=await Promise.all([
-      loadConfiguredFormFields(userId(req),"orders.form"),
-      loadConfiguredFormFields(userId(req),"orders.items")
-    ]);
     if(hasConfiguredCustomCalculations(orderFields)){
       body.customFields=calculateConfiguredCustomFields(
         orderFields,
@@ -331,6 +327,11 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
         if(!selectedClient)return res.status(400).json({message:"Selected customer was not found in your account."});
       }
     }
+    const [orderFields,itemFields]=await Promise.all([
+      loadConfiguredFormFields(userId(req),"orders.form"),
+      loadConfiguredFormFields(userId(req),"orders.items")
+    ]);
+    const calculateItemFields=hasConfiguredCustomCalculations(itemFields);
     const allowed=["challanNumber","lrNo","orderDate","subOrders","Address","State","City","pinCode","stateCode","gstNumber","companyName","status","paymentTerms","taxPercentage","discountRate","note","customFields"];
     for(const key of allowed){
       if(req.body?.[key]===undefined)continue;
@@ -339,8 +340,19 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
           ...cleanCustomFields(order.customFields),
           ...cleanCustomFields(req.body.customFields)
         };
+      }else if(key==="subOrders"&&calculateItemFields){
+        // Calculate against plain request data before attaching the array to
+        // the Mongoose document; this keeps its normal single array update.
+        order.subOrders=req.body.subOrders.map(item=>({
+          ...item,
+          customFields:calculateConfiguredCustomFields(
+            itemFields,
+            item,
+            cleanCustomFields(item.customFields)
+          )
+        }));
       }else{
-        order[key]=key==="customFields"?cleanCustomFields(req.body[key]):req.body[key];
+        order[key]=req.body[key];
       }
     }
     if(clientIdWasProvided){
@@ -369,17 +381,6 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
         cleanCustomFields(order.customFields)
       );
     }
-    if(hasConfiguredCustomCalculations(itemFields)){
-      order.subOrders.forEach(item=>{
-        const itemValues=item.toObject({depopulate:true});
-        item.customFields=calculateConfiguredCustomFields(
-          itemFields,
-          itemValues,
-          cleanCustomFields(item.customFields)
-        );
-      });
-    }
-
     await applyWorkflows({resource:"orders",event:"record_updated",doc:order,createdBy:userId(req)});
     if(String(order.status||"")!==String(oldStatus||"")){
       order.statusHistory=appendStatusTransition(

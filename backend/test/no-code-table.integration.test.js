@@ -8,6 +8,7 @@ const app=require("../server");
 const Client=require("../models/Client");
 const TableConfiguration=require("../models/TableConfiguration");
 const TableCustomValue=require("../models/TableCustomValue");
+const FormConfiguration=require("../models/FormConfiguration");
 
 const mongoUri=process.env.MONGO_URI;
 
@@ -23,7 +24,7 @@ test("custom table values persist with correct types and enforce business owners
 
   try{
     await mongoose.connect(mongoUri,{serverSelectionTimeoutMS:10000});
-    await Promise.all([Client.init(),TableConfiguration.init(),TableCustomValue.init()]);
+    await Promise.all([Client.init(),TableConfiguration.init(),TableCustomValue.init(),FormConfiguration.init()]);
 
     ownerId=new mongoose.Types.ObjectId();
     otherOwnerId=new mongoose.Types.ObjectId();
@@ -51,6 +52,16 @@ test("custom table values persist with correct types and enforce business owners
     });
     baseUrl=`http://127.0.0.1:${server.address().port}/api`;
 
+    await FormConfiguration.create({
+      createdBy:ownerId,
+      formKey:"clients.form",
+      fields:[
+        {key:"quantity",label:"Quantity",custom:true,fieldType:"number"},
+        {key:"rate",label:"Rate",custom:true,fieldType:"currency"},
+        {key:"amount",label:"Calculated amount",custom:true,fieldType:"currency",formula:"quantity * rate",editable:false}
+      ]
+    });
+
     async function request(path,{method="GET",body,token=ownerToken}={}){
       const response=await fetch(`${baseUrl}${path}`,{
         method,
@@ -65,6 +76,24 @@ test("custom table values persist with correct types and enforce business owners
       try{data=raw?JSON.parse(raw):null;}catch{data=raw;}
       return {status:response.status,data};
     }
+
+    const formulaClient=await request("/clients",{
+      method:"POST",
+      body:{
+        name:"Calculated customer",
+        companyName:"Calculation Test Business",
+        customFields:{quantity:4,rate:25,amount:999}
+      }
+    });
+    assert.equal(formulaClient.status,201,JSON.stringify(formulaClient.data));
+    assert.equal(formulaClient.data.customFields.amount,100);
+
+    const updatedFormulaClient=await request(`/clients/${formulaClient.data._id}`,{
+      method:"PATCH",
+      body:{customFields:{quantity:3,rate:20,amount:999}}
+    });
+    assert.equal(updatedFormulaClient.status,200,JSON.stringify(updatedFormulaClient.data));
+    assert.equal(updatedFormulaClient.data.customFields.amount,60);
 
     const tableKey="no-code-integration";
     const configured=await request(`/table-config/${tableKey}`,{
@@ -142,6 +171,7 @@ test("custom table values persist with correct types and enforce business owners
         await Promise.all([
           TableCustomValue.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
           TableConfiguration.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
+          FormConfiguration.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
           Client.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}})
         ]);
       }

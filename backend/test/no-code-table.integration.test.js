@@ -220,6 +220,15 @@ test("custom table values persist with correct types and enforce business owners
     assert.equal(ownerValues.data.values.find(item=>item.fieldKey==="custom_note").value,"Call before delivery");
     assert.equal(ownerValues.data.values.find(item=>item.fieldKey==="custom_related_customer").value,String(ownerClientId));
 
+    const resetTable=await request(`/table-config/${tableKey}`,{method:"DELETE"});
+    assert.equal(resetTable.status,200);
+    const resetLayout=await request(`/table-config/${tableKey}`);
+    assert.deepEqual(resetLayout.data.columns,[]);
+    const retainedValues=await request(`/table-config/${tableKey}/values?rowKeys=${ownerClientId}`);
+    assert.equal(retainedValues.status,200);
+    assert.equal(retainedValues.data.values.length,3);
+    assert.equal(retainedValues.data.values.find(item=>item.fieldKey==="custom_verified").value,false);
+
     const hiddenFromOtherOwner=await request(`/table-config/${tableKey}/values?rowKeys=${ownerClientId}`,{
       token:otherOwnerToken
     });

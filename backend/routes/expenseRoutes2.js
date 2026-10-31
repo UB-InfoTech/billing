@@ -101,11 +101,19 @@ function normalizeExpenseTags(value){
   return [...new Set(values.map(item=>String(item??"").trim()).filter(Boolean))].slice(0,50);
 }
 
-function valuesForExpenseValidation(values){
-  return {
-    ...(values||{}),
-    tags:Array.isArray(values?.tags)?values.tags.join(", "):values?.tags??""
-  };
+function valuesForExpenseValidation(values,fields=[]){
+  const tagField=(fields||[]).find(field=>field?.key==="tags"&&!field.custom);
+  const tags=tagField?.fieldType==="multiselect"
+    ?Array.isArray(values?.tags)?values.tags:values?.tags===undefined||values?.tags===null||values?.tags===""?[]:[values.tags]
+    :Array.isArray(values?.tags)?values.tags.join(", "):values?.tags??"";
+  return {...(values||{}),tags};
+}
+
+function normalizeExpenseBoolean(value,label){
+  if(value===undefined||value===null)return value;
+  if(value===true||value===1||value==="1"||String(value).trim().toLowerCase()==="true")return true;
+  if(value===false||value===0||value==="0"||String(value).trim().toLowerCase()==="false")return false;
+  throw referenceError(`Choose Yes or No for “${label}”.`);
 }
 
 function applyValidatedExpenseValues(expense,values,customFields,fields){
@@ -119,7 +127,7 @@ function applyValidatedExpenseValues(expense,values,customFields,fields){
 }
 
 function validateRecurringExpense(values){
-  if(values?.isRecurring&&!values?.recurringInterval){
+  if(values?.isRecurring===true&&!values?.recurringInterval){
     throw referenceError("Choose a recurring interval.");
   }
 }
@@ -341,6 +349,8 @@ router.post("/",auth,async(req,res)=>{
       isNewRecord:true
     });
     const values={...prepared.values};
+    if(values.isRecurring!==undefined)values.isRecurring=normalizeExpenseBoolean(values.isRecurring,"Recurring expense");
+    if(values.taxDeductible!==undefined)values.taxDeductible=normalizeExpenseBoolean(values.taxDeductible,"Tax deductible");
     values.tags=normalizeExpenseTags(values.tags);
     values.clientId=String(values.clientId??"").trim()||null;
     values.orderId=String(values.orderId??"").trim()||null;
@@ -369,7 +379,7 @@ router.post("/",auth,async(req,res)=>{
         plainCustomFields(expense.customFields)
       );
     }
-    const validationValues=valuesForExpenseValidation(expense.toObject({depopulate:true}));
+    const validationValues=valuesForExpenseValidation(expense.toObject({depopulate:true}),configuredFields);
     const validated=validateConfiguredFormValues({
       fields:configuredFields,
       values:validationValues,
@@ -422,6 +432,8 @@ router.put("/:id",auth,async(req,res)=>{
       onlyChangedLookups:true
     });
     const preparedValues={...prepared.values};
+    if(preparedValues.isRecurring!==undefined)preparedValues.isRecurring=normalizeExpenseBoolean(preparedValues.isRecurring,"Recurring expense");
+    if(preparedValues.taxDeductible!==undefined)preparedValues.taxDeductible=normalizeExpenseBoolean(preparedValues.taxDeductible,"Tax deductible");
     preparedValues.tags=normalizeExpenseTags(preparedValues.tags);
     preparedValues.clientId=String(preparedValues.clientId??"").trim()||null;
     preparedValues.orderId=String(preparedValues.orderId??"").trim()||null;

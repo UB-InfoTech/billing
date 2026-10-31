@@ -163,10 +163,8 @@ export default function CreditNote() {
 
     useEffect(()=>{
         setForm(previous=>{
-            const next=buildConfiguredDefaults({
-                ...previous,
-                customFields:{...(previous.customFields||{})}
-            },creditNoteFormConfig.fields);
+            const hydrated=hydrateConfiguredValues(previous,creditNoteFormConfig.fields);
+            const next=buildConfiguredDefaults(hydrated,creditNoteFormConfig.fields);
             return syncConfiguredCustomFields(
                 applyFormulas(creditNoteFormConfig.fields,next),
                 creditNoteFormConfig.fields
@@ -188,10 +186,13 @@ export default function CreditNote() {
         });
     };
 
-    const preparedCreditNoteForm=useMemo(()=>syncConfiguredCustomFields(
-        applyFormulas(creditNoteFormConfig.fields,form),
-        creditNoteFormConfig.fields
-    ),[form,creditNoteFormConfig.fields]);
+    const preparedCreditNoteForm=useMemo(()=>{
+        const hydrated=hydrateConfiguredValues(form,creditNoteFormConfig.fields);
+        return syncConfiguredCustomFields(
+            applyFormulas(creditNoteFormConfig.fields,hydrated),
+            creditNoteFormConfig.fields
+        );
+    },[form,creditNoteFormConfig.fields]);
 
     const creditNoteCustomFieldNodes=creditNoteFormConfig.fields.filter(field=>field.custom).map(field=>{
         const state=getFieldState(field,{...preparedCreditNoteForm,...(preparedCreditNoteForm.customFields||{})});
@@ -453,7 +454,10 @@ export default function CreditNote() {
         setInvoiceSearch("");
         setOrders([]);
         setSearchResultsOpen(false);
-        setForm(emptyForm());
+        setForm(syncConfiguredCustomFields(
+            applyFormulas(creditNoteFormConfig.fields,buildConfiguredDefaults(emptyForm(),creditNoteFormConfig.fields)),
+            creditNoteFormConfig.fields
+        ));
         setPreviewNote(null);
         setError("");
         setSuccess("");
@@ -658,6 +662,13 @@ export default function CreditNote() {
                 manualTaxRate: n(fullNote.manualCredit?.taxRate ?? fullNote.originalOrder?.taxPercentage ?? 5),
                 note: fullNote.note || "",
                 customFields:fullNote.customFields||{}
+            });
+            setForm(previous=>{
+                const hydrated=hydrateConfiguredValues(previous,creditNoteFormConfig.fields);
+                return syncConfiguredCustomFields(
+                    applyFormulas(creditNoteFormConfig.fields,hydrated),
+                    creditNoteFormConfig.fields
+                );
             });
 
             setView("edit");

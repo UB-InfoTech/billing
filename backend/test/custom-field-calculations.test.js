@@ -35,7 +35,7 @@ test("evaluates arithmetic with precedence, grouping, percentages and negative v
 });
 
 test("rejects divide-by-zero, malformed expressions and excessive input",()=>{
-  for(const expression of ["10 / 0","10 % 0","1 +","(1 + 2","1 2","1 + )","1..2","9 / (3 - 3)"]){
+  for(const expression of ["10 / 0","10 % 0","1 +","(1 + 2","1 2","1 + )","1..2","9 / (3 - 3)","process.exit()","2 ** 4"]){
     assert.throws(()=>evaluateArithmeticExpression(expression));
   }
   assert.throws(()=>tokenize("1".repeat(501)),/too long/i);

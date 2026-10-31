@@ -10,6 +10,7 @@ const { exceedsCurrencyLimit, meetsCurrencyTarget } = require("../utils/currency
 const { buildInvoiceCreditWriteFilter, buildPreviouslyCreditedFilter } = require("../utils/creditNoteConcurrency");
 const { buildClientCreditBalanceMutation } = require("../utils/clientCreditBalance");
 const { recordFinancialRecoveryIssue } = require("../utils/financialRecovery");
+const { createSettlementHistoryEvent, appendSettlementHistoryEvent } = require("../utils/creditNoteSettlementHistory");
 
 
 const router = express.Router();
@@ -1104,9 +1105,12 @@ router.post("/", auth, async (req, res) => {
         finalSettlement.customerCreditAmount
     );
 
+    const effectiveCreditNoteDate = creditNoteDate ? new Date(creditNoteDate) : new Date();
+    if (Number.isNaN(effectiveCreditNoteDate.getTime())) throw new Error("Invalid credit note date.");
+
     const noteDoc = new CreditNote({
       creditNoteNumber: number,
-      creditNoteDate: creditNoteDate ? new Date(creditNoteDate) : new Date(),
+      creditNoteDate: effectiveCreditNoteDate,
       reason,
       creditMode,
       originalOrderId: order._id,
@@ -1133,6 +1137,12 @@ router.post("/", auth, async (req, res) => {
       inventoryStatus,
       inventoryMovements,
       settlement: finalSettlement,
+      settlementHistory: [createSettlementHistoryEvent({
+        eventType: "posted",
+        effectiveAt: effectiveCreditNoteDate,
+        status: "Posted",
+        settlement: finalSettlement
+      })],
       items: finalItems,
       totals: {
         subtotal,
@@ -1593,14 +1603,16 @@ router.put("/:id", auth, async (req, res) => {
       });
     }
 
-    order.creditAppliedAmount = Math.max(
+    // Build the compare-and-set filter from the untouched persisted invoice
+    // snapshot. Mutating order.creditAppliedAmount first would make the filter
+    // compare against the replacement value instead of the stored value.
+    const invoiceWriteFilter = buildInvoiceCreditWriteFilter(order, userId);
+    const previousOtherCredit = Math.max(
       0,
       round2(Number(order.creditAppliedAmount || 0) - oldAdjustment)
     );
-
     const nextCreditApplied = round2(
-      Number(order.creditAppliedAmount || 0) +
-      prepared.finalSettlement.adjustmentAmount
+      previousOtherCredit + prepared.finalSettlement.adjustmentAmount
     );
 
     if (prepared.inventoryMovements.length) {
@@ -1620,7 +1632,7 @@ router.put("/:id", auth, async (req, res) => {
     }
 
     const updatedOrder = await Order.findOneAndUpdate(
-      buildInvoiceCreditWriteFilter(order, userId),
+      invoiceWriteFilter,
       { $set: { creditAppliedAmount: nextCreditApplied } },
       { new: true, runValidators: true, session }
     );
@@ -1642,6 +1654,12 @@ router.put("/:id", auth, async (req, res) => {
     note.inventoryStatus = prepared.inventoryStatus;
     note.inventoryMovements = prepared.inventoryMovements;
     note.settlement = prepared.finalSettlement;
+    note.settlementHistory = appendSettlementHistoryEvent(note, {
+      eventType: "edited",
+      effectiveAt: new Date(),
+      status: "Posted",
+      settlement: prepared.finalSettlement
+    });
     note.items = prepared.finalItems;
     note.totals = {
       subtotal: prepared.subtotal,
@@ -1676,6 +1694,7 @@ router.put("/:id", auth, async (req, res) => {
       inventoryStatus: note.inventoryStatus,
       inventoryMovements: note.inventoryMovements,
       settlement: note.settlement,
+      settlementHistory: note.settlementHistory,
       items: note.items,
       totals: note.totals,
       originalInvoiceTotal: note.originalInvoiceTotal,
@@ -1734,7 +1753,7 @@ router.put("/:id", auth, async (req, res) => {
           [
             "creditNoteNumber", "creditNoteDate", "reason", "creditMode",
             "stockAffecting", "inventoryStatus", "inventoryMovements",
-            "settlement", "items", "totals", "originalInvoiceTotal",
+            "settlement", "settlementHistory", "items", "totals", "originalInvoiceTotal",
             "manualCredit", "settlementStatus", "note"
           ].forEach(key => { restoreNoteFields[key] = previousNote[key]; });
           const restoredNote = await CreditNote.findOneAndUpdate(
@@ -1933,6 +1952,12 @@ async function cancelCreditNote(req, res) {
     note.cancellationReason = String(req.body?.reason || "").trim();
     note.cancelledAt = new Date();
     note.cancelledBy = userId;
+    note.settlementHistory = appendSettlementHistoryEvent(note, {
+      eventType: "cancelled",
+      effectiveAt: note.cancelledAt,
+      status: "Cancelled",
+      settlement: {}
+    });
 
     const savedNote = await CreditNote.findOneAndUpdate(
       {
@@ -1949,6 +1974,7 @@ async function cancelCreditNote(req, res) {
           cancelledAt: note.cancelledAt,
           cancelledBy: note.cancelledBy,
           inventoryStatus: note.inventoryStatus,
+          settlementHistory: note.settlementHistory,
         },
       },
       { new: true, runValidators: true, session }
@@ -1997,6 +2023,7 @@ async function cancelCreditNote(req, res) {
               cancelledAt: previousNote.cancelledAt,
               cancelledBy: previousNote.cancelledBy,
               inventoryStatus: previousNote.inventoryStatus,
+              settlementHistory: previousNote.settlementHistory || [],
             } },
             { new: true, runValidators: true }
           );

@@ -755,6 +755,9 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(round2(payment.payload.order.dueAmount), 160);
     assert.equal(payment.payload.order.paymentStatus, "Partial");
     assert.equal(payment.payload.order.payments.length, 1);
+    assert.equal(payment.payload.order.financialHistory[0].eventType, "created");
+    assert.equal(payment.payload.order.paymentHistory.length, 1);
+    assert.equal(payment.payload.order.paymentHistory[0].action, "added");
 
     const overpayment = await request(`/order/orders/${orderId}/pay`, {
       method: "POST",
@@ -801,6 +804,10 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(editedPayment.response.status, 200, JSON.stringify(editedPayment.payload));
     assert.equal(round2(editedPayment.payload.order.paidAmount), 70);
     assert.equal(round2(editedPayment.payload.order.dueAmount), 150);
+    assert.equal(editedPayment.payload.order.paymentHistory.length, 2);
+    assert.equal(editedPayment.payload.order.paymentHistory[1].action, "edited");
+    assert.equal(round2(editedPayment.payload.order.paymentHistory[1].before.amount), 60);
+    assert.equal(round2(editedPayment.payload.order.paymentHistory[1].after.amount), 70);
     const clientAfterPaymentEdit = await Client.findOne({ _id: clientId, createdBy: ownerId }).lean();
     assert.equal(round2(clientAfterPaymentEdit.totalPaid), round2(totalPaidBeforePayment + 70), "Editing a payment must refresh the customer paid total.");
     assert.equal(round2(clientAfterPaymentEdit.pendingPayments), round2(outstandingBeforePayment - 70));
@@ -819,6 +826,9 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(round2(deletedPayment.payload.order.dueAmount), 220);
     assert.equal(deletedPayment.payload.order.paymentStatus, "Unpaid");
     assert.equal(deletedPayment.payload.order.payments.length, 0);
+    assert.equal(deletedPayment.payload.order.paymentHistory.length, 3);
+    assert.equal(deletedPayment.payload.order.paymentHistory[2].action, "deleted");
+    assert.equal(round2(deletedPayment.payload.order.paymentHistory[2].before.amount), 70);
     const clientAfterPaymentDelete = await Client.findOne({ _id: clientId, createdBy: ownerId }).lean();
     assert.equal(round2(clientAfterPaymentDelete.totalPaid), totalPaidBeforePayment, "Deleting a payment must restore the customer's prior paid total.");
     assert.equal(round2(clientAfterPaymentDelete.pendingPayments), outstandingBeforePayment);
@@ -975,6 +985,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     ]);
     for (const order of [fallbackOrderOne, fallbackOrderTwo]) {
       assert.equal(order.payments.length, 0, "Standalone compensation must remove each partial allocation.");
+      assert.equal((order.paymentHistory||[]).length, 0, "Compensated payments must not leave audit events.");
       assert.equal(round2(order.paidAmount), 0);
       assert.equal(round2(order.dueAmount), 100);
       assert.equal(order.paymentStatus, "Unpaid");
@@ -1037,6 +1048,18 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(storedOrder.creditNoteCount, 1);
     assert.equal(round2(storedOrder.dueAmount), 110, "Customer-credit settlement must not be mistaken for an invoice-due adjustment.");
 
+    const initialCustomerTransactions = await request("/clients/" + clientId + "/transactions");
+    assert.equal(initialCustomerTransactions.response.status, 200, JSON.stringify(initialCustomerTransactions.payload));
+    const initialCreditRow = initialCustomerTransactions.payload.find(transaction =>
+      transaction.type === "Credit Note" && String(transaction.creditNoteId) === String(creditNoteId)
+    );
+    assert.ok(initialCreditRow, "The customer transaction feed must include its Credit Notes.");
+    assert.equal(round2(initialCreditRow.customerCreditAmount), 55);
+    assert.equal(round2(initialCreditRow.amount), 55);
+    assert.equal(initialCreditRow.status, "Posted");
+    assert.ok(Array.isArray(initialCreditRow.settlementHistory));
+    assert.equal(initialCreditRow.settlementHistory.length, 1);
+
     const edited = await request(`/credit-notes/${creditNoteId}`, {
       method: "PUT",
       body: {
@@ -1063,11 +1086,15 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
 
     const manualAdjustment = await request(`/clients/${clientId}/credit`, {
       method: "PUT",
-      body: { amount: 10 }
+      body: { amount: 10, reason: "Customer relationship adjustment" }
     });
     assert.equal(manualAdjustment.response.status, 200, JSON.stringify(manualAdjustment.payload));
     assert.equal(round2(manualAdjustment.payload.creditBalance), 76);
     assert.equal(round2(manualAdjustment.payload.creditBalanceAdjustment), 10);
+    assert.equal(manualAdjustment.payload.creditBalanceHistory.length, 1);
+    assert.equal(round2(manualAdjustment.payload.creditBalanceHistory[0].amount), 10);
+    assert.equal(round2(manualAdjustment.payload.creditBalanceHistory[0].balanceAfter), 76);
+    assert.equal(manualAdjustment.payload.creditBalanceHistory[0].reason, "Customer relationship adjustment");
 
     const secondCreditNoteNumber = `S${suffix}`;
     const secondPosted = await request("/credit-notes", {
@@ -1168,7 +1195,193 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(round2(storedOrder.paidAmount), 110);
     assert.equal(round2(storedOrder.dueAmount), 110);
 
-    // A late Credit Note failure must roll back earlier stock writes and leave no orphan note.
+    const customerStatement = await request("/clients/" + clientId + "/statement?from=2026-10-01&to=2026-10-31");
+    assert.equal(customerStatement.response.status, 200, JSON.stringify(customerStatement.payload));
+    assert.equal(customerStatement.payload.statement.receivables.currentOutstanding, round2(storedClient.outstanding_balance));
+    assert.equal(customerStatement.payload.statement.receivables.reconcilesWithCustomerSummary, true);
+    assert.equal(customerStatement.payload.statement.customerCredit.currentBalance, 10);
+    assert.equal(customerStatement.payload.statement.customerCredit.closingBalance, 10);
+    const hiddenCustomerStatement = await request("/clients/" + clientId + "/statement", { token: otherOwnerToken });
+    assert.equal(hiddenCustomerStatement.response.status, 404, "Customer statements must be isolated by business owner.");
+
+    // A Credit Note posted after a payment must not rewrite the earlier receipt.
+    // A later payment sees the credit; cancellation only affects payments after cancellation.
+    const timelineClientResponse = await request("/clients", {
+      method: "POST",
+      body: {
+        name: "Credit Timeline Customer " + suffix,
+        companyName: "Credit Timeline Business " + suffix,
+        phone: "9999999996"
+      }
+    });
+    assert.equal(timelineClientResponse.response.status, 201, JSON.stringify(timelineClientResponse.payload));
+    const timelineClientId = timelineClientResponse.payload._id;
+
+    const timelineInvoiceResponse = await request("/order/orders/create", {
+      method: "POST",
+      body: {
+        clientId: timelineClientId,
+        orderDate: "2026-10-14T09:00:00.000Z",
+        paymentTerms: "30",
+        taxPercentage: 0,
+        discountRate: 0,
+        subOrders: [{
+          orderName: "Credit timeline item",
+          qtyUnit: "PCS",
+          quantity: 1,
+          unitPrice: 100
+        }]
+      }
+    });
+    assert.equal(timelineInvoiceResponse.response.status, 201, JSON.stringify(timelineInvoiceResponse.payload));
+    const timelineInvoiceId = timelineInvoiceResponse.payload.order._id;
+
+    const timelinePaymentOne = await request("/order/orders/" + timelineInvoiceId + "/pay", {
+      method: "POST",
+      body: {
+        amount: 60,
+        method: "UPI",
+        amountReference: "ITTL1-" + suffix,
+        paymentDate: "2026-10-15T09:00:00.000Z"
+      }
+    });
+    assert.equal(timelinePaymentOne.response.status, 200, JSON.stringify(timelinePaymentOne.payload));
+    const timelinePaymentOneId = timelinePaymentOne.payload.order.payments[0]._id;
+
+    const timelineCreditNoteResponse = await request("/credit-notes", {
+      method: "POST",
+      body: {
+        creditNoteNumber: "TL" + suffix,
+        creditNoteDate: "2026-10-16T09:00:00.000Z",
+        reason: "Post Sale Discount",
+        creditMode: "AMOUNT",
+        originalOrderId: timelineInvoiceId,
+        manualCredit: { taxableAmount: 20, taxRate: 0 },
+        settlement: {
+          adjustmentType: "Outstanding",
+          adjustmentAmount: 20,
+          refundAmount: 0,
+          customerCreditAmount: 0
+        }
+      }
+    });
+    assert.equal(timelineCreditNoteResponse.response.status, 201, JSON.stringify(timelineCreditNoteResponse.payload));
+    const timelineCreditNoteId = timelineCreditNoteResponse.payload.creditNote._id;
+    assert.equal(round2(timelineCreditNoteResponse.payload.creditNote.originalOrderId.dueAmount), 20);
+
+    const timelineReceiptOne = await request(
+      "/order/" + timelineInvoiceId + "/payments/" + timelinePaymentOneId + "/invoice"
+    );
+    assert.equal(timelineReceiptOne.response.status, 200);
+    assert.ok(timelineReceiptOne.payload.includes("100.00"), "The earlier receipt must show the full due before the payment.");
+    assert.ok(timelineReceiptOne.payload.includes("40.00"), "The later Credit Note must not reduce the earlier receipt balance.");
+    assert.equal(timelineReceiptOne.payload.includes("estimates"), false, "New Credit Notes must have reliable settlement history.");
+
+    const timelinePaymentTwo = await request("/order/orders/" + timelineInvoiceId + "/pay", {
+      method: "POST",
+      body: {
+        amount: 10,
+        method: "UPI",
+        amountReference: "ITTL2-" + suffix,
+        paymentDate: "2026-10-17T09:00:00.000Z"
+      }
+    });
+    assert.equal(timelinePaymentTwo.response.status, 200, JSON.stringify(timelinePaymentTwo.payload));
+    const timelinePaymentTwoId = timelinePaymentTwo.payload.order.payments[1]._id;
+
+    const timelineReceiptTwo = await request(
+      "/order/" + timelineInvoiceId + "/payments/" + timelinePaymentTwoId + "/invoice"
+    );
+    assert.equal(timelineReceiptTwo.response.status, 200);
+    assert.ok(timelineReceiptTwo.payload.includes("20.00"), "The later receipt must include the earlier Credit Note adjustment.");
+    assert.ok(timelineReceiptTwo.payload.includes("10.00"), "The later receipt must show the correct remaining due.");
+
+    const editedTimelineCreditNote = await request("/credit-notes/" + timelineCreditNoteId, {
+      method: "PUT",
+      body: {
+        creditNoteNumber: "TL" + suffix,
+        creditNoteDate: "2026-10-16T09:00:00.000Z",
+        reason: "Post Sale Discount",
+        creditMode: "AMOUNT",
+        manualCredit: { taxableAmount: 20, taxRate: 0 },
+        settlement: {
+          adjustmentType: "Outstanding",
+          adjustmentAmount: 10,
+          refundAmount: 10,
+          refundMethod: "Cash",
+          customerCreditAmount: 0
+        }
+      }
+    });
+    assert.equal(editedTimelineCreditNote.response.status, 200, JSON.stringify(editedTimelineCreditNote.payload));
+    const editedTimelineHistory = editedTimelineCreditNote.payload.creditNote.settlementHistory;
+    assert.equal(editedTimelineHistory.length, 2, "Editing a posted Credit Note must append a dated settlement snapshot.");
+    assert.equal(editedTimelineHistory[0].eventType, "posted");
+    assert.equal(editedTimelineHistory[1].eventType, "edited");
+
+    const timelineReceiptTwoAfterEdit = await request(
+      "/order/" + timelineInvoiceId + "/payments/" + timelinePaymentTwoId + "/invoice"
+    );
+    assert.equal(timelineReceiptTwoAfterEdit.response.status, 200);
+    assert.ok(timelineReceiptTwoAfterEdit.payload.includes("20.00"), "Editing a Credit Note later must preserve its earlier applied amount on an existing receipt.");
+    assert.ok(timelineReceiptTwoAfterEdit.payload.includes("10.00"));
+
+    const timelineCreditNoteCancellation = await request("/credit-notes/" + timelineCreditNoteId + "/cancel", {
+      method: "POST",
+      body: { reason: "Timeline cancellation test" }
+    });
+    assert.equal(timelineCreditNoteCancellation.response.status, 200, JSON.stringify(timelineCreditNoteCancellation.payload));
+
+    const timelineReceiptTwoAfterCancellation = await request(
+      "/order/" + timelineInvoiceId + "/payments/" + timelinePaymentTwoId + "/invoice"
+    );
+    assert.equal(timelineReceiptTwoAfterCancellation.response.status, 200);
+    assert.ok(timelineReceiptTwoAfterCancellation.payload.includes("20.00"), "A cancellation after payment must not rewrite that earlier receipt.");
+    assert.ok(timelineReceiptTwoAfterCancellation.payload.includes("10.00"));
+
+    const timelinePaymentThree = await request("/order/orders/" + timelineInvoiceId + "/pay", {
+      method: "POST",
+      body: {
+        amount: 10,
+        method: "UPI",
+        amountReference: "ITTL3-" + suffix,
+        paymentDate: new Date().toISOString()
+      }
+    });
+    assert.equal(timelinePaymentThree.response.status, 200, JSON.stringify(timelinePaymentThree.payload));
+    const timelinePaymentThreeId = timelinePaymentThree.payload.order.payments[2]._id;
+
+    const timelineReceiptThree = await request(
+      "/order/" + timelineInvoiceId + "/payments/" + timelinePaymentThreeId + "/invoice"
+    );
+    assert.equal(timelineReceiptThree.response.status, 200);
+    assert.ok(timelineReceiptThree.payload.includes("30.00"), "A payment after cancellation must use the restored invoice due.");
+    assert.ok(timelineReceiptThree.payload.includes("20.00"), "The post-cancellation receipt must show the remaining due.");
+
+    const timelineTransactions = await request("/clients/" + timelineClientId + "/transactions");
+    assert.equal(timelineTransactions.response.status, 200);
+    const cancelledTimelineNote = timelineTransactions.payload.find(transaction =>
+      transaction.type === "Credit Note" && String(transaction.creditNoteId) === String(timelineCreditNoteId)
+    );
+    assert.ok(cancelledTimelineNote, "The customer feed must retain the cancelled Credit Note.");
+    assert.equal(cancelledTimelineNote.status, "Cancelled");
+    assert.equal(round2(cancelledTimelineNote.adjustmentAmount), 10);
+    assert.equal(round2(cancelledTimelineNote.refundAmount), 10);
+    assert.ok(cancelledTimelineNote.cancelledAt, "The customer feed must show the cancellation date.");
+    assert.equal(cancelledTimelineNote.settlementHistory.length, 3);
+    assert.equal(cancelledTimelineNote.settlementHistory[1].eventType, "edited");
+    assert.equal(cancelledTimelineNote.settlementHistory[2].eventType, "cancelled");
+
+    const timelineStatement = await request("/clients/" + timelineClientId + "/statement?from=2026-10-14&to=2026-10-31");
+    assert.equal(timelineStatement.response.status, 200, JSON.stringify(timelineStatement.payload));
+    assert.equal(timelineStatement.payload.statement.receivables.openingBalance, 0);
+    assert.equal(timelineStatement.payload.statement.receivables.totalDebits, 120);
+    assert.equal(timelineStatement.payload.statement.receivables.totalCredits, 100);
+    assert.equal(timelineStatement.payload.statement.receivables.closingBalance, 20);
+    assert.equal(timelineStatement.payload.statement.receivables.currentOutstanding, 20);
+    assert.equal(timelineStatement.payload.statement.receivables.reconcilesWithCustomerSummary, true);
+    assert.equal(timelineStatement.payload.statement.customerCredit.currentBalance, 0);
+
     const stockProduct = await Product.create({
       productName: `Rollback Product ${suffix}`,
       productCode: `ITROLLBACK-${suffix}`,

@@ -11,7 +11,8 @@ function buildPaymentAppendOperation({
   amount,
   expectedDueAmount,
   payment,
-  paymentDate
+  paymentDate,
+  paymentHistoryEvent
 }) {
   const normalizedAmount = Number(amount);
   const expectedDue = Number(expectedDueAmount);
@@ -50,7 +51,9 @@ function buildPaymentAppendOperation({
       dueAmount: expectedDue
     },
     update: {
-      $push: { payments: payment },
+      $push: paymentHistoryEvent
+        ? { payments: payment, paymentHistory: paymentHistoryEvent }
+        : { payments: payment },
       $set: { lastPaymentDate: paymentDate ?? payment.paymentDate }
     },
     options: { new: true, runValidators: true }

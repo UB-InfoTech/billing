@@ -8,6 +8,7 @@ const Expense=require("../models/Expense");
 const {buildClientCreditBalanceMutation}=require("../utils/clientCreditBalance");
 const {assertClientIdentity,hasClientIdentity}=require("../utils/clientIdentity");
 const {getInvoiceRevenue}=require("../utils/syncClientData");
+const {buildCustomerStatement}=require("../utils/customerStatement");
 const auth=require("../middleware/auth");
 const {escapeRegex}=require("../utils/escapeRegex");
 
@@ -120,7 +121,7 @@ router.put("/:id/credit",auth,async(req,res)=>{
       return res.status(400).json({message:"Enter a valid non-zero credit adjustment."});
     }
     const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)})
-      .select("creditBalance creditBalanceAdjustment createdBy +financialSummaryVersion")
+      .select("creditBalance creditBalanceAdjustment creditBalanceHistory createdBy +financialSummaryVersion")
       .lean();
     if(!client)return res.status(404).json({message:"Client not found"});
 
@@ -148,8 +149,17 @@ router.put("/:id/credit",auth,async(req,res)=>{
       return res.status(400).json({message:error.message});
     }
 
-    // Balance and its manual component are changed by one compare-and-set write.
-    // The revision also prevents a concurrent summary refresh from overwriting it.
+    // Save the signed manual adjustment and its resulting wallet balance in the
+    // same atomic write as the balance itself, so statement history cannot drift.
+    const reason=String(req.body?.reason||"Manual adjustment").trim().slice(0,160)||"Manual adjustment";
+    mutation.update.$push={
+      creditBalanceHistory:{
+        amount:Math.round((amount+Number.EPSILON)*100)/100,
+        balanceAfter:mutation.nextBalance,
+        effectiveAt:new Date(),
+        reason
+      }
+    };
     const updated=await Client.findOneAndUpdate(
       mutation.filter,
       mutation.update,
@@ -162,16 +172,126 @@ router.put("/:id/credit",auth,async(req,res)=>{
   }catch(error){res.status(400).json({message:error.message});}
 });
 
+function parseStatementDate(value,endOfDay=false){
+  const raw=String(value||"").trim();
+  if(!raw)return null;
+  const dateOnly=raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  let normalized=raw;
+  if(dateOnly){
+    const year=Number(dateOnly[1]),month=Number(dateOnly[2]),day=Number(dateOnly[3]);
+    const calendarDate=new Date(Date.UTC(year,month-1,day));
+    if(calendarDate.getUTCFullYear()!==year||calendarDate.getUTCMonth()+1!==month||calendarDate.getUTCDate()!==day)return null;
+    normalized=raw+"T"+(endOfDay?"23:59:59.999":"00:00:00.000")+"+05:30";
+  }
+  const parsed=new Date(normalized);
+  return Number.isNaN(parsed.getTime())?null:parsed;
+}
+
+router.get("/:id/statement",auth,async(req,res)=>{
+  try{
+    if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid customer ID."});
+    const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)}).lean();
+    if(!client)return res.status(404).json({message:"Customer not found."});
+
+    const requestedFrom=req.query.from?parseStatementDate(req.query.from,false):null;
+    const requestedTo=req.query.to?parseStatementDate(req.query.to,true):null;
+    if((req.query.from&&!requestedFrom)||(req.query.to&&!requestedTo)){
+      return res.status(400).json({message:"Enter valid statement dates."});
+    }
+    const from=requestedFrom||client.createdAt||new Date(0);
+    const to=requestedTo||new Date();
+    if(Number.isNaN(new Date(from).getTime())||Number.isNaN(new Date(to).getTime())){
+      return res.status(400).json({message:"Customer account dates are invalid. Review the customer record."});
+    }
+    if(new Date(from).getTime()>new Date(to).getTime()){
+      return res.status(400).json({message:"Statement start date must be on or before the end date."});
+    }
+
+    const orders=await Order.find({
+      createdBy:owner(req),
+      $or:[
+        {clientId:client._id},
+        {"financialHistory.previous.clientId":client._id},
+        {"financialHistory.next.clientId":client._id}
+      ]
+    })
+      .select("orderNumber orderDate createdAt status clientId roundOffFinalRevenue totalAmount finalRevenue payments paymentHistory financialHistory")
+      .sort({orderDate:1,createdAt:1})
+      .lean();
+    const orderIds=orders.map(order=>order._id);
+    const creditNotes=await CreditNote.find({
+      createdBy:owner(req),
+      $or:[
+        {clientId:client._id},
+        {originalOrderId:{$in:orderIds}}
+      ]
+    }).select("creditNoteNumber clientId originalOrderId settlement settlementHistory creditNoteDate createdAt updatedAt status cancelledAt")
+      .sort({creditNoteDate:1,createdAt:1})
+      .lean();
+
+    const statement=buildCustomerStatement({
+      client,
+      orders,
+      creditNotes,
+      fromDate:from,
+      toDate:to
+    });
+
+    return res.json({
+      customer:{
+        _id:client._id,
+        name:client.name||"",
+        companyName:client.companyName||"",
+        phone:client.phone||"",
+        email:client.email||""
+      },
+      statement
+    });
+  }catch(error){
+    console.error("Customer statement error:",error);
+    return res.status(error instanceof RangeError?400:500).json({
+      message:error.message||"Unable to prepare customer statement."
+    });
+  }
+});
+
 router.get("/:id/transactions",auth,async(req,res)=>{
   try{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid client ID."});
     const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)}).select("_id");
     if(!client)return res.status(404).json({message:"Client not found"});
     const orders=await Order.find({clientId:client._id,createdBy:owner(req)}).sort({orderDate:-1}).lean();
+    const orderIds=orders.map(order=>order._id);
+    const creditNotes=await CreditNote.find({
+      createdBy:owner(req),
+      $or:[
+        {clientId:client._id},
+        {originalOrderId:{$in:orderIds}}
+      ]
+    }).sort({creditNoteDate:-1,createdAt:-1}).lean();
+
     const transactions=[];
     for(const order of orders){
-      transactions.push({type:"Invoice",orderId:order._id,orderNumber:order.orderNumber,date:order.orderDate,amount:getInvoiceRevenue(order),paid:Number(order.paidAmount||0),due:Number(order.dueAmount||0),status:order.paymentStatus});
+      transactions.push({type:"Invoice",orderId:order._id,orderNumber:order.orderNumber,date:order.orderDate,amount:getInvoiceRevenue(order),paid:Number(order.paidAmount||0),due:Number(order.dueAmount||0),status:order.paymentStatus,orderStatus:order.status});
       for(const payment of order.payments||[])transactions.push({type:"Payment",orderId:order._id,orderNumber:order.orderNumber,paymentId:payment._id,date:payment.paymentDate||payment.createdAt,amount:Number(payment.amount||0),method:payment.method,reference:payment.amountReference});
+    }
+    for(const creditNote of creditNotes){
+      transactions.push({
+        type:"Credit Note",
+        creditNoteId:creditNote._id,
+        creditNoteNumber:creditNote.creditNoteNumber,
+        orderId:creditNote.originalOrderId,
+        orderNumber:creditNote.originalInvoiceNumber,
+        date:creditNote.creditNoteDate||creditNote.createdAt,
+        amount:Number(creditNote.totals?.grandTotal||0),
+        adjustmentAmount:Number(creditNote.settlement?.adjustmentAmount||0),
+        refundAmount:Number(creditNote.settlement?.refundAmount||0),
+        customerCreditAmount:Number(creditNote.settlement?.customerCreditAmount||0),
+        status:creditNote.status,
+        settlementStatus:creditNote.settlementStatus,
+        cancelledAt:creditNote.cancelledAt||null,
+        settlementHistory:Array.isArray(creditNote.settlementHistory)?creditNote.settlementHistory:[]
+      });
     }
     res.json(transactions.sort((a,b)=>new Date(b.date)-new Date(a.date)));
   }catch(error){res.status(500).json({message:error.message});}

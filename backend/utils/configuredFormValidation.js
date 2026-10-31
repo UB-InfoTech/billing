@@ -433,6 +433,39 @@ const validateConfiguredFormValues=({
   return {values:nextValues,customFields:nextCustomFields};
 };
 
+const prepareConfiguredFormValues=async({
+  ownerId,
+  fields=[],
+  values={},
+  customFields={},
+  existingValues={},
+  existingCustomFields={},
+  isNewRecord=false,
+  onlyChangedLookups=false
+})=>{
+  const defaults=isNewRecord
+    ?applyConfiguredDefaults({fields,values,customFields})
+    :{values:{...(values||{})},customFields:plain(customFields)};
+  const linked=await applyConfiguredAutoFill({
+    ownerId,
+    fields,
+    values:defaults.values,
+    customFields:defaults.customFields,
+    existingValues,
+    existingCustomFields,
+    onlyChanged:onlyChangedLookups
+  });
+  const preserved=preserveNonEditableFields({
+    fields,
+    values:linked.values,
+    customFields:linked.customFields,
+    existingValues,
+    existingCustomFields,
+    autoFillUpdates:linked.updates
+  });
+  return {...preserved,updates:linked.updates};
+};
+
 module.exports={
   isEmpty,
   readFieldValue,
@@ -442,5 +475,6 @@ module.exports={
   applyConfiguredAutoFill,
   applyConfiguredDefaults,
   preserveNonEditableFields,
+  prepareConfiguredFormValues,
   validateConfiguredFormValues
 };

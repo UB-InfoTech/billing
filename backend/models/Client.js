@@ -1,5 +1,12 @@
 const mongoose = require("mongoose");
 
+const creditBalanceHistorySchema = new mongoose.Schema({
+  amount: { type: Number, required: true },
+  balanceAfter: { type: Number, required: true, min: 0 },
+  effectiveAt: { type: Date, required: true, default: Date.now },
+  reason: { type: String, trim: true, maxlength: 160, default: "Manual adjustment" }
+}, { _id: false });
+
 const ClientSchema = new mongoose.Schema({
   name:{type:String,trim:true,default:""},
   email:{type:String,trim:true,lowercase:true,default:""},
@@ -23,6 +30,8 @@ const ClientSchema = new mongoose.Schema({
   creditBalance:{type:Number,default:0,min:0},
   // Manual adjustments are kept separately from posted Credit Note credits.
   creditBalanceAdjustment:{type:Number,default:0},
+  // Dated manual changes to the separate customer-credit wallet.
+  creditBalanceHistory:{type:[creditBalanceHistorySchema],default:[]},
   // Optimistic concurrency token for derived customer summaries.
   financialSummaryVersion:{type:Number,default:0,min:0,select:false},
   paymentTerms:{type:String,enum:["30","60","90","Advance"],default:"30"},

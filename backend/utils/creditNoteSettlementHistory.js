@@ -128,5 +128,6 @@ function getCreditAppliedAmountAt(notes = [], asOfDate) {
 module.exports = {
   createSettlementHistoryEvent,
   appendSettlementHistoryEvent,
+  getLegacySettlementHistory,
   getCreditAppliedAmountAt
 };

@@ -30,7 +30,7 @@ const isValidCalendarDate=value=>{
 const normalizeCustomValue=(field,value)=>{
   const empty=value===null||value===undefined
     ||(typeof value==="string"&&!value.trim())
-    ||(Array.isArray(value)&&value.length===0);
+    ||(field.fieldType==="multiselect"&&Array.isArray(value)&&value.length===0);
   if(empty)return null;
 
   switch(field.fieldType){

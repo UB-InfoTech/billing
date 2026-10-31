@@ -4,6 +4,7 @@ const FormConfiguration=require("../models/FormConfiguration");
 const auth=require("../middleware/auth");
 const {FORM_LOOKUP_SOURCES,getFormLookupSource}=require("../utils/formLookupPolicy");
 const {mergeConfiguredEwaybillFields}=require("../utils/ewaybillFormValidation");
+const {mergeConfiguredPaymentFields}=require("../utils/paymentFormValidation");
 
 const router=express.Router();
 
@@ -197,6 +198,11 @@ router.get("/:formKey",auth,async(req,res)=>{
       response.fields=mergeConfiguredEwaybillFields(response.fields);
       return res.json(response);
     }
+    if(formKey==="orders.payments"){
+      const response=config||{formKey,fields:[]};
+      response.fields=mergeConfiguredPaymentFields(response.fields);
+      return res.json(response);
+    }
     return res.json(config||{formKey,fields:[]});
   }catch(error){
     return res.status(500).json({message:error.message});
@@ -210,6 +216,9 @@ router.put("/:formKey",auth,async(req,res)=>{
     let fields=sanitizeFields(req.body?.fields);
     if(formKey==="ewaybill.form"){
       fields=mergeConfiguredEwaybillFields(fields);
+    }
+    if(formKey==="orders.payments"){
+      fields=mergeConfiguredPaymentFields(fields);
     }
 
     const ownerId=new mongoose.Types.ObjectId(owner(req));

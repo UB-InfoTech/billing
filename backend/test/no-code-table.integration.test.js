@@ -145,7 +145,7 @@ test("custom table values persist with correct types and enforce business owners
     });
     assert.equal(updatedOrder.status,200,JSON.stringify(updatedOrder.data));
     assert.equal(updatedOrder.data.order.customFields.packingCharge,20);
-    assert.equal(updatedOrder.data.order.subOrders[0].customFields.extraTotal,24);
+    assert.equal(updatedOrder.data.order.subOrders[0].customFields.extraTotal,21,"Unchanged invoice items retain their saved custom calculations.");
 
     const tableKey="no-code-integration";
     const configured=await request(`/table-config/${tableKey}`,{

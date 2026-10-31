@@ -6,6 +6,8 @@ const jwt=require("jsonwebtoken");
 process.env.JWT_SECRET||="billing-integration-tests-only-secret";
 const app=require("../server");
 const Client=require("../models/Client");
+const Product=require("../models/Product");
+const Expense=require("../models/Expense");
 const TableConfiguration=require("../models/TableConfiguration");
 const TableCustomValue=require("../models/TableCustomValue");
 const FormConfiguration=require("../models/FormConfiguration");
@@ -24,7 +26,7 @@ test("custom table values persist with correct types and enforce business owners
 
   try{
     await mongoose.connect(mongoUri,{serverSelectionTimeoutMS:10000});
-    await Promise.all([Client.init(),TableConfiguration.init(),TableCustomValue.init(),FormConfiguration.init()]);
+    await Promise.all([Client.init(),Product.init(),Expense.init(),TableConfiguration.init(),TableCustomValue.init(),FormConfiguration.init()]);
 
     ownerId=new mongoose.Types.ObjectId();
     otherOwnerId=new mongoose.Types.ObjectId();
@@ -234,6 +236,168 @@ test("custom table values persist with correct types and enforce business owners
     assert.equal(updatedOrder.data.order.customFields.packingCharge,20);
     assert.equal(updatedOrder.data.order.subOrders[0].customFields.extraTotal,21,"Unchanged invoice items retain their saved custom calculations.");
 
+    await FormConfiguration.create([
+      {
+        createdBy:ownerId,
+        formKey:"products.form",
+        fields:[
+          {key:"productName",label:"Product name",fieldType:"text",required:true},
+          {key:"rate",label:"Selling price",fieldType:"currency",required:true},
+          {key:"quantity",label:"Current stock",fieldType:"number"},
+          {key:"units",label:"Units",custom:true,fieldType:"number"},
+          {key:"unitCost",label:"Unit cost",custom:true,fieldType:"currency"},
+          {key:"calculatedValue",label:"Calculated value",custom:true,fieldType:"currency",formula:"units * unitCost",editable:false},
+          {
+            key:"supplier",
+            label:"Supplier",
+            custom:true,
+            fieldType:"reference",
+            dataSource:{
+              type:"lookup",resource:"clients",valueField:"_id",labelField:"companyName",searchField:"companyName",
+              autoFill:[{targetKey:"supplierPhone",sourceKey:"phone"}]
+            }
+          },
+          {key:"supplierPhone",label:"Supplier phone",custom:true,fieldType:"phone",editable:false},
+          {key:"protectedNote",label:"Protected note",custom:true,fieldType:"text",editable:false,defaultValue:"Managed by the business"}
+        ]
+      },
+      {
+        createdBy:ownerId,
+        formKey:"expenses.form",
+        fields:[
+          {key:"date",label:"Date",fieldType:"date",required:true},
+          {key:"description",label:"Description",fieldType:"text",required:true},
+          {key:"amount",label:"Amount",fieldType:"currency",required:true},
+          {key:"category",label:"Category",fieldType:"select",required:true,options:[{value:"Operational",label:"Operational"},{value:"Production",label:"Production"}]},
+          {key:"taxRate",label:"Tax rate",fieldType:"number"},
+          {key:"taxAmount",label:"Tax amount",fieldType:"currency",formula:"amount * taxRate / 100",editable:false},
+          {key:"tags",label:"Tags",fieldType:"text"},
+          {
+            key:"clientId",
+            label:"Customer",
+            fieldType:"reference",
+            dataSource:{type:"lookup",resource:"clients",valueField:"_id",labelField:"companyName",searchField:"companyName"}
+          },
+          {key:"units",label:"Units",custom:true,fieldType:"number"},
+          {key:"unitCost",label:"Unit cost",custom:true,fieldType:"currency"},
+          {key:"customTotal",label:"Custom total",custom:true,fieldType:"currency",formula:"units * unitCost",editable:false},
+          {key:"protectedNote",label:"Protected note",custom:true,fieldType:"text",editable:false,defaultValue:"Expense note controlled by the business"}
+        ]
+      }
+    ]);
+
+    const createdProduct=await request("/products",{
+      method:"POST",
+      body:{
+        productName:"Configured product",
+        rate:50,
+        quantity:5,
+        customFields:{
+          units:2,
+          unitCost:7,
+          calculatedValue:999,
+          supplier:String(ownerClientId),
+          supplierPhone:"1111111111",
+          protectedNote:"Browser submitted value"
+        }
+      }
+    });
+    assert.equal(createdProduct.status,201,JSON.stringify(createdProduct.data));
+    assert.equal(createdProduct.data.product.customFields.calculatedValue,14);
+    assert.equal(createdProduct.data.product.customFields.supplier,String(ownerClientId));
+    assert.equal(createdProduct.data.product.customFields.supplierPhone,"9999999999");
+    assert.equal(createdProduct.data.product.customFields.protectedNote,"Managed by the business");
+    assert.ok(createdProduct.data.product.productCode,"Product code is still generated by the server.");
+
+    const updatedProduct=await request(`/products/${createdProduct.data.product._id}`,{
+      method:"PUT",
+      body:{
+        rate:60,
+        quantity:7,
+        customFields:{
+          units:3,
+          unitCost:10,
+          calculatedValue:999,
+          supplierPhone:"2222222222",
+          protectedNote:"Updated browser value"
+        }
+      }
+    });
+    assert.equal(updatedProduct.status,200,JSON.stringify(updatedProduct.data));
+    assert.equal(updatedProduct.data.product.customFields.calculatedValue,30);
+    assert.equal(updatedProduct.data.product.customFields.supplierPhone,"9999999999");
+    assert.equal(updatedProduct.data.product.customFields.protectedNote,"Managed by the business");
+
+    const rejectedProductReference=await request(`/products/${createdProduct.data.product._id}`,{
+      method:"PUT",
+      body:{customFields:{supplier:String(otherClientId),supplierPhone:"forged"}}
+    });
+    assert.equal(rejectedProductReference.status,400);
+    assert.match(rejectedProductReference.data.message,/not found in this business/i);
+    const productAfterRejectedReference=await request(`/products/${createdProduct.data.product._id}`);
+    assert.equal(productAfterRejectedReference.status,200);
+    assert.equal(productAfterRejectedReference.data.customFields.supplier,String(ownerClientId));
+    assert.equal(productAfterRejectedReference.data.customFields.supplierPhone,"9999999999");
+
+    const createdExpense=await request("/expenses",{
+      method:"POST",
+      body:{
+        date:"2026-10-31",
+        description:"Configured business expense",
+        amount:100,
+        category:"Operational",
+        taxRate:18,
+        taxAmount:999,
+        tags:["packing","urgent"],
+        clientId:String(ownerClientId),
+        customFields:{
+          units:2,
+          unitCost:5,
+          customTotal:999,
+          protectedNote:"Browser submitted expense note"
+        },
+        createdBy:String(otherOwnerId),
+        user:String(otherOwnerId)
+      }
+    });
+    assert.equal(createdExpense.status,201,JSON.stringify(createdExpense.data));
+    assert.equal(createdExpense.data.amount,100);
+    assert.equal(createdExpense.data.taxAmount,18,"Expense tax is recalculated by the server, not trusted from the browser.");
+    assert.deepEqual(createdExpense.data.tags,["packing","urgent"]);
+    assert.equal(String(createdExpense.data.createdBy),String(ownerId));
+    assert.equal(String(createdExpense.data.user),String(ownerId));
+    assert.equal(createdExpense.data.customFields.customTotal,10);
+    assert.equal(createdExpense.data.customFields.protectedNote,"Expense note controlled by the business");
+
+    const updatedExpense=await request(`/expenses/${createdExpense.data._id}`,{
+      method:"PUT",
+      body:{
+        taxRate:10,
+        tags:["packing","fragile"],
+        customFields:{
+          units:4,
+          unitCost:5,
+          customTotal:999,
+          protectedNote:"Updated browser expense note"
+        }
+      }
+    });
+    assert.equal(updatedExpense.status,200,JSON.stringify(updatedExpense.data));
+    assert.equal(updatedExpense.data.taxAmount,10);
+    assert.deepEqual(updatedExpense.data.tags,["packing","fragile"]);
+    assert.equal(updatedExpense.data.customFields.customTotal,20);
+    assert.equal(updatedExpense.data.customFields.protectedNote,"Expense note controlled by the business");
+
+    const rejectedExpenseReference=await request(`/expenses/${createdExpense.data._id}`,{
+      method:"PUT",
+      body:{clientId:String(otherClientId)}
+    });
+    assert.equal(rejectedExpenseReference.status,400);
+    assert.match(rejectedExpenseReference.data.message,/not found in this business/i);
+    const expenseAfterRejectedReference=await request(`/expenses/${createdExpense.data._id}`);
+    assert.equal(expenseAfterRejectedReference.status,200);
+    assert.equal(String(expenseAfterRejectedReference.data.clientId),String(ownerClientId));
+
     const tableKey="no-code-integration";
     const configured=await request(`/table-config/${tableKey}`,{
       method:"PUT",
@@ -320,7 +484,9 @@ test("custom table values persist with correct types and enforce business owners
           TableCustomValue.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
           TableConfiguration.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
           FormConfiguration.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
-          Client.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}})
+          Client.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
+          Product.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
+          Expense.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}})
         ]);
       }
       await mongoose.disconnect();

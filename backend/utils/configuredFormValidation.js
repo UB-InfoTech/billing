@@ -427,8 +427,11 @@ const validateConfiguredFormValues=({
     const previous=field.custom?existingCustom[field.key]:existing[field.key];
     if(!validateAllValues&&!sameValue(value,previous))continue;
     const normalized=normalizeConfiguredFieldValue(field,value);
+    const referenceIdMapping=field.fieldType==="reference"&&!field.custom
+      ?(field.dataSource?.autoFill||[]).find(mapping=>mapping.sourceKey==="_id")
+      :null;
     if(field.custom)nextCustomFields[field.key]=normalized;
-    else nextValues[field.key]=normalized;
+    else if(!referenceIdMapping)nextValues[field.key]=normalized;
   }
 
   return {values:nextValues,customFields:nextCustomFields};

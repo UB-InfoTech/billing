@@ -10,6 +10,7 @@ const Product=require("../models/Product");
 const Expense=require("../models/Expense");
 const CalendarEvent=require("../models/Calendar");
 const Profile=require("../models/Profile");
+const {prepareEwaybillForm}=require("../utils/ewaybillFormValidation");
 const TableConfiguration=require("../models/TableConfiguration");
 const TableCustomValue=require("../models/TableCustomValue");
 const FormConfiguration=require("../models/FormConfiguration");
@@ -297,6 +298,28 @@ test("custom table values persist with correct types and enforce business owners
           },
           {key:"customerPhone",label:"Customer phone",custom:true,fieldType:"phone",editable:false},
           {key:"internalNote",label:"Internal note",custom:true,fieldType:"text",visible:false,defaultValue:"Business-only event note"}
+        ]
+      },
+      {
+        createdBy:ownerId,
+        formKey:"ewaybill.form",
+        fields:[
+          {key:"supplyType",label:"Supply direction",fieldType:"text",required:false,options:["INVALID"]},
+          {key:"transDistance",label:"Distance",fieldType:"number",validation:{min:5}},
+          {key:"loadUnits",label:"Load units",custom:true,fieldType:"number"},
+          {key:"unitWeight",label:"Unit weight",custom:true,fieldType:"currency"},
+          {key:"totalWeight",label:"Total weight",custom:true,fieldType:"currency",formula:"loadUnits * unitWeight",editable:false},
+          {
+            key:"carrier",
+            label:"Carrier",
+            custom:true,
+            fieldType:"reference",
+            dataSource:{
+              type:"lookup",resource:"clients",valueField:"_id",labelField:"companyName",searchField:"companyName",
+              autoFill:[{targetKey:"carrierPhone",sourceKey:"phone"}]
+            }
+          },
+          {key:"carrierPhone",label:"Carrier phone",custom:true,fieldType:"phone",editable:false}
         ]
       },
       {
@@ -630,6 +653,66 @@ test("custom table values persist with correct types and enforce business owners
     assert.equal(updatedProfile.data.hasEWayPassword,true);
     const storedProfile=await Profile.findOne({createdBy:String(ownerId)}).lean();
     assert.equal(storedProfile.eWayPassword,"integration-secret-password","An empty update must keep the saved E-Way Bill password.");
+
+    const preparedEwaybill=await prepareEwaybillForm({
+      ownerId,
+      body:{
+        supplyType:"O",
+        subSupplyType:"1",
+        transactionType:"1",
+        transMode:"1",
+        vehicleType:"R",
+        transDistance:"15",
+        customFields:{
+          loadUnits:2,
+          unitWeight:3,
+          totalWeight:999,
+          carrier:String(ownerClientId),
+          carrierPhone:"1111111111"
+        }
+      }
+    });
+    assert.equal(preparedEwaybill.values.supplyType,"O");
+    assert.equal(preparedEwaybill.values.subSupplyType,"1");
+    assert.equal(preparedEwaybill.values.transDistance,15);
+    assert.equal(preparedEwaybill.customFields.totalWeight,6);
+    assert.equal(preparedEwaybill.customFields.carrier,String(ownerClientId));
+    assert.equal(preparedEwaybill.customFields.carrierPhone,"9999999999");
+
+    await assert.rejects(
+      ()=>prepareEwaybillForm({ownerId,body:{
+        supplyType:"INVALID",
+        subSupplyType:"1",
+        transactionType:"1",
+        transMode:"1",
+        vehicleType:"R",
+        transDistance:15
+      }}),
+      /available option/i
+    );
+    await assert.rejects(
+      ()=>prepareEwaybillForm({ownerId,body:{
+        supplyType:"O",
+        subSupplyType:"1",
+        transactionType:"1",
+        transMode:"1",
+        vehicleType:"R",
+        transDistance:4
+      }}),
+      /cannot be less than 5/i
+    );
+    await assert.rejects(
+      ()=>prepareEwaybillForm({ownerId,body:{
+        supplyType:"O",
+        subSupplyType:"1",
+        transactionType:"1",
+        transMode:"1",
+        vehicleType:"R",
+        transDistance:15,
+        customFields:{carrier:String(otherClientId)}
+      }}),
+      /not found in this business/i
+    );
 
     const tableKey="no-code-integration";
     const configured=await request(`/table-config/${tableKey}`,{

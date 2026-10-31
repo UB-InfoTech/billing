@@ -64,9 +64,6 @@ const applyConfiguredEventValues=(event,values,customFields,fields)=>{
   }
   event.customFields=customFields;
 };
-const prepareEventInput=({input,customFields,existingValues={},existingCustomFields={},isNewRecord=false})=>{
-  return {input,customFields,existingValues,existingCustomFields,isNewRecord};
-};
 const validDate=value=>{
   const date=new Date(value);
   return Number.isNaN(date.getTime())?null:date;

@@ -16,7 +16,7 @@ const auth=require("../middleware/auth");
 const {syncClientDataSafely,getInvoiceRevenue}=require("../utils/syncClientData");
 const {getCreditAppliedAmountAt}=require("../utils/creditNoteSettlementHistory");
 const {sanitizeOrderCreateInput,cleanCustomFields}=require("../utils/orderInput");
-const {loadConfiguredFormFields,calculateConfiguredCustomFields}=require("../utils/customFieldCalculations");
+const {loadConfiguredFormFields,calculateConfiguredCustomFields,hasConfiguredCustomCalculations}=require("../utils/customFieldCalculations");
 const {numberToWords}=require("../utils/numberToWords");
 const {appendStatusTransition}=require("../utils/statusHistory");
 const {hasInvoiceSensitiveChanges,wouldReduceTotalBelowApplied}=require("../utils/orderEditPolicy");
@@ -232,19 +232,22 @@ router.post("/orders/create",auth,async(req,res)=>{
       loadConfiguredFormFields(userId(req),"orders.form"),
       loadConfiguredFormFields(userId(req),"orders.items")
     ]);
-    body.customFields=calculateConfiguredCustomFields(
-      orderFields,
-      body,
-      body.customFields
-    );
-    body.subOrders=body.subOrders.map(item=>({
-      ...item,
-      customFields:calculateConfiguredCustomFields(
-        itemFields,
-        item,
-        item.customFields
-      )
-    }));
+    if(hasConfiguredCustomCalculations(orderFields)){
+      body.customFields=calculateConfiguredCustomFields(
+        orderFields,
+        body,
+        body.customFields
+      );
+    }
+    if(hasConfiguredCustomCalculations(itemFields)){
+      body.subOrders.forEach(item=>{
+        item.customFields=calculateConfiguredCustomFields(
+          itemFields,
+          item,
+          item.customFields
+        );
+      });
+    }
 
     const order=new Order(body);
     await applyWorkflows({resource:"orders",event:"record_created",doc:order,createdBy:userId(req)});
@@ -359,22 +362,23 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
       loadConfiguredFormFields(userId(req),"orders.form"),
       loadConfiguredFormFields(userId(req),"orders.items")
     ]);
-    order.customFields=calculateConfiguredCustomFields(
-      orderFields,
-      order.toObject({depopulate:true}),
-      cleanCustomFields(order.customFields)
-    );
-    order.subOrders=order.subOrders.map(item=>{
-      const itemValues=item.toObject({depopulate:true});
-      return {
-        ...itemValues,
-        customFields:calculateConfiguredCustomFields(
+    if(hasConfiguredCustomCalculations(orderFields)){
+      order.customFields=calculateConfiguredCustomFields(
+        orderFields,
+        order.toObject({depopulate:true}),
+        cleanCustomFields(order.customFields)
+      );
+    }
+    if(hasConfiguredCustomCalculations(itemFields)){
+      order.subOrders.forEach(item=>{
+        const itemValues=item.toObject({depopulate:true});
+        item.customFields=calculateConfiguredCustomFields(
           itemFields,
           itemValues,
           cleanCustomFields(item.customFields)
-        )
-      };
-    });
+        );
+      });
+    }
 
     await applyWorkflows({resource:"orders",event:"record_updated",doc:order,createdBy:userId(req)});
     if(String(order.status||"")!==String(oldStatus||"")){

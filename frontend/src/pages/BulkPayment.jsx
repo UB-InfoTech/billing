@@ -344,6 +344,7 @@ const PaymentForm = React.memo(({
     {customFieldNodes&&customFieldNodes.length>0&&(
       <div className="row g-3 mt-1">{customFieldNodes}</div>
     )}
+    {validationErrors._custom&&<div className="alert alert-danger mt-2" role="alert">{validationErrors._custom}</div>}
 
     <div className="row d-flex justify-content-between align-items-center">
       <div className="col-md-2">
@@ -826,7 +827,7 @@ export default function BulkPayment() {
         return next;
       });
     }
-  }, [validationErrors]);
+  }, [validationErrors,paymentFormConfig.fields]);
 
   const handleCustomAmountChange = useCallback((orderId, value) => {
     const numValue = parseDecimal(value || 0);
@@ -979,7 +980,7 @@ export default function BulkPayment() {
       submissionLockRef.current = false;
       setSubmitting(false);
     }
-  }, [form, selectedOrders, customSplits, orders, totalDue, selectedOrdersData]);
+  }, [form, selectedOrders, customSplits, orders, totalDue, selectedOrdersData,paymentFormConfig.fields]);
   const reportRef = useRef();
   const contentRef = useRef(null);
   const reactToPrintFn = useReactToPrint({ contentRef });
@@ -1026,6 +1027,8 @@ export default function BulkPayment() {
             onToggleModal={toggleModal}
             showModal={showModal}
             validationErrors={validationErrors}
+            customFieldNodes={paymentCustomFieldNodes}
+            onCustomize={()=>setPaymentFormSettingsOpen(true)}
           />
 
           {showModal && (
@@ -1059,6 +1062,21 @@ export default function BulkPayment() {
             />
           )}
         </form>
+
+        <FormConfigurator
+          open={paymentFormSettingsOpen}
+          onClose={()=>setPaymentFormSettingsOpen(false)}
+          title="Customize payment form"
+          subtitle="Add collection details, labels, choices and rules. Payment amounts, dates and allocation controls remain protected."
+          fields={paymentFormConfig.fields}
+          saving={paymentFormConfig.saving}
+          onSave={paymentFormConfig.save}
+          onReset={async()=>{
+            const defaults=await paymentFormConfig.reset();
+            paymentFormConfig.setFields(defaults);
+            setPaymentFormSettingsOpen(false);
+          }}
+        />
       </div>
     </ErrorBoundary>
   );

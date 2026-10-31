@@ -8,6 +8,7 @@ import {
   applyFormulas,
   buildConfiguredDefaults,
   getFieldState,
+  groupFieldsBySection,
   hydrateConfiguredValues,
   syncConfiguredCustomFields,
   useFormConfiguration
@@ -19,11 +20,25 @@ const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
 const blankProfile=()=>buildConfiguredDefaults({
   headerTitle:"",
   companyName:"",
+  legalName:"",
+  organizationType:"",
+  industry:"",
+  contactPerson:"",
+  emailAddress:"",
+  website:"",
   companyAddress:"",
+  addressLine2:"",
+  city:"",
+  district:"",
+  state:"",
+  country:"India",
   phoneNumber1:"",
   phoneNumber2:"",
   gstin:"",
   pan:"",
+  tan:"",
+  cin:"",
+  udyamNumber:"",
   bankName:"",
   accountNo:"",
   branchName:"",
@@ -50,11 +65,16 @@ export default function Profile(){
   const [successMessage,setSuccessMessage]=useState("");
 
   const builderOpen=searchParams.get("customize")==="form";
-  const profilePrimaryKeys=new Set(["headerTitle","companyName","companyAddress","phoneNumber1"]);
+  const profilePrimaryKeys=new Set([
+    "headerTitle","companyName","legalName","organizationType","industry",
+    "contactPerson","emailAddress","website","companyAddress","addressLine2",
+    "city","district","state","country","pinCode","stateCode","phoneNumber1","phoneNumber2"
+  ]);
   const primaryProfileFields=profileFields.filter(field=>{
     const state=getFieldState(field,{...profile,...(profile.customFields||{})});
     return state.visible&&(state.required||profilePrimaryKeys.has(field.key));
   });
+  const primaryProfileGroups=groupFieldsBySection(primaryProfileFields);
   const primaryProfileKeySet=new Set(primaryProfileFields.map(field=>field.key));
   const additionalProfileFields=profileFields.filter(field=>!primaryProfileKeySet.has(field.key));
   const renderProfileField=field=>{
@@ -98,7 +118,7 @@ export default function Profile(){
         setError("");
         setSuccessMessage("");
       }catch(loadError){
-        if(active)setError(loadError.response?.data?.message||"Unable to load company profile.");
+        if(active)setError(loadError.response?.data?.message||"Unable to load organization profile.");
       }finally{
         if(active)setLoading(false);
       }
@@ -135,9 +155,9 @@ export default function Profile(){
       const response=await axios.put(API+"/api/profile",next,auth());
       setProfile(applyFormulas(profileFields,hydrateConfiguredValues(response.data||next,profileFields)));
       setError("");
-      setSuccessMessage("Company profile saved. These details will be used on your invoices.");
+      setSuccessMessage("Organization profile saved. These details will be used on your invoices.");
     }catch(saveError){
-      setError(saveError.response?.data?.message||"We could not save the company details. Please check the fields and try again.");
+      setError(saveError.response?.data?.message||"We could not save the organization details. Please check the fields and try again.");
     }finally{setSaving(false);}
   };
 
@@ -145,8 +165,8 @@ export default function Profile(){
     <div className="container-fluid py-4">
       <div className="d-flex justify-content-between align-items-center mb-3 gap-2">
         <div>
-          <h2 className="mb-1">Company details</h2>
-          <div className="text-muted small">Add the details you want printed on invoices. Bank, tax and E-Way Bill information can be added later.</div>
+          <h2 className="mb-1">Organization profile</h2>
+          <div className="text-muted small">Enter your organization name, legal details, contact information and address. Tax registrations, bank details and invoice settings can be added now or later.</div>
         </div>
         <button type="button" className="btn btn-light border" onClick={()=>navigate("/profile?customize=form")}>
           <i className="bi bi-sliders me-1"></i>Customize profile form
@@ -162,24 +182,35 @@ export default function Profile(){
             ? <div className="text-center py-5"><span className="spinner-border spinner-border-sm me-2"></span>Loading profile...</div>
             : <form onSubmit={save}>
                 <section className="profile-quick-fields">
-                  <div className="profile-fields-heading">
-                    <span className="profile-step-number">1</span>
-                    <div>
-                      <h6 className="mb-1">Invoice header</h6>
-                      <p className="mb-0">Start with your company name. Add address and phone if you want them to appear on printed invoices.</p>
-                    </div>
-                  </div>
-                  <div className="row g-3">{primaryProfileFields.map(renderProfileField)}</div>
+                  {primaryProfileGroups.map(group=>(
+                    <section className="profile-primary-group mb-4" key={group.key}>
+                      <div className="profile-fields-heading">
+                        <div>
+                          <h6 className="mb-1">{group.label}</h6>
+                          <p className="mb-0">
+                            {group.key==="organization"||group.key==="company"
+                              ? "Use the name and legal structure that identify your business."
+                              : group.key==="contact"
+                                ? "Add the details customers can use to contact your organization."
+                                : group.key==="address"
+                                  ? "Enter the business address used for correspondence and invoices."
+                                  : "Complete the details your business needs."}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="row g-3">{group.fields.map(renderProfileField)}</div>
+                    </section>
+                  ))}
                 </section>
                 {additionalProfileFields.some(field=>getFieldState(field,{...profile,...(profile.customFields||{})}).visible)&&(
                   <details className="profile-additional-details mt-3">
-                    <summary><i className="bi bi-plus-circle me-2"></i>More company details <span>GST/PAN, bank details, invoice numbering and E-Way Bill setup</span></summary>
+                    <summary><i className="bi bi-plus-circle me-2"></i>Registrations, banking and billing <span>GST, PAN, CIN, Udyam, bank details, invoice numbering and E-Way Bill setup</span></summary>
                     <div className="row g-3 p-3">{additionalProfileFields.map(renderProfileField)}</div>
                   </details>
                 )}
                 <div className="d-flex justify-content-end mt-4">
                   <button type="submit" className="btn btn-primary px-4" disabled={saving}>
-                    {saving?<><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>:"Save company profile"}
+                    {saving?<><span className="spinner-border spinner-border-sm me-2"></span>Saving...</>:"Save organization profile"}
                   </button>
                 </div>
               </form>}
@@ -189,8 +220,8 @@ export default function Profile(){
       <FormConfigurator
         open={builderOpen}
         onClose={()=>navigate("/profile")}
-        title="Customize company profile"
-        subtitle="Arrange fields, add your own business information, set visibility, rules and validations."
+        title="Customize organization profile"
+        subtitle="Arrange organization fields, add your own business information, set visibility, rules and validations."
         fields={profileFields}
         onSave={saveForm}
         onReset={resetForm}

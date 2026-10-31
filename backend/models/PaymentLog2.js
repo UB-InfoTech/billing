@@ -15,7 +15,8 @@ const PaymentLogSchema=new mongoose.Schema({
   skippedOrders:[{orderId:{type:mongoose.Schema.Types.ObjectId,ref:"Order2"},reason:{type:String,default:"fully_paid"}}],
   transactionMetadata:{requestId:String,processingTimeMs:{type:Number,min:0},batchSize:{type:Number,min:1},ipAddress:String,userAgent:{type:String,maxlength:500}},
   status:{type:String,enum:["completed","partially_completed","failed"],default:"completed"},
-  errorDetails:{code:String,message:String,recoverable:Boolean}
+  errorDetails:{code:String,message:String,recoverable:Boolean},
+  customFields:{type:Map,of:mongoose.Schema.Types.Mixed,default:{}}
 },{timestamps:true,versionKey:false});
 PaymentLogSchema.index({userId:1,createdAt:-1});
 PaymentLogSchema.index({reference:1,createdAt:-1});

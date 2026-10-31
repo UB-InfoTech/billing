@@ -1,7 +1,7 @@
 import BusinessPageHeader from "../components/BusinessPageHeader";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {useSearchParams} from "react-router-dom";
-import {ORDER_FORM_FIELDS,ORDER_ITEM_FIELDS} from "../config/noCodeCatalog";
+import {ORDER_FORM_FIELDS,ORDER_ITEM_FIELDS,PAYMENT_FORM_FIELDS} from "../config/noCodeCatalog";
 import axios from "axios";
 import editSVG from '../assets/edit.svg';
 import deleteSVG from '../assets/delete.svg';
@@ -71,6 +71,7 @@ function Order2() {
     const [orderId, setOrderId] = useState(null);
     const [formSettingsOpen,setFormSettingsOpen]=useState(false);
     const [itemSettingsOpen,setItemSettingsOpen]=useState(false);
+    const [paymentFormSettingsOpen,setPaymentFormSettingsOpen]=useState(false);
     const [tableCustomizeRequested,setTableCustomizeRequested]=useState(false);
     const [ewayCustomizeRequested,setEwayCustomizeRequested]=useState(false);
     const [searchParams,setSearchParams]=useSearchParams();
@@ -80,6 +81,7 @@ function Order2() {
         const action=searchParams.get("action");
         if(customize==="form")setFormSettingsOpen(true);
         if(customize==="items")setItemSettingsOpen(true);
+        if(customize==="payments")setPaymentFormSettingsOpen(true);
         if(customize==="table")setTableCustomizeRequested(true);
         if(customize==="ewaybill")setEwayCustomizeRequested(true);
         if(action==="new"){
@@ -99,12 +101,15 @@ function Order2() {
     },[searchParams,setSearchParams]);
     const orderFormConfig=useFormConfiguration("orders.form",ORDER_FORM_FIELDS);
     const orderItemConfig=useFormConfiguration("orders.items",ORDER_ITEM_FIELDS);
+    const paymentFormConfig=useFormConfiguration("orders.payments",PAYMENT_FORM_FIELDS);
     const emptyOrderItem=()=>buildConfiguredDefaults({designNumber:"",orderName:"",productId:null,hsnCode:0,qtyUnit:"PCS",quantity:0,cut:0,MTR:0,unitPrice:0,shortPcs:0,customFields:{}},orderItemConfig.fields);
+    const emptyPaymentRecord=()=>buildConfiguredDefaults({amount:"",method:"Cash",amountReference:"",paymentDate:formatDateInput(new Date()),customFields:{}},paymentFormConfig.fields);
     const emptyOrder=()=>buildConfiguredDefaults({orderDate:new Date(),orderNumber:OrderBillNo,lrNo:"",challanNumber:"",Address:"",State:"",City:"",pinCode:"",stateCode:"",clientId:"",gstNumber:"",companyName:"",subOrders:[],status:"Pending",paymentTerms:"30",taxPercentage:5,discountRate:0,note:"",customFields:{}},orderFormConfig.fields);
     const linkedOrderSources=useMemo(()=>Array.from(new Set([
         ...orderFormConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean),
-        ...orderItemConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean)
-    ])),[orderFormConfig.fields,orderItemConfig.fields]);
+        ...orderItemConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean),
+        ...paymentFormConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean)
+    ])),[orderFormConfig.fields,orderItemConfig.fields,paymentFormConfig.fields]);
     const {records:linkedRecords,searchRecords:searchLinkedRecords}=useNoCodeDataSources(linkedOrderSources);
     const [editingOrder, setEditingOrder] = useState(null);
     const [viewingOrder,setViewingOrder]=useState(null);
@@ -112,7 +117,7 @@ function Order2() {
 
     const [payments, setPayments] = useState([]);
     const [editPayment, setEditPayment] = useState(null);
-    const [newPayment, setNewPayment] = useState({ amount: "", method: "Cash", amountReference: "", paymentDate: formatDateInput(new Date()) });
+    const [newPayment, setNewPayment] = useState(()=>emptyPaymentRecord());
     const [paymentSubmitting,setPaymentSubmitting]=useState(false);
     const [paymentFeedback,setPaymentFeedback]=useState(null);
     const [paymentsLoading,setPaymentsLoading]=useState(false);

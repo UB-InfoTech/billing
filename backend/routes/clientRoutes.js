@@ -11,10 +11,12 @@ const {getInvoiceRevenue}=require("../utils/syncClientData");
 const {buildCustomerStatement}=require("../utils/customerStatement");
 const auth=require("../middleware/auth");
 const {escapeRegex}=require("../utils/escapeRegex");
+const {loadConfiguredFormFields,calculateConfiguredCustomFields}=require("../utils/customFieldCalculations");
 
 const router=express.Router();
 const owner=req=>req.user.id;
 const cleanCustomFields=value=>{
+  if(value instanceof Map)return Object.fromEntries([...value.entries()].slice(0,100).map(([key,val])=>[String(key).slice(0,100),val]));
   if(!value||typeof value!=="object"||Array.isArray(value))return {};
   return Object.fromEntries(Object.entries(value).slice(0,100).map(([key,val])=>[String(key).slice(0,100),val]));
 };
@@ -85,7 +87,12 @@ router.post("/",auth,async(req,res)=>{
       if(input[key]!==undefined)body[key]=input[key];
     });
     body.createdBy=owner(req);
-    body.customFields=cleanCustomFields(body.customFields);
+    const configuredFields=await loadConfiguredFormFields(owner(req),"clients.form");
+    body.customFields=calculateConfiguredCustomFields(
+      configuredFields,
+      body,
+      cleanCustomFields(body.customFields)
+    );
     if(body.gstNumber)body.gstNumber=String(body.gstNumber).trim().toUpperCase();
     const client=new Client(body);
     await applyWorkflows({resource:"clients",event:"record_created",doc:client,createdBy:owner(req)});
@@ -102,7 +109,23 @@ router.patch("/:id",auth,async(req,res)=>{
     if(!client)return res.status(404).json({message:"Client not found"});
     const hadClientIdentity=hasClientIdentity(client);
     const allowed=["name","email","phone","address","state","city","pinCode","stateCode","gstNumber","companyName","businessType","paymentTerms","loyaltyPoints","discountRate","accountStatus","notes","customFields"];
-    for(const key of allowed)if(req.body?.[key]!==undefined)client[key]=key==="customFields"?cleanCustomFields(req.body[key]):req.body[key];
+    for(const key of allowed){
+      if(req.body?.[key]===undefined)continue;
+      if(key==="customFields"){
+        client.customFields={
+          ...cleanCustomFields(client.customFields),
+          ...cleanCustomFields(req.body[key])
+        };
+      }else{
+        client[key]=req.body[key];
+      }
+    }
+    const configuredFields=await loadConfiguredFormFields(owner(req),"clients.form");
+    client.customFields=calculateConfiguredCustomFields(
+      configuredFields,
+      client.toObject({depopulate:true}),
+      cleanCustomFields(client.customFields)
+    );
     if(client.gstNumber)client.gstNumber=String(client.gstNumber).trim().toUpperCase();
     await applyWorkflows({resource:"clients",event:"record_updated",doc:client,createdBy:owner(req)});
     if(hadClientIdentity||req.body?.name!==undefined||req.body?.companyName!==undefined){

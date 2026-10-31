@@ -191,10 +191,10 @@ router.delete("/:tableKey",auth,async(req,res)=>{
   try{
     const tableKey=cleanString(req.params.tableKey,120);
     if(!tableKey)return res.status(400).json({message:"Table key is required."});
-    await Promise.all([
-      TableConfiguration.deleteOne({createdBy:owner(req),tableKey}),
-      TableCustomValue.deleteMany({createdBy:owner(req),tableKey})
-    ]);
+    // Resetting a view must never erase data entered into custom columns.
+    // Old values remain available in the saved-value store if the layout is
+    // restored later or the business needs to recover a removed column.
+    await TableConfiguration.deleteOne({createdBy:owner(req),tableKey});
     return res.json({message:"Table configuration reset successfully."});
   }catch(error){
     return res.status(500).json({message:error.message});

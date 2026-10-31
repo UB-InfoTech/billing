@@ -6,6 +6,7 @@ const jwt=require("jsonwebtoken");
 process.env.JWT_SECRET||="billing-integration-tests-only-secret";
 const app=require("../server");
 const Client=require("../models/Client");
+const Order=require("../models/Order2");
 const Product=require("../models/Product");
 const Expense=require("../models/Expense");
 const CalendarEvent=require("../models/Calendar");
@@ -29,7 +30,7 @@ test("custom table values persist with correct types and enforce business owners
 
   try{
     await mongoose.connect(mongoUri,{serverSelectionTimeoutMS:10000});
-    await Promise.all([Client.init(),Product.init(),Expense.init(),CalendarEvent.init(),Profile.init(),TableConfiguration.init(),TableCustomValue.init(),FormConfiguration.init()]);
+    await Promise.all([Client.init(),Order.init(),Product.init(),Expense.init(),CalendarEvent.init(),Profile.init(),TableConfiguration.init(),TableCustomValue.init(),FormConfiguration.init()]);
 
     ownerId=new mongoose.Types.ObjectId();
     otherOwnerId=new mongoose.Types.ObjectId();
@@ -347,10 +348,13 @@ test("custom table values persist with correct types and enforce business owners
     );
     assert.equal(rejectedPaymentReference.status,400);
     assert.match(rejectedPaymentReference.data.message,/not found in this business/i);
-    const paymentAfterRejectedUpdate=await request(`/order/orders/${createdOrder.data.order._id}`);
-    assert.equal(paymentAfterRejectedUpdate.status,200);
-    assert.equal(paymentAfterRejectedUpdate.data.order.payments.at(-1).amount,6);
-    assert.equal(paymentAfterRejectedUpdate.data.order.payments.at(-1).customFields.collectorPhone,"9999999999");
+    const paymentAfterRejectedUpdate=await Order.findOne({
+      _id:createdOrder.data.order._id,
+      createdBy:ownerId
+    }).lean();
+    const unchangedPayment=paymentAfterRejectedUpdate.payments.find(item=>String(item._id)===String(createdPaymentRecord._id));
+    assert.equal(unchangedPayment.amount,6);
+    assert.equal(unchangedPayment.customFields.collectorPhone,"9999999999");
 
     await FormConfiguration.create([
       {

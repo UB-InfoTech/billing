@@ -84,6 +84,7 @@ const mergeConfiguredPaymentFields=savedFields=>{
       custom:false,
       system:true,
       locked:true,
+      visible:true,
       fieldType:defaultField.fieldType,
       required:defaultField.required,
       editable:true,

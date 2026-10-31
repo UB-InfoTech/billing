@@ -12,6 +12,8 @@ const { buildClientCreditBalanceMutation } = require("../utils/clientCreditBalan
 const { recordFinancialRecoveryIssue } = require("../utils/financialRecovery");
 const { createSettlementHistoryEvent, appendSettlementHistoryEvent } = require("../utils/creditNoteSettlementHistory");
 const { prepareCreditNoteCustomFields, plainCustomFields } = require("../utils/creditNoteFormValidation");
+const FormConfiguration=require("../models/FormConfiguration");
+const {getConfiguredFieldState}=require("../utils/configuredFormValidation");
 
 
 const router = express.Router();
@@ -575,7 +577,7 @@ function creditWords(value) {
   return result+" Only";
 }
 
-function renderCreditNoteHtml(note, profile, order) {
+function renderCreditNoteHtml(note, profile, order, additionalDetailsHtml="") {
   const items=Array.isArray(note.items)?note.items:[];
   const totals=note.totals||{};
   const settlement=note.settlement||{};
@@ -631,7 +633,7 @@ table{width:100%;border-collapse:collapse}th{background:#111827;color:#fff;paddi
 .grand{border-top:2px solid #111827;margin-top:5px;padding-top:8px;font-size:16px;font-weight:900}
 .note{margin-top:10px;padding:8px;background:#f8fafc;border-left:3px solid #111827}
 .footer{display:flex;justify-content:space-between;gap:20px;border-top:1px solid #d1d5db;margin-top:20px;padding-top:12px}
-.signature{text-align:center;min-width:200px;padding-top:24px}.print-footer{text-align:center;color:#6b7280;font-size:9px;margin-top:15px}
+.signature{text-align:center;min-width:200px;padding-top:24px}.additional{border:1px solid #d1d5db;border-radius:5px;padding:10px;margin-top:14px}.additional-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.additional-row span{display:block;color:#6b7280;font-size:9px}.additional-row strong{display:block;overflow-wrap:anywhere}.print-footer{text-align:center;color:#6b7280;font-size:9px;margin-top:15px}
 @media print{body{background:#fff}.page{margin:0;padding:0;width:auto;min-height:auto}.no-print{display:none}}
 </style>
 </head>
@@ -700,6 +702,7 @@ table{width:100%;border-collapse:collapse}th{background:#111827;color:#fff;paddi
     </div>
   </div>
 
+  ${additionalDetailsHtml}
   <div class="footer">
     <div>
       ${profile.bankName?`<div class="bold">${escapeHtml(profile.bankName)}</div>`:""}
@@ -740,9 +743,24 @@ router.get("/:id/print", auth, async (req, res) => {
     const profile = (await require("../models/Profile")
       .findOne({ createdBy: req.user.id })
       .lean()) || {};
+    const formConfig=await FormConfiguration.findOne({
+      createdBy:new mongoose.Types.ObjectId(String(req.user.id)),
+      formKey:"creditnotes.form"
+    }).select("fields").lean();
+    const savedCustomFields=plainCustomFields(note.customFields);
+    const detailRows=(formConfig?.fields||[]).filter(field=>field?.custom).map(field=>{
+      const state=getConfiguredFieldState(field,savedCustomFields);
+      const value=savedCustomFields[field.key];
+      if(!state.visible||value===undefined||value===null||value==="")return "";
+      const display=Array.isArray(value)?value.join(", "):typeof value==="boolean"?value?"Yes":"No":String(value);
+      return `<div class="additional-row"><span>${escapeHtml(field.label||field.key)}</span><strong>${escapeHtml(display)}</strong></div>`;
+    }).filter(Boolean);
+    const additionalDetailsHtml=detailRows.length
+      ?`<div class="additional"><div class="label">Additional details</div><div class="additional-grid">${detailRows.join("")}</div></div>`
+      :"";
 
     res.set("Cache-Control", "no-store");
-    return res.type("html").send(renderCreditNoteHtml(note, profile, order));
+    return res.type("html").send(renderCreditNoteHtml(note, profile, order, additionalDetailsHtml));
   } catch (error) {
     console.error("Credit note print error:", error);
     return res.status(500).json({

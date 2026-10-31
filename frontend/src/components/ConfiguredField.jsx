@@ -102,7 +102,9 @@ export default function ConfiguredField({
     if(!Array.isArray(next)&&onRecordChange&&Array.isArray(lookupRecords)){
       const candidates=[...lookupRecords,...(lookupResults||[])];
       const selected=candidates.find(record=>String(record?.[lookupValueField]??"")===String(next??""));
-      if(selected)onRecordChange(selected,next);
+      // Notify the form when a selection is cleared as well as when a record
+      // is chosen, so previously auto-filled values and hidden IDs are cleared.
+      onRecordChange(selected||null,next);
     }
   };
 

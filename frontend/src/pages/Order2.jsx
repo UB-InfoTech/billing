@@ -354,11 +354,24 @@ function Order2() {
     };
 
     const fieldFor=(fields,key)=>fields.find(field=>field.key===key)||{key,label:key,fieldType:"text",width:6,visible:true,order:0};
+    const lookupRecordId=(field,values)=>{
+        const idMapping=(field?.dataSource?.autoFill||[]).find(mapping=>mapping.sourceKey==="_id");
+        if(!idMapping)return undefined;
+        return values?.customFields?.[idMapping.targetKey]??values?.[idMapping.targetKey];
+    };
     const configuredOrderValue=field=>{
+        if(field.fieldType==="reference"&&field.dataSource?.type==="lookup"){
+            const id=lookupRecordId(field,formData);
+            if(id!==undefined&&id!==null)return id;
+        }
         if(field.custom)return formData.customFields?.[field.key]??formData[field.key]??field.defaultValue??"";
         return formData[field.key]??field.defaultValue??"";
     };
     const configuredItemValue=(item,field)=>{
+        if(field.fieldType==="reference"&&field.dataSource?.type==="lookup"){
+            const id=lookupRecordId(field,item);
+            if(id!==undefined&&id!==null)return id;
+        }
         if(field.custom)return item.customFields?.[field.key]??item[field.key]??field.defaultValue??"";
         return item[field.key]??field.defaultValue??"";
     };

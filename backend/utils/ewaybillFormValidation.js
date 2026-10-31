@@ -10,12 +10,12 @@ const {
 
 const EWAYBILL_BASE_FIELDS=[
   {
-    key:"supplyType",label:"Supply Type",fieldType:"select",required:true,system:true,locked:true,
+    key:"supplyType",label:"Supply Type",fieldType:"select",width:4,section:"compliance",order:0,required:true,system:true,locked:true,
     defaultValue:"O",
     options:[{value:"O",label:"Outward"},{value:"I",label:"Inward"}]
   },
   {
-    key:"subSupplyType",label:"Sub Supply Type",fieldType:"select",required:true,system:true,locked:true,
+    key:"subSupplyType",label:"Sub Supply Type",fieldType:"select",width:4,section:"compliance",order:1,required:true,system:true,locked:true,
     defaultValue:"1",
     options:[
       {value:"1",label:"Supply"},{value:"2",label:"Import"},{value:"3",label:"Export"},
@@ -24,30 +24,30 @@ const EWAYBILL_BASE_FIELDS=[
     ]
   },
   {
-    key:"transactionType",label:"Transaction Type",fieldType:"select",required:true,system:true,locked:true,
+    key:"transactionType",label:"Transaction Type",fieldType:"select",width:4,section:"compliance",order:2,required:true,system:true,locked:true,
     defaultValue:"1",
     options:[
       {value:"1",label:"Regular"},{value:"2",label:"Bill To - Ship To"},
       {value:"3",label:"Bill From - Dispatch From"},{value:"4",label:"Combination"}
     ]
   },
-  {key:"transporterName",label:"Transporter Name",fieldType:"text"},
-  {key:"transporterId",label:"Transporter GST / ID",fieldType:"text"},
-  {key:"transDocNo",label:"Transport Document No.",fieldType:"text"},
-  {key:"transDocDate",label:"Transport Document Date",fieldType:"date"},
+  {key:"transporterName",label:"Transporter Name",fieldType:"text",width:3,section:"transport",order:3},
+  {key:"transporterId",label:"Transporter GST / ID",fieldType:"text",width:3,section:"transport",order:4},
+  {key:"transDocNo",label:"Transport Document No.",fieldType:"text",width:3,section:"transport",order:5},
+  {key:"transDocDate",label:"Transport Document Date",fieldType:"date",width:3,section:"transport",order:6},
   {
-    key:"transMode",label:"Transport Mode",fieldType:"select",defaultValue:"1",
+    key:"transMode",label:"Transport Mode",fieldType:"select",width:3,section:"transport",order:7,defaultValue:"1",
     options:[
       {value:"1",label:"Road"},{value:"2",label:"Rail"},
       {value:"3",label:"Air"},{value:"4",label:"Ship"}
     ]
   },
-  {key:"vehicleNo",label:"Vehicle Number",fieldType:"text"},
+  {key:"vehicleNo",label:"Vehicle Number",fieldType:"text",width:3,section:"transport",order:8},
   {
-    key:"vehicleType",label:"Vehicle Type",fieldType:"select",defaultValue:"R",
+    key:"vehicleType",label:"Vehicle Type",fieldType:"select",width:3,section:"transport",order:9,defaultValue:"R",
     options:[{value:"R",label:"Regular"},{value:"O",label:"ODC"}]
   },
-  {key:"transDistance",label:"Distance (KM)",fieldType:"number",defaultValue:0,validation:{min:0}}
+  {key:"transDistance",label:"Distance (KM)",fieldType:"number",width:3,section:"transport",order:10,defaultValue:0,validation:{min:0}}
 ];
 
 const EWAYBILL_ROOT_KEYS=EWAYBILL_BASE_FIELDS.map(field=>field.key);

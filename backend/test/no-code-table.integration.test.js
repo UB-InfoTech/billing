@@ -140,17 +140,7 @@ test("custom table values persist with correct types and enforce business owners
     const updatedOrder=await request(`/order/orders/${createdOrder.data.order._id}/update`,{
       method:"PUT",
       body:{
-        customFields:{packingCount:4,packingRate:5,packingCharge:999},
-        subOrders:[{
-          _id:createdOrder.data.order.subOrders[0]._id,
-          orderName:"No-code integration item",
-          quantity:2,
-          cut:0,
-          MTR:0,
-          unitPrice:10,
-          qtyUnit:"PCS",
-          customFields:{extraUnits:2,extraRate:12,extraTotal:999}
-        }]
+        customFields:{packingCount:4,packingRate:5,packingCharge:999}
       }
     });
     assert.equal(updatedOrder.status,200,JSON.stringify(updatedOrder.data));

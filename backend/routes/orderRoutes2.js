@@ -370,10 +370,6 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
         order.discountRate=Number(selectedClient.discountRate??order.discountRate??0);
       }
     }
-    const [orderFields,itemFields]=await Promise.all([
-      loadConfiguredFormFields(userId(req),"orders.form"),
-      loadConfiguredFormFields(userId(req),"orders.items")
-    ]);
     if(hasConfiguredCustomCalculations(orderFields)){
       order.customFields=calculateConfiguredCustomFields(
         orderFields,

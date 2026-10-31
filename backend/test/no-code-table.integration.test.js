@@ -116,7 +116,7 @@ test("custom table values persist with correct types and enforce business owners
     assert.equal(updatedFormulaClient.status,200,JSON.stringify(updatedFormulaClient.data));
     assert.equal(updatedFormulaClient.data.customFields.amount,60);
 
-    const createdOrder=await request("/orders/create",{
+    const createdOrder=await request("/order/orders/create",{
       method:"POST",
       body:{
         clientId:String(ownerClientId),
@@ -137,7 +137,7 @@ test("custom table values persist with correct types and enforce business owners
     assert.equal(createdOrder.data.order.customFields.packingCharge,10);
     assert.equal(createdOrder.data.order.subOrders[0].customFields.extraTotal,21);
 
-    const updatedOrder=await request(`/orders/${createdOrder.data.order._id}/update`,{
+    const updatedOrder=await request(`/order/orders/${createdOrder.data.order._id}/update`,{
       method:"PUT",
       body:{
         customFields:{packingCount:4,packingRate:5,packingCharge:999},

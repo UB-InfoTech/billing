@@ -163,7 +163,16 @@ export const mergeFormFields=(baseFields,savedFields,formKey="")=>{
       editable:savedField.editable!==false,
       readOnly:Boolean(savedField.readOnly||savedField.formula),
       disabled:Boolean(savedField.disabled),
-      dataSource:savedField.dataSource&&typeof savedField.dataSource==="object"?{...field.dataSource,...savedField.dataSource,multiple:Boolean(savedField.dataSource.multiple)}:field.dataSource,
+      dataSource:savedField.dataSource&&typeof savedField.dataSource==="object"?{
+        ...field.dataSource,
+        ...savedField.dataSource,
+        valueField:savedField.dataSource.type==="lookup"?"_id":field.dataSource.valueField||"_id",
+        autoFill:[...new Map([
+          ...(field.dataSource?.autoFill||[]),
+          ...(savedField.dataSource.autoFill||[])
+        ].map(mapping=>[mapping.targetKey,mapping])).values()],
+        multiple:Boolean(savedField.dataSource.multiple)
+      }:field.dataSource,
       conditions:Array.isArray(savedField.conditions)?savedField.conditions:field.conditions,
       validation:savedField.validation||field.validation,
       custom:false,

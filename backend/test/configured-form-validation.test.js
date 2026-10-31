@@ -37,8 +37,8 @@ test("conditional optional and disabled rules override configured required state
   };
   const pickup=getConfiguredFieldState(field,{deliveryType:"Pickup"});
   const delivery=getConfiguredFieldState(field,{deliveryType:"Delivery"});
-  assert.deepEqual(pickup,{visible:true,required:false,disabled:true});
-  assert.deepEqual(delivery,{visible:true,required:true,disabled:false});
+  assert.deepEqual(pickup,{visible:true,required:false,disabled:true,readOnly:false});
+  assert.deepEqual(delivery,{visible:true,required:true,disabled:false,readOnly:false});
 });
 
 test("server rejects missing visible conditional required fields",()=>{

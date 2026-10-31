@@ -3,6 +3,7 @@ const mongoose=require("mongoose");
 const FormConfiguration=require("../models/FormConfiguration");
 const auth=require("../middleware/auth");
 const {FORM_LOOKUP_SOURCES,getFormLookupSource}=require("../utils/formLookupPolicy");
+const {mergeConfiguredEwaybillFields}=require("../utils/ewaybillFormValidation");
 
 const router=express.Router();
 
@@ -191,6 +192,11 @@ router.get("/:formKey",auth,async(req,res)=>{
     const formKey=cleanString(req.params.formKey,120);
     if(!formKey)return res.status(400).json({message:"Form key is required."});
     const config=await FormConfiguration.findOne({createdBy:owner(req),formKey}).lean();
+    if(formKey==="ewaybill.form"){
+      const response=config||{formKey,fields:[]};
+      response.fields=mergeConfiguredEwaybillFields(response.fields);
+      return res.json(response);
+    }
     return res.json(config||{formKey,fields:[]});
   }catch(error){
     return res.status(500).json({message:error.message});
@@ -201,7 +207,10 @@ router.put("/:formKey",auth,async(req,res)=>{
   try{
     const formKey=cleanString(req.params.formKey,120);
     if(!formKey)return res.status(400).json({message:"Form key is required."});
-    const fields=sanitizeFields(req.body?.fields);
+    let fields=sanitizeFields(req.body?.fields);
+    if(formKey==="ewaybill.form"){
+      fields=mergeConfiguredEwaybillFields(fields);
+    }
 
     const ownerId=new mongoose.Types.ObjectId(owner(req));
     const existing=await FormConfiguration.findOne({createdBy:ownerId,formKey}).lean();

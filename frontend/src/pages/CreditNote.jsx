@@ -1266,6 +1266,14 @@ function CreditNotePrint({ note, profile, customFields=[] }) {
         totalAmount: original?.totalAmount,
         finalRevenue: original?.finalRevenue,
     });
+    const savedCustomFields=note?.customFields&&typeof note.customFields==="object"?note.customFields:{};
+    const additionalDetails=(customFields||[]).filter(field=>field.custom).map(field=>{
+        const value=savedCustomFields[field.key];
+        const state=getFieldState(field,savedCustomFields);
+        if(!state.visible||value===undefined||value===null||value==="")return null;
+        const display=Array.isArray(value)?value.join(", "):typeof value==="boolean"?value?"Yes":"No":String(value);
+        return {key:field.key,label:field.label||field.key,value:display};
+    }).filter(Boolean);
 
     const amountInWords = (value) => {
         const ones = ["Zero","One","Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Eleven","Twelve","Thirteen","Fourteen","Fifteen","Sixteen","Seventeen","Eighteen","Nineteen"];
@@ -1422,6 +1430,20 @@ function CreditNotePrint({ note, profile, customFields=[] }) {
                     </div>
                 </div>
             </div>
+
+            {additionalDetails.length>0&&(
+                <div className="cn-info-box mt-3">
+                    <div className="cn-section-label">Additional details</div>
+                    <div className="row g-2">
+                        {additionalDetails.map(item=>(
+                            <div className="col-md-6" key={item.key}>
+                                <div className="small text-muted">{item.label}</div>
+                                <div className="fw-semibold">{item.value}</div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             <div className="cn-footer">
                 <div>

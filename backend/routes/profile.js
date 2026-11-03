@@ -75,7 +75,7 @@ const receiveOrganizationLogo=(req,res,next)=>{
 };
 
 const publicProfileForOwner=(profile,ownerId)=>{
-  const result=publicProfileForOwner(profile,req.user.id);
+  const result=toPublicProfile(profile);
   if(!result)return result;
   result.logoUrl=getPublicOrganizationLogoUrl(result.logoUrl,ownerId);
   return result;

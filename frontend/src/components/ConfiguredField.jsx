@@ -119,7 +119,7 @@ export default function ConfiguredField({
     const data=new FormData();data.append("formKey",field.formKey);data.append("fieldKey",field.key);data.append("file",selected);
     setFileUploading(true);setFileError("");
     try{
-      const apiBase=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\\/$/,"");
+      const apiBase=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
       const response=await axios.post(`${apiBase}/api/no-code-files/upload`,data,{headers:{"x-auth-token":localStorage.getItem("token")||""}});
       const file=response.data?.file;if(!file?.id)throw new Error("The uploaded file could not be saved.");
       setFileMetadata(file);handleValue(file.id);
@@ -129,7 +129,7 @@ export default function ConfiguredField({
 
   useEffect(()=>{
     let active=true;let objectUrl="";
-    const apiBase=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\\/$/,"");
+    const apiBase=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
     if(!["image","file"].includes(field?.fieldType)||!value){setFileMetadata(null);setFilePreviewUrl("");setFileError("");return undefined;}
     const loadFile=async()=>{
       try{

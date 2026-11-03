@@ -868,6 +868,7 @@ const SalesAnalytics = () => {
                     {stateData[selectedState] ? (
                       <DynamicTable
                           tableKey="sales-analytics.state-cities"
+                          allowCustomFields={false}
                           autoOpenSettings={searchParams.get("customize")==="state-table"}
                           rows={Object.entries(stateData[selectedState].cities || {}).map(([city,count])=>({
                             city:city||"Unknown",

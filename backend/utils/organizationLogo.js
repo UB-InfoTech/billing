@@ -6,7 +6,7 @@ function getOwnedOrganizationLogoFilename(value,ownerId){
   const owner=String(ownerId??"").trim();
   if(!/^[a-f0-9]{24}$/i.test(owner)||!raw.startsWith(LOGO_PATH_PREFIX))return "";
   const filename=raw.slice(LOGO_PATH_PREFIX.length);
-  if(filename.includes("/")||filename.includes("\\\\"))return "";
+  if(filename.includes("/")||filename.includes("\\"))return "";
   const match=filename.match(LOGO_FILENAME_PATTERN);
   if(!match||match[1].toLowerCase()!==owner.toLowerCase())return "";
   return filename;

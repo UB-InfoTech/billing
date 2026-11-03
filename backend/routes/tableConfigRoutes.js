@@ -2,6 +2,12 @@ const express=require("express");
 const mongoose=require("mongoose");
 const TableConfiguration=require("../models/TableConfiguration");
 const TableCustomValue=require("../models/TableCustomValue");
+const {
+  FIELD_KEY_PATTERN,
+  getTableCustomFieldTarget,
+  readTableRecordValues,
+  writeTableRecordValue
+}=require("../utils/tableCustomFieldPersistence");
 const auth=require("../middleware/auth");
 
 const router=express.Router();
@@ -110,6 +116,9 @@ const sanitizeColumns=(columns)=>{
     seen.add(key);
 
     const kind=["merged","custom"].includes(raw?.kind)?raw.kind:"field";
+    if(kind==="custom"&&!FIELD_KEY_PATTERN.test(key)){
+      throw new Error("Custom column names must use letters, numbers, underscores or hyphens.");
+    }
     const fieldType=FIELD_TYPES.includes(raw?.fieldType)?raw.fieldType:"text";
     const sourceKeys=Array.isArray(raw?.sourceKeys)
       ? [...new Set(raw.sourceKeys.map(x=>cleanString(x,100)).filter(Boolean))].slice(0,30)
@@ -205,9 +214,34 @@ router.get("/:tableKey/values",auth,async(req,res)=>{
   try{
     const tableKey=cleanString(req.params.tableKey,120);
     const rawRowKeys=String(req.query.rowKeys||"");
-    const rowKeys=rawRowKeys.split(",").map(x=>cleanString(x,200)).filter(Boolean).slice(0,500);
+    const rowKeys=[...new Set(rawRowKeys.split(",").map(x=>cleanString(x,200)).filter(Boolean))].slice(0,500);
     if(!rowKeys.length)return res.json({values:[]});
-    const values=await TableCustomValue.find({createdBy:owner(req),tableKey,rowKey:{$in:rowKeys}}).lean();
+
+    const [config,legacy]=await Promise.all([
+      TableConfiguration.findOne({createdBy:owner(req),tableKey}).select("columns").lean(),
+      TableCustomValue.find({createdBy:owner(req),tableKey,rowKey:{$in:rowKeys}}).lean()
+    ]);
+    const configuredKeys=(config?.columns||[])
+      .filter(column=>column.kind==="custom"&&FIELD_KEY_PATTERN.test(String(column.key||"")))
+      .map(column=>String(column.key));
+    const fieldKeys=[...new Set([...configuredKeys,...legacy.map(item=>String(item.fieldKey||""))])]
+      .filter(key=>FIELD_KEY_PATTERN.test(key));
+    if(!fieldKeys.length)return res.json({values:[]});
+
+    const persisted=await readTableRecordValues({tableKey,rowKeys,ownerId:req.user.id,fieldKeys});
+    const legacyByKey=new Map(legacy.map(item=>[String(item.rowKey)+"::"+String(item.fieldKey),item.value]));
+    const values=[];
+    for(const rowKey of rowKeys){
+      const actual=persisted.get(rowKey)||{};
+      for(const fieldKey of fieldKeys){
+        if(Object.prototype.hasOwnProperty.call(actual,fieldKey)){
+          values.push({rowKey,fieldKey,value:actual[fieldKey]});
+          continue;
+        }
+        const legacyKey=rowKey+"::"+fieldKey;
+        if(legacyByKey.has(legacyKey))values.push({rowKey,fieldKey,value:legacyByKey.get(legacyKey)});
+      }
+    }
     return res.json({values});
   }catch(error){
     return res.status(400).json({message:error.message});
@@ -220,12 +254,18 @@ router.put("/:tableKey/values",auth,async(req,res)=>{
     const rowKey=cleanString(req.body?.rowKey,200);
     const fieldKey=cleanString(req.body?.fieldKey,100);
     if(!rowKey||!fieldKey)return res.status(400).json({message:"rowKey and fieldKey are required."});
+    const target=getTableCustomFieldTarget(tableKey);
+    if(!target||target.kind==="virtual"){
+      return res.status(400).json({message:"Custom values can only be saved on actual business records, not summary rows."});
+    }
+    if(!mongoose.isValidObjectId(rowKey))return res.status(400).json({message:"This row is not a saved business record."});
+    if(!FIELD_KEY_PATTERN.test(fieldKey))return res.status(400).json({message:"This custom column name is not valid."});
 
     const config=await TableConfiguration.findOne({createdBy:owner(req),tableKey}).lean();
     const field=config?.columns?.find(column=>column.key===fieldKey&&column.kind==="custom");
     if(!field)return res.status(404).json({message:"Custom field was not found."});
-
     if(field.editable===false)return res.status(400).json({message:"This column is read only."});
+
     if(["select","multiselect"].includes(field.fieldType)){
       const incoming=Array.isArray(req.body?.value)?req.body.value:[req.body?.value];
       const valid=incoming.filter(value=>value!==null&&value!=="").every(value=>field.options.some(option=>String(option?.value??option)===cleanString(value,200)));
@@ -235,23 +275,16 @@ router.put("/:tableKey/values",auth,async(req,res)=>{
     const value=normalizeCustomValue(field,req.body?.value);
     if(field.fieldType==="reference"&&value!==null){
       const model=LOOKUP_MODELS[field.dataSource?.resource];
-      const exists=model&&await model.exists({
-        _id:value,
-        createdBy:new mongoose.Types.ObjectId(owner(req))
-      });
+      const exists=model&&await model.exists({_id:value,createdBy:new mongoose.Types.ObjectId(owner(req))});
       if(!exists)return res.status(400).json({message:"Choose a record that belongs to your business account."});
     }
-    if(value===null){
-      await TableCustomValue.deleteOne({createdBy:owner(req),tableKey,rowKey,fieldKey});
-      return res.json({message:"Value cleared.",value:null});
-    }
 
-    const saved=await TableCustomValue.findOneAndUpdate(
-      {createdBy:owner(req),tableKey,rowKey,fieldKey},
-      {$set:{value}},
-      {upsert:true,new:true,setDefaultsOnInsert:true,runValidators:true}
-    ).lean();
-    return res.json(saved);
+    const saved=await writeTableRecordValue({tableKey,rowKey,fieldKey,value,ownerId:req.user.id});
+    if(!saved.matchedCount)return res.status(404).json({message:"The selected record was not found in your business account."});
+    await TableCustomValue.deleteOne({createdBy:owner(req),tableKey,rowKey,fieldKey}).catch(error=>{
+      console.warn("Unable to remove migrated table value:",error.message);
+    });
+    return res.json({tableKey,rowKey,fieldKey,value});
   }catch(error){
     return res.status(400).json({message:error.message});
   }
@@ -260,3 +293,4 @@ router.put("/:tableKey/values",auth,async(req,res)=>{
 module.exports=router;
 module.exports.sanitizeColumns=sanitizeColumns;
 module.exports.normalizeCustomValue=normalizeCustomValue;
+module.exports.FIELD_KEY_PATTERN=FIELD_KEY_PATTERN;

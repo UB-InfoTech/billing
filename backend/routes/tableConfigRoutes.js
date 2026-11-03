@@ -150,6 +150,10 @@ const sanitizeColumns=(columns)=>{
     if(kind==="custom"&&fieldType==="reference"&&!LOOKUP_RESOURCES.includes(cleanString(raw?.dataSource?.resource,80))){
       throw new Error("Choose whether this column links to a customer, product, invoice or expense.");
     }
+    const rawDefaultValue=kind==="custom"?(raw?.defaultValue??""):"";
+    const defaultValue=kind==="custom"&&fieldType==="percentage"&&rawDefaultValue!==""
+      ?normalizeCustomValue({fieldType},rawDefaultValue)
+      :rawDefaultValue;
 
     return{
       key,
@@ -159,7 +163,7 @@ const sanitizeColumns=(columns)=>{
       kind,
       fieldType:kind==="custom"?fieldType:"text",
       options:kind==="custom"&&["select","multiselect"].includes(fieldType)?options:[],
-      defaultValue:kind==="custom"?raw?.defaultValue??"": "",
+      defaultValue,
       editable:raw?.editable!==false,
       dataSource:kind==="custom"&&raw?.dataSource&&typeof raw.dataSource==="object"?{
         type:raw.dataSource.type==="lookup"?"lookup":"none",

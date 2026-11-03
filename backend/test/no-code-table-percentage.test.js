@@ -17,6 +17,12 @@ test("table percentage columns reject values outside the supported range",()=>{
   assert.throws(()=>normalizeCustomValue(field,true),/valid percentage/i);
 });
 
+test("percentage table defaults are validated when the column is saved",()=>{
+  const [valid]=sanitizeColumns([{key:"taxRate",label:"Tax rate",kind:"custom",fieldType:"percentage",defaultValue:"18"}]);
+  assert.equal(valid.defaultValue,18);
+  assert.throws(()=>sanitizeColumns([{key:"taxRate",label:"Tax rate",kind:"custom",fieldType:"percentage",defaultValue:"125"}]),/between 0 and 100/i);
+});
+
 test("the table builder accepts percentage as a saved custom column type",()=>{
   const [column]=sanitizeColumns([{
     key:"commissionRate",

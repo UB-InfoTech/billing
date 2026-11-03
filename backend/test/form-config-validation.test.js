@@ -171,6 +171,17 @@ test("explicit zero and positive validation bounds are preserved", () => {
   assert.equal(field.validation.max, 250);
 });
 
+test("percentage fields default to a 0 to 100 validation range",()=>{
+  const [field]=sanitizeFields([{key:"commissionRate",label:"Commission rate",fieldType:"percentage"}]);
+  assert.equal(field.validation.min,0);
+  assert.equal(field.validation.max,100);
+  const [bounded]=sanitizeFields([{key:"discountRate",label:"Discount",fieldType:"percentage",validation:{min:5,max:50}}]);
+  assert.equal(bounded.validation.min,5);
+  assert.equal(bounded.validation.max,50);
+  assert.throws(()=>sanitizeFields([{key:"badMin",label:"Bad minimum",fieldType:"percentage",validation:{min:-1,max:100}}]),/between 0 and 100/i);
+  assert.throws(()=>sanitizeFields([{key:"badMax",label:"Bad maximum",fieldType:"percentage",validation:{min:0,max:101}}]),/between 0 and 100/i);
+});
+
 test("an invalid validation pattern is still rejected", () => {
   assert.throws(() => sanitizeFields([{
     key: "quantity",

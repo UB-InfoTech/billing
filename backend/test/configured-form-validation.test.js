@@ -90,6 +90,17 @@ test("server validates numbers, dates, email, phone and website values",()=>{
   assert.throws(()=>normalizeConfiguredFieldValue({key:"website",label:"Website",fieldType:"url"},"javascript:alert(1)"),/valid website/i);
 });
 
+test("server validates percentage custom fields and enforces the 0 to 100 range",()=>{
+  const field={key:"commissionRate",label:"Commission rate",custom:true,fieldType:"percentage",validation:{min:0,max:100}};
+  assert.equal(normalizeConfiguredFieldValue(field,"18.25"),18.25);
+  assert.equal(normalizeConfiguredFieldValue(field,0),0);
+  assert.equal(normalizeConfiguredFieldValue(field,100),100);
+  assert.throws(()=>normalizeConfiguredFieldValue(field,"-0.01"),/at least 0%/i);
+  assert.throws(()=>normalizeConfiguredFieldValue(field,"100.01"),/more than 100%/i);
+  assert.throws(()=>normalizeConfiguredFieldValue(field,true),/valid percentage/i);
+  assert.equal(normalizeConfiguredFieldValue({key:"discountRate",label:"Discount",fieldType:"percentage"},"12"),"12");
+});
+
 test("server preserves an explicit false boolean and rejects ambiguous input",()=>{
   assert.equal(normalizeConfiguredFieldValue({key:"verified",label:"Verified",custom:true,fieldType:"boolean"},false),false);
   assert.equal(normalizeConfiguredFieldValue({key:"verified",label:"Verified",custom:true,fieldType:"boolean"},"false"),false);

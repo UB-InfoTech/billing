@@ -155,7 +155,7 @@ export const mergeFormFields=(baseFields,savedFields,formKey="")=>{
       helpText:String(savedField.helpText??field.helpText??""),
       visible:field.locked?true:savedField.visible!==false,
       required:Object.prototype.hasOwnProperty.call(savedField,"required")?Boolean(savedField.required):field.required,
-      fieldType:savedField.fieldType||field.fieldType,
+      fieldType:field.system?field.fieldType:(savedField.fieldType||field.fieldType),
       width:Math.min(12,Math.max(1,Number(savedField.width)||field.width)),
       order:Number.isFinite(Number(savedField.order))?Number(savedField.order):index,
       section:savedField.section||field.section,

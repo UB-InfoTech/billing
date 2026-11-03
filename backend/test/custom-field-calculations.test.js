@@ -57,6 +57,18 @@ test("calculates custom fields on the server and ignores a submitted calculated 
   assert.deepEqual(saved,{quantity:"4",rate:"25",amount:100});
 });
 
+test("calculates a discount or tax amount from a percentage field",()=>{
+  const fields=[
+    {key:"subtotal",label:"Subtotal",custom:true,fieldType:"currency"},
+    {key:"discountRate",label:"Discount rate",custom:true,fieldType:"percentage"},
+    {key:"discountAmount",label:"Discount amount",custom:true,fieldType:"currency",formula:"(subtotal * discountRate / 100)"},
+    {key:"afterDiscount",label:"Amount after discount",custom:true,fieldType:"currency",formula:"subtotal - discountAmount"}
+  ];
+  const saved=calculateConfiguredCustomFields(fields,{}, {subtotal:1500,discountRate:12,discountAmount:999,afterDiscount:0});
+  assert.equal(saved.discountAmount,180);
+  assert.equal(saved.afterDiscount,1320);
+});
+
 test("recalculates dependent custom fields regardless of their display order",()=>{
   const fields=[
     {key:"grandTotal",label:"Grand total",custom:true,fieldType:"currency",formula:"subtotal + delivery"},

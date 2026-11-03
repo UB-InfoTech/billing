@@ -1,9 +1,67 @@
 const express = require('express');
+const multer = require("multer");
+const fs = require("fs");
+const path = require("path");
+const crypto = require("crypto");
 const router = express.Router();
+const logoUploadDir=path.join(__dirname,"../public/uploads/organization-logos");
+fs.mkdirSync(logoUploadDir,{recursive:true});
+
+const organizationLogoUpload=multer({
+  storage:multer.diskStorage({
+    destination:(_,__,callback)=>callback(null,logoUploadDir),
+    filename:(req,file,callback)=>{
+      const accountId=String(req.user?.id||"").trim();
+      const extension=getSafeUploadExtension(file.mimetype);
+      if(!/^[a-f0-9]{24}$/i.test(accountId)||!extension){
+        return callback(new Error("Your account or logo file could not be verified."));
+      }
+      callback(null,accountId+"-"+crypto.randomBytes(12).toString("hex")+extension);
+    }
+  }),
+  limits:{files:1,fileSize:2*1024*1024},
+  fileFilter:(_,file,callback)=>{
+    if(!["image/jpeg","image/png","image/webp"].includes(String(file.mimetype||"").toLowerCase())){
+      return callback(new Error("Choose a JPG, PNG or WebP image for your organization logo."));
+    }
+    return callback(null,true);
+  }
+});
+
+const removeOrganizationLogo=async(value,ownerId)=>{
+  const filename=getOwnedOrganizationLogoFilename(value,ownerId);
+  if(!filename)return;
+  try{
+    await fs.promises.unlink(path.join(logoUploadDir,filename));
+  }catch(error){
+    if(error.code!=="ENOENT"){
+      console.warn("Unable to remove an old organization logo:",error.message);
+    }
+  }
+};
+
+const receiveOrganizationLogo=(req,res,next)=>{
+  organizationLogoUpload.single("logo")(req,res,async error=>{
+    if(!error)return next();
+    if(req.file?.path){
+      await fs.promises.unlink(req.file.path).catch(()=>{});
+    }
+    const status=error.code==="LIMIT_FILE_SIZE"?413:400;
+    const message=error.code==="LIMIT_FILE_SIZE"
+      ?"Organization logos must be 2 MB or smaller."
+      :error.message||"Unable to upload the organization logo.";
+    return res.status(status).json({message});
+  });
+};
 const Profile = require('../models/Profile');
 const auth = require('../middleware/auth');
 const {toPublicProfile}=require('../utils/publicProfile');
 const {normalizeInvoiceSequence}=require("../utils/invoiceSequence");
+const {getSafeUploadExtension}=require("../utils/uploadFileTypes");
+const {
+  getOwnedOrganizationLogoFilename,
+  getPublicOrganizationLogoUrl
+}=require("../utils/organizationLogo");
 const {
   loadConfiguredFormFields,
   calculateConfiguredCustomFields,
@@ -147,6 +205,46 @@ router.get('/', auth, async (req, res) => {
     res.json(toPublicProfile(profile));
   } catch (err) {
     res.status(500).json({ message: err.message });
+  }
+});
+
+// Organization logo is optional and stored separately from editable form values.
+router.post("/logo",auth,receiveOrganizationLogo,async(req,res)=>{
+  if(!req.file)return res.status(400).json({message:"Choose a logo image first."});
+  const newLogoUrl="/uploads/organization-logos/"+req.file.filename;
+  try{
+    let profile=await Profile.findOne({createdBy:String(req.user.id)});
+    if(!profile){
+      profile=new Profile({
+        createdBy:String(req.user.id),
+        billNoPrefix:"INV-",
+        billNoSequence:1
+      });
+    }
+    const previousLogoUrl=profile.logoUrl||"";
+    profile.logoUrl=newLogoUrl;
+    await profile.save();
+    await removeOrganizationLogo(previousLogoUrl,req.user.id);
+    return res.status(201).json({
+      logoUrl:getPublicOrganizationLogoUrl(profile.logoUrl,req.user.id)
+    });
+  }catch(error){
+    await removeOrganizationLogo(newLogoUrl,req.user.id);
+    return res.status(error.status||500).json({message:error.message||"Unable to save the organization logo."});
+  }
+});
+
+router.delete("/logo",auth,async(req,res)=>{
+  try{
+    const profile=await Profile.findOne({createdBy:String(req.user.id)});
+    if(!profile||!profile.logoUrl)return res.json({logoUrl:""});
+    const previousLogoUrl=profile.logoUrl;
+    profile.logoUrl="";
+    await profile.save();
+    await removeOrganizationLogo(previousLogoUrl,req.user.id);
+    return res.json({logoUrl:""});
+  }catch(error){
+    return res.status(error.status||500).json({message:error.message||"Unable to remove the organization logo."});
   }
 });
 

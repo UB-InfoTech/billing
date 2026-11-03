@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from "react";
+import React,{useEffect,useMemo,useRef,useState} from "react";
 import {useNavigate,useSearchParams} from "react-router-dom";
 import axios from "axios";
 import FormConfigurator from "../components/FormConfigurator";
@@ -63,6 +63,9 @@ export default function Profile(){
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");
   const [successMessage,setSuccessMessage]=useState("");
+  const [logoUploading,setLogoUploading]=useState(false);
+  const [logoRemoving,setLogoRemoving]=useState(false);
+  const logoInputRef=useRef(null);
 
   const builderOpen=searchParams.get("customize")==="form";
   const profilePrimaryKeys=new Set([
@@ -134,6 +137,51 @@ export default function Profile(){
     ));
   };
 
+  const handleLogoFileChange=async event=>{
+    const file=event.target.files?.[0];
+    event.target.value="";
+    if(!file)return;
+    if(!["image/jpeg","image/png","image/webp"].includes(file.type)){
+      setError("Choose a JPG, PNG or WebP image for your organization logo.");
+      return;
+    }
+    if(file.size>2*1024*1024){
+      setError("The organization logo must be 2 MB or smaller.");
+      return;
+    }
+
+    const formData=new FormData();
+    formData.append("logo",file);
+    setError("");
+    setSuccessMessage("");
+    try{
+      setLogoUploading(true);
+      const response=await axios.post(API+"/api/profile/logo",formData,auth());
+      setProfile(previous=>({...previous,logoUrl:response.data?.logoUrl||""}));
+      setSuccessMessage("Organization logo uploaded and will appear on your invoices.");
+    }catch(uploadError){
+      setError(uploadError.response?.data?.message||"Unable to upload the organization logo.");
+    }finally{
+      setLogoUploading(false);
+    }
+  };
+
+  const removeLogo=async()=>{
+    if(!profile.logoUrl||logoRemoving)return;
+    setError("");
+    setSuccessMessage("");
+    try{
+      setLogoRemoving(true);
+      await axios.delete(API+"/api/profile/logo",auth());
+      setProfile(previous=>({...previous,logoUrl:""}));
+      setSuccessMessage("Organization logo removed. Your invoices will use the text-only header.");
+    }catch(removeError){
+      setError(removeError.response?.data?.message||"Unable to remove the organization logo.");
+    }finally{
+      setLogoRemoving(false);
+    }
+  };
+
   const save=async event=>{
     event.preventDefault();
     const next=applyFormulas(profileFields,syncConfiguredCustomFields(profile,profileFields));
@@ -161,6 +209,12 @@ export default function Profile(){
     }finally{setSaving(false);}
   };
 
+  const logoPreviewUrl=profile.logoUrl
+    ?(String(profile.logoUrl).startsWith("http://")||String(profile.logoUrl).startsWith("https://")
+      ?profile.logoUrl
+      :API+profile.logoUrl)
+    :"";
+
   return (
     <div className="container-fluid py-4">
       <div className="d-flex justify-content-between align-items-center mb-3 gap-2">
@@ -181,6 +235,48 @@ export default function Profile(){
           {loading||formLoading
             ? <div className="text-center py-5"><span className="spinner-border spinner-border-sm me-2"></span>Loading profile...</div>
             : <form onSubmit={save}>
+                <section className="d-flex align-items-center flex-wrap gap-3 border rounded-3 p-3 mb-4">
+                  <div className="d-flex align-items-center justify-content-center rounded-2 border bg-light flex-shrink-0" style={{width:112,height:88}}>
+                    {logoPreviewUrl
+                      ? <img src={logoPreviewUrl} alt="Organization logo" style={{maxWidth:"100%",maxHeight:"100%",objectFit:"contain"}}/>
+                      : <span className="text-muted small text-center px-2">No logo uploaded</span>}
+                  </div>
+                  <div className="flex-grow-1">
+                    <h6 className="mb-1">Organization logo <span className="text-muted fw-normal small">(optional)</span></h6>
+                    <p className="text-muted small mb-2">Your logo appears in the header of printed invoices. Use a clear JPG, PNG or WebP image up to 2 MB.</p>
+                    <input
+                      ref={logoInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="d-none"
+                      onChange={handleLogoFileChange}
+                    />
+                    <div className="d-flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary btn-sm"
+                        onClick={()=>logoInputRef.current?.click()}
+                        disabled={logoUploading||logoRemoving}
+                      >
+                        {logoUploading
+                          ? <><span className="spinner-border spinner-border-sm me-1"></span>Uploading...</>
+                          : profile.logoUrl?"Change logo":"Upload logo"}
+                      </button>
+                      {profile.logoUrl&&(
+                        <button
+                          type="button"
+                          className="btn btn-outline-secondary btn-sm"
+                          onClick={removeLogo}
+                          disabled={logoUploading||logoRemoving}
+                        >
+                          {logoRemoving
+                            ? <><span className="spinner-border spinner-border-sm me-1"></span>Removing...</>
+                            :"Remove logo"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </section>
                 <section className="profile-quick-fields">
                   {primaryProfileGroups.map(group=>(
                     <section className="profile-primary-group mb-4" key={group.key}>

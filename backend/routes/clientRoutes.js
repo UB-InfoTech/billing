@@ -90,6 +90,7 @@ router.post("/",auth,async(req,res)=>{
     const configuredFields=await loadConfiguredFormFields(owner(req),"clients.form");
     const prepared=await prepareConfiguredFormValues({
       ownerId:owner(req),
+      formKey:"clients.form",
       fields:configuredFields,
       values:body,
       customFields:cleanCustomFields(body.customFields),
@@ -149,6 +150,7 @@ router.patch("/:id",auth,async(req,res)=>{
     const configuredFields=await loadConfiguredFormFields(owner(req),"clients.form");
     const prepared=await prepareConfiguredFormValues({
       ownerId:owner(req),
+      formKey:"clients.form",
       fields:configuredFields,
       values:client.toObject({depopulate:true}),
       customFields:cleanCustomFields(client.customFields),

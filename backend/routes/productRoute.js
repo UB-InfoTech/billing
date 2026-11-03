@@ -193,6 +193,7 @@ router.post("/",auth,receiveProductImages,async(req,res)=>{
 
     const prepared=await prepareConfiguredFormValues({
       ownerId:owner(req),
+      formKey:"products.form",
       fields:configuredFields,
       values:input,
       customFields:incomingCustomFields,
@@ -302,6 +303,7 @@ router.put("/:id",auth,receiveProductImages,async(req,res)=>{
     const configuredFields=await loadConfiguredFormFields(owner(req),"products.form");
     const prepared=await prepareConfiguredFormValues({
       ownerId:owner(req),
+      formKey:"products.form",
       fields:configuredFields,
       values,
       customFields:nextCustomFields,

@@ -1,4 +1,5 @@
 const mongoose=require("mongoose");
+const NoCodeFile=require("../models/NoCodeFile");
 const {
   getFormLookupSource,
   getFormLookupQuery
@@ -288,6 +289,12 @@ const normalizeConfiguredFieldValue=(field,value)=>{
   if(isEmpty(value))return value;
   const label=field.label||"This field";
   switch(field.fieldType){
+    case "image":
+    case "file":{
+      const id=String(value??"").trim();
+      if(!/^[a-f0-9]{24}$/i.test(id))throw makeValidationError(field,`Upload a valid ${field.fieldType==="image"?"image":"file"} for “${label}”.`);
+      return id;
+    }
     case "percentage":{
       if(typeof value==="boolean"||typeof value==="object"){
         throw makeValidationError(field,`Enter a valid percentage for "${label}".`);
@@ -481,8 +488,22 @@ const validateConfiguredFormValues=({
   return {values:nextValues,customFields:nextCustomFields};
 };
 
+const validateConfiguredFileReferences=async({ownerId,formKey,fields=[],customFields={}})=>{
+  for(const field of fields||[]){
+    if(!["image","file"].includes(field?.fieldType))continue;
+    if(!field.custom)throw makeValidationError(field,"Uploads are available only in additional form fields.");
+    const value=customFields?.[field.key];
+    if(isEmpty(value))continue;
+    const id=String(value).trim();
+    if(!/^[a-f0-9]{24}$/i.test(id))throw makeValidationError(field,`Upload a valid ${field.fieldType==="image"?"image":"file"} for “${field.label||"this field"}”.`);
+    const file=await NoCodeFile.findOne({_id:id,createdBy:ownerId,formKey,fieldKey:field.key,fieldType:field.fieldType}).select("_id").lean();
+    if(!file)throw makeValidationError(field,`The uploaded file for “${field.label||"this field"}” is no longer available. Upload it again.`);
+  }
+};
+
 const prepareConfiguredFormValues=async({
   ownerId,
+  formKey,
   fields=[],
   values={},
   customFields={},
@@ -511,6 +532,7 @@ const prepareConfiguredFormValues=async({
     existingCustomFields,
     autoFillUpdates:linked.updates
   });
+  await validateConfiguredFileReferences({ownerId,formKey,fields,customFields:preserved.customFields});
   return {...preserved,updates:linked.updates};
 };
 
@@ -520,6 +542,7 @@ module.exports={
   conditionMatches,
   getConfiguredFieldState,
   normalizeConfiguredFieldValue,
+  validateConfiguredFileReferences,
   applyConfiguredAutoFill,
   applyConfiguredDefaults,
   preserveNonEditableFields,

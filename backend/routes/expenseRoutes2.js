@@ -343,6 +343,7 @@ router.post("/",auth,async(req,res)=>{
     const incomingCustomFields=cleanCustomFields(req.body?.customFields);
     const prepared=await prepareConfiguredFormValues({
       ownerId:owner(req),
+      formKey:"expenses.form",
       fields:configuredFields,
       values:input,
       customFields:incomingCustomFields,
@@ -424,6 +425,7 @@ router.put("/:id",auth,async(req,res)=>{
     const configuredFields=await loadConfiguredFormFields(owner(req),"expenses.form");
     const prepared=await prepareConfiguredFormValues({
       ownerId:owner(req),
+      formKey:"expenses.form",
       fields:configuredFields,
       values,
       customFields:nextCustomFields,

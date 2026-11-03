@@ -249,6 +249,7 @@ router.post("/orders/create",auth,async(req,res)=>{
     // totals and other built-in financial calculations remain unchanged.
     const preparedOrder=await prepareConfiguredFormValues({
       ownerId:userId(req),
+      formKey:"orders.form",
       fields:orderFields,
       values:body,
       customFields:body.customFields,
@@ -261,6 +262,7 @@ router.post("/orders/create",auth,async(req,res)=>{
     for(const rawItem of body.subOrders){
       const preparedItem=await prepareConfiguredFormValues({
         ownerId:userId(req),
+        formKey:"orders.items",
         fields:itemFields,
         values:rawItem,
         customFields:rawItem.customFields,
@@ -424,6 +426,7 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
 
     const preparedOrder=await prepareConfiguredFormValues({
       ownerId:userId(req),
+      formKey:"orders.form",
       fields:orderFields,
       values:order.toObject({depopulate:true}),
       customFields:cleanCustomFields(order.customFields),
@@ -464,6 +467,7 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
 
         const preparedItem=await prepareConfiguredFormValues({
           ownerId:userId(req),
+          formKey:"orders.items",
           fields:itemFields,
           values:candidate,
           customFields:candidate.customFields,

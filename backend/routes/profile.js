@@ -312,6 +312,7 @@ router.put('/', auth, async (req, res) => {
     const configuredFields=await loadConfiguredFormFields(req.user.id,"profile.form");
     const prepared=await prepareConfiguredFormValues({
       ownerId:req.user.id,
+      formKey:"profile.form",
       fields:configuredFields,
       values,
       customFields:cleanCustomFields(nextBody.customFields,originalCustomFields),

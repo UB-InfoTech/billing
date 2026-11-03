@@ -90,6 +90,7 @@ router.post("/",auth,async(req,res)=>{
     };
     const prepared=await prepareConfiguredFormValues({
       ownerId:owner(req),
+      formKey:"calendar.event",
       fields:configuredFields,
       values:input,
       customFields:cleanCustomFields(req.body?.customFields),
@@ -149,6 +150,7 @@ router.put("/:id",auth,async(req,res)=>{
     const configuredFields=await loadConfiguredFormFields(owner(req),"calendar.event");
     const prepared=await prepareConfiguredFormValues({
       ownerId:owner(req),
+      formKey:"calendar.event",
       fields:configuredFields,
       values,
       customFields:cleanCustomFields(req.body?.customFields,originalCustomFields),

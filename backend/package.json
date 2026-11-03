@@ -5,7 +5,8 @@
   "scripts": {
     "test": "node --test",
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "migrate:table-custom-values": "node scripts/migrate-table-custom-values.js"
   },
   "keywords": [],
   "author": "",

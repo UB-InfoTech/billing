@@ -117,6 +117,7 @@ app.use("/api/financial-metrics",require("./routes/financialMetricsRoutes"));
 app.use("/api/financial-recovery-issues",require("./routes/financialRecoveryIssueRoutes"));
 app.use("/api/table-config",require("./routes/tableConfigRoutes"));
 app.use("/api/form-config",require("./routes/formConfigRoutes"));
+app.use("/api/no-code-files",require("./routes/noCodeFileRoutes"));
 app.use("/api/no-code-data",require("./routes/noCodeDataRoutes"));
 app.use("/api/software-config",require("./routes/softwareConfigRoutes"));
 app.use("/api/invoice-config",require("./routes/invoiceConfigRoutes"));

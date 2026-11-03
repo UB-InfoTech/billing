@@ -8,7 +8,7 @@ const {mergeConfiguredPaymentFields}=require("../utils/paymentFormValidation");
 
 const router=express.Router();
 
-const FIELD_TYPES=["text","textarea","number","currency","percentage","date","datetime","select","multiselect","boolean","email","phone","url","reference"];
+const FIELD_TYPES=["text","textarea","number","currency","percentage","date","datetime","select","multiselect","boolean","email","phone","url","reference","image","file"];
 const SOURCES=["none",...Object.keys(FORM_LOOKUP_SOURCES)];
 const OPERATORS=["equals","not_equals","contains","not_contains","greater_than","less_than","empty","not_empty"];
 const {
@@ -65,6 +65,7 @@ const sanitizeFields=fields=>{
     const visible=raw?.visible!==false;
     const required=Boolean(raw?.required);
     if(required&&!visible)throw new Error("\""+label+"\" cannot be required while it is hidden.");
+    if(["image","file"].includes(fieldType)&&!custom)throw new Error(`Only additional fields can use uploads. Add “${label}” as a new field.`);
 
     const section=cleanString(raw?.section||"General",50);
     const width=Math.min(12,Math.max(1,Number(raw?.width)||6));
@@ -126,7 +127,7 @@ const sanitizeFields=fields=>{
       section,
       options:["select","multiselect"].includes(fieldType)?options:[],
       formula,
-      defaultValue:raw?.defaultValue??"",
+      defaultValue:["image","file"].includes(fieldType)?"":raw?.defaultValue??"",
       editable:formulaReadOnly?false:raw?.editable!==false,
       readOnly:formulaReadOnly||Boolean(raw?.readOnly),
       disabled:Boolean(raw?.disabled),

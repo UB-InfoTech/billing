@@ -182,6 +182,19 @@ test("percentage fields default to a 0 to 100 validation range",()=>{
   assert.throws(()=>sanitizeFields([{key:"badMax",label:"Bad maximum",fieldType:"percentage",validation:{min:0,max:101}}]),/between 0 and 100/i);
 });
 
+test("Mongoose accepts the percentage, image and file field types",async()=>{
+  const mongoose=require("mongoose");
+  const FormConfiguration=require("../models/FormConfiguration");
+  for(const fieldType of ["percentage","image","file"]){
+    const config=new FormConfiguration({createdBy:new mongoose.Types.ObjectId(),formKey:"clients.form",fields:[{key:"customField",label:"Custom field",custom:true,fieldType,validation:{min:fieldType==="percentage"?0:null,max:fieldType==="percentage"?100:null}}]});
+    await assert.doesNotReject(config.validate());
+  }
+});
+
+test("image and file field types are restricted to custom fields",()=>{
+  for(const fieldType of ["image","file"])assert.throws(()=>sanitizeFields([{key:"builtIn",label:"Built in",custom:false,fieldType}]),/only additional fields can use uploads/i);
+});
+
 test("an invalid validation pattern is still rejected", () => {
   assert.throws(() => sanitizeFields([{
     key: "quantity",

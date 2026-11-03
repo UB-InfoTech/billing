@@ -32,7 +32,7 @@ const formFieldSchema=new mongoose.Schema({
   editable:{type:Boolean,default:true},
   readOnly:{type:Boolean,default:false},
   disabled:{type:Boolean,default:false},
-  fieldType:{type:String,enum:["text","textarea","number","currency","date","datetime","select","multiselect","boolean","email","phone","url","reference"],default:"text"},
+  fieldType:{type:String,enum:["text","textarea","number","currency","percentage","date","datetime","select","multiselect","boolean","email","phone","url","reference","image","file"],default:"text"},
   width:{type:Number,default:6,min:1,max:12},
   order:{type:Number,default:0,min:0},
   section:{type:String,trim:true,default:"header",maxlength:50},

@@ -22,6 +22,7 @@ const MODEL_BY_FORM=Object.freeze({
   "calendar.event":Calendar,
   "profile.form":Profile,
   "orders.form":Order,
+  "orders.items":Order,
   "creditnotes.form":CreditNote
 });
 

@@ -1195,7 +1195,8 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(round2(storedOrder.paidAmount), 110);
     assert.equal(round2(storedOrder.dueAmount), 110);
 
-    const customerStatement = await request("/clients/" + clientId + "/statement?from=2026-10-01&to=2026-10-31");
+    const statementEndDate=new Date().toISOString().slice(0,10);
+    const customerStatement = await request("/clients/" + clientId + "/statement?from=2026-10-01&to="+statementEndDate);
     assert.equal(customerStatement.response.status, 200, JSON.stringify(customerStatement.payload));
     assert.equal(customerStatement.payload.statement.receivables.currentOutstanding, round2(storedClient.outstanding_balance));
     assert.equal(customerStatement.payload.statement.receivables.reconcilesWithCustomerSummary, true);

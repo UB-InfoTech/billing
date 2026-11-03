@@ -267,7 +267,7 @@ export function useFormConfiguration(formKey,baseFields){
       const response=await axios.get(`${apiBase}/api/form-config/${encodeURIComponent(formKey)}`,authConfig());
       setFields(mergeFormFields(baseFields,response.data?.fields,formKey));
     }catch(loadError){
-      setFields(mergeFormFields(baseFields,[]));
+      setFields(mergeFormFields(baseFields,[],formKey));
       setError(loadError.response?.data?.message||"Unable to load form settings.");
     }finally{setLoading(false);}
   },[formKey,baseSignature,baseFields]);
@@ -285,7 +285,7 @@ export function useFormConfiguration(formKey,baseFields){
     try{
       setSaving(true);setError("");
       await axios.delete(`${apiBase}/api/form-config/${encodeURIComponent(formKey)}`,authConfig());
-      const defaults=mergeFormFields(baseFields,[]);setFields(defaults);return defaults;
+      const defaults=mergeFormFields(baseFields,[],formKey);setFields(defaults);return defaults;
     }catch(resetError){setError(resetError.response?.data?.message||"Unable to reset form settings.");throw resetError;}
     finally{setSaving(false);}
   },[formKey,baseSignature,baseFields]);

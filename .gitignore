@@ -6,5 +6,6 @@ dist/
 build/
 coverage/
 backend/public/uploads/
+backend/private_uploads/
 frontend/.vite/
 *.log

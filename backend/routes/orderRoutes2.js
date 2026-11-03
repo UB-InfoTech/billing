@@ -20,6 +20,7 @@ const {loadConfiguredFormFields,calculateConfiguredCustomFields,hasConfiguredCus
 const {prepareConfiguredFormValues,validateConfiguredFormValues}=require("../utils/configuredFormValidation");
 const {preparePaymentCustomFields}=require("../utils/paymentFormValidation");
 const {numberToWords}=require("../utils/numberToWords");
+const {getPublicOrganizationLogoUrl}=require("../utils/organizationLogo");
 const {appendStatusTransition}=require("../utils/statusHistory");
 const {hasInvoiceSensitiveChanges,wouldReduceTotalBelowApplied}=require("../utils/orderEditPolicy");
 function buildInvoiceFinancialSnapshot(order={},invoiceTotal) {
@@ -1291,6 +1292,7 @@ function renderSimpleInvoiceHtml({order,profile,client}){
     profile.addressLine2,
     [profile.city,profile.district,profile.state,profile.pinCode,profile.country].filter(Boolean).join(", ")
   ].filter(Boolean).join(", ");
+  const profileLogoUrl=getPublicOrganizationLogoUrl(profile.logoUrl,order.createdBy);
 
   const invoiceTotal=getInvoiceRevenue(order);
   const calculatedFinalRevenue=Number(order.finalRevenue);
@@ -1318,6 +1320,8 @@ function renderSimpleInvoiceHtml({order,profile,client}){
     body{font-family:Arial,sans-serif;margin:0;padding:24px;color:#111;background:#fff}
     .sheet{max-width:1100px;margin:0 auto}
     .top{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #111;padding-bottom:14px}
+    .brand{display:flex;align-items:flex-start;gap:14px;min-width:0}
+    .brand-logo{width:88px;height:88px;object-fit:contain;flex:0 0 auto}
     h1,h2,p{margin:0 0 6px}.muted{color:#555}
     table{width:100%;border-collapse:collapse;margin-top:18px}
     th,td{border:1px solid #222;padding:7px;font-size:13px}
@@ -1326,7 +1330,7 @@ function renderSimpleInvoiceHtml({order,profile,client}){
     .summary div{display:flex;justify-content:space-between;padding:4px 0}
     @media print{body{padding:0}.sheet{max-width:none}}
   </style></head><body><div class="sheet">
-  <div class="top"><div><div class="muted">${invoiceEscape(profile.headerTitle||"TAX INVOICE")}</div><h1>${invoiceEscape(profile.companyName||"Company")}</h1><div>${invoiceEscape(profileAddress)}</div><div>GSTIN: ${invoiceEscape(profile.gstin||"")}</div><div>Phone: ${invoiceEscape(profile.phoneNumber1||"")}</div>${profile.emailAddress?`<div>Email: ${invoiceEscape(profile.emailAddress)}</div>`:""}${profile.website?`<div>Website: ${invoiceEscape(profile.website)}</div>`:""}</div>
+  <div class="top"><div class="brand">${profileLogoUrl?`<img class="brand-logo" src="${invoiceEscape(profileLogoUrl)}" alt="Organization logo">`:""}<div><div class="muted">${invoiceEscape(profile.headerTitle||"TAX INVOICE")}</div><h1>${invoiceEscape(profile.companyName||"Company")}</h1><div>${invoiceEscape(profileAddress)}</div><div>GSTIN: ${invoiceEscape(profile.gstin||"")}</div><div>Phone: ${invoiceEscape(profile.phoneNumber1||"")}</div>${profile.emailAddress?`<div>Email: ${invoiceEscape(profile.emailAddress)}</div>`:""}${profile.website?`<div>Website: ${invoiceEscape(profile.website)}</div>`:""}</div></div>
   <div><h2>Invoice</h2><div><b>No.:</b> ${invoiceEscape(order.orderNumber||"")}</div><div><b>Date:</b> ${invoiceEscape(new Date(order.orderDate||new Date()).toLocaleDateString("en-IN"))}</div><div><b>Due:</b> ${invoiceEscape(dueDate.toLocaleDateString("en-IN"))}</div></div></div>
   <div style="margin-top:18px"><h3>Bill To</h3><div><b>${invoiceEscape(order.companyName||client?.companyName||client?.name||"Customer")}</b></div><div>${invoiceEscape(order.Address||client?.address||"")}</div><div>${invoiceEscape(order.City||client?.city||"")}, ${invoiceEscape(order.State||client?.state||"")}</div><div>GSTIN: ${invoiceEscape(order.gstNumber||client?.gstNumber||"")}</div></div>
   <table><thead><tr><th>#</th><th>Description</th><th>Design</th><th>HSN</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody>${rows||'<tr><td colspan="7">No line items.</td></tr>'}</tbody></table>
@@ -1369,6 +1373,7 @@ async function renderInvoice(order,res){
   try{
     const html=await ejs.renderFile(path.join(__dirname,"../public/invoiceTable.ejs"),{
       invoiceConfig,
+      profileLogoUrl:getPublicOrganizationLogoUrl(profile.logoUrl,order.createdBy),
       profileHeaderTitle:profile.headerTitle||"Invoice",profileCompanyName:profile.companyName||"Company",profileCompanyAddress:profileAddress,profileEmailAddress:profile.emailAddress||"",profileWebsite:profile.website||"",profilePhoneNumber1:profile.phoneNumber1||"",profilePhoneNumber2:profile.phoneNumber2||"",profileGstNumber:profile.gstin||"",profilePanNumber:profile.pan||"",profileBankName:profile.bankName||"",profileAccountNo:profile.accountNo||"",profileBranchName:profile.branchName||"",profileIfsc:profile.ifsc||"",
       clientChallanNumber:order.challanNumber||"",clientCompanyName:order.companyName||"",clientAddress:order.Address||"",clientPhoneNumber:client?.phone||"",clientGstNumber:order.gstNumber||"",clientState:client?.state||order.State||"",
       orderNumber:order.orderNumber||"",createdAt:new Date(order.orderDate).toLocaleDateString("en-IN"),dueDate:dueDate.toLocaleDateString("en-IN"),paymentTerm:order.paymentTerms||"",ewayBillNo:order.ewbDetails?.ewbNo||"N/A",subOrders:order.subOrders||[],orderTotalCost:order.totalCost||0,orderSubTotal:round2(Number(order.totalCost||0)+Number(order.discountAmount||0)),orderDisRate:order.discountRate||0,orderDiscountAmount:order.discountAmount||0,orderTax:round2(Number(order.taxPercentage||0)/2),orderTaxAmount:round2(Number(order.taxAmount||0)/2),orderIgstTax:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxPercentage||0):0,orderIgstTaxAmount:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxAmount||0):0,orderFinalRevenue:order.finalRevenue||0,orderFinalRevenueRoundOff:round2(getInvoiceRevenue(order)-Number(order.finalRevenue||0)),orderFinalRevenueAfterRoundOff:getInvoiceRevenue(order),orderFinalRevenueInWords:numberToWords(getInvoiceRevenue(order)),paymentStatus:order.paymentStatus,dueAmount:order.dueAmount||0,creditAppliedAmount:order.creditAppliedAmount||0,payments:order.payments||[]

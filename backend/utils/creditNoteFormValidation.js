@@ -68,6 +68,7 @@ const prepareCreditNoteCustomFields=async({
   const merged={...existing,...supplied};
   const prepared=await prepareConfiguredFormValues({
     ownerId,
+    formKey:"creditnotes.form",
     fields,
     values:{},
     customFields:merged,

@@ -18,9 +18,11 @@ const FIELD_TYPES=[
   {value:"phone",label:"Phone",icon:"bi-telephone"},
   {value:"url",label:"Website",icon:"bi-link-45deg"},
   {value:"reference",label:"Existing record",icon:"bi-database"},
+  {value:"image",label:"Image upload",icon:"bi-image"},
+  {value:"file",label:"File upload",icon:"bi-paperclip"},
 ];
 
-const COMMON_FIELD_TYPES=FIELD_TYPES.filter(type=>["text","number","currency","percentage","date","select","boolean","phone","reference"].includes(type.value));
+const COMMON_FIELD_TYPES=FIELD_TYPES.filter(type=>["text","number","currency","percentage","date","select","boolean","phone","reference","image","file"].includes(type.value));
 const ADVANCED_FIELD_TYPES=FIELD_TYPES.filter(type=>!COMMON_FIELD_TYPES.some(item=>item.value===type.value));
 
 const DATA_SOURCES=[
@@ -246,7 +248,7 @@ export default function FormConfigurator({
     const options=["select","multiselect"].includes(fieldType)
       ?[{value:"Option 1",label:"Option 1"},{value:"Option 2",label:"Option 2"}]
       :[];
-    const width=fieldType==="textarea"?12:["number","currency","percentage","date","boolean"].includes(fieldType)?4:6;
+    const width=fieldType==="textarea"?12:["number","currency","percentage","date","boolean","image"].includes(fieldType)?4:6;
     setDraft(prev=>{
       const next=prev.slice();
       const targetIndex=targetKey?next.findIndex(field=>field.key===targetKey):-1;
@@ -596,8 +598,10 @@ export default function FormConfigurator({
                           <label className="form-label form-entry-label">{field.label}{field.required?<span className="form-entry-required ms-2">Required</span>:<span className="form-entry-optional ms-2">Optional</span>}</label>
                           {["select","reference","multiselect"].includes(field.fieldType)||field.dataSource?.resource
                             ?<select className="form-select form-entry-control" disabled><option>{field.dataSource?.resource?"Choose "+field.label:"Select an option"}</option>{normalizePreviewOptions(field.options).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>
-                            :field.fieldType==="textarea"
-                              ?<textarea className="form-control form-entry-control" rows={2} placeholder={field.formula?"Calculated automatically":"Enter "+field.label.toLowerCase()} readOnly/>
+                            :["image","file"].includes(field.fieldType)
+                              ?<div className="border rounded p-3 bg-light small text-secondary"><i className={`bi ${field.fieldType==="image"?"bi-image":"bi-paperclip"} me-2`}></i>{field.fieldType==="image"?"Choose an image":"Choose a file"} <span className="ms-1">(upload when filling in the form)</span></div>
+                              :field.fieldType==="textarea"
+                                ?<textarea className="form-control form-entry-control" rows={2} placeholder={field.formula?"Calculated automatically":"Enter "+field.label.toLowerCase()} readOnly/>
                               :field.fieldType==="boolean"
                                 ?<div className="form-check form-switch pt-2"><input className="form-check-input" type="checkbox" disabled/></div>
                                 :field.fieldType==="percentage"

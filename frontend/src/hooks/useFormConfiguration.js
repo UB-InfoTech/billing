@@ -110,6 +110,7 @@ const resolveSavedLabel=(formKey,field,savedField)=>{
 
 export const mergeFormFields=(baseFields,savedFields,formKey="")=>{
   const normalize=(field,index)=>({
+    formKey,
     key:field.key,
     label:field.label||field.key,
     helpText:String(field.helpText||""),
@@ -256,7 +257,7 @@ export const getFieldState=(field,values)=>{
 
 export function useFormConfiguration(formKey,baseFields){
   const baseSignature=useMemo(()=>JSON.stringify(baseFields.map(field=>({key:field.key,label:field.label,fieldType:field.fieldType,section:field.section}))),[baseFields]);
-  const [fields,setFields]=useState(()=>mergeFormFields(baseFields,[]));
+  const [fields,setFields]=useState(()=>mergeFormFields(baseFields,[],formKey));
   const [loading,setLoading]=useState(true);
   const [saving,setSaving]=useState(false);
   const [error,setError]=useState("");

@@ -1,4 +1,5 @@
 import React,{useEffect,useId,useRef,useState} from "react";
+import axios from "axios";
 import ArithmeticInput from "./ArithmeticInput";
 import {normalizeBooleanValue} from "../utils/fieldValue";
 
@@ -28,6 +29,10 @@ export default function ConfiguredField({
   const [lookupResults,setLookupResults]=useState(null);
   const [lookupSearching,setLookupSearching]=useState(false);
   const [lookupSearchError,setLookupSearchError]=useState("");
+  const [fileUploading,setFileUploading]=useState(false);
+  const [fileMetadata,setFileMetadata]=useState(null);
+  const [filePreviewUrl,setFilePreviewUrl]=useState("");
+  const [fileError,setFileError]=useState("");
   const lookupRequestSequence=useRef(0);
   const controlId=`configured-field-${useId()}`;
   const labelId=`${controlId}-label`;
@@ -107,6 +112,38 @@ export default function ConfiguredField({
       onRecordChange(selected||null,next);
     }
   };
+
+  const uploadConfiguredFile=async event=>{
+    const selected=event.target.files?.[0];event.target.value="";if(!selected)return;
+    if(!field.formKey||!field.key){setFileError("Refresh this form before uploading a file.");return;}
+    const data=new FormData();data.append("formKey",field.formKey);data.append("fieldKey",field.key);data.append("file",selected);
+    setFileUploading(true);setFileError("");
+    try{
+      const apiBase=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\\/$/,"");
+      const response=await axios.post(`${apiBase}/api/no-code-files/upload`,data,{headers:{"x-auth-token":localStorage.getItem("token")||""}});
+      const file=response.data?.file;if(!file?.id)throw new Error("The uploaded file could not be saved.");
+      setFileMetadata(file);handleValue(file.id);
+    }catch(error){setFileError(error.response?.data?.message||error.message||"Unable to upload this file. Try again.");}
+    finally{setFileUploading(false);}
+  };
+
+  useEffect(()=>{
+    let active=true;let objectUrl="";
+    const apiBase=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\\/$/,"");
+    if(!["image","file"].includes(field?.fieldType)||!value){setFileMetadata(null);setFilePreviewUrl("");setFileError("");return undefined;}
+    const loadFile=async()=>{
+      try{
+        const headers={"x-auth-token":localStorage.getItem("token")||""};
+        const metadataResponse=await axios.get(`${apiBase}/api/no-code-files/${encodeURIComponent(String(value))}`,{headers});
+        const metadata=metadataResponse.data?.file;if(!metadata?.downloadUrl)throw new Error("The saved file is unavailable.");
+        if(!active)return;setFileMetadata(metadata);
+        const content=await axios.get(`${apiBase}${metadata.downloadUrl}`,{headers,responseType:"blob"});
+        if(!active)return;objectUrl=URL.createObjectURL(content.data);setFilePreviewUrl(objectUrl);setFileError("");
+      }catch(error){if(active){setFileMetadata(null);setFilePreviewUrl("");setFileError(error.response?.data?.message||"This saved file is unavailable. Upload it again.");}}
+    };
+    loadFile();
+    return()=>{active=false;if(objectUrl)URL.revokeObjectURL(objectUrl);};
+  },[field?.fieldType,field?.formKey,field?.key,value]);
 
   const common={
     id:controlId,
@@ -234,6 +271,31 @@ export default function ConfiguredField({
           <div className="small text-muted">No choices have been added yet. Open Customize form to add the available choices.</div>
         )}
       </fieldset>
+    );
+  }else if(["image","file"].includes(field.fieldType)){
+    const accept=field.fieldType==="image"?"image/jpeg,image/png,image/gif,image/webp":".jpg,.jpeg,.png,.gif,.webp,.pdf,image/jpeg,image/png,image/gif,image/webp,application/pdf";
+    control=(
+      <div className="no-code-file-field border rounded p-3">
+        {fileMetadata&&value?(
+          <div className="d-flex align-items-start gap-3 flex-wrap">
+            {field.fieldType==="image"&&filePreviewUrl&&<img src={filePreviewUrl} alt={fileMetadata.name||label} style={{width:112,height:88,objectFit:"contain"}} className="border rounded bg-light"/>}
+            <div className="flex-grow-1 min-w-0">
+              <div className="fw-semibold text-break">{fileMetadata.name||"Uploaded file"}</div>
+              <div className="small text-secondary">{Math.max(1,Math.ceil(Number(fileMetadata.size||0)/1024))} KB</div>
+              {filePreviewUrl&&<a className="small" href={filePreviewUrl} download={fileMetadata.name||"download"}>Open or download</a>}
+              {fileError&&<div className="small text-danger mt-1">{fileError}</div>}
+              {!effectiveReadOnly&&!effectiveDisabled&&<button type="button" className="btn btn-sm btn-outline-danger mt-2" onClick={()=>{handleValue("");setFileMetadata(null);setFilePreviewUrl("");setFileError("");}}>Remove file</button>}
+            </div>
+          </div>
+        ):(
+          <>
+            <input id={controlId} type="file" className="form-control" accept={accept} required={effectiveRequired&&!value} disabled={effectiveDisabled||effectiveReadOnly||fileUploading} onChange={uploadConfiguredFile} aria-describedby={effectiveHelp?helpId:undefined}/>
+            <div className="form-text mt-2">{field.fieldType==="image"?"JPG, PNG, GIF or WebP image · Maximum 10 MB":"PDF or image · Maximum 10 MB"}</div>
+            {fileUploading&&<div className="small text-primary mt-2"><span className="spinner-border spinner-border-sm me-2" role="status"></span>Uploading file...</div>}
+            {fileError&&<div className="small text-danger mt-2" role="alert">{fileError}</div>}
+          </>
+        )}
+      </div>
     );
   }else if(field.fieldType==="boolean"){
     control=<div className="form-check form-switch pt-2">

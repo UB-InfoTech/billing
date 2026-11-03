@@ -37,5 +37,6 @@ function getPublicOrganizationLogoUrl(value,ownerId){
 
 module.exports={
   getOwnedOrganizationLogoFilename,
-  getPublicOrganizationLogoUrl
+  getPublicOrganizationLogoUrl,
+  hasSupportedOrganizationLogoSignature
 };

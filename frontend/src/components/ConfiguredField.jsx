@@ -115,7 +115,7 @@ export default function ConfiguredField({
     "aria-describedby":effectiveHelp?helpId:undefined,
     value:value??"",
     onChange:event=>handleValue(event.target.value),
-    placeholder:placeholder||(effectiveReadOnly?"Filled automatically":field.fieldType==="date"?"Choose a date":field.fieldType==="datetime"?"Choose date and time":field.fieldType==="number"||field.fieldType==="currency"?"Enter "+label.toLowerCase():"Enter "+label.toLowerCase()),
+    placeholder:placeholder||(effectiveReadOnly?"Filled automatically":field.fieldType==="date"?"Choose a date":field.fieldType==="datetime"?"Choose date and time":field.fieldType==="number"||field.fieldType==="currency"||field.fieldType==="percentage"?"Enter "+label.toLowerCase():"Enter "+label.toLowerCase()),
     disabled:effectiveDisabled,
     required:effectiveRequired,
     readOnly:effectiveReadOnly,
@@ -239,6 +239,24 @@ export default function ConfiguredField({
     control=<div className="form-check form-switch pt-2">
       <input id={controlId} aria-describedby={effectiveHelp?helpId:undefined} autoFocus={autoFocus} className="form-check-input" type="checkbox" checked={normalizeBooleanValue(value)} onChange={event=>handleValue(event.target.checked)} disabled={effectiveDisabled||effectiveReadOnly}/>
     </div>;
+  }else if(field.fieldType==="percentage"){
+    control=(
+      <div className="input-group">
+        <ArithmeticInput
+          value={value}
+          onValueChange={handleValue}
+          className="form-control form-entry-control"
+          min={field.validation?.min??min??0}
+          max={field.validation?.max??max??100}
+          step="0.01"
+          disabled={effectiveDisabled}
+          required={effectiveRequired}
+          readOnly={effectiveReadOnly}
+          placeholder={placeholder||label}
+        />
+        <span className="input-group-text">%</span>
+      </div>
+    );
   }else if(field.fieldType==="number"||field.fieldType==="currency"){
     control=<ArithmeticInput
       value={value}

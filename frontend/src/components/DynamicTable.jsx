@@ -9,6 +9,7 @@ const FIELD_TYPES=[
   {value:"textarea",label:"Long Text",icon:"bi-text-paragraph",help:"Notes or longer descriptions"},
   {value:"number",label:"Number",icon:"bi-123",help:"Numeric values"},
   {value:"currency",label:"Currency",icon:"bi-currency-rupee",help:"Money values shown as ₹"},
+  {value:"percentage",label:"Percentage",icon:"bi-percent",help:"Percentages from 0% to 100%"},
   {value:"date",label:"Date",icon:"bi-calendar3",help:"Calendar date"},
   {value:"datetime",label:"Date & Time",icon:"bi-calendar2-week",help:"Date with time"},
   {value:"boolean",label:"Yes / No",icon:"bi-toggle-on",help:"Simple true/false value"},
@@ -457,6 +458,7 @@ export default function DynamicTable({
   const formatCustomValue=(column,value)=>{
     if(value===null||value===undefined||value==="")return "—";
     if(column.fieldType==="currency")return `₹${Number(value||0).toFixed(2)}`;
+    if(column.fieldType==="percentage")return `${Number(value).toLocaleString("en-IN",{maximumFractionDigits:2})}%`;
     if(column.fieldType==="number")return Number(value||0).toLocaleString("en-IN",{maximumFractionDigits:2});
     if(column.fieldType==="boolean")return value===true||value==="true"?"Yes":"No";
     if(column.fieldType==="date"){
@@ -646,6 +648,7 @@ export default function DynamicTable({
         </div>
       );
     }
+    if(column.fieldType==="percentage")return <input {...common} type="number" min="0" max="100" step="0.01"/>;
     if(column.fieldType==="number"||column.fieldType==="currency")return <input {...common} type="number" step={column.fieldType==="currency"?"0.01":"any"}/>;
     if(column.fieldType==="date"||column.fieldType==="datetime"){
       return <input {...common} type={column.fieldType==="date"?"date":"datetime-local"}/>;
@@ -744,12 +747,18 @@ export default function DynamicTable({
       setError("Choose a list for this existing-record column.");
       return;
     }
+    if(customForm.fieldType==="percentage"&&customForm.defaultValue.trim()!==""&&(!Number.isFinite(Number(customForm.defaultValue))||Number(customForm.defaultValue)<0||Number(customForm.defaultValue)>100)){
+      setError("Starting percentage must be between 0 and 100.");
+      return;
+    }
 
     const slug=label.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,50)||"field";
     const key=`custom_${slug}_${Date.now()}`;
     const defaultValue=customForm.fieldType==="boolean"
       ? customForm.defaultValue==="true"
-      : customForm.fieldType==="multiselect"
+      : customForm.fieldType==="percentage"
+        ? (customForm.defaultValue.trim()===""?"":Number(customForm.defaultValue))
+        : customForm.fieldType==="multiselect"
         ? customForm.defaultValue.split(/\r?\n|,/).map(value=>value.trim()).filter(Boolean)
         : customForm.fieldType==="reference"
           ? ""
@@ -1182,7 +1191,7 @@ export default function DynamicTable({
                     ) : (
                       <div className="col-md-6">
                         <label className="form-label">Starting value <span className="text-secondary">(optional)</span></label>
-                        <input className="form-control" value={customForm.defaultValue} onChange={event=>setCustomForm(prev=>({...prev,defaultValue:event.target.value}))} placeholder="Leave blank for none"/>
+                        <input className="form-control" type={customForm.fieldType==="percentage"?"number":"text"} min={customForm.fieldType==="percentage"?0:undefined} max={customForm.fieldType==="percentage"?100:undefined} step={customForm.fieldType==="percentage"?"0.01":undefined} value={customForm.defaultValue} onChange={event=>setCustomForm(prev=>({...prev,defaultValue:event.target.value}))} placeholder="Leave blank for none"/>
                       </div>
                     )}
                     <div className="col-12">

@@ -8,7 +8,7 @@ const {mergeConfiguredPaymentFields}=require("../utils/paymentFormValidation");
 
 const router=express.Router();
 
-const FIELD_TYPES=["text","textarea","number","currency","date","datetime","select","multiselect","boolean","email","phone","url","reference"];
+const FIELD_TYPES=["text","textarea","number","currency","percentage","date","datetime","select","multiselect","boolean","email","phone","url","reference"];
 const SOURCES=["none",...Object.keys(FORM_LOOKUP_SOURCES)];
 const OPERATORS=["equals","not_equals","contains","not_contains","greater_than","less_than","empty","not_empty"];
 const {
@@ -100,6 +100,16 @@ const sanitizeFields=fields=>{
         value:cleanString(item?.value,300)
       }))
       :[];
+    const validationMin=optionalNumber(raw?.validation?.min);
+    const validationMax=optionalNumber(raw?.validation?.max);
+    if(fieldType==="percentage"){
+      if(validationMin!==null&&(validationMin<0||validationMin>100)){
+        throw new Error(`The minimum for "${label}" must be between 0 and 100.`);
+      }
+      if(validationMax!==null&&(validationMax<0||validationMax>100)){
+        throw new Error(`The maximum for "${label}" must be between 0 and 100.`);
+      }
+    }
 
     return {
       key,
@@ -140,8 +150,8 @@ const sanitizeFields=fields=>{
       validation:{
         // Number(null) and Number("") are both 0. Treat blank limits as
         // unbounded so saving a form doesn't silently cap numeric fields at 0.
-        min:optionalNumber(raw?.validation?.min),
-        max:optionalNumber(raw?.validation?.max),
+        min:fieldType==="percentage"?(validationMin??0):validationMin,
+        max:fieldType==="percentage"?(validationMax??100):validationMax,
         pattern:cleanString(raw?.validation?.pattern,500)
       }
     };

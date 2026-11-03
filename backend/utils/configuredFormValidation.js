@@ -288,6 +288,18 @@ const normalizeConfiguredFieldValue=(field,value)=>{
   if(isEmpty(value))return value;
   const label=field.label||"This field";
   switch(field.fieldType){
+    case "percentage":{
+      if(typeof value==="boolean"||typeof value==="object"){
+        throw makeValidationError(field,`Enter a valid percentage for "${label}".`);
+      }
+      const number=Number(String(value).trim());
+      if(!Number.isFinite(number))throw makeValidationError(field,`Enter a valid percentage for "${label}".`);
+      const min=Math.max(0,field.validation?.min===null||field.validation?.min===undefined?0:Number(field.validation.min));
+      const max=Math.min(100,field.validation?.max===null||field.validation?.max===undefined?100:Number(field.validation.max));
+      if(number<min)throw makeValidationError(field,`"${label}" must be at least ${min}%.`);
+      if(number>max)throw makeValidationError(field,`"${label}" cannot be more than ${max}%.`);
+      return field.custom?Math.round((number+Number.EPSILON)*100)/100:value;
+    }
     case "number":
     case "currency":{
       if(typeof value==="boolean"||typeof value==="object"){

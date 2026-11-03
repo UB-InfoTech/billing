@@ -39,8 +39,8 @@ export const ORDER_FORM_FIELDS=[
  {key:"gstNumber",label:"GST No.",fieldType:"text",width:4,section:"client",order:10},
  {key:"paymentTerms",label:"When should payment be made?",fieldType:"select",width:4,section:"client",defaultValue:"30",order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Pay in advance"}],system:true},
  {key:"challanNumber",label:"Delivery challan no.",fieldType:"text",width:4,section:"client",order:12,defaultValue:""},
- {key:"taxPercentage",label:"Tax %",fieldType:"number",width:4,section:"client",order:13,system:true},
- {key:"discountRate",label:"Discount %",fieldType:"number",width:4,section:"client",order:14,system:true}
+ {key:"taxPercentage",label:"Tax %",fieldType:"percentage",width:4,section:"client",order:13,system:true,validation:{min:0,max:100}},
+ {key:"discountRate",label:"Discount %",fieldType:"percentage",width:4,section:"client",order:14,system:true,validation:{min:0,max:100}}
 ];
 
 export const ORDER_ITEM_FIELDS=[
@@ -78,7 +78,7 @@ export const CLIENT_FORM_FIELDS=[
   {key:"companyName",label:"Customer or business name",helpText:"For a business, enter its company name.",fieldType:"text",width:12,section:"basic",required:true,order:0,system:true},
   {key:"businessType",label:"Business Type",fieldType:"select",width:6,section:"business",order:10,options:["Retail","Wholesale","Manufacturer","Trader","Supplier"]},
   {key:"paymentTerms",label:"When should payment be made?",fieldType:"select",width:6,section:"business",order:11,options:[{value:"30",label:"30 days"},{value:"60",label:"60 days"},{value:"90",label:"90 days"},{value:"Advance",label:"Pay in advance"}],system:true},
-  {key:"discountRate",label:"Default discount (%)",fieldType:"number",width:4,section:"additional",order:12,system:true},
+  {key:"discountRate",label:"Default discount (%)",fieldType:"percentage",width:4,section:"additional",order:12,system:true,validation:{min:0,max:100}},
   {key:"accountStatus",label:"Customer status",fieldType:"select",width:8,section:"additional",order:13,options:["Active","Inactive"],system:true},
   {key:"notes",label:"Notes",fieldType:"textarea",width:12,section:"additional",order:14}
 ];

@@ -14,7 +14,7 @@ const router=express.Router();
 
 const owner=req=>String(req.user.id);
 const cleanString=(value,max)=>String(value??"").trim().slice(0,max);
-const FIELD_TYPES=["text","textarea","number","currency","date","datetime","boolean","select","multiselect","reference"];
+const FIELD_TYPES=["text","textarea","number","currency","percentage","date","datetime","boolean","select","multiselect","reference"];
 const LOOKUP_MODELS={
   clients:require("../models/Client"),
   products:require("../models/Product"),
@@ -49,6 +49,16 @@ const normalizeCustomValue=(field,value)=>{
       if(!raw) return null;
       const number=Number(raw);
       if(!Number.isFinite(number))throw new Error("Value must be a valid number.");
+      return Math.round((number+Number.EPSILON)*100)/100;
+    }
+    case "percentage":{
+      if(typeof value==="boolean"||(typeof value==="object"&&value!==null)){
+        throw new Error("Enter a valid percentage.");
+      }
+      const number=Number(String(value).trim());
+      if(!Number.isFinite(number)||number<0||number>100){
+        throw new Error("Percentage must be between 0 and 100.");
+      }
       return Math.round((number+Number.EPSILON)*100)/100;
     }
     case "boolean":{

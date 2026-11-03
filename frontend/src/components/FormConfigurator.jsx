@@ -8,6 +8,7 @@ const FIELD_TYPES=[
   {value:"textarea",label:"Long text",icon:"bi-text-paragraph"},
   {value:"number",label:"Number",icon:"bi-123"},
   {value:"currency",label:"Money",icon:"bi-currency-rupee"},
+  {value:"percentage",label:"Percentage",icon:"bi-percent"},
   {value:"date",label:"Date",icon:"bi-calendar3"},
   {value:"datetime",label:"Date & time",icon:"bi-calendar2-week"},
   {value:"select",label:"Dropdown",icon:"bi-list-ul"},
@@ -19,7 +20,7 @@ const FIELD_TYPES=[
   {value:"reference",label:"Existing record",icon:"bi-database"},
 ];
 
-const COMMON_FIELD_TYPES=FIELD_TYPES.filter(type=>["text","number","currency","date","select","boolean","phone","reference"].includes(type.value));
+const COMMON_FIELD_TYPES=FIELD_TYPES.filter(type=>["text","number","currency","percentage","date","select","boolean","phone","reference"].includes(type.value));
 const ADVANCED_FIELD_TYPES=FIELD_TYPES.filter(type=>!COMMON_FIELD_TYPES.some(item=>item.value===type.value));
 
 const DATA_SOURCES=[
@@ -115,6 +116,7 @@ export default function FormConfigurator({
   const [showAddField,setShowAddField]=useState(false);
   const [showAdvanced,setShowAdvanced]=useState(false);
   const [showPreview,setShowPreview]=useState(true);
+  const [percentageOperands,setPercentageOperands]=useState({});
   const [error,setError]=useState("");
   const [newField,setNewField]=useState({
     label:"",
@@ -198,7 +200,7 @@ export default function FormConfigurator({
   const shownCount=draft.filter(field=>field.visible!==false).length;
   const previewSections=useMemo(()=>groupFieldsBySection(draft.filter(field=>field.visible!==false)),[draft]);
   const numericFields=useMemo(
-    ()=>draft.filter(field=>["number","currency"].includes(field.fieldType)),
+    ()=>draft.filter(field=>["number","currency","percentage"].includes(field.fieldType)),
     [draft]
   );
 
@@ -244,7 +246,7 @@ export default function FormConfigurator({
     const options=["select","multiselect"].includes(fieldType)
       ?[{value:"Option 1",label:"Option 1"},{value:"Option 2",label:"Option 2"}]
       :[];
-    const width=fieldType==="textarea"?12:["number","currency","date","boolean"].includes(fieldType)?4:6;
+    const width=fieldType==="textarea"?12:["number","currency","percentage","date","boolean"].includes(fieldType)?4:6;
     setDraft(prev=>{
       const next=prev.slice();
       const targetIndex=targetKey?next.findIndex(field=>field.key===targetKey):-1;
@@ -254,7 +256,7 @@ export default function FormConfigurator({
       next.splice(index,0,{
         key,label,visible:true,required:false,locked:false,system:false,custom:true,
         fieldType,width,order:index,section,helpText:"",options,formula:"",defaultValue:"",
-        validation:{min:null,max:null,pattern:""},editable:true,readOnly:false,disabled:false,
+        validation:fieldType==="percentage"?{min:0,max:100,pattern:""}:{min:null,max:null,pattern:""},editable:true,readOnly:false,disabled:false,
         dataSource:{type:"none",resource:"",valueField:"_id",labelField:"",searchField:"",multiple:fieldType==="multiselect",autoFill:[]},
         conditions:[]
       });
@@ -327,7 +329,7 @@ export default function FormConfigurator({
         :[],
       formula:"",
       defaultValue:"",
-      validation:{min:null,max:null,pattern:""},
+      validation:newField.fieldType==="percentage"?{min:0,max:100,pattern:""}:{min:null,max:null,pattern:""},
       editable:true,
       readOnly:false,
       disabled:false,
@@ -449,6 +451,38 @@ export default function FormConfigurator({
     }
   };
 
+  const renderPercentageFormulaBuilder=field=>{
+    const amountFields=numericFields.filter(item=>item.key!==field.key&&item.fieldType!=="percentage");
+    const rateFields=numericFields.filter(item=>item.key!==field.key&&item.fieldType==="percentage");
+    if(!amountFields.length||!rateFields.length)return null;
+    const selected=percentageOperands[field.key]||{};
+    const amountKey=amountFields.some(item=>item.key===selected.amountKey)?selected.amountKey:amountFields[0].key;
+    const rateKey=rateFields.some(item=>item.key===selected.rateKey)?selected.rateKey:rateFields[0].key;
+    return(
+      <div className="border rounded p-3 mt-3 bg-white">
+        <div className="fw-semibold mb-1">Calculate a percentage of an amount</div>
+        <div className="small text-secondary mb-3">For example, calculate 18% tax on the subtotal or 10% commission on sales.</div>
+        <div className="row g-2 align-items-end">
+          <div className="col-md-5">
+            <label className="form-label">Amount</label>
+            <select className="form-select form-select-sm" value={amountKey} onChange={event=>setPercentageOperands(previous=>({...previous,[field.key]:{...(previous[field.key]||{}),amountKey:event.target.value}}))}>
+              {amountFields.map(item=><option key={item.key} value={item.key}>{item.label}</option>)}
+            </select>
+          </div>
+          <div className="col-md-5">
+            <label className="form-label">Percentage</label>
+            <select className="form-select form-select-sm" value={rateKey} onChange={event=>setPercentageOperands(previous=>({...previous,[field.key]:{...(previous[field.key]||{}),rateKey:event.target.value}}))}>
+              {rateFields.map(item=><option key={item.key} value={item.key}>{item.label}</option>)}
+            </select>
+          </div>
+          <div className="col-md-2 d-grid">
+            <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>update(field.key,{formula:`(${amountKey} * ${rateKey} / 100)`,readOnly:true,editable:false})}>Apply</button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if(!open)return null;
 
   return(
@@ -566,7 +600,9 @@ export default function FormConfigurator({
                               ?<textarea className="form-control form-entry-control" rows={2} placeholder={field.formula?"Calculated automatically":"Enter "+field.label.toLowerCase()} readOnly/>
                               :field.fieldType==="boolean"
                                 ?<div className="form-check form-switch pt-2"><input className="form-check-input" type="checkbox" disabled/></div>
-                                :<input className="form-control form-entry-control" type={field.fieldType==="date"?"date":field.fieldType==="datetime"?"datetime-local":field.fieldType==="email"?"email":field.fieldType==="url"?"url":field.fieldType==="number"||field.fieldType==="currency"?"number":"text"} placeholder={field.formula?"Calculated automatically":"Enter "+field.label.toLowerCase()} readOnly={Boolean(field.formula)}/>}
+                                :field.fieldType==="percentage"
+                                  ?<div className="input-group"><input className="form-control form-entry-control" type="number" min="0" max="100" step="0.01" placeholder={"Enter "+field.label.toLowerCase()}/><span className="input-group-text">%</span></div>
+                                  :<input className="form-control form-entry-control" type={field.fieldType==="date"?"date":field.fieldType==="datetime"?"datetime-local":field.fieldType==="email"?"email":field.fieldType==="url"?"url":field.fieldType==="number"||field.fieldType==="currency"?"number":"text"} placeholder={field.formula?"Calculated automatically":"Enter "+field.label.toLowerCase()} readOnly={Boolean(field.formula)}/>}
                           {field.helpText&&<div className="form-text">{field.helpText}</div>}
                           {field.formula&&<div className="form-text">Calculated automatically</div>}
                           <div className="form-builder-canvas-hint"><i className="bi bi-grip-vertical me-1"></i>Drag to move</div>
@@ -668,6 +704,7 @@ export default function FormConfigurator({
                                 options:["select","multiselect"].includes(type.value)?(field.options||[]):[],
                                 formula:["number","currency"].includes(type.value)?field.formula:"",
                                 readOnly:["number","currency"].includes(type.value)&&field.formula?true:field.readOnly,
+                                validation:type.value==="percentage"?{...(field.validation||{}),min:field.validation?.min??0,max:field.validation?.max??100}:field.validation,
                                 dataSource:["reference","select","multiselect"].includes(type.value)
                                   ?field.dataSource
                                   :{type:"none",resource:"",valueField:"_id",labelField:"",searchField:"",multiple:false,autoFill:[]}
@@ -691,6 +728,7 @@ export default function FormConfigurator({
                                   options:["select","multiselect"].includes(type.value)?(field.options||[]):[],
                                   formula:["number","currency"].includes(type.value)?field.formula:"",
                                   readOnly:["number","currency"].includes(type.value)&&field.formula?true:field.readOnly,
+                                  validation:type.value==="percentage"?{...(field.validation||{}),min:field.validation?.min??0,max:field.validation?.max??100}:field.validation,
                                   dataSource:["reference","select","multiselect"].includes(type.value)
                                     ?field.dataSource
                                     :{type:"none",resource:"",valueField:"_id",labelField:"",searchField:"",multiple:false,autoFill:[]}
@@ -910,6 +948,7 @@ export default function FormConfigurator({
                               }}>Add</button>
                             </div>
 
+                            {renderPercentageFormulaBuilder(field)}
                             {field.formula&&validateFormula(field)&&<div className="alert alert-warning py-2 mt-3 mb-0">{validateFormula(field)}</div>}
                             <div className="form-text">Automatic calculations are always read only.</div>
                           </div>
@@ -920,16 +959,17 @@ export default function FormConfigurator({
                         <details className="form-builder-panel">
                           <summary className="fw-semibold">Validation</summary>
                           <div className="row g-3 mt-1">
-                            {(field.fieldType==="number"||field.fieldType==="currency")&&(
+                            {["number","currency","percentage"].includes(field.fieldType)&&(
                               <>
-                                <div className="col-md-3"><label className="form-label">Minimum</label><input className="form-control" type="number" value={field.validation?.min??""} onChange={event=>update(field.key,{validation:{...(field.validation||{}),min:event.target.value===""?null:Number(event.target.value)}})} placeholder="No minimum"/></div>
-                                <div className="col-md-3"><label className="form-label">Maximum</label><input className="form-control" type="number" value={field.validation?.max??""} onChange={event=>update(field.key,{validation:{...(field.validation||{}),max:event.target.value===""?null:Number(event.target.value)}})} placeholder="No maximum"/></div>
+                                <div className="col-md-3"><label className="form-label">{field.fieldType==="percentage"?"Minimum (%)":"Minimum"}</label><input className="form-control" type="number" min={field.fieldType==="percentage"?0:undefined} max={field.fieldType==="percentage"?100:undefined} step={field.fieldType==="percentage"?"0.01":undefined} value={field.validation?.min??(field.fieldType==="percentage"?0:"")} onChange={event=>update(field.key,{validation:{...(field.validation||{}),min:event.target.value===""?null:Number(event.target.value)}})} placeholder="No minimum"/></div>
+                                <div className="col-md-3"><label className="form-label">{field.fieldType==="percentage"?"Maximum (%)":"Maximum"}</label><input className="form-control" type="number" min={field.fieldType==="percentage"?0:undefined} max={field.fieldType==="percentage"?100:undefined} step={field.fieldType==="percentage"?"0.01":undefined} value={field.validation?.max??(field.fieldType==="percentage"?100:"")} onChange={event=>update(field.key,{validation:{...(field.validation||{}),max:event.target.value===""?null:Number(event.target.value)}})} placeholder="No maximum"/></div>
                               </>
                             )}
                             {["text","textarea","email","phone","url"].includes(field.fieldType)&&(
                               <div className="col-12"><label className="form-label">Pattern <span className="text-secondary">(advanced)</span></label><input className="form-control" value={field.validation?.pattern||""} onChange={event=>update(field.key,{validation:{...(field.validation||{}),pattern:event.target.value}})} placeholder="Optional regular-expression pattern"/></div>
                             )}
-                            {!["number","currency","text","textarea","email","phone","url"].includes(field.fieldType)&&<div className="small text-secondary">No extra validation is needed for this field type.</div>}
+                            {!["number","currency","percentage","text","textarea","email","phone","url"].includes(field.fieldType)&&<div className="small text-secondary">No extra validation is needed for this field type.</div>}
+                            {field.fieldType==="percentage"&&<div className="small text-secondary">Percentages are limited to 0%–100%.</div>}
                           </div>
                         </details>
                       </div>

@@ -92,9 +92,7 @@ export default function ConfiguredField({
     };
   },[lookupQuery,lookupResource,lookupSearchField,onLookupSearch]);
 
-  if(!field||field.visible===false)return null;
-
-  const label=field.label||field.key;
+  const label=field?.label||field?.key||"";
   const effectiveReadOnly=readOnly||field.readOnly||field.editable===false;
   const effectiveRequired=field.required===true||required;
   const effectiveHelp=help??field.helpText;
@@ -144,6 +142,8 @@ export default function ConfiguredField({
     loadFile();
     return()=>{active=false;if(objectUrl)URL.revokeObjectURL(objectUrl);};
   },[field?.fieldType,field?.formKey,field?.key,value]);
+
+  if(!field||field.visible===false)return null;
 
   const common={
     id:controlId,

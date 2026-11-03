@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const profileSchema = new mongoose.Schema({
   headerTitle: { type: String, trim: true, maxlength: 80, default: "" },
   companyName: { type: String, trim: true, maxlength: 160, default: "" },
+  logoUrl: { type: String, trim: true, maxlength: 300, default: "" },
   legalName: { type: String, trim: true, maxlength: 180, default: "" },
   organizationType: { type: String, trim: true, maxlength: 60, default: "" },
   industry: { type: String, trim: true, maxlength: 120, default: "" },

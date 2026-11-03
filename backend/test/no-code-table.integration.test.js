@@ -17,6 +17,7 @@ const {prepareEwaybillForm}=require("../utils/ewaybillFormValidation");
 const {prepareCreditNoteCustomFields}=require("../utils/creditNoteFormValidation");
 const TableConfiguration=require("../models/TableConfiguration");
 const TableCustomValue=require("../models/TableCustomValue");
+const {migrateLegacyTableCustomValue}=require("../utils/tableCustomFieldPersistence");
 const FormConfiguration=require("../models/FormConfiguration");
 
 const mongoUri=process.env.MONGO_URI;
@@ -986,12 +987,13 @@ test("custom table values persist with correct types and enforce business owners
       /not found in this business/i
     );
 
-    const tableKey="no-code-integration";
+    const tableKey="clients.list";
     const configured=await request(`/table-config/${tableKey}`,{
       method:"PUT",
       body:{columns:[
         {key:"custom_verified",label:"Verified",kind:"custom",fieldType:"boolean",editable:true},
         {key:"custom_note",label:"Internal note",kind:"custom",fieldType:"text",editable:true},
+        {key:"custom_legacy_note",label:"Legacy note",kind:"custom",fieldType:"text",editable:true},
         {
           key:"custom_related_customer",
           label:"Related customer",
@@ -1009,6 +1011,21 @@ test("custom table values persist with correct types and enforce business owners
       ]}
     });
     assert.equal(configured.status,200,JSON.stringify(configured.data));
+
+    const legacyTableValue=await TableCustomValue.create({
+      createdBy:ownerId,
+      tableKey,
+      rowKey:String(ownerClientId),
+      fieldKey:"custom_legacy_note",
+      value:"Migrated from the old table-value collection"
+    });
+    const migrationResult=await migrateLegacyTableCustomValue(legacyTableValue.toObject(),TableCustomValue);
+    assert.equal(migrationResult.status,"migrated");
+    assert.equal(
+      await TableCustomValue.countDocuments({createdBy:ownerId,tableKey,rowKey:String(ownerClientId)}),
+      0,
+      "A migrated value is removed from the legacy collection only after it is stored on its owner record."
+    );
 
     const invalidBoolean=await request(`/table-config/${tableKey}/values`,{
       method:"PUT",
@@ -1045,10 +1062,67 @@ test("custom table values persist with correct types and enforce business owners
 
     const ownerValues=await request(`/table-config/${tableKey}/values?rowKeys=${ownerClientId}`);
     assert.equal(ownerValues.status,200);
-    assert.equal(ownerValues.data.values.length,3);
+    assert.equal(ownerValues.data.values.length,4);
     assert.equal(ownerValues.data.values.find(item=>item.fieldKey==="custom_verified").value,false);
     assert.equal(ownerValues.data.values.find(item=>item.fieldKey==="custom_note").value,"Call before delivery");
     assert.equal(ownerValues.data.values.find(item=>item.fieldKey==="custom_related_customer").value,String(ownerClientId));
+    assert.equal(ownerValues.data.values.find(item=>item.fieldKey==="custom_legacy_note").value,"Migrated from the old table-value collection");
+
+    const nestedTableOrder=await Order.create({
+      createdBy:ownerId,
+      orderNumber:"NO-CODE-TABLE-PERSIST-"+Date.now(),
+      companyName:"Owner business",
+      subOrders:[{designNumber:"LINE-1",orderName:"Invoice line",quantity:2,unitPrice:5}],
+      payments:[{amount:5,method:"Cash"}]
+    });
+    const nestedPayment=nestedTableOrder.payments[0];
+    const nestedInvoiceLine=nestedTableOrder.subOrders[0];
+
+    const paymentColumns=await request("/table-config/orders.payments",{
+      method:"PUT",
+      body:{columns:[{
+        key:"custom_collector_note",label:"Collector note",kind:"custom",fieldType:"text",editable:true
+      }]}
+    });
+    assert.equal(paymentColumns.status,200,JSON.stringify(paymentColumns.data));
+    const savedPaymentNote=await request("/table-config/orders.payments/values",{
+      method:"PUT",
+      body:{rowKey:String(nestedPayment._id),fieldKey:"custom_collector_note",value:"Collected at the shop"}
+    });
+    assert.equal(savedPaymentNote.status,200,JSON.stringify(savedPaymentNote.data));
+
+    const itemColumns=await request("/table-config/credit-notes.items",{
+      method:"PUT",
+      body:{columns:[{
+        key:"custom_item_condition",label:"Item condition",kind:"custom",fieldType:"text",editable:true
+      }]}
+    });
+    assert.equal(itemColumns.status,200,JSON.stringify(itemColumns.data));
+    const savedItemCondition=await request("/table-config/credit-notes.items/values",{
+      method:"PUT",
+      body:{rowKey:String(nestedInvoiceLine._id),fieldKey:"custom_item_condition",value:"Checked"}
+    });
+    assert.equal(savedItemCondition.status,200,JSON.stringify(savedItemCondition.data));
+
+    const storedNestedOrder=await Order.findOne({_id:nestedTableOrder._id,createdBy:ownerId}).lean();
+    const storedPayment=storedNestedOrder.payments.find(item=>String(item._id)===String(nestedPayment._id));
+    const storedInvoiceLine=storedNestedOrder.subOrders.find(item=>String(item._id)===String(nestedInvoiceLine._id));
+    assert.equal(plainMap(storedPayment.customFields).custom_collector_note,"Collected at the shop");
+    assert.equal(plainMap(storedInvoiceLine.customFields).custom_item_condition,"Checked");
+
+    const virtualColumns=await request("/table-config/sales-analytics.state-cities",{
+      method:"PUT",
+      body:{columns:[{
+        key:"custom_city_note",label:"City note",kind:"custom",fieldType:"text",editable:true
+      }]}
+    });
+    assert.equal(virtualColumns.status,200,JSON.stringify(virtualColumns.data));
+    const virtualWrite=await request("/table-config/sales-analytics.state-cities/values",{
+      method:"PUT",
+      body:{rowKey:"Vadodara",fieldKey:"custom_city_note",value:"No underlying record"}
+    });
+    assert.equal(virtualWrite.status,400);
+    assert.match(virtualWrite.data.message,/actual business records/i);
 
     const resetTable=await request(`/table-config/${tableKey}`,{method:"DELETE"});
     assert.equal(resetTable.status,200);
@@ -1056,8 +1130,13 @@ test("custom table values persist with correct types and enforce business owners
     assert.deepEqual(resetLayout.data.columns,[]);
     const retainedValues=await request(`/table-config/${tableKey}/values?rowKeys=${ownerClientId}`);
     assert.equal(retainedValues.status,200);
-    assert.equal(retainedValues.data.values.length,3);
-    assert.equal(retainedValues.data.values.find(item=>item.fieldKey==="custom_verified").value,false);
+    assert.deepEqual(retainedValues.data.values,[]);
+    const retainedOwnerClient=await Client.findById(ownerClientId).lean();
+    const retainedClientFields=plainMap(retainedOwnerClient.customFields);
+    assert.equal(retainedClientFields.custom_verified,false);
+    assert.equal(retainedClientFields.custom_note,"Call before delivery");
+    assert.equal(retainedClientFields.custom_related_customer,String(ownerClientId));
+    assert.equal(retainedClientFields.custom_legacy_note,"Migrated from the old table-value collection");
 
     const hiddenFromOtherOwner=await request(`/table-config/${tableKey}/values?rowKeys=${ownerClientId}`,{
       token:otherOwnerToken
@@ -1070,6 +1149,7 @@ test("custom table values persist with correct types and enforce business owners
       if(ownerId&&otherOwnerId){
         await Promise.all([
           TableCustomValue.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
+          Order.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
           TableConfiguration.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
           FormConfiguration.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),
           Client.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}}),

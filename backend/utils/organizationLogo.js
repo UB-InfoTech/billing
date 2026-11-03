@@ -1,5 +1,5 @@
 const LOGO_PATH_PREFIX="/uploads/organization-logos/";
-const LOGO_FILENAME_PATTERN=/^([a-f0-9]{24})-([a-f0-9]{24})\\.(?:jpg|png|webp)$/i;
+const LOGO_FILENAME_PATTERN=/^([a-f0-9]{24})-([a-f0-9]{24})\.(?:jpg|png|webp)$/i;
 
 function getOwnedOrganizationLogoFilename(value,ownerId){
   const raw=String(value??"").trim();

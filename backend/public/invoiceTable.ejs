@@ -14,6 +14,7 @@
     th,td{border:1px solid <%= invoiceConfig.accentColor %>;padding:5px 6px;vertical-align:top}
     th{font-weight:800}
     .header{text-align:center;padding:8px 10px}
+    .organization-logo{display:block;width:auto;max-width:150px;max-height:64px;object-fit:contain;margin:0 auto 6px}
     .header-title{font-size:12px;font-weight:800}
     .company-name{font-size:22px;font-weight:900;margin:2px 0;letter-spacing:.15px}
     .gst{font-size:12px;font-weight:800}
@@ -62,6 +63,7 @@
 <div class="invoice">
 
   <div class="header">
+    <% if(profileLogoUrl) { %><img class="organization-logo" src="<%= profileLogoUrl %>" alt="Organization logo"><% } %>
     <% if(invoiceConfig.header.showHeaderTitle){ %><div class="header-title"><%= profileHeaderTitle %></div><% } %>
     <% if(invoiceConfig.header.showCompanyName){ %><div class="company-name"><%= profileCompanyName %></div><% } %>
     <% if(invoiceConfig.header.showGST){ %><div class="gst">GSTIN: <%= profileGstNumber %></div><% } %>

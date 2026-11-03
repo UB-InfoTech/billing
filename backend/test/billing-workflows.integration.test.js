@@ -1373,7 +1373,7 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(cancelledTimelineNote.settlementHistory[1].eventType, "edited");
     assert.equal(cancelledTimelineNote.settlementHistory[2].eventType, "cancelled");
 
-    const timelineStatement = await request("/clients/" + timelineClientId + "/statement?from=2026-10-14&to=2026-10-31");
+    const timelineStatement = await request("/clients/" + timelineClientId + "/statement?from=2026-10-14&to="+statementEndDate);
     assert.equal(timelineStatement.response.status, 200, JSON.stringify(timelineStatement.payload));
     assert.equal(timelineStatement.payload.statement.receivables.openingBalance, 0);
     assert.equal(timelineStatement.payload.statement.receivables.totalDebits, 120);

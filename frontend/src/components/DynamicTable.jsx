@@ -179,6 +179,7 @@ export default function DynamicTable({
   actionColumn,
   footer,
   autoOpenSettings=false,
+  allowCustomFields=true,
 }){
   const [draft,setDraft]=useState(()=>cloneColumns(columns));
   const [customValues,setCustomValues]=useState({});
@@ -225,8 +226,14 @@ export default function DynamicTable({
   const cancelledEditRef=useRef(null);
   const referenceIdLookupAttemptsRef=useRef(new Set());
 
-  const customColumns=useMemo(()=>draft.filter(column=>column.kind==="custom"),[draft]);
-  const mergeSources=useMemo(()=>draft.filter(column=>column.kind!=="merged"),[draft]);
+  const customColumns=useMemo(
+    ()=>allowCustomFields?draft.filter(column=>column.kind==="custom"):[],
+    [draft,allowCustomFields]
+  );
+  const mergeSources=useMemo(
+    ()=>draft.filter(column=>column.kind!=="merged"&&(allowCustomFields||column.kind!=="custom")),
+    [draft,allowCustomFields]
+  );
   const referenceResources=useMemo(()=>Array.from(new Set(
     customColumns
       .filter(column=>column.fieldType==="reference"&&REFERENCE_RESOURCES[column.dataSource?.resource])
@@ -242,12 +249,12 @@ export default function DynamicTable({
     ()=>JSON.stringify(customColumns.map(column=>({key:column.key,fieldType:column.fieldType,options:column.options,defaultValue:column.defaultValue}))),
     [customColumns]
   );
-  const visibleColumns=useMemo(()=>draft.filter(column=>column.visible!==false),[draft]);
+  const visibleColumns=useMemo(()=>draft.filter(column=>column.visible!==false&&(allowCustomFields||column.kind!=="custom")),[draft,allowCustomFields]);
   const filteredDraft=useMemo(()=>{
     const query=searchTerm.trim().toLowerCase();
     if(!query)return draft;
-    return draft.filter(column=>column.label.toLowerCase().includes(query));
-  },[draft,searchTerm]);
+    return draft.filter(column=>(allowCustomFields||column.kind!=="custom")&&column.label.toLowerCase().includes(query));
+  },[draft,searchTerm,allowCustomFields]);
 
   const resetCustomForm=()=>setCustomForm({
     label:"",
@@ -724,6 +731,7 @@ export default function DynamicTable({
   const addCustomField=()=>{
     const label=customForm.label.trim();
     const options=customForm.optionsText.split(/\r?\n|,/).map(item=>item.trim()).filter(Boolean);
+    if(!allowCustomFields)return;
     if(!label){
       setError("Enter a field name.");
       return;
@@ -1136,6 +1144,7 @@ export default function DynamicTable({
                 </div>
               </div>
 
+              {allowCustomFields&&(
               <details className="dynamic-builder-details">
                 <summary><i className="bi bi-plus-lg me-2"></i>Add a new column</summary>
                 <div className="dynamic-builder-details-body">
@@ -1186,6 +1195,7 @@ export default function DynamicTable({
                   <button type="button" className="btn btn-primary mt-3" onClick={addCustomField} disabled={!customForm.label.trim()}>Add column</button>
                 </div>
               </details>
+              )}
 
               <details className="dynamic-builder-details">
                 <summary><i className="bi bi-link-45deg me-2"></i>Combine existing columns</summary>

@@ -63,14 +63,14 @@ test("no-code file uploads are authenticated, private and tied to their configur
 
     const metadata=await fetch(baseUrl+"/no-code-files/"+file.id,{headers:{"x-auth-token":ownerToken}});
     assert.equal(metadata.status,200);
-    const downloaded=await fetch(baseUrl+file.downloadUrl,{headers:{"x-auth-token":ownerToken}});
+    const downloaded=await fetch(baseUrl.replace(/\/api$/,"")+file.downloadUrl,{headers:{"x-auth-token":ownerToken}});
     assert.equal(downloaded.status,200);
     assert.equal(downloaded.headers.get("content-type"),"image/png");
     assert.deepEqual(Buffer.from(await downloaded.arrayBuffer()),png);
 
     const otherMetadata=await fetch(baseUrl+"/no-code-files/"+file.id,{headers:{"x-auth-token":otherToken}});
     assert.equal(otherMetadata.status,404);
-    const otherDownload=await fetch(baseUrl+file.downloadUrl,{headers:{"x-auth-token":otherToken}});
+    const otherDownload=await fetch(baseUrl.replace(/\/api$/,"")+file.downloadUrl,{headers:{"x-auth-token":otherToken}});
     assert.equal(otherDownload.status,404);
 
     const spoofedForm=new FormData();

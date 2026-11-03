@@ -74,6 +74,13 @@ const receiveOrganizationLogo=(req,res,next)=>{
   });
 };
 
+const publicProfileForOwner=(profile,ownerId)=>{
+  const result=publicProfileForOwner(profile,req.user.id);
+  if(!result)return result;
+  result.logoUrl=getPublicOrganizationLogoUrl(result.logoUrl,ownerId);
+  return result;
+};
+
 const PROFILE_FORM_KEYS=[
   "headerTitle","companyName","legalName","organizationType","industry","contactPerson",
   "emailAddress","website","companyAddress","addressLine2","city","district","state","country",
@@ -205,7 +212,7 @@ router.get('/', auth, async (req, res) => {
       await profile.save();
     }
 
-    res.json(toPublicProfile(profile));
+    res.json(publicProfileForOwner(profile,req.user.id));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -337,7 +344,7 @@ router.put('/', auth, async (req, res) => {
     applyProfileValues(profile,validated.values,validated.customFields,configuredFields);
     profile.createdBy=String(req.user.id);
     await profile.save();
-    res.json(toPublicProfile(profile));
+    res.json(publicProfileForOwner(profile,req.user.id));
   } catch (err) {
     res.status(err.status||400).json({ message: err.message });
   }
@@ -361,7 +368,7 @@ router.patch('/billNoSequence', auth, async (req, res) => {
     if (!profile) {
       return res.status(404).json({ message: 'Profile not found' });
     }
-    res.json(toPublicProfile(profile));
+    res.json(publicProfileForOwner(profile,req.user.id));
   } catch (err) {
     res.status(err.status||500).json({ message: err.message });
   }
@@ -384,7 +391,7 @@ router.patch('/updateBillNoSequence', auth, async (req, res) => {
       { $set: { billNoSequence: sequence } },
       { new: true, upsert: true }
     ).lean();
-    res.json(toPublicProfile(profile));
+    res.json(publicProfileForOwner(profile,req.user.id));
   } catch (error) {
     res.status(400).json({ message: error.message });
   }

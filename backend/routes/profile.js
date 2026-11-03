@@ -1,9 +1,29 @@
-const express = require('express');
-const multer = require("multer");
-const fs = require("fs");
-const path = require("path");
-const crypto = require("crypto");
-const router = express.Router();
+const express=require("express");
+const multer=require("multer");
+const fs=require("fs");
+const path=require("path");
+const crypto=require("crypto");
+const Profile=require("../models/Profile");
+const auth=require("../middleware/auth");
+const {toPublicProfile}=require("../utils/publicProfile");
+const {normalizeInvoiceSequence}=require("../utils/invoiceSequence");
+const {getSafeUploadExtension}=require("../utils/uploadFileTypes");
+const {
+  getOwnedOrganizationLogoFilename,
+  getPublicOrganizationLogoUrl,
+  hasSupportedOrganizationLogoSignature
+}=require("../utils/organizationLogo");
+const {
+  loadConfiguredFormFields,
+  calculateConfiguredCustomFields,
+  hasConfiguredCustomCalculations
+}=require("../utils/customFieldCalculations");
+const {
+  prepareConfiguredFormValues,
+  validateConfiguredFormValues
+}=require("../utils/configuredFormValidation");
+
+const router=express.Router();
 const logoUploadDir=path.join(__dirname,"../public/uploads/organization-logos");
 fs.mkdirSync(logoUploadDir,{recursive:true});
 
@@ -53,24 +73,7 @@ const receiveOrganizationLogo=(req,res,next)=>{
     return res.status(status).json({message});
   });
 };
-const Profile = require('../models/Profile');
-const auth = require('../middleware/auth');
-const {toPublicProfile}=require('../utils/publicProfile');
-const {normalizeInvoiceSequence}=require("../utils/invoiceSequence");
-const {getSafeUploadExtension}=require("../utils/uploadFileTypes");
-const {
-  getOwnedOrganizationLogoFilename,
-  getPublicOrganizationLogoUrl
-}=require("../utils/organizationLogo");
-const {
-  loadConfiguredFormFields,
-  calculateConfiguredCustomFields,
-  hasConfiguredCustomCalculations
-}=require("../utils/customFieldCalculations");
-const {
-  prepareConfiguredFormValues,
-  validateConfiguredFormValues
-}=require("../utils/configuredFormValidation");
+
 const PROFILE_FORM_KEYS=[
   "headerTitle","companyName","legalName","organizationType","industry","contactPerson",
   "emailAddress","website","companyAddress","addressLine2","city","district","state","country",
@@ -213,6 +216,11 @@ router.post("/logo",auth,receiveOrganizationLogo,async(req,res)=>{
   if(!req.file)return res.status(400).json({message:"Choose a logo image first."});
   const newLogoUrl="/uploads/organization-logos/"+req.file.filename;
   try{
+    const logoBuffer=await fs.promises.readFile(req.file.path);
+    if(!hasSupportedOrganizationLogoSignature(logoBuffer,path.extname(req.file.filename))){
+      await fs.promises.unlink(req.file.path).catch(()=>{});
+      return res.status(400).json({message:"The selected file is not a valid JPG, PNG or WebP image."});
+    }
     let profile=await Profile.findOne({createdBy:String(req.user.id)});
     if(!profile){
       profile=new Profile({

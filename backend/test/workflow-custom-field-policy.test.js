@@ -19,7 +19,7 @@ test("status and financial fields stay available as conditions but cannot be wri
  assert.throws(()=>validateWorkflowPayload(makePayload("orders",[{type:"set_value",fieldKey:"custom_approval_1",value:"Yes"}]),policy),/cannot be changed by an automation/i);
 });
 
-test("hidden, disabled, formula, attachment and complex custom fields are excluded",()=>{
+test("hidden and unsupported fields are excluded while read-only values remain condition-only",()=>{
  const fields=[
   {key:"custom_hidden",custom:true,visible:false,fieldType:"text"},
   {key:"custom_disabled",custom:true,visible:true,disabled:true,fieldType:"text"},
@@ -30,9 +30,14 @@ test("hidden, disabled, formula, attachment and complex custom fields are exclud
   {key:"custom_reference",custom:true,visible:true,fieldType:"reference"}
  ];
  const policy=buildWorkflowFieldPolicy("clients",fields);
- for(const field of fields){
-  assert.equal(policy.conditionFields.has(field.key),false,field.key);
-  assert.equal(policy.actionFields.has(field.key),false,field.key);
+ assert.equal(policy.conditionFields.has("custom_hidden"),false);
+ for(const key of ["custom_image","custom_file","custom_multi","custom_reference"]){
+  assert.equal(policy.conditionFields.has(key),false,key);
+  assert.equal(policy.actionFields.has(key),false,key);
+ }
+ for(const key of ["custom_disabled","custom_formula"]){
+  assert.equal(policy.conditionFields.has(key),true,key);
+  assert.equal(policy.actionFields.has(key),false,key);
  }
 });
 

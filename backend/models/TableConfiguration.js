@@ -6,7 +6,7 @@ const tableColumnSchema=new mongoose.Schema({
   visible:{type:Boolean,default:true},
   locked:{type:Boolean,default:false},
   kind:{type:String,enum:["field","merged","custom"],default:"field"},
-  fieldType:{type:String,enum:["text","textarea","number","currency","date","datetime","boolean","select","multiselect","reference"],default:"text"},
+  fieldType:{type:String,enum:["text","textarea","number","currency","percentage","date","datetime","boolean","select","multiselect","reference","image","file"],default:"text"},
   options:{type:[mongoose.Schema.Types.Mixed],default:[]},
   editable:{type:Boolean,default:true},
   dataSource:{type:mongoose.Schema.Types.Mixed,default:null},

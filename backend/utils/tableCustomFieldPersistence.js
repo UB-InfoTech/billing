@@ -39,7 +39,16 @@ function addSelectedValues(result,rowKey,customFields,fieldKeys){
   if(Object.keys(selected).length)result.set(String(rowKey),selected);
 }
 
-async function readTableRecordValues({tableKey,rowKeys,ownerId,fieldKeys=[]}){
+async function tableCustomFieldRowExists({tableKey,rowKey,ownerId}){
+  const target=getTableCustomFieldTarget(tableKey);
+  const ownerObjectId=validOwnerId(ownerId);
+  const rowObjectId=validRowId(rowKey);
+  if(!target||target.kind==="virtual"||!ownerObjectId||!rowObjectId)return false;
+  if(target.kind==="record")return Boolean(await target.model.exists({_id:rowObjectId,createdBy:ownerObjectId}));
+  return Boolean(await target.model.exists({createdBy:ownerObjectId,[target.arrayPath]:{$elemMatch:{_id:rowObjectId}}}));
+}
+
+async function readTableRecordValues({tableKey,rowKeys,ownerId,fieldKeys=[]})
   const target=getTableCustomFieldTarget(tableKey),result=new Map(),ownerObjectId=validOwnerId(ownerId);
   const keys=[...new Set(fieldKeys||[])].filter(key=>FIELD_KEY_PATTERN.test(String(key||"")));
   if(!target||target.kind==="virtual"||!ownerObjectId||!keys.length)return result;
@@ -105,4 +114,4 @@ async function migrateLegacyTableCustomValue(legacy,TableCustomValue){
   return {status:"missing-record"};
 }
 
-module.exports={FIELD_KEY_PATTERN,TABLE_CUSTOM_FIELD_TARGETS,getTableCustomFieldTarget,toPlainMap,readTableRecordValues,writeTableRecordValue,migrateLegacyTableCustomValue};
+module.exports={FIELD_KEY_PATTERN,TABLE_CUSTOM_FIELD_TARGETS,getTableCustomFieldTarget,tableCustomFieldRowExists,toPlainMap,readTableRecordValues,writeTableRecordValue,migrateLegacyTableCustomValue};

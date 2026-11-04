@@ -3,6 +3,7 @@ const dotenv=require("dotenv");
 const mongoose=require("mongoose");
 const NoCodeFile=require("../models/NoCodeFile");
 const {getOwnedNoCodeFilePath}=require("../utils/noCodeFileStorage");
+const {getTableCustomFieldTarget}=require("../utils/tableCustomFieldPersistence");
 const Client=require("../models/Client");
 const Product=require("../models/Product");
 const Expense=require("../models/Expense");
@@ -27,6 +28,14 @@ const MODEL_BY_FORM=Object.freeze({
 });
 
 const buildNoCodeFileReferenceQuery=file=>{
+  if(file?.scope==="table"&&String(file.formKey||"").startsWith("table:")){
+    const tableKey=String(file.formKey).slice(6);
+    const target=getTableCustomFieldTarget(tableKey);
+    if(!target||target.kind==="virtual"||!file.rowKey||!file.fieldKey||!file.createdBy||!file._id)return null;
+    const fieldPath="customFields."+file.fieldKey;
+    if(target.kind==="record")return {model:target.model,query:{createdBy:file.createdBy,_id:file.rowKey,[fieldPath]:String(file._id)}};
+    return {model:target.model,query:{createdBy:file.createdBy,[target.arrayPath]:{$elemMatch:{_id:file.rowKey,[fieldPath]:String(file._id)}}}};
+  }
   const model=MODEL_BY_FORM[file?.formKey];
   if(!model||!file?.fieldKey||!file?.createdBy||!file?._id)return null;
   const fieldPath="customFields."+file.fieldKey;

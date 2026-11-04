@@ -496,7 +496,7 @@ const validateConfiguredFileReferences=async({ownerId,formKey,fields=[],customFi
     if(isEmpty(value))continue;
     const id=String(value).trim();
     if(!/^[a-f0-9]{24}$/i.test(id))throw makeValidationError(field,`Upload a valid ${field.fieldType==="image"?"image":"file"} for “${field.label||"this field"}”.`);
-    const file=await NoCodeFile.findOne({_id:id,createdBy:ownerId,formKey,fieldKey:field.key,fieldType:field.fieldType}).select("_id").lean();
+    const file=await NoCodeFile.findOne({_id:id,createdBy:ownerId,formKey,fieldKey:field.key,fieldType:field.fieldType,scope:{$ne:"table"}}).select("_id").lean();
     if(!file)throw makeValidationError(field,`The uploaded file for “${field.label||"this field"}” is no longer available. Upload it again.`);
   }
 };

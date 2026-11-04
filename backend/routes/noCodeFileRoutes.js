@@ -4,6 +4,8 @@ const fs=require("fs");
 const mongoose=require("mongoose");
 const auth=require("../middleware/auth");
 const FormConfiguration=require("../models/FormConfiguration");
+const TableConfiguration=require("../models/TableConfiguration");
+const {getTableCustomFieldTarget,tableCustomFieldRowExists}=require("../utils/tableCustomFieldPersistence");
 const NoCodeFile=require("../models/NoCodeFile");
 const {
   NO_CODE_FILE_DIR,getNoCodeFileType,isAllowedNoCodeFileType,hasNoCodeFileSignature,
@@ -38,15 +40,36 @@ router.post("/upload",auth,receiveUpload,async(req,res)=>{
   if(!req.file)return res.status(400).json({message:"Choose a file first."});
   let storedPath="";
   try{
-    const formKey=String(req.body?.formKey||"").trim().slice(0,120);
+    const scope=String(req.body?.scope||"form").trim();
     const fieldKey=String(req.body?.fieldKey||"").trim().slice(0,100);
     const accountId=owner(req);
-    if(!FORM_FILE_UPLOAD_KEYS.has(formKey))return res.status(400).json({message:"File uploads are not enabled for this form."});
     if(!mongoose.isValidObjectId(accountId))return res.status(401).json({message:"Your business account could not be verified."});
     if(!/^[A-Za-z][A-Za-z0-9_-]{0,99}$/.test(fieldKey))return res.status(400).json({message:"Choose a valid file field."});
-    const configuration=await FormConfiguration.findOne({createdBy:accountId,formKey}).select("fields").lean();
-    const field=(configuration?.fields||[]).find(item=>item.key===fieldKey&&item.custom===true&&["image","file"].includes(item.fieldType));
-    if(!field)return res.status(400).json({message:"This upload field is no longer available. Refresh the form and try again."});
+    let formKey="",field=null,rowKey=null;
+    if(scope==="table"){
+      const tableKey=String(req.body?.tableKey||"").trim().slice(0,120);
+      rowKey=String(req.body?.rowKey||"").trim();
+      const target=getTableCustomFieldTarget(tableKey);
+      if(!target||target.kind==="virtual")return res.status(400).json({message:"Attachments are not available for this summary list."});
+      if(!mongoose.isValidObjectId(rowKey))return res.status(400).json({message:"Select a saved row before uploading a file."});
+      const [configuration,rowExists]=await Promise.all([
+        TableConfiguration.findOne({createdBy:accountId,tableKey}).select("columns").lean(),
+        tableCustomFieldRowExists({tableKey,rowKey,ownerId:accountId})
+      ]);
+      field=(configuration?.columns||[]).find(item=>item.key===fieldKey&&item.kind==="custom"&&["image","file"].includes(item.fieldType));
+      if(!field)return res.status(400).json({message:"This attachment column is no longer available. Refresh the table and try again."});
+      if(field.editable===false)return res.status(400).json({message:"This attachment column is read only."});
+      if(!rowExists)return res.status(404).json({message:"The selected row was not found in your business account."});
+      formKey="table:"+tableKey;
+    }else if(scope==="form"){
+      formKey=String(req.body?.formKey||"").trim().slice(0,120);
+      if(!FORM_FILE_UPLOAD_KEYS.has(formKey))return res.status(400).json({message:"File uploads are not enabled for this form."});
+      const configuration=await FormConfiguration.findOne({createdBy:accountId,formKey}).select("fields").lean();
+      field=(configuration?.fields||[]).find(item=>item.key===fieldKey&&item.custom===true&&["image","file"].includes(item.fieldType));
+      if(!field)return res.status(400).json({message:"This upload field is no longer available. Refresh the form and try again."});
+    }else{
+      return res.status(400).json({message:"Choose a valid upload destination."});
+    }
     if(!isAllowedNoCodeFileType(field.fieldType,req.file.mimetype)){
       return res.status(400).json({message:field.fieldType==="image"?"Choose a JPG, PNG, GIF or WebP image.":"Choose a JPG, PNG, GIF, WebP or PDF file."});
     }
@@ -56,7 +79,7 @@ router.post("/upload",auth,receiveUpload,async(req,res)=>{
     storedPath=getOwnedNoCodeFilePath(filename,accountId);
     await fs.promises.writeFile(storedPath,req.file.buffer,{flag:"wx",mode:0o600});
     const saved=await NoCodeFile.create({
-      createdBy:accountId,formKey,fieldKey,fieldType:field.fieldType,filename,
+      createdBy:accountId,formKey,scope,rowKey:rowKey?new mongoose.Types.ObjectId(rowKey):null,fieldKey,fieldType:field.fieldType,filename,
       originalName:sanitizeNoCodeOriginalName(req.file.originalname),
       mimeType:String(req.file.mimetype).toLowerCase(),size:req.file.size
     });

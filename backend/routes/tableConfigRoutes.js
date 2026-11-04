@@ -8,13 +8,14 @@ const {
   readTableRecordValues,
   writeTableRecordValue
 }=require("../utils/tableCustomFieldPersistence");
+const NoCodeFile=require("../models/NoCodeFile");
 const auth=require("../middleware/auth");
 
 const router=express.Router();
 
 const owner=req=>String(req.user.id);
 const cleanString=(value,max)=>String(value??"").trim().slice(0,max);
-const FIELD_TYPES=["text","textarea","number","currency","percentage","date","datetime","boolean","select","multiselect","reference"];
+const FIELD_TYPES=["text","textarea","number","currency","percentage","date","datetime","boolean","select","multiselect","reference","image","file"];
 const LOOKUP_MODELS={
   clients:require("../models/Client"),
   products:require("../models/Product"),
@@ -100,6 +101,13 @@ const normalizeCustomValue=(field,value)=>{
       }
       return raw;
     }
+    case "image":
+    case "file":{
+      if(typeof value!=="string"&&!(value instanceof mongoose.Types.ObjectId))throw new Error("Choose an uploaded file.");
+      const id=cleanString(value,100);
+      if(!mongoose.isValidObjectId(id))throw new Error("Choose an uploaded file.");
+      return id;
+    }
     case "reference":{
       if(typeof value!=="string"&&!(value instanceof mongoose.Types.ObjectId)){
         throw new Error("Choose an existing record from your business account.");
@@ -150,7 +158,7 @@ const sanitizeColumns=(columns)=>{
     if(kind==="custom"&&fieldType==="reference"&&!LOOKUP_RESOURCES.includes(cleanString(raw?.dataSource?.resource,80))){
       throw new Error("Choose whether this column links to a customer, product, invoice or expense.");
     }
-    const rawDefaultValue=kind==="custom"?(raw?.defaultValue??""):"";
+    const rawDefaultValue=kind==="custom"&&!["image","file"].includes(fieldType)?(raw?.defaultValue??""):"";
     const defaultValue=kind==="custom"&&fieldType==="percentage"&&rawDefaultValue!==""
       ?normalizeCustomValue({fieldType},rawDefaultValue)
       :rawDefaultValue;
@@ -287,6 +295,13 @@ router.put("/:tableKey/values",auth,async(req,res)=>{
     }
 
     const value=normalizeCustomValue(field,req.body?.value);
+    if(["image","file"].includes(field.fieldType)&&value!==null){
+      const attachment=await NoCodeFile.findOne({
+        _id:value,createdBy:new mongoose.Types.ObjectId(owner(req)),
+        formKey:"table:"+tableKey,scope:"table",rowKey:new mongoose.Types.ObjectId(rowKey),fieldKey,fieldType:field.fieldType
+      }).select("_id").lean();
+      if(!attachment)return res.status(400).json({message:"Upload a file for this row and column before saving it."});
+    }
     if(field.fieldType==="reference"&&value!==null){
       const model=LOOKUP_MODELS[field.dataSource?.resource];
       const exists=model&&await model.exists({_id:value,createdBy:new mongoose.Types.ObjectId(owner(req))});

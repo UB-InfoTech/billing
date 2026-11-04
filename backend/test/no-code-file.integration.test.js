@@ -7,6 +7,8 @@ const jwt=require("jsonwebtoken");
 process.env.JWT_SECRET||="billing-integration-tests-only-secret";
 const app=require("../server");
 const FormConfiguration=require("../models/FormConfiguration");
+const TableConfiguration=require("../models/TableConfiguration");
+const Client=require("../models/Client");
 const NoCodeFile=require("../models/NoCodeFile");
 const {getOwnedNoCodeFilePath}=require("../utils/noCodeFileStorage");
 const {validateConfiguredFileReferences}=require("../utils/configuredFormValidation");
@@ -19,10 +21,11 @@ test("no-code file uploads are authenticated, private and tied to their configur
   let server;
   let ownerId;
   let otherOwnerId;
+  let clientId=null;
   let baseUrl;
   try{
     await mongoose.connect(mongoUri,{serverSelectionTimeoutMS:10000});
-    await Promise.all([FormConfiguration.init(),NoCodeFile.init()]);
+    await Promise.all([FormConfiguration.init(),TableConfiguration.init(),Client.init(),NoCodeFile.init()]);
     ownerId=new mongoose.Types.ObjectId();
     otherOwnerId=new mongoose.Types.ObjectId();
     const ownerToken=jwt.sign({user:{id:String(ownerId)}},process.env.JWT_SECRET);
@@ -90,6 +93,50 @@ test("no-code file uploads are authenticated, private and tied to their configur
       method:"POST",headers:{"x-auth-token":ownerToken},body:unsupportedFieldForm
     });
     assert.equal(unsupported.status,400);
+
+    const client=await Client.create({createdBy:ownerId,name:"Table upload customer",companyName:"Table upload business"});
+    clientId=client._id;
+    const tableKey="clients.list";
+    await TableConfiguration.create({createdBy:ownerId,tableKey,columns:[
+      {key:"businessLogo",label:"Business logo",kind:"custom",fieldType:"image",editable:true}
+    ]});
+    const tableUploadForm=new FormData();
+    tableUploadForm.append("scope","table");
+    tableUploadForm.append("tableKey",tableKey);
+    tableUploadForm.append("rowKey",String(clientId));
+    tableUploadForm.append("fieldKey","businessLogo");
+    tableUploadForm.append("file",new Blob([png],{type:"image/png"}),"table-logo.png");
+    const tableUploaded=await fetch(baseUrl+"/no-code-files/upload",{
+      method:"POST",headers:{"x-auth-token":ownerToken},body:tableUploadForm
+    });
+    assert.equal(tableUploaded.status,201);
+    const tableFile=(await tableUploaded.json()).file;
+    assert.equal(tableFile.fieldType,"image");
+    const tableSave=await fetch(baseUrl+"/table-config/"+tableKey+"/values",{
+      method:"PUT",headers:{"x-auth-token":ownerToken,"Content-Type":"application/json"},
+      body:JSON.stringify({rowKey:String(clientId),fieldKey:"businessLogo",value:tableFile.id})
+    });
+    assert.equal(tableSave.status,200);
+    const savedClient=await Client.findOne({_id:clientId,createdBy:ownerId}).lean();
+    assert.equal(savedClient.customFields.businessLogo,tableFile.id);
+    const tableRead=await fetch(baseUrl+"/table-config/"+tableKey+"/values?rowKeys="+String(clientId),{headers:{"x-auth-token":ownerToken}});
+    assert.equal(tableRead.status,200);
+    const tableValues=(await tableRead.json()).values;
+    assert.equal(tableValues.find(item=>item.fieldKey==="businessLogo")?.value,tableFile.id);
+
+    const otherRowForm=new FormData();
+    otherRowForm.append("scope","table");otherRowForm.append("tableKey",tableKey);
+    otherRowForm.append("rowKey",String(clientId));otherRowForm.append("fieldKey","businessLogo");
+    otherRowForm.append("file",new Blob([png],{type:"image/png"}),"other-logo.png");
+    const otherRowUpload=await fetch(baseUrl+"/no-code-files/upload",{
+      method:"POST",headers:{"x-auth-token":otherToken},body:otherRowForm
+    });
+    assert.equal(otherRowUpload.status,404);
+    const invalidTableSave=await fetch(baseUrl+"/table-config/"+tableKey+"/values",{
+      method:"PUT",headers:{"x-auth-token":ownerToken,"Content-Type":"application/json"},
+      body:JSON.stringify({rowKey:String(clientId),fieldKey:"businessLogo",value:file.id})
+    });
+    assert.equal(invalidTableSave.status,400);
   }finally{
     if(server)await new Promise(resolve=>server.close(resolve));
     if(ownerId){
@@ -99,6 +146,8 @@ test("no-code file uploads are authenticated, private and tied to their configur
         if(filePath)await fs.unlink(filePath).catch(()=>{});
       }));
       await NoCodeFile.deleteMany({createdBy:ownerId}).catch(()=>{});
+      if(clientId)await Client.deleteOne({_id:clientId,createdBy:ownerId}).catch(()=>{});
+      await TableConfiguration.deleteOne({createdBy:ownerId,tableKey:"clients.list"}).catch(()=>{});
       await FormConfiguration.deleteOne({createdBy:ownerId,formKey:"clients.form"}).catch(()=>{});
     }
     await mongoose.disconnect();

@@ -23,6 +23,21 @@ test("percentage table defaults are validated when the column is saved",()=>{
   assert.throws(()=>sanitizeColumns([{key:"taxRate",label:"Tax rate",kind:"custom",fieldType:"percentage",defaultValue:"125"}]),/between 0 and 100/i);
 });
 
+test("table custom columns accept image and file attachment types",()=>{
+  for(const fieldType of ["image","file"]){
+    const [column]=sanitizeColumns([{key:"attachment_"+fieldType,label:fieldType==="image"?"Product image":"Supporting file",kind:"custom",fieldType,defaultValue:"must-be-cleared"}]);
+    assert.equal(column.fieldType,fieldType);
+    assert.equal(column.defaultValue,"");
+  }
+});
+
+test("table attachment values must be valid file IDs",()=>{
+  for(const fieldType of ["image","file"]){
+    assert.throws(()=>normalizeCustomValue({fieldType},"not-a-file-id"),/uploaded file/i);
+    assert.equal(normalizeCustomValue({fieldType},null),null);
+  }
+});
+
 test("the table builder accepts percentage as a saved custom column type",()=>{
   const [column]=sanitizeColumns([{
     key:"commissionRate",

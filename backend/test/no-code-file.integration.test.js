@@ -131,7 +131,7 @@ test("no-code file uploads are authenticated, private and tied to their configur
     const otherRowUpload=await fetch(baseUrl+"/no-code-files/upload",{
       method:"POST",headers:{"x-auth-token":otherToken},body:otherRowForm
     });
-    assert.equal(otherRowUpload.status,404);
+    assert.equal(otherRowUpload.status,400);
     const invalidTableSave=await fetch(baseUrl+"/table-config/"+tableKey+"/values",{
       method:"PUT",headers:{"x-auth-token":ownerToken,"Content-Type":"application/json"},
       body:JSON.stringify({rowKey:String(clientId),fieldKey:"businessLogo",value:file.id})

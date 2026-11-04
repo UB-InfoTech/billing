@@ -1074,7 +1074,7 @@ export default function Settings(){
                                     <option>Dispatched</option>
                                   </select>
                                 ) : (
-                                  {["select","boolean"].includes(workflowActionFields.find(field=>field.value===action.fieldKey)?.fieldType) ? (
+                                  ["select","boolean"].includes(workflowActionFields.find(field=>field.value===action.fieldKey)?.fieldType) ? (
  <select className="form-select" value={action.value??""} onChange={event=>updateAction(index,{value:event.target.value})}>
   <option value="">Choose a value</option>
   {workflowOptionsForField(workflowActionFields.find(field=>field.value===action.fieldKey)).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}

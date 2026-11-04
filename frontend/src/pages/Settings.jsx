@@ -48,6 +48,16 @@ const workflowOptionsForField=field=>{
   return {value,label:value};
  }).filter(option=>option.value);
 };
+const workflowActionValueForField=(field,value)=>{
+ if(value==="")return "";
+ if(field?.fieldType==="boolean")return value===true||value==="true";
+ if(["number","currency","percentage"].includes(field?.fieldType)){
+  const number=Number(value);
+  return Number.isFinite(number)?number:value;
+ }
+ return String(value);
+};
+const workflowSelectValue=(value,field)=>field?.fieldType==="boolean"&&typeof value==="boolean"?String(value):value??"";
 const workflowInputTypeForField=field=>{
  switch(field?.fieldType){
   case "number":case "currency":case "percentage":return "number";
@@ -1075,12 +1085,12 @@ export default function Settings(){
                                   </select>
                                 ) : (
                                   ["select","boolean"].includes(workflowActionFields.find(field=>field.value===action.fieldKey)?.fieldType) ? (
- <select className="form-select" value={action.value??""} onChange={event=>updateAction(index,{value:event.target.value})}>
+ <select className="form-select" value={workflowSelectValue(action.value,workflowActionFields.find(field=>field.value===action.fieldKey))} onChange={event=>updateAction(index,{value:workflowActionValueForField(workflowActionFields.find(field=>field.value===action.fieldKey),event.target.value)})}>
   <option value="">Choose a value</option>
   {workflowOptionsForField(workflowActionFields.find(field=>field.value===action.fieldKey)).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
  </select>
 ) : (
- <input className="form-control" type={workflowInputTypeForField(workflowActionFields.find(field=>field.value===action.fieldKey))} step={["number","currency","percentage"].includes(workflowActionFields.find(field=>field.value===action.fieldKey)?.fieldType)?"any":undefined} value={action.value??""} onChange={event=>updateAction(index,{value:event.target.value})} placeholder="Enter the value"/>
+ <input className="form-control" type={workflowInputTypeForField(workflowActionFields.find(field=>field.value===action.fieldKey))} step={["number","currency","percentage"].includes(workflowActionFields.find(field=>field.value===action.fieldKey)?.fieldType)?"any":undefined} min={workflowActionFields.find(field=>field.value===action.fieldKey)?.validation?.min??undefined} max={workflowActionFields.find(field=>field.value===action.fieldKey)?.validation?.max??(workflowActionFields.find(field=>field.value===action.fieldKey)?.fieldType==="percentage"?100:undefined)} value={action.value??""} onChange={event=>updateAction(index,{value:workflowActionValueForField(workflowActionFields.find(field=>field.value===action.fieldKey),event.target.value)})} placeholder="Enter the value"/>
 )
                                 )}
                               </div>

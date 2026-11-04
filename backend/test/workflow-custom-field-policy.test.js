@@ -54,3 +54,51 @@ test("unknown custom fields and nested paths are rejected",()=>{
 test("workflow field actions reject object values",()=>{
  assert.throws(()=>validateWorkflowPayload(makePayload("clients",[{type:"set_value",fieldKey:"name",value:{nested:"value"}}])),/simple text, number or yes\/no value/i);
 });
+
+test("normalizes numeric and boolean custom action values to their real field types",()=>{
+ const {normalizeWorkflowActionValues}=require("../utils/workflowPolicy");
+ const policy=buildWorkflowFieldPolicy("clients",[
+  {key:"custom_creditLimit",custom:true,visible:true,editable:true,fieldType:"currency"},
+  {key:"custom_isPreferred",custom:true,visible:true,editable:true,fieldType:"boolean"}
+ ]);
+ const workflow=makePayload("clients",[
+  {type:"set_value",fieldKey:"custom_creditLimit",value:"1500.25"},
+  {type:"set_value",fieldKey:"custom_isPreferred",value:"true"}
+ ]);
+ normalizeWorkflowActionValues(workflow,policy);
+ assert.equal(workflow.actions[0].value,1500.25);
+ assert.equal(workflow.actions[1].value,true);
+ assert.doesNotThrow(()=>validateWorkflowPayload(workflow,policy));
+});
+
+test("validates numeric bounds and selected dropdown options from the saved form",()=>{
+ const policy=buildWorkflowFieldPolicy("clients",[
+  {key:"custom_discount",label:"Discount",custom:true,visible:true,editable:true,fieldType:"percentage",validation:{min:0,max:35}},
+  {key:"custom_customerType",label:"Customer Type",custom:true,visible:true,editable:true,fieldType:"select",options:[{value:"Retail",label:"Retail"},{value:"Wholesale",label:"Wholesale"}]}
+ ]);
+ assert.doesNotThrow(()=>validateWorkflowPayload(makePayload("clients",[
+  {type:"set_value",fieldKey:"custom_discount",value:25},
+  {type:"set_value",fieldKey:"custom_customerType",value:"Wholesale"}
+ ]),policy));
+ assert.throws(()=>validateWorkflowPayload(makePayload("clients",[
+  {type:"set_value",fieldKey:"custom_discount",value:50}
+ ]),policy),/above its maximum/i);
+ assert.throws(()=>validateWorkflowPayload(makePayload("clients",[
+  {type:"set_value",fieldKey:"custom_customerType",value:"Not configured"}
+ ]),policy),/available option/i);
+ assert.throws(()=>validateWorkflowPayload(makePayload("clients",[
+  {type:"set_value",fieldKey:"custom_discount",value:"five"}
+ ]),policy),/valid number/i);
+});
+
+test("custom boolean actions require an actual yes or no value",()=>{
+ const policy=buildWorkflowFieldPolicy("clients",[
+  {key:"custom_preferred",custom:true,visible:true,editable:true,fieldType:"boolean"}
+ ]);
+ assert.doesNotThrow(()=>validateWorkflowPayload(makePayload("clients",[
+  {type:"set_value",fieldKey:"custom_preferred",value:false}
+ ]),policy));
+ assert.throws(()=>validateWorkflowPayload(makePayload("clients",[
+  {type:"set_value",fieldKey:"custom_preferred",value:"perhaps"}
+ ]),policy),/choose yes or no/i);
+});

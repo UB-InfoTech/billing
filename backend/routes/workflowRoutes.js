@@ -2,7 +2,7 @@ const express=require("express");
 const mongoose=require("mongoose");
 const auth=require("../middleware/auth");
 const WorkflowDefinition=require("../models/WorkflowDefinition");
-const {validateWorkflowPayload,loadWorkflowFieldPolicy}=require("../utils/workflowPolicy");
+const {validateWorkflowPayload,loadWorkflowFieldPolicy,normalizeWorkflowActionValues}=require("../utils/workflowPolicy");
 
 const router=express.Router();
 const owner=req=>new mongoose.Types.ObjectId(req.user.id);
@@ -40,6 +40,7 @@ router.post("/",auth,async(req,res)=>{
     const payload=clean(req.body);
     if(!payload.name)return res.status(400).json({message:"Give this workflow a simple name."});
     const fieldPolicy=await loadWorkflowFieldPolicy(owner(req),payload.trigger.resource);
+    normalizeWorkflowActionValues(payload,fieldPolicy);
     validateWorkflowPayload(payload,fieldPolicy);
     const workflow=await WorkflowDefinition.create({...payload,createdBy:owner(req)});
     res.status(201).json(workflow);
@@ -52,6 +53,7 @@ router.put("/:id",auth,async(req,res)=>{
     const payload=clean(req.body);
     if(!payload.name)return res.status(400).json({message:"Give this workflow a simple name."});
     const fieldPolicy=await loadWorkflowFieldPolicy(owner(req),payload.trigger.resource);
+    normalizeWorkflowActionValues(payload,fieldPolicy);
     validateWorkflowPayload(payload,fieldPolicy);
     const workflow=await WorkflowDefinition.findOneAndUpdate(
       {_id:req.params.id,createdBy:owner(req)},

@@ -42,7 +42,14 @@ function buildWorkflowFieldPolicy(resource,configuredFields=[]){
    actionFields.add(key);
   }
  }
- return {resource,conditionFields,actionFields};
+ const customFieldDefinitions=new Map();
+ for(const field of Array.isArray(configuredFields)?configuredFields:[]){
+  const key=String(field?.key||"").trim();
+  if(field?.custom===true&&field?.visible!==false&&key.startsWith("custom_")&&!isUnsafeWorkflowFieldPath(key)&&CUSTOM_WORKFLOW_FIELD_TYPES.has(field?.fieldType)){
+   customFieldDefinitions.set(key,field);
+  }
+ }
+ return {resource,conditionFields,actionFields,customFieldDefinitions};
 }
 async function loadWorkflowFieldPolicy(createdBy,resource){
  const formKey=WORKFLOW_FORM_KEYS[resource];
@@ -51,6 +58,25 @@ async function loadWorkflowFieldPolicy(createdBy,resource){
  const configuration=await FormConfiguration.findOne({createdBy,formKey}).select({fields:1}).lean();
  return buildWorkflowFieldPolicy(resource,configuration?.fields||[]);
 }
+function normalizeWorkflowActionValues(workflow,fieldPolicy){
+ const definitions=fieldPolicy?.customFieldDefinitions instanceof Map?fieldPolicy.customFieldDefinitions:new Map();
+ for(const action of Array.isArray(workflow?.actions)?workflow.actions:[]){
+  if(action?.type!=="set_value")continue;
+  const field=definitions.get(String(action.fieldKey||""));
+  if(!field)continue;
+  const value=action.value;
+  if(value===null||value===undefined||value===""){action.value="";continue;}
+  if(["number","currency","percentage"].includes(field.fieldType)){
+   const number=typeof value==="number"?value:Number(value);
+   if(Number.isFinite(number))action.value=number;
+  }else if(field.fieldType==="boolean"){
+   if(value===true||value==="true")action.value=true;
+   else if(value===false||value==="false")action.value=false;
+  }else action.value=String(value);
+ }
+ return workflow;
+}
+
 function validateWorkflowPayload(workflow,fieldPolicy=buildWorkflowFieldPolicy(workflow?.trigger?.resource)){
  const resource=workflow?.trigger?.resource;
  const conditions=Array.isArray(workflow?.conditions)?workflow.conditions:[];
@@ -79,6 +105,24 @@ function validateWorkflowPayload(workflow,fieldPolicy=buildWorkflowFieldPolicy(w
    const valueType=typeof action.value;
    if(action.value!==null&&!["string","number","boolean"].includes(valueType))throw new Error("Enter a simple text, number or yes/no value for this automation.");
    if(typeof action.value==="string"&&action.value.length>1000)throw new Error("The automation value is too long.");
+   const customField=fieldPolicy?.customFieldDefinitions instanceof Map?fieldPolicy.customFieldDefinitions.get(key):null;
+   if(customField){
+    const value=action.value;
+    const empty=value===null||value===undefined||value==="";
+    if(["number","currency","percentage"].includes(customField.fieldType)&&!empty){
+     if(typeof value!=="number"||!Number.isFinite(value))throw new Error(`Enter a valid number for “${customField.label||"this field"}”.`);
+     const minimum=customField.fieldType==="percentage"?Math.max(0,Number(customField.validation?.min??0)):customField.validation?.min;
+     const maximum=customField.fieldType==="percentage"?Math.min(100,Number(customField.validation?.max??100)):customField.validation?.max;
+     if(minimum!==null&&minimum!==undefined&&Number.isFinite(Number(minimum))&&value<Number(minimum))throw new Error(`The value for “${customField.label||"this field"}” is below its minimum.`);
+     if(maximum!==null&&maximum!==undefined&&Number.isFinite(Number(maximum))&&value>Number(maximum))throw new Error(`The value for “${customField.label||"this field"}” is above its maximum.`);
+    }
+    if(customField.fieldType==="boolean"&&!empty&&typeof value!=="boolean")throw new Error(`Choose Yes or No for “${customField.label||"this field"}”.`);
+    if(customField.fieldType==="select"&&!empty){
+     const options=Array.isArray(customField.options)?customField.options:[];
+     const allowed=options.map(option=>String(option&&typeof option==="object"?(option.value??option.label??""):option??""));
+     if(!allowed.includes(String(value)))throw new Error(`Choose an available option for “${customField.label||"this field"}”.`);
+    }
+   }
    continue;
   }
   if(action.type==="change_status"){
@@ -90,4 +134,4 @@ function validateWorkflowPayload(workflow,fieldPolicy=buildWorkflowFieldPolicy(w
  }
  return workflow;
 }
-module.exports={ORDER_STATUSES,PROTECTED_FIELDS,WORKFLOW_FORM_KEYS,BUILT_IN_CONDITION_FIELDS,BUILT_IN_ACTION_FIELDS,CUSTOM_WORKFLOW_FIELD_TYPES,isUnsafeWorkflowFieldPath,isProtectedWorkflowField,buildWorkflowFieldPolicy,loadWorkflowFieldPolicy,validateWorkflowPayload};
+module.exports={ORDER_STATUSES,PROTECTED_FIELDS,WORKFLOW_FORM_KEYS,BUILT_IN_CONDITION_FIELDS,BUILT_IN_ACTION_FIELDS,CUSTOM_WORKFLOW_FIELD_TYPES,isUnsafeWorkflowFieldPath,isProtectedWorkflowField,buildWorkflowFieldPolicy,loadWorkflowFieldPolicy,normalizeWorkflowActionValues,validateWorkflowPayload};

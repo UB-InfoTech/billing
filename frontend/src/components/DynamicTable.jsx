@@ -16,6 +16,8 @@ const FIELD_TYPES=[
   {value:"select",label:"Dropdown",icon:"bi-menu-button-wide",help:"Choose one option"},
   {value:"multiselect",label:"Multiple choices",icon:"bi-check2-square",help:"Choose more than one option"},
   {value:"reference",label:"Existing record",icon:"bi-database",help:"Choose an existing record"},
+  {value:"image",label:"Image attachment",icon:"bi-image",help:"Attach a private image to each row"},
+  {value:"file",label:"File attachment",icon:"bi-paperclip",help:"Attach a private PDF or image to each row"},
 ];
 
 const REFERENCE_RESOURCES={
@@ -195,6 +197,7 @@ export default function DynamicTable({
   const [editingCell,setEditingCell]=useState(null);
   const [editingValue,setEditingValue]=useState("");
   const [savingCells,setSavingCells]=useState(()=>new Set());
+  const [uploadingFiles,setUploadingFiles]=useState(()=>new Set());
   const [error,setError]=useState("");
   const [showColumnDetails,setShowColumnDetails]=useState(false);
 
@@ -457,6 +460,8 @@ export default function DynamicTable({
 
   const formatCustomValue=(column,value)=>{
     if(value===null||value===undefined||value==="")return "—";
+    if(column.fieldType==="image")return "Image attached";
+    if(column.fieldType==="file")return "File attached";
     if(column.fieldType==="currency")return `₹${Number(value||0).toFixed(2)}`;
     if(column.fieldType==="percentage")return `${Number(value).toLocaleString("en-IN",{maximumFractionDigits:2})}%`;
     if(column.fieldType==="number")return Number(value||0).toLocaleString("en-IN",{maximumFractionDigits:2});
@@ -494,6 +499,7 @@ export default function DynamicTable({
         {rowKey:String(rowKey),fieldKey,value},
         authConfig()
       );
+      return true;
     }catch(saveError){
       setCustomValues(prev=>{
         const next={...prev};
@@ -502,6 +508,33 @@ export default function DynamicTable({
         return next;
       });
       setError(saveError.response?.data?.message||"Unable to save custom field value.");
+      return false;
+    }
+  };
+
+  const uploadTableFile=async(rowKey,column,file)=>{
+    if(!file)return;
+    const stateKey=customValueKey(rowKey,column.key);
+    setUploadingFiles(previous=>new Set([...previous,stateKey]));
+    setError("");
+    try{
+      const data=new FormData();
+      data.append("scope","table");
+      data.append("tableKey",tableKey);
+      data.append("rowKey",String(rowKey));
+      data.append("fieldKey",column.key);
+      data.append("file",file);
+      const response=await axios.post(`${apiBase}/api/no-code-files/upload`,data,authConfig());
+      const uploadedFile=response.data?.file;
+      if(!uploadedFile?.id)throw new Error("The uploaded file could not be saved.");
+      const saved=await saveCustomValue(rowKey,column.key,uploadedFile.id);
+      if(saved)setError("");
+    }catch(uploadError){
+      setError(uploadError.response?.data?.message||uploadError.message||"Unable to upload this attachment.");
+    }finally{
+      setUploadingFiles(previous=>{
+        const next=new Set(previous);next.delete(stateKey);return next;
+      });
     }
   };
 
@@ -557,6 +590,32 @@ export default function DynamicTable({
       },
     };
 
+    if(column.fieldType==="image"||column.fieldType==="file"){
+      const uploading=uploadingFiles.has(customValueKey(rowKey,column.key));
+      const accept=column.fieldType==="image"
+        ?"image/jpeg,image/png,image/gif,image/webp"
+        :".jpg,.jpeg,.png,.gif,.webp,.pdf,image/jpeg,image/png,image/gif,image/webp,application/pdf";
+      return(
+        <div className="dynamic-attachment-editor d-flex flex-column gap-2">
+          {editingValue&&<div className="small text-secondary"><i className={`bi ${column.fieldType==="image"?"bi-image":"bi-file-earmark"} me-1`}></i>{column.fieldType==="image"?"An image is attached to this row.":"A file is attached to this row."}</div>}
+          <input
+            type="file"
+            className="form-control form-control-sm"
+            accept={accept}
+            disabled={uploading}
+            onChange={event=>{
+              const selected=event.target.files?.[0];
+              event.target.value="";
+              if(selected)uploadTableFile(rowKey,column,selected);
+            }}
+            aria-label={`Upload ${column.fieldType==="image"?"image":"file"} for ${column.label}`}
+          />
+          <div className="form-text">{column.fieldType==="image"?"JPG, PNG, GIF or WebP · Maximum 10 MB":"PDF or image · Maximum 10 MB"}</div>
+          {uploading&&<div className="small text-primary"><span className="spinner-border spinner-border-sm me-2" role="status"></span>Uploading...</div>}
+          {editingValue&&!uploading&&<button type="button" className="btn btn-sm btn-outline-danger align-self-start" onClick={()=>saveCustomValue(rowKey,column.key,null)}>Remove attachment</button>}
+        </div>
+      );
+    }
     if(column.fieldType==="textarea")return <textarea {...common} rows={2}/>;
     if(column.fieldType==="reference"){
       const resource=column.dataSource?.resource;
@@ -754,7 +813,9 @@ export default function DynamicTable({
 
     const slug=label.toLowerCase().replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"").slice(0,50)||"field";
     const key=`custom_${slug}_${Date.now()}`;
-    const defaultValue=customForm.fieldType==="boolean"
+    const defaultValue=["image","file"].includes(customForm.fieldType)
+      ? ""
+      : customForm.fieldType==="boolean"
       ? customForm.defaultValue==="true"
       : customForm.fieldType==="percentage"
         ? (customForm.defaultValue.trim()===""?"":Number(customForm.defaultValue))
@@ -1188,6 +1249,8 @@ export default function DynamicTable({
                         <label className="form-label">Choices</label>
                         <textarea className="form-control" rows={2} value={customForm.optionsText} onChange={event=>setCustomForm(prev=>({...prev,optionsText:event.target.value}))} placeholder="One choice per line"/>
                       </div>
+                    ) : ["image","file"].includes(customForm.fieldType) ? (
+                      <div className="col-12"><div className="small text-secondary">Each row can have its own private attachment. Files are limited to 10 MB.</div></div>
                     ) : (
                       <div className="col-md-6">
                         <label className="form-label">Starting value <span className="text-secondary">(optional)</span></label>

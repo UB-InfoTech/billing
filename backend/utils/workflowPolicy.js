@@ -27,6 +27,22 @@ function isProtectedWorkflowField(value) {
 
 function validateWorkflowPayload(workflow) {
   const resource = workflow?.trigger?.resource;
+  const conditions=Array.isArray(workflow?.conditions)?workflow.conditions:[];
+  if(!["all","any"].includes(workflow?.matchMode||"all")){
+    throw new Error("Choose whether all conditions or any condition must match.");
+  }
+  if(conditions.length>20)throw new Error("A workflow can have no more than 20 conditions.");
+  for(const condition of conditions){
+    if(!String(condition?.fieldKey||"").trim()){
+      throw new Error("Choose a field for every condition or remove the unfinished condition.");
+    }
+    if(!["equals","not_equals","contains","not_contains","greater_than","less_than","empty","not_empty"].includes(condition?.operator)){
+      throw new Error("Choose a valid condition.");
+    }
+    if(!["empty","not_empty"].includes(condition.operator)&&!String(condition?.value??"").trim()){
+      throw new Error("Enter a value for every condition or choose an empty/not empty condition.");
+    }
+  }
   const actions = Array.isArray(workflow?.actions) ? workflow.actions : [];
   if (!actions.length) throw new Error("Add at least one working action.");
 

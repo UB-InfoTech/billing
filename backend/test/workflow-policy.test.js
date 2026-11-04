@@ -46,6 +46,29 @@ test("allows ordinary business and custom field updates", () => {
   ])));
 });
 
+test("workflow conditions default to all matching and support any matching",()=>{
+  const {matchesWorkflowConditions}=require("../utils/workflowEngine");
+  const doc={status:"Completed",paymentStatus:"Unpaid"};
+  const conditions=[
+    {fieldKey:"status",operator:"equals",value:"Pending"},
+    {fieldKey:"paymentStatus",operator:"equals",value:"Unpaid"}
+  ];
+  assert.equal(matchesWorkflowConditions(conditions,doc,"all"),false);
+  assert.equal(matchesWorkflowConditions(conditions,doc,"any"),true);
+  assert.equal(matchesWorkflowConditions([],doc,"all"),true);
+});
+
+test("rejects unfinished workflow conditions instead of silently dropping them",()=>{
+  assert.throws(()=>validateWorkflowPayload({
+    ...payload("clients",[{type:"set_value",fieldKey:"accountStatus",value:"Inactive"}]),
+    conditions:[{fieldKey:"",operator:"equals",value:"Active"}]
+  }),/choose a field for every condition/i);
+  assert.throws(()=>validateWorkflowPayload({
+    ...payload("clients",[{type:"set_value",fieldKey:"accountStatus",value:"Inactive"}]),
+    conditions:[{fieldKey:"accountStatus",operator:"equals",value:""}]
+  }),/enter a value for every condition/i);
+});
+
 test("requires a field for a Set a field action", () => {
   assert.throws(
     () => validateWorkflowPayload(payload("clients", [{ type: "set_value", fieldKey: "", value: "Inactive" }])),

@@ -14,11 +14,12 @@ const clean=workflow=>({
     event:["record_created","record_updated"].includes(workflow?.trigger?.event)?workflow.trigger.event:"record_updated",
     resource:["orders","clients","products","expenses","calendar"].includes(workflow?.trigger?.resource)?workflow.trigger.resource:"orders"
   },
+  matchMode:workflow?.matchMode==="any"?"any":"all",
   conditions:Array.isArray(workflow?.conditions)?workflow.conditions.slice(0,20).map(item=>({
     fieldKey:String(item?.fieldKey||"").trim().slice(0,100),
     operator:["equals","not_equals","contains","not_contains","greater_than","less_than","empty","not_empty"].includes(item?.operator)?item.operator:"equals",
     value:String(item?.value??"").slice(0,300)
-  })).filter(item=>item.fieldKey):[],
+  })):[],
   actions:Array.isArray(workflow?.actions)?workflow.actions.slice(0,20).map(item=>({
     type:["set_value","change_status","show_message"].includes(item?.type)?item.type:"set_value",
     fieldKey:String(item?.fieldKey||"").trim().slice(0,100),

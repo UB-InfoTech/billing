@@ -28,6 +28,13 @@ const matches=(condition,doc)=>{
   }
 };
 
+const matchesWorkflowConditions=(conditions,doc,matchMode="all")=>{
+  const rules=Array.isArray(conditions)?conditions:[];
+  if(!rules.length)return true;
+  const results=rules.map(condition=>matches(condition,doc));
+  return matchMode==="any"?results.some(Boolean):results.every(Boolean);
+};
+
 const setValue=(doc,key,value)=>{
   if(isProtectedWorkflowField(key))return false;
   const custom=doc.customFields instanceof Map
@@ -60,7 +67,7 @@ async function applyWorkflows({resource,event,doc,createdBy}){
 
   const applied=[];
   for(const workflow of workflows){
-    if((workflow.conditions||[]).some(condition=>!matches(condition,doc)))continue;
+    if(!matchesWorkflowConditions(workflow.conditions,doc,workflow.matchMode||"all"))continue;
 
     let changed=false;
     for(const action of workflow.actions||[]){
@@ -84,4 +91,4 @@ async function applyWorkflows({resource,event,doc,createdBy}){
   return applied;
 }
 
-module.exports={applyWorkflows};
+module.exports={applyWorkflows,matchesWorkflowConditions};

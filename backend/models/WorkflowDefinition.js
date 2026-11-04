@@ -21,6 +21,7 @@ const workflowSchema=new mongoose.Schema({
     event:{type:String,enum:["record_created","record_updated"],default:"record_updated"},
     resource:{type:String,enum:["orders","clients","products","expenses","calendar"],default:"orders"}
   },
+  matchMode:{type:String,enum:["all","any"],default:"all"},
   conditions:{type:[workflowConditionSchema],default:[]},
   actions:{type:[workflowActionSchema],default:[]}
 },{timestamps:true,versionKey:false});

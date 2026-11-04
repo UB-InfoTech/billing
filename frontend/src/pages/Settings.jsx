@@ -20,6 +20,7 @@ const defaultWorkflow={
   name:"",
   active:true,
   trigger:{event:"record_updated",resource:"orders"},
+  matchMode:"all",
   conditions:[],
   actions:[]
 };
@@ -369,6 +370,7 @@ export default function Settings(){
       ...defaultWorkflow,
       ...item,
       trigger:{...defaultWorkflow.trigger,...(item.trigger||{})},
+      matchMode:item.matchMode==="any"?"any":"all",
       conditions:Array.isArray(item.conditions)?item.conditions.map(condition=>({...condition})):[],
       actions:Array.isArray(item.actions)?item.actions.map(action=>({...action})):[],
     });
@@ -919,10 +921,21 @@ export default function Settings(){
                   <div className="settings-workflow-step">
                     <span className="settings-step-number">3</span>
                     <div className="flex-grow-1">
-                      <div className="d-flex justify-content-between align-items-center mb-2">
-                        <h4 className="mb-0">Only when</h4>
+                      <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                        <div><h4 className="mb-0">Only when</h4><small className="text-secondary">Choose the answers that decide whether this automation runs.</small></div>
                         <button type="button" className="btn btn-sm btn-light border" onClick={addCondition}>Add condition</button>
                       </div>
+                      {workflow.conditions.length>1&&(
+                        <div className="row g-2 align-items-center mb-3">
+                          <div className="col-sm-4"><label className="form-label mb-0" htmlFor="workflow-match-mode">Match conditions</label></div>
+                          <div className="col-sm-8">
+                            <select id="workflow-match-mode" className="form-select" value={workflow.matchMode||"all"} onChange={event=>updateWorkflow({matchMode:event.target.value})}>
+                              <option value="all">All conditions must be true</option>
+                              <option value="any">At least one condition must be true</option>
+                            </select>
+                          </div>
+                        </div>
+                      )}
                       {!workflow.conditions.length&&<div className="settings-empty-inline">No condition. The workflow will run whenever the trigger happens.</div>}
                       {workflow.conditions.map((condition,index)=>(
                         <div className="row g-2 align-items-end mb-2" key={index}>
@@ -941,7 +954,7 @@ export default function Settings(){
                           </div>
                           <div className="col-md-4">
                             <label className="form-label">Value</label>
-                            <input className="form-control" value={condition.value||""} disabled={["empty","not_empty"].includes(condition.operator)} onChange={event=>updateCondition(index,{value:event.target.value})}/>
+                            <input className="form-control" value={condition.value||""} disabled={["empty","not_empty"].includes(condition.operator)} onChange={event=>updateCondition(index,{value:event.target.value})} placeholder={["empty","not_empty"].includes(condition.operator)?"No value needed":"Enter a value"}/>
                           </div>
                           <div className="col-md-1">
                             <button type="button" className="btn btn-outline-danger w-100" onClick={()=>removeCondition(index)} aria-label="Remove condition"><i className="bi bi-trash"></i></button>
@@ -1021,7 +1034,7 @@ export default function Settings(){
                         <div className="settings-workflow-row" key={item._id}>
                           <div>
                             <strong>{item.name}</strong>
-                            <small>{workflowResourceLabel(item.trigger?.resource)} · {workflowEventLabel(item.trigger?.event)} · {item.active===false?"Off":"Active"}</small>
+                            <small>{workflowResourceLabel(item.trigger?.resource)} · {workflowEventLabel(item.trigger?.event)} · {(item.conditions||[]).length>1?(item.matchMode==="any"?"Any condition":"All conditions")+" · ":""}{item.active===false?"Off":"Active"}</small>
                           </div>
                           <div className="d-flex gap-2">
                             <button type="button" className="btn btn-sm btn-light border" onClick={()=>editWorkflow(item)}>Edit</button>

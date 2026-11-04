@@ -1081,7 +1081,7 @@ export default function Settings(){
  </select>
 ) : (
  <input className="form-control" type={workflowInputTypeForField(workflowActionFields.find(field=>field.value===action.fieldKey))} step={["number","currency","percentage"].includes(workflowActionFields.find(field=>field.value===action.fieldKey)?.fieldType)?"any":undefined} value={action.value??""} onChange={event=>updateAction(index,{value:event.target.value})} placeholder="Enter the value"/>
-)}
+)
                                 )}
                               </div>
                           <div className="col-md-1">

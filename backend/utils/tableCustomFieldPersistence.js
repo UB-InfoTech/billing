@@ -48,7 +48,7 @@ async function tableCustomFieldRowExists({tableKey,rowKey,ownerId}){
   return Boolean(await target.model.exists({createdBy:ownerObjectId,[target.arrayPath]:{$elemMatch:{_id:rowObjectId}}}));
 }
 
-async function readTableRecordValues({tableKey,rowKeys,ownerId,fieldKeys=[]})
+async function readTableRecordValues({tableKey,rowKeys,ownerId,fieldKeys=[]}){
   const target=getTableCustomFieldTarget(tableKey),result=new Map(),ownerObjectId=validOwnerId(ownerId);
   const keys=[...new Set(fieldKeys||[])].filter(key=>FIELD_KEY_PATTERN.test(String(key||"")));
   if(!target||target.kind==="virtual"||!ownerObjectId||!keys.length)return result;

@@ -148,6 +148,7 @@ const sanitizeFields=fields=>{
           :[]
       },
       conditions,
+      showMatchMode:raw?.showMatchMode==="any"?"any":"all",
       validation:{
         // Number(null) and Number("") are both 0. Treat blank limits as
         // unbounded so saving a form doesn't silently cap numeric fields at 0.

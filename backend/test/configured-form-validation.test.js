@@ -25,6 +25,17 @@ test("conditional visibility and required rules match the selected customer type
   assert.equal(business.required,true);
 });
 
+test("conditional show rules support all or any matching while hide rules keep existing behavior",()=>{
+  const field={key:"gstNumber",label:"GST number",showMatchMode:"any",conditions:[
+    {action:"show",fieldKey:"customerType",operator:"equals",value:"Business"},
+    {action:"show",fieldKey:"region",operator:"equals",value:"West"},
+    {action:"hide",fieldKey:"accountStatus",operator:"equals",value:"Inactive"}
+  ]};
+  assert.equal(getConfiguredFieldState(field,{customerType:"Business",region:"East",accountStatus:"Active"}).visible,true);
+  assert.equal(getConfiguredFieldState({...field,showMatchMode:"all"},{customerType:"Business",region:"East",accountStatus:"Active"}).visible,false);
+  assert.equal(getConfiguredFieldState(field,{customerType:"Business",region:"East",accountStatus:"Inactive"}).visible,false);
+});
+
 test("conditional optional and disabled rules override configured required state",()=>{
   const field={
     key:"deliveryNote",

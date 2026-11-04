@@ -139,6 +139,7 @@ export const mergeFormFields=(baseFields,savedFields,formKey="")=>{
       autoFill:Array.isArray(field.dataSource.autoFill)?field.dataSource.autoFill.slice():[]
     }:{type:"none",resource:"",valueField:"_id",labelField:"",searchField:"",autoFill:[]},
     conditions:Array.isArray(field.conditions)?field.conditions.slice():[],
+    showMatchMode:field.showMatchMode==="any"?"any":"all",
     validation:field.validation&&typeof field.validation==="object"?{min:field.validation.min??null,max:field.validation.max??null,pattern:field.validation.pattern||""}:{min:null,max:null,pattern:""}
   });
 
@@ -177,6 +178,7 @@ export const mergeFormFields=(baseFields,savedFields,formKey="")=>{
         multiple:Boolean(savedField.dataSource.multiple)
       }:field.dataSource,
       conditions:Array.isArray(savedField.conditions)?savedField.conditions:field.conditions,
+      showMatchMode:savedField.showMatchMode==="any"?"any":savedField.showMatchMode==="all"?"all":field.showMatchMode,
       validation:savedField.validation||field.validation,
       custom:false,
       system:Boolean(field.system)
@@ -239,7 +241,11 @@ export const getFieldState=(field,values)=>{
   const showRules=conditions.filter(condition=>condition.action==="show");
   const hideRules=conditions.filter(condition=>condition.action==="hide");
 
-  if(showRules.length)visible=showRules.every(condition=>fieldConditionMatches(condition,values));
+  if(showRules.length){
+    visible=field?.showMatchMode==="any"
+      ?showRules.some(condition=>fieldConditionMatches(condition,values))
+      :showRules.every(condition=>fieldConditionMatches(condition,values));
+  }
   if(hideRules.some(condition=>fieldConditionMatches(condition,values)))visible=false;
 
   conditions.forEach(condition=>{

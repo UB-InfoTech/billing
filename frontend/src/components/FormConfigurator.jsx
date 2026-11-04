@@ -97,6 +97,7 @@ const clone=field=>({
     autoFill:Array.isArray(field.dataSource.autoFill)?field.dataSource.autoFill.map(item=>({...item})):[],
   }:{type:"none",resource:"",valueField:"_id",labelField:"",searchField:"",multiple:false,autoFill:[]},
   conditions:Array.isArray(field.conditions)?field.conditions.map(item=>({...item})):[],
+  showMatchMode:field.showMatchMode==="any"?"any":"all",
 });
 
 export default function FormConfigurator({
@@ -982,6 +983,18 @@ export default function FormConfigurator({
                         <div className="form-builder-panel">
                           <div className="fw-semibold mb-2">Rules</div>
                           <div className="small text-secondary mb-2">Make a field appear, become required, or become read only based on another answer.</div>
+                          {(field.conditions||[]).filter(condition=>condition.action==="show").length>1&&(
+                            <div className="row g-2 align-items-center mb-3">
+                              <div className="col-md-5"><label className="form-label mb-0" htmlFor={`show-match-${field.key}`}>Show this field when</label></div>
+                              <div className="col-md-7">
+                                <select id={`show-match-${field.key}`} className="form-select form-select-sm" value={field.showMatchMode||"all"} onChange={event=>update(field.key,{showMatchMode:event.target.value})}>
+                                  <option value="all">Every Show condition is true</option>
+                                  <option value="any">At least one Show condition is true</option>
+                                </select>
+                              </div>
+                              <div className="col-12 small text-secondary">This setting applies only to Show rules. A matching Hide rule still hides the field.</div>
+                            </div>
+                          )}
                           {(field.conditions||[]).map((condition,conditionIndex)=>(
                             <div className="row g-2 align-items-end mb-2" key={conditionIndex}>
                               <div className="col-md-3">

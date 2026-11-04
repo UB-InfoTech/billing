@@ -80,7 +80,11 @@ const getConfiguredFieldState=(field,values)=>{
 
   const showRules=conditions.filter(condition=>condition.action==="show");
   const hideRules=conditions.filter(condition=>condition.action==="hide");
-  if(showRules.length)visible=showRules.every(condition=>conditionMatches(condition,values));
+  if(showRules.length){
+    visible=field?.showMatchMode==="any"
+      ?showRules.some(condition=>conditionMatches(condition,values))
+      :showRules.every(condition=>conditionMatches(condition,values));
+  }
   if(hideRules.some(condition=>conditionMatches(condition,values)))visible=false;
 
   conditions.forEach(condition=>{

@@ -41,6 +41,7 @@ const formFieldSchema=new mongoose.Schema({
   defaultValue:{type:mongoose.Schema.Types.Mixed,default:""},
   dataSource:{type:dataSourceSchema,default:()=>({type:"none"})},
   conditions:{type:[conditionSchema],default:[]},
+  showMatchMode:{type:String,enum:["all","any"],default:"all"},
   validation:{
     min:{type:Number,default:null},
     max:{type:Number,default:null},

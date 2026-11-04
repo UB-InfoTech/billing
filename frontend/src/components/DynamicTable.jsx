@@ -199,6 +199,7 @@ export default function DynamicTable({
   const [savingCells,setSavingCells]=useState(()=>new Set());
   const [uploadingFiles,setUploadingFiles]=useState(()=>new Set());
   const [error,setError]=useState("");
+  const [attachmentPreview,setAttachmentPreview]=useState(null);
   const [showColumnDetails,setShowColumnDetails]=useState(false);
 
   const [customForm,setCustomForm]=useState({
@@ -512,6 +513,35 @@ export default function DynamicTable({
     }
   };
 
+  const openCustomAttachment=async(fileId)=>{
+    try{
+      setError("");
+      const metadataResponse=await axios.get(`${apiBase}/api/no-code-files/${encodeURIComponent(String(fileId))}`,authConfig());
+      const metadata=metadataResponse.data?.file;
+      if(!metadata?.downloadUrl)throw new Error("The saved attachment is unavailable.");
+      const downloadPath=metadata.downloadUrl.startsWith("/api/")?metadata.downloadUrl.slice(4):metadata.downloadUrl;
+      const response=await axios.get(`${apiBase}${downloadPath}`,{...authConfig(),responseType:"blob"});
+      const objectUrl=URL.createObjectURL(response.data);
+      if(metadata.fieldType==="image"){
+        setAttachmentPreview({url:objectUrl,name:metadata.name||"Attached image"});
+      }else{
+        const anchor=document.createElement("a");
+        anchor.href=objectUrl;
+        anchor.download=metadata.name||"attachment";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        window.setTimeout(()=>URL.revokeObjectURL(objectUrl),1500);
+      }
+    }catch(openError){
+      setError(openError.response?.data?.message||openError.message||"Unable to open this attachment.");
+    }
+  };
+
+  useEffect(()=>()=>{
+    if(attachmentPreview?.url)URL.revokeObjectURL(attachmentPreview.url);
+  },[attachmentPreview?.url]);
+
   const uploadTableFile=async(rowKey,column,file)=>{
     if(!file)return;
     const stateKey=customValueKey(rowKey,column.key);
@@ -597,7 +627,7 @@ export default function DynamicTable({
         :".jpg,.jpeg,.png,.gif,.webp,.pdf,image/jpeg,image/png,image/gif,image/webp,application/pdf";
       return(
         <div className="dynamic-attachment-editor d-flex flex-column gap-2">
-          {editingValue&&<div className="small text-secondary"><i className={`bi ${column.fieldType==="image"?"bi-image":"bi-file-earmark"} me-1`}></i>{column.fieldType==="image"?"An image is attached to this row.":"A file is attached to this row."}</div>}
+          {editingValue&&<div className="d-flex flex-wrap align-items-center gap-2 small text-secondary"><span><i className={`bi ${column.fieldType==="image"?"bi-image":"bi-file-earmark"} me-1`}></i>{column.fieldType==="image"?"An image is attached to this row.":"A file is attached to this row."}</span><button type="button" className="btn btn-sm btn-link p-0" onClick={()=>openCustomAttachment(editingValue)}>{column.fieldType==="image"?"Preview image":"Download file"}</button></div>}
           <input
             type="file"
             className="form-control form-control-sm"
@@ -722,7 +752,12 @@ export default function DynamicTable({
     const isSaving=savingCells.has(stateKey);
 
     if(column.editable===false){
-      return <span className={value===null||value===undefined||value===""?"text-muted":""}>{formatCustomValue(column,value)}</span>;
+      return(
+        <span className="d-inline-flex align-items-center gap-1 flex-wrap">
+          <span className={value===null||value===undefined||value===""?"text-muted":""}>{formatCustomValue(column,value)}</span>
+          {["image","file"].includes(column.fieldType)&&value&&<button type="button" className="btn btn-sm btn-link px-1 py-0" onClick={()=>openCustomAttachment(value)}>{column.fieldType==="image"?"Preview":"Download"}</button>}
+        </span>
+      );
     }
 
     if(editingCell===stateKey){
@@ -730,22 +765,29 @@ export default function DynamicTable({
     }
 
     return(
-      <button
-        type="button"
-        className="dynamic-custom-cell"
-        onClick={()=>startEdit(rowKey,column,value)}
-        disabled={isSaving}
-        aria-busy={isSaving}
-        title={isSaving?"Saving this value…":"Click to edit"}
-      >
-        <span className={value===null||value===undefined||value===""?"text-muted":""}>
-          {formatCustomValue(column,value)}
-        </span>
-        {isSaving
-          ? <span className="spinner-border spinner-border-sm ms-2" role="status" aria-label="Saving"></span>
-          : <i className="bi bi-pencil-square ms-2 opacity-0 dynamic-custom-edit-icon"></i>
-        }
-      </button>
+      <div className="d-inline-flex align-items-center gap-1 flex-wrap">
+        <button
+          type="button"
+          className="dynamic-custom-cell"
+          onClick={()=>startEdit(rowKey,column,value)}
+          disabled={isSaving}
+          aria-busy={isSaving}
+          title={isSaving?"Saving this value…":"Click to edit"}
+        >
+          <span className={value===null||value===undefined||value===""?"text-muted":""}>
+            {formatCustomValue(column,value)}
+          </span>
+          {isSaving
+            ? <span className="spinner-border spinner-border-sm ms-2" role="status" aria-label="Saving"></span>
+            : <i className="bi bi-pencil-square ms-2 opacity-0 dynamic-custom-edit-icon"></i>
+          }
+        </button>
+        {["image","file"].includes(column.fieldType)&&value&&(
+          <button type="button" className="btn btn-sm btn-link px-1 py-0" onClick={()=>openCustomAttachment(value)} title={column.fieldType==="image"?"Preview attached image":"Download attached file"}>
+            {column.fieldType==="image"?"Preview":"Download"}
+          </button>
+        )}
+      </div>
     );
   };
 
@@ -1063,6 +1105,18 @@ export default function DynamicTable({
           )}
         </table>
       </div>
+
+      {attachmentPreview&&(
+        <div className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center p-3" style={{background:"rgba(0,0,0,.65)",zIndex:1600}} onMouseDown={event=>{if(event.target===event.currentTarget)setAttachmentPreview(null);}}>
+          <section className="bg-white rounded shadow p-3" style={{width:"min(900px,96vw)",maxHeight:"94vh",overflow:"auto"}} role="dialog" aria-modal="true" aria-label="Attached image preview">
+            <div className="d-flex justify-content-between align-items-center gap-3 mb-3">
+              <strong className="text-break">{attachmentPreview.name}</strong>
+              <button type="button" className="btn btn-light border rounded-circle" onClick={()=>setAttachmentPreview(null)} aria-label="Close image preview"><i className="bi bi-x-lg"></i></button>
+            </div>
+            <img src={attachmentPreview.url} alt={attachmentPreview.name} className="d-block mx-auto" style={{maxWidth:"100%",maxHeight:"78vh",objectFit:"contain"}}/>
+          </section>
+        </div>
+      )}
 
       {showSettings&&(
         <div className="dynamic-settings-overlay" onMouseDown={event=>{

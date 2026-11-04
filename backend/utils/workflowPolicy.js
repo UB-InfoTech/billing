@@ -66,6 +66,9 @@ function normalizeWorkflowActionValues(workflow,fieldPolicy){
   if(!field)continue;
   const value=action.value;
   if(value===null||value===undefined||value===""){action.value="";continue;}
+  // Leave arrays/objects untouched so payload validation rejects them; never coerce
+  // an unexpected object into the literal string "[object Object]".
+  if(!["string","number","boolean"].includes(typeof value))continue;
   if(["number","currency","percentage"].includes(field.fieldType)){
    const number=typeof value==="number"?value:Number(value);
    if(Number.isFinite(number))action.value=number;

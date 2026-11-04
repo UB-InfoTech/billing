@@ -102,3 +102,16 @@ test("custom boolean actions require an actual yes or no value",()=>{
   {type:"set_value",fieldKey:"custom_preferred",value:"perhaps"}
  ]),policy),/choose yes or no/i);
 });
+
+test("custom text actions do not stringify object payloads",()=>{
+ const {normalizeWorkflowActionValues}=require("../utils/workflowPolicy");
+ const policy=buildWorkflowFieldPolicy("clients",[
+  {key:"custom_note",custom:true,visible:true,editable:true,fieldType:"text"}
+ ]);
+ const workflow=makePayload("clients",[
+  {type:"set_value",fieldKey:"custom_note",value:{injected:"value"}}
+ ]);
+ normalizeWorkflowActionValues(workflow,policy);
+ assert.equal(typeof workflow.actions[0].value,"object");
+ assert.throws(()=>validateWorkflowPayload(workflow,policy),/simple text, number or yes\/no value/i);
+});

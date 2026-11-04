@@ -753,10 +753,10 @@ export default function DynamicTable({
 
     if(column.editable===false){
       return(
-        <span className="d-inline-flex align-items-center gap-1 flex-wrap">
+        <div className="d-inline-flex align-items-center gap-1 flex-wrap">
           <span className={value===null||value===undefined||value===""?"text-muted":""}>{formatCustomValue(column,value)}</span>
           {["image","file"].includes(column.fieldType)&&value&&<button type="button" className="btn btn-sm btn-link px-1 py-0" onClick={()=>openCustomAttachment(value)}>{column.fieldType==="image"?"Preview":"Download"}</button>}
-        </span>
+        </div>
       );
     }
 

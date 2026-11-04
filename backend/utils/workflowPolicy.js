@@ -1,83 +1,93 @@
-const ORDER_STATUSES = ["Pending", "In Process", "Completed", "Cancelled", "Dispatched"];
-
-// Fields maintained by the application or derived from financial transactions
-// must not be edited directly by automations. Status changes use the dedicated
-// change_status action so the status history is recorded consistently.
-const PROTECTED_FIELDS = new Set([
-  "_id", "id", "__v", "createdBy", "customFields",
-  "status", "statusHistory",
-  "payments", "paymentHistory", "lastPaymentDate",
-  "paymentStatus", "paidAmount", "dueAmount",
-  "discountAmount", "taxAmount", "totalCost", "totalAmount",
-  "finalRevenue", "roundOffFinalRevenue", "roundOff",
-  "creditAppliedAmount", "creditNoteCount",
-  "creditBalance", "creditBalanceAdjustment", "outstanding_balance",
-  "pendingPayments", "totalPaid", "totalRevenue", "orderCount",
-  "lastOrderDate", "averageOrderValue", "preferredProducts", "orderFrequency",
-  "ewbDetails"
+const ORDER_STATUSES=["Pending","In Process","Completed","Cancelled","Dispatched"];
+const PROTECTED_FIELDS=new Set([
+ "_id","id","__v","createdBy","customFields","status","statusHistory","payments","paymentHistory",
+ "lastPaymentDate","paymentStatus","paidAmount","dueAmount","discountAmount","taxAmount","totalCost",
+ "totalAmount","finalRevenue","roundOffFinalRevenue","roundOff","creditAppliedAmount","creditNoteCount",
+ "creditBalance","creditBalanceAdjustment","outstanding_balance","pendingPayments","totalPaid","totalRevenue",
+ "orderCount","lastOrderDate","averageOrderValue","preferredProducts","orderFrequency","ewbDetails"
 ]);
-
-function isProtectedWorkflowField(value) {
-  const key = String(value ?? "").trim();
-  if (!key || PROTECTED_FIELDS.has(key)) return true;
-  if (["__proto__", "prototype", "constructor"].includes(key)) return true;
-  if (key.startsWith("$") || key.includes(".")) return true;
-  return false;
+const WORKFLOW_FORM_KEYS=Object.freeze({
+ orders:"orders.form",clients:"clients.form",products:"products.form",expenses:"expenses.form",calendar:"calendar.event"
+});
+const BUILT_IN_CONDITION_FIELDS=Object.freeze({
+ orders:["orderNumber","companyName","status","paymentStatus","discountRate","taxPercentage","dueAmount","roundOffFinalRevenue"],
+ clients:["name","companyName","businessType","accountStatus","paymentTerms","discountRate"],
+ products:["productName","productCode","rate","quantity"],
+ expenses:["title","category","amount","paymentMethod"],calendar:["title","start","end","color"]
+});
+const BUILT_IN_ACTION_FIELDS=Object.freeze({
+ orders:["companyName","discountRate","taxPercentage"],
+ clients:["name","companyName","businessType","accountStatus","paymentTerms","discountRate"],
+ products:["productName","productCode","rate","quantity"],
+ expenses:["title","category","amount","paymentMethod"],calendar:["title","start","end","color"]
+});
+const CUSTOM_WORKFLOW_FIELD_TYPES=new Set(["text","textarea","number","currency","percentage","date","datetime","select","boolean","email","phone","url"]);
+function isUnsafeWorkflowFieldPath(value){
+ const key=String(value??"").trim();
+ return !key||["__proto__","prototype","constructor"].includes(key)||key.startsWith("$")||key.includes(".");
 }
-
-function validateWorkflowPayload(workflow) {
-  const resource = workflow?.trigger?.resource;
-  const conditions=Array.isArray(workflow?.conditions)?workflow.conditions:[];
-  if(!["all","any"].includes(workflow?.matchMode||"all")){
-    throw new Error("Choose whether all conditions or any condition must match.");
-  }
-  if(conditions.length>20)throw new Error("A workflow can have no more than 20 conditions.");
-  for(const condition of conditions){
-    if(!String(condition?.fieldKey||"").trim()){
-      throw new Error("Choose a field for every condition or remove the unfinished condition.");
-    }
-    if(!["equals","not_equals","contains","not_contains","greater_than","less_than","empty","not_empty"].includes(condition?.operator)){
-      throw new Error("Choose a valid condition.");
-    }
-    if(!["empty","not_empty"].includes(condition.operator)&&!String(condition?.value??"").trim()){
-      throw new Error("Enter a value for every condition or choose an empty/not empty condition.");
-    }
-  }
-  const actions = Array.isArray(workflow?.actions) ? workflow.actions : [];
-  if (!actions.length) throw new Error("Add at least one working action.");
-
-  for (const action of actions) {
-    if (action.type === "set_value") {
-      if (!String(action.fieldKey ?? "").trim()) {
-        throw new Error("Choose which field this workflow should update.");
-      }
-      if (isProtectedWorkflowField(action.fieldKey)) {
-        throw new Error(
-          "This field is maintained by the software and cannot be changed directly by a workflow. Use Change status for invoice status."
-        );
-      }
-      continue;
-    }
-
-    if (action.type === "change_status") {
-      if (resource !== "orders") {
-        throw new Error("Automatic status changes are available for invoices only.");
-      }
-      if (!ORDER_STATUSES.includes(String(action.value ?? ""))) {
-        throw new Error("Choose a valid invoice status for this workflow.");
-      }
-      continue;
-    }
-
-    throw new Error("This workflow action is not supported yet. Choose Set a field or Change status.");
-  }
-
-  return workflow;
+function isProtectedWorkflowField(value){
+ const key=String(value??"").trim();
+ return isUnsafeWorkflowFieldPath(key)||PROTECTED_FIELDS.has(key);
 }
-
-module.exports = {
-  ORDER_STATUSES,
-  PROTECTED_FIELDS,
-  isProtectedWorkflowField,
-  validateWorkflowPayload
-};
+function buildWorkflowFieldPolicy(resource,configuredFields=[]){
+ const conditionFields=new Set(BUILT_IN_CONDITION_FIELDS[resource]||[]);
+ const actionFields=new Set(BUILT_IN_ACTION_FIELDS[resource]||[]);
+ for(const field of Array.isArray(configuredFields)?configuredFields:[]){
+  const key=String(field?.key||"").trim();
+  if(field?.custom!==true||field?.visible===false||!key.startsWith("custom_")||
+    isUnsafeWorkflowFieldPath(key)||!CUSTOM_WORKFLOW_FIELD_TYPES.has(field?.fieldType))continue;
+  conditionFields.add(key);
+  if(field?.editable!==false&&field?.readOnly!==true&&field?.disabled!==true&&field?.locked!==true&&!String(field?.formula||"").trim()){
+   actionFields.add(key);
+  }
+ }
+ return {resource,conditionFields,actionFields};
+}
+async function loadWorkflowFieldPolicy(createdBy,resource){
+ const formKey=WORKFLOW_FORM_KEYS[resource];
+ if(!formKey)return buildWorkflowFieldPolicy(resource);
+ const FormConfiguration=require("../models/FormConfiguration");
+ const configuration=await FormConfiguration.findOne({createdBy,formKey}).select({fields:1}).lean();
+ return buildWorkflowFieldPolicy(resource,configuration?.fields||[]);
+}
+function validateWorkflowPayload(workflow,fieldPolicy=buildWorkflowFieldPolicy(workflow?.trigger?.resource)){
+ const resource=workflow?.trigger?.resource;
+ const conditions=Array.isArray(workflow?.conditions)?workflow.conditions:[];
+ const allowedConditionFields=fieldPolicy?.conditionFields instanceof Set?fieldPolicy.conditionFields:new Set(BUILT_IN_CONDITION_FIELDS[resource]||[]);
+ const allowedActionFields=fieldPolicy?.actionFields instanceof Set?fieldPolicy.actionFields:new Set(BUILT_IN_ACTION_FIELDS[resource]||[]);
+ if(!WORKFLOW_FORM_KEYS[resource])throw new Error("Choose a supported record type for this automation.");
+ if(fieldPolicy?.resource&&fieldPolicy.resource!==resource)throw new Error("The selected form fields do not match this automation's record type. Reload the form and try again.");
+ if(!["all","any"].includes(workflow?.matchMode||"all"))throw new Error("Choose whether all conditions or any condition must match.");
+ if(conditions.length>20)throw new Error("A workflow can have no more than 20 conditions.");
+ for(const condition of conditions){
+  const key=String(condition?.fieldKey||"").trim();
+  if(!key)throw new Error("Choose a field for every condition or remove the unfinished condition.");
+  // Read-only financial/status values remain safe to compare in conditions.
+  if(!allowedConditionFields.has(key)||isUnsafeWorkflowFieldPath(key))throw new Error("This condition field is not available for the selected record type. Choose a current form field.");
+  if(!["equals","not_equals","contains","not_contains","greater_than","less_than","empty","not_empty"].includes(condition?.operator))throw new Error("Choose a valid condition.");
+  if(!["empty","not_empty"].includes(condition.operator)&&!String(condition?.value??"").trim())throw new Error("Enter a value for every condition or choose an empty/not empty condition.");
+ }
+ const actions=Array.isArray(workflow?.actions)?workflow.actions:[];
+ if(!actions.length)throw new Error("Add at least one working action.");
+ for(const action of actions){
+  if(action.type==="set_value"){
+   const key=String(action.fieldKey??"").trim();
+   if(!key)throw new Error("Choose which field this workflow should update.");
+   if(isProtectedWorkflowField(key))throw new Error("This field is maintained by the software and cannot be changed directly by a workflow. Use Change status for invoice status.");
+   if(!allowedActionFields.has(key))throw new Error("This field cannot be changed by an automation. Choose an editable field from the selected form.");
+   const valueType=typeof action.value;
+   if(action.value!==null&&!["string","number","boolean"].includes(valueType))throw new Error("Enter a simple text, number or yes/no value for this automation.");
+   if(typeof action.value==="string"&&action.value.length>1000)throw new Error("The automation value is too long.");
+   continue;
+  }
+  if(action.type==="change_status"){
+   if(resource!=="orders")throw new Error("Automatic status changes are available for invoices only.");
+   if(!ORDER_STATUSES.includes(String(action.value??"")))throw new Error("Choose a valid invoice status for this workflow.");
+   continue;
+  }
+  throw new Error("This workflow action is not supported yet. Choose Set a field or Change status.");
+ }
+ return workflow;
+}
+module.exports={ORDER_STATUSES,PROTECTED_FIELDS,WORKFLOW_FORM_KEYS,BUILT_IN_CONDITION_FIELDS,BUILT_IN_ACTION_FIELDS,CUSTOM_WORKFLOW_FIELD_TYPES,isUnsafeWorkflowFieldPath,isProtectedWorkflowField,buildWorkflowFieldPolicy,loadWorkflowFieldPolicy,validateWorkflowPayload};

@@ -37,13 +37,15 @@ test("blocks object prototype keys and unsupported nested field paths", () => {
   assert.equal(isProtectedWorkflowField("$where"), true);
 });
 
-test("allows ordinary business and custom field updates", () => {
+test("allows approved built-in edits while custom fields require form configuration", () => {
   assert.equal(isProtectedWorkflowField("accountStatus"), false);
   assert.equal(isProtectedWorkflowField("custom_salesPerson"), false);
   assert.doesNotThrow(() => validateWorkflowPayload(payload("clients", [
-    { type: "set_value", fieldKey: "accountStatus", value: "Inactive" },
-    { type: "set_value", fieldKey: "custom_salesPerson", value: "Team A" }
+    { type: "set_value", fieldKey: "accountStatus", value: "Inactive" }
   ])));
+  assert.throws(() => validateWorkflowPayload(payload("clients", [
+    { type: "set_value", fieldKey: "custom_salesPerson", value: "Team A" }
+  ])), /cannot be changed by an automation/i);
 });
 
 test("workflow conditions default to all matching and support any matching",()=>{

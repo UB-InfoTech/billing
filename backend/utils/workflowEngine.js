@@ -1,5 +1,5 @@
 const WorkflowDefinition=require("../models/WorkflowDefinition");
-const {isProtectedWorkflowField,ORDER_STATUSES}=require("./workflowPolicy");
+const {isProtectedWorkflowField,ORDER_STATUSES,loadWorkflowFieldPolicy,validateWorkflowPayload}=require("./workflowPolicy");
 const {numericConditionMatches}=require("./conditionMatcher");
 
 const readValue=(doc,key)=>{
@@ -65,8 +65,11 @@ async function applyWorkflows({resource,event,doc,createdBy}){
     "trigger.event":event
   }).lean();
 
+  if(!workflows.length)return [];
+  const fieldPolicy=await loadWorkflowFieldPolicy(createdBy,resource);
   const applied=[];
   for(const workflow of workflows){
+    try{validateWorkflowPayload(workflow,fieldPolicy);}catch{continue;}
     if(!matchesWorkflowConditions(workflow.conditions,doc,workflow.matchMode||"all"))continue;
 
     let changed=false;

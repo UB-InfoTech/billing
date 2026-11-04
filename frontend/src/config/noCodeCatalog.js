@@ -222,6 +222,8 @@ export const WORKFLOW_RESOURCES=[
   {key:"calendar",label:"Calendar"}
 ];
 
+export const WORKFLOW_FORM_KEYS={orders:"orders.form",clients:"clients.form",products:"products.form",expenses:"expenses.form",calendar:"calendar.event"};
+
 export const WORKFLOW_EVENTS=[
   {key:"record_created",label:"A new record is created"},
   {key:"record_updated",label:"A record is updated"}

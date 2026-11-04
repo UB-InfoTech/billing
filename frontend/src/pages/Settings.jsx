@@ -8,6 +8,7 @@ import {
   WORKFLOW_RESOURCES,
   WORKFLOW_EVENTS,
   WORKFLOW_OPERATORS,
+  WORKFLOW_FORM_KEYS,
   workflowFieldsFor,
   workflowActionFieldsFor
 } from "../config/noCodeCatalog";
@@ -33,6 +34,30 @@ const workflowResourceLabel=key=>{
 const workflowEventLabel=key=>{
   const item=WORKFLOW_EVENTS.find(event=>event.key===key);
   return item?.label||key||"Changed";
+};
+const WORKFLOW_AUTOMATION_FIELD_TYPES=new Set(["text","textarea","number","currency","percentage","date","datetime","select","boolean","email","phone","url"]);
+const workflowOptionsForField=field=>{
+ if(field?.fieldType==="boolean")return [{value:"true",label:"Yes"},{value:"false",label:"No"}];
+ if(!Array.isArray(field?.options))return [];
+ return field.options.map(option=>{
+  if(option&&typeof option==="object"){
+   const value=String(option.value??option.label??"");
+   return {value,label:String(option.label??option.value??"")};
+  }
+  const value=String(option??"");
+  return {value,label:value};
+ }).filter(option=>option.value);
+};
+const workflowInputTypeForField=field=>{
+ switch(field?.fieldType){
+  case "number":case "currency":case "percentage":return "number";
+  case "date":return "date";
+  case "datetime":return "datetime-local";
+  case "email":return "email";
+  case "phone":return "tel";
+  case "url":return "url";
+  default:return "text";
+ }
 };
 
 
@@ -106,6 +131,9 @@ export default function Settings(){
   const [workflowSaving,setWorkflowSaving]=useState(false);
   const [workflowError,setWorkflowError]=useState("");
   const [workflowLoading,setWorkflowLoading]=useState(true);
+  const [workflowCustomFields,setWorkflowCustomFields]=useState([]);
+  const [workflowCustomFieldsLoading,setWorkflowCustomFieldsLoading]=useState(false);
+  const [workflowFieldError,setWorkflowFieldError]=useState("");
   const [invoiceConfig,setInvoiceConfig]=useState(null);
   const [invoiceLoading,setInvoiceLoading]=useState(true);
   const [invoiceSaving,setInvoiceSaving]=useState(false);
@@ -155,6 +183,27 @@ export default function Settings(){
   };
 
   useEffect(()=>{loadWorkflows();},[]);
+  useEffect(()=>{
+   const formKey=WORKFLOW_FORM_KEYS[workflow.trigger.resource];
+   let current=true;
+   setWorkflowCustomFields([]);
+   setWorkflowFieldError("");
+   if(!formKey){setWorkflowCustomFieldsLoading(false);return ()=>{current=false;};}
+   const loadFields=async()=>{
+    try{
+     setWorkflowCustomFieldsLoading(true);
+     const response=await axios.get(apiBase+"/api/form-config/"+encodeURIComponent(formKey),auth());
+     const fields=Array.isArray(response.data?.fields)?response.data.fields:[];
+     const eligible=fields.filter(field=>field?.custom===true&&field?.visible!==false&&
+      typeof field?.key==="string"&&field.key.startsWith("custom_")&&WORKFLOW_AUTOMATION_FIELD_TYPES.has(field.fieldType));
+     if(current)setWorkflowCustomFields(eligible);
+    }catch(loadError){
+     if(current)setWorkflowFieldError(loadError.response?.data?.message||"Extra form fields could not be loaded. Built-in fields are still available.");
+    }finally{if(current)setWorkflowCustomFieldsLoading(false);}
+   };
+   loadFields();
+   return ()=>{current=false;};
+  },[workflow.trigger.resource]);
 
   const loadInvoiceConfig=async()=>{
     try{
@@ -456,8 +505,15 @@ export default function Settings(){
     }
   };
 
-  const workflowFields=workflowFieldsFor(workflow.trigger.resource);
-  const workflowActionFields=workflowActionFieldsFor(workflow.trigger.resource);
+  const customWorkflowFields=workflowCustomFields.map(field=>({...field,value:field.key,label:(field.label||field.key)+" (Custom)"}));
+  const workflowFields=[...workflowFieldsFor(workflow.trigger.resource),...customWorkflowFields];
+  const workflowActionFields=[
+   ...workflowActionFieldsFor(workflow.trigger.resource),
+   ...customWorkflowFields.filter(field=>field.editable!==false&&field.readOnly!==true&&field.disabled!==true&&field.locked!==true&&!String(field.formula||"").trim())
+  ];
+  const addUnavailableField=(list,key)=>key&&!list.some(field=>field.value===key)?[...list,{value:key,label:"Unavailable field — remove or choose another"}]:list;
+  const conditionFieldOptions=workflow.conditions.reduce((list,condition)=>addUnavailableField(list,condition.fieldKey),workflowFields);
+  const actionFieldOptions=workflow.actions.reduce((list,action)=>addUnavailableField(list,action.fieldKey),workflowActionFields);
 
   if(loading){
     return <div className="settings-page d-flex align-items-center justify-content-center min-vh-100"><div className="text-center text-secondary"><span className="spinner-border spinner-border-sm me-2"></span>Loading settings...</div></div>;
@@ -885,6 +941,8 @@ export default function Settings(){
                 </div>
 
                 {workflowError&&<div className="alert alert-warning">{workflowError}</div>}
+                {workflowFieldError&&<div className="alert alert-warning">{workflowFieldError}</div>}
+                {workflowCustomFieldsLoading&&<div className="small text-secondary mb-2">Loading additional fields from this form…</div>}
 
                 <div className="settings-workflow-builder">
                   <div className="settings-workflow-step">
@@ -941,9 +999,9 @@ export default function Settings(){
                         <div className="row g-2 align-items-end mb-2" key={index}>
                           <div className="col-md-4">
                             <label className="form-label">Field</label>
-                            <select className="form-select" value={condition.fieldKey} onChange={event=>updateCondition(index,{fieldKey:event.target.value})}>
+                            <select className="form-select" value={condition.fieldKey} onChange={event=>updateCondition(index,{fieldKey:event.target.value,value:""})}>
                               <option value="">Choose a field</option>
-                              {workflowFields.map(field=><option key={field.value} value={field.value}>{field.label}</option>)}
+                              {conditionFieldOptions.map(field=><option key={field.value} value={field.value}>{field.label}</option>)}
                             </select>
                           </div>
                           <div className="col-md-3">
@@ -954,7 +1012,14 @@ export default function Settings(){
                           </div>
                           <div className="col-md-4">
                             <label className="form-label">Value</label>
-                            <input className="form-control" value={condition.value||""} disabled={["empty","not_empty"].includes(condition.operator)} onChange={event=>updateCondition(index,{value:event.target.value})} placeholder={["empty","not_empty"].includes(condition.operator)?"No value needed":"Enter a value"}/>
+                            {["select","boolean"].includes(workflowFields.find(field=>field.value===condition.fieldKey)?.fieldType) ? (
+ <select className="form-select" value={condition.value||""} disabled={["empty","not_empty"].includes(condition.operator)} onChange={event=>updateCondition(index,{value:event.target.value})}>
+  <option value="">Choose a value</option>
+  {workflowOptionsForField(workflowFields.find(field=>field.value===condition.fieldKey)).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
+ </select>
+) : (
+ <input className="form-control" type={workflowInputTypeForField(workflowFields.find(field=>field.value===condition.fieldKey))} step={["number","currency","percentage"].includes(workflowFields.find(field=>field.value===condition.fieldKey)?.fieldType)?"any":undefined} value={condition.value||""} disabled={["empty","not_empty"].includes(condition.operator)} onChange={event=>updateCondition(index,{value:event.target.value})} placeholder={["empty","not_empty"].includes(condition.operator)?"No value needed":"Enter a value"}/>
+)}
                           </div>
                           <div className="col-md-1">
                             <button type="button" className="btn btn-outline-danger w-100" onClick={()=>removeCondition(index)} aria-label="Remove condition"><i className="bi bi-trash"></i></button>
@@ -990,9 +1055,9 @@ export default function Settings(){
                             ) : (
                               <>
                                 <label className="form-label">Field</label>
-                                <select className="form-select" value={action.fieldKey||""} onChange={event=>updateAction(index,{fieldKey:event.target.value})}>
+                                <select className="form-select" value={action.fieldKey||""} onChange={event=>updateAction(index,{fieldKey:event.target.value,value:""})}>
                                   <option value="">Choose a field</option>
-                                  {workflowActionFields.map(field=><option key={field.value} value={field.value}>{field.label}</option>)}
+                                  {actionFieldOptions.map(field=><option key={field.value} value={field.value}>{field.label}</option>)}
                                 </select>
                               </>
                             )}
@@ -1009,7 +1074,14 @@ export default function Settings(){
                                     <option>Dispatched</option>
                                   </select>
                                 ) : (
-                                  <input className="form-control" value={action.value??""} onChange={event=>updateAction(index,{value:event.target.value})} placeholder="Enter the value"/>
+                                  {["select","boolean"].includes(workflowActionFields.find(field=>field.value===action.fieldKey)?.fieldType) ? (
+ <select className="form-select" value={action.value??""} onChange={event=>updateAction(index,{value:event.target.value})}>
+  <option value="">Choose a value</option>
+  {workflowOptionsForField(workflowActionFields.find(field=>field.value===action.fieldKey)).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
+ </select>
+) : (
+ <input className="form-control" type={workflowInputTypeForField(workflowActionFields.find(field=>field.value===action.fieldKey))} step={["number","currency","percentage"].includes(workflowActionFields.find(field=>field.value===action.fieldKey)?.fieldType)?"any":undefined} value={action.value??""} onChange={event=>updateAction(index,{value:event.target.value})} placeholder="Enter the value"/>
+)}
                                 )}
                               </div>
                           <div className="col-md-1">
@@ -1022,7 +1094,7 @@ export default function Settings(){
 
                   <div className="d-flex justify-content-end gap-2">
                     <button type="button" className="btn btn-light border" onClick={newWorkflow}>Clear</button>
-                    <button type="button" className="btn btn-primary" disabled={workflowSaving} onClick={saveWorkflow}>{workflowSaving?"Saving...":workflow._id?"Update workflow":"Save workflow"}</button>
+                    <button type="button" className="btn btn-primary" disabled={workflowSaving||workflowCustomFieldsLoading} onClick={saveWorkflow}>{workflowSaving?"Saving...":workflow._id?"Update workflow":"Save workflow"}</button>
                   </div>
                 </div>
 

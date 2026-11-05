@@ -6,6 +6,7 @@ import axios from 'axios';
 import DynamicTable from '../components/DynamicTable';
 import FormConfigurator from '../components/FormConfigurator';
 import ConfiguredField from '../components/ConfiguredField';
+import ClientActivityPanel from "../components/ClientActivityPanel";
 import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,syncConfiguredCustomFields,buildConfiguredDefaults,buildNewRecordDefaults,groupFieldsBySection} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
@@ -679,7 +680,7 @@ function Clients() {
                 locked:true,
                 render:client=>(
                   <div className="d-flex gap-1 justify-content-end">
-                    <button className="btn btn-sm btn-light border" onClick={()=>setViewingClient(client)} title="View customer details"><i className="bi bi-eye me-1"></i>View</button>
+                    <button className="btn btn-sm btn-light border" onClick={()=>setViewingClient(client)} title="Open customer profile and activity"><i className="bi bi-person-lines-fill me-1"></i>Open</button>
                     <button className="btn btn-sm btn-light border" onClick={()=>handleEditClient(client)} title="Edit customer">
                       <i className="bi bi-pencil me-1"></i>Edit
                     </button>
@@ -740,14 +741,16 @@ function Clients() {
           </div>
 
           {viewingClient&&(
-            <div className="modal show d-block customer-view-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-label="Customer details">
-              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable customer-a4-dialog">
+            <div className="modal show d-block customer-view-backdrop client-crm-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-label="Customer CRM profile">
+              <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable client-crm-dialog">
                 <div className="modal-content customer-view-modal border-0">
                   <div className="modal-header customer-view-toolbar">
-                    <div><div className="small text-primary text-uppercase fw-semibold mb-1">CUSTOMER RECORD</div><h5 className="modal-title fw-bold mb-1">{viewingClient.companyName||viewingClient.name||"Customer details"}</h5><div className="small text-secondary">A clear, print-friendly summary of this customer.</div></div>
+                    <div className="min-w-0"><div className="small text-primary text-uppercase fw-semibold mb-1">CUSTOMER PROFILE</div><h5 className="modal-title fw-bold mb-1">{viewingClient.companyName||viewingClient.name||"Customer details"}</h5><div className="small text-secondary">Activities, conversations, invoices, payments and follow-ups for this customer.</div></div>
                     <div className="d-flex gap-2"><button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>{handleEditClient(viewingClient);setViewingClient(null);}}><i className="bi bi-pencil me-1"></i>Edit</button><button type="button" className="btn-close" aria-label="Close customer details" onClick={()=>setViewingClient(null)} /></div>
                   </div>
-                  <div className="modal-body customer-view-body">
+                  <div className="modal-body customer-view-body client-crm-body">
+                    <ClientActivityPanel clientId={viewingClient._id} apiBase={linkone}/>
+                    <div className="client-crm-details-heading"><h6 className="mb-0 fw-bold">Customer details</h6><span className="small text-secondary">Contact information and saved form fields</span></div>
                     <article className="customer-a4-sheet customer-a4-read-sheet">
                       <div className="customer-record-title"><span className="customer-record-avatar"><i className="bi bi-person-vcard"></i></span><div><div className="small text-secondary">CUSTOMER / BUSINESS</div><h3>{viewingClient.companyName||viewingClient.name||"Unnamed customer"}</h3><div className="small text-secondary">{viewingClient.phone||"No phone added"}{viewingClient.email?" · "+viewingClient.email:""}</div></div></div>
                       {clientFormSections.map(section=>{

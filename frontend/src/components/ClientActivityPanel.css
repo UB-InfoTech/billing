@@ -1,0 +1,49 @@
+.client-crm-dialog{width:calc(100% - 2rem);max-width:1180px}
+.client-crm-backdrop{overflow-y:auto}
+.client-crm-body{padding:clamp(1rem,2.4vw,1.75rem);overflow-x:hidden}
+.client-crm-details-heading{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;margin:1.75rem 0 .85rem}
+.client-crm-body .customer-a4-sheet{max-width:none;margin:0 auto}
+.client-activity-panel{border:1px solid #e6eaf0;border-radius:16px;background:#fff;overflow:hidden}
+.client-activity-heading{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:1.15rem 1.25rem;border-bottom:1px solid #edf0f4}
+.client-activity-eyebrow{font-size:.68rem;letter-spacing:.12em;font-weight:800;color:#64748b;margin-bottom:.3rem}
+.client-activity-heading h6{font-weight:750;font-size:1.05rem}
+.client-activity-layout{display:grid;grid-template-columns:minmax(260px,320px) minmax(0,1fr);align-items:start}
+.client-activity-composer{padding:1.25rem;border-right:1px solid #edf0f4;background:#fbfcfe}
+.client-activity-composer .form-label{font-size:.78rem;font-weight:650;color:#334155;margin-bottom:.35rem}
+.client-activity-composer .form-control,.client-activity-composer .form-select{font-size:.88rem;min-height:40px}
+.client-activity-composer textarea.form-control{min-height:88px}
+.client-activity-compose-icon{display:inline-flex;width:34px;height:34px;align-items:center;justify-content:center;border-radius:10px;background:#eaf2ff;color:#245bb5}
+.client-activity-feed{padding:1.1rem 1.25rem;min-width:0}
+.client-activity-feed-toolbar{display:flex;justify-content:space-between;align-items:flex-start;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem}
+.client-activity-filters{display:flex;gap:.35rem;flex-wrap:wrap}
+.client-activity-filters button{border:1px solid #e2e8f0;border-radius:999px;background:#fff;color:#475569;padding:.3rem .65rem;font-size:.73rem}
+.client-activity-filters button.is-active{background:#edf4ff;border-color:#bfdbfe;color:#1d4ed8;font-weight:700}
+.client-activity-loading{display:flex;align-items:center;justify-content:center;min-height:180px;color:#64748b;font-size:.85rem}
+.client-activity-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:220px;padding:2rem 1rem}
+.client-activity-empty>span{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:#f1f5f9;color:#64748b;font-size:1.2rem;margin-bottom:.7rem}
+.client-activity-timeline{position:relative;padding:.2rem 0 .2rem .2rem}
+.client-activity-entry{display:grid;grid-template-columns:34px minmax(0,1fr);gap:.8rem;position:relative;padding:0 0 1.2rem}
+.client-activity-entry:not(:last-child):before{content:"";position:absolute;left:16px;top:34px;bottom:0;width:1px;background:#e2e8f0}
+.client-activity-entry-icon{z-index:1;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#f1f5f9;color:#475569;font-size:.9rem}
+.client-activity-entry-content{min-width:0;border:1px solid #edf0f4;border-radius:12px;padding:.8rem .9rem}
+.client-activity-entry-meta{display:flex;justify-content:space-between;gap:.5rem;flex-wrap:wrap;font-size:.7rem;color:#64748b;margin-bottom:.35rem}
+.client-activity-entry-meta span{font-weight:750;text-transform:uppercase;letter-spacing:.045em}
+.client-activity-entry-meta time{font-variant-numeric:tabular-nums}
+.client-activity-entry-content h6{font-size:.9rem;font-weight:750;margin:0 0 .3rem;color:#1e293b;overflow-wrap:anywhere}
+.client-activity-description{font-size:.82rem;line-height:1.5;color:#475569;white-space:pre-wrap;overflow-wrap:anywhere;margin:0 0 .5rem}
+.client-activity-entry-foot{display:flex;align-items:center;gap:.5rem .85rem;flex-wrap:wrap;font-size:.74rem;color:#64748b}
+.client-activity-entry-foot strong{color:#1e293b;font-variant-numeric:tabular-nums}
+.client-activity-status{border-radius:999px;background:#f1f5f9;padding:.15rem .5rem}
+.client-activity-task-actions{display:flex;align-items:center;gap:.65rem;margin-top:.65rem}
+.client-activity-task-state{font-size:.72rem;font-weight:750}
+.client-activity-task-state.is-open{color:#b45309}
+.client-activity-task-state.is-complete{color:#15803d}
+.client-activity-task-state.is-cancelled{color:#64748b}
+.client-activity-load-more{width:100%;margin-top:.5rem}
+@media(max-width:767.98px){
+ .client-crm-dialog{width:calc(100% - 1rem);margin:.5rem auto}
+ .client-activity-layout{grid-template-columns:minmax(0,1fr)}
+ .client-activity-composer{border-right:0;border-bottom:1px solid #edf0f4}
+ .client-activity-heading{align-items:flex-start}
+ .client-activity-details-heading{display:block}
+}

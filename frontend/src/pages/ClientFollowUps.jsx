@@ -20,9 +20,9 @@ const getDateState=item=>{
  if(item.status==="completed")return "completed";
  if(!item.dueAt)return "no-date";
  const due=new Date(item.dueAt);
- const today=new Date();today.setHours(0,0,0,0);
- const tomorrow=new Date(today);tomorrow.setDate(tomorrow.getDate()+1);
- if(due<today)return "overdue";
+ const now=new Date();
+ const tomorrow=new Date(now);tomorrow.setHours(0,0,0,0);tomorrow.setDate(tomorrow.getDate()+1);
+ if(due<now)return "overdue";
  if(due<tomorrow)return "today";
  return "upcoming";
 };

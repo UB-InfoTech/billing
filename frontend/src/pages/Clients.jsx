@@ -694,7 +694,7 @@ function Clients() {
                 { key:"nextFollowUpAt", label:"Next follow-up", sortKey:"nextFollowUpAt", render:client=>{
                   if(!client.nextFollowUpAt)return <span className="small text-secondary">{client.openFollowUpCount?"Open · no due date":"—"}</span>;
                   const due=new Date(client.nextFollowUpAt);
-                  const overdue=due<new Date(new Date().setHours(0,0,0,0));
+                  const overdue=due<new Date();
                   return <span className={overdue?"text-danger fw-semibold":"small"}>{overdue?"Overdue · ":""}{due.toLocaleDateString("en-IN")}</span>;
                 } },
                 { key:"totalRevenue", label:"Total Revenue", sortKey:"totalRevenue", render:client=>`₹${Number(client.totalRevenue||0).toFixed(2)}` },

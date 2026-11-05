@@ -106,14 +106,15 @@ router.get("/follow-ups",auth,async(req,res)=>{
     if((todayStart&&!Number.isFinite(todayStart.getTime()))||(tomorrowStart&&!Number.isFinite(tomorrowStart.getTime()))){
       return res.status(400).json({message:"The follow-up date range is invalid."});
     }
-    const start=todayStart||new Date(new Date().setHours(0,0,0,0));
+    const now=new Date();
+    const start=todayStart||new Date(now.getFullYear(),now.getMonth(),now.getDate());
     const end=tomorrowStart||new Date(start.getTime()+24*60*60*1000);
     const base={createdBy:ownerId,type:{$in:["task","follow_up"]}};
     if(status!=="all")base.status=status;
     if(bucket!=="all"){
       if(status==="completed")return res.status(400).json({message:"Date filters are available for open follow-ups."});
-      if(bucket==="overdue")base.dueAt={$ne:null,$lt:start};
-      if(bucket==="today")base.dueAt={$gte:start,$lt:end};
+      if(bucket==="overdue")base.dueAt={$ne:null,$lt:now};
+      if(bucket==="today")base.dueAt={$gte:now,$lt:end};
       if(bucket==="upcoming")base.dueAt={$gte:end};
       if(bucket==="no_date")base.dueAt=null;
     }
@@ -139,8 +140,8 @@ router.get("/follow-ups",auth,async(req,res)=>{
         {$project:{dueOrder:0}}
       ]),
       ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open"}),
-      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:{$ne:null,$lt:start}}),
-      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:{$gte:start,$lt:end}}),
+      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:{$ne:null,$lt:now}}),
+      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:{$gte:now,$lt:end}}),
       ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:{$gte:end}}),
       ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:null}),
       ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"completed"})

@@ -138,9 +138,10 @@ router.get("/follow-ups",auth,async(req,res)=>{
         {$limit:limit},
         {$lookup:{
           from:Client.collection.name,
-          let:{clientId:"$clientId"},
+          localField:"clientId",
+          foreignField:"_id",
           pipeline:[
-            {$match:{$expr:{$and:[{$eq:["$_id","$clientId"]},{$eq:["$createdBy",ownerId]}]}}},
+            {$match:{createdBy:ownerId}},
             {$project:{companyName:1,name:1,phone:1,email:1,accountStatus:1}}
           ],
           as:"client"

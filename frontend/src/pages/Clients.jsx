@@ -1034,26 +1034,30 @@ function Clients() {
 
                   {formError&&<div className="alert alert-danger mx-3 mt-3 mb-0" role="alert">{formError}</div>}
                   <form className="customer-form-workspace" onSubmit={editingClient?handleUpdateClient:handleAddClient}>
-                    <div className="modal-body p-3 customer-a4-sheet-body">
-                      <div className="customer-paper-intro">
-                        <div className="customer-paper-instruction"><i className="bi bi-info-circle me-2"></i>Complete fields marked Required. Optional fields can be left blank and added later.</div>
+                    <div className="modal-body p-3 customer-a4-sheet-body client-form-body">
+                      <div className="client-form-intro">
+                        <span className="client-form-intro-icon"><i className="bi bi-person-plus"></i></span>
+                        <div><strong>Start with the customer name</strong><p>Only complete the information you have. You can add or update the rest later.</p></div>
                       </div>
                       {clientFormSections.map((section,sectionIndex)=>{
-                        const sectionFields=section.fields.filter(field=>getFieldState(field,{...newClient,...(newClient.customFields||{})}).visible);
+                        const values={...newClient,...(newClient.customFields||{})};
+                        const sectionFields=section.fields.filter(field=>getFieldState(field,values).visible);
                         if(!sectionFields.length)return null;
+                        const hasRequired=sectionFields.some(field=>getFieldState(field,values).required);
+                        const expanded=sectionIndex===0||hasRequired;
                         return (
-                          <section className="customer-form-section" key={section.key}>
-                            <div className="customer-form-section-heading">
-                              <span className="customer-section-number">{sectionIndex+1}</span>
-                              <div><h6>{section.label}</h6><div className="small text-secondary">Enter the details for this section</div></div>
-                            </div>
-                            <div className="row g-3">
+                          <details className="client-form-section" key={section.key} open={expanded||undefined}>
+                            <summary>
+                              <span className="client-form-section-number">{sectionIndex+1}</span>
+                              <span className="client-form-section-copy"><strong>{section.label}</strong><small>{hasRequired?"Includes required information":"Optional · You can fill this later"}</small></span>
+                              <i className="bi bi-chevron-down client-form-section-chevron"></i>
+                            </summary>
+                            <div className="row g-3 client-form-section-fields">
                               {sectionFields.map(renderClientField)}
                             </div>
-                          </section>
+                          </details>
                         );
                       })}
-                      <div className="customer-paper-note"><i className="bi bi-info-circle me-2"></i>You can leave optional fields blank and add details later.</div>
                     </div>
                     <div className="modal-footer bg-white p-3 border-top sticky-bottom">
                       <button type="button" className="btn btn-light border" onClick={()=>{setShowModal(false);setFormError("");}}>Cancel</button>

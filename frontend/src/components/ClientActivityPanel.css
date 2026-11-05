@@ -196,3 +196,32 @@
  .client-profile-details{display:block!important;max-width:none!important}
  .client-profile-card{margin-bottom:12px;border:1px solid #dfe5eb!important;box-shadow:none!important;break-inside:avoid}
 }
+
+/* Customer entry form: essentials first, optional sections tucked away. */
+.customer-a4-dialog{display:flex!important;align-items:stretch!important;width:100%!important;max-width:none!important;height:100dvh!important;max-height:100dvh!important;margin:0!important;padding:0!important}
+.customer-form-modal{display:flex!important;flex-direction:column!important;width:100%!important;height:100dvh!important;max-height:100dvh!important;min-height:0!important;border:0!important;border-radius:0!important;background:#f4f7fb!important}
+.customer-form-workspace{display:flex;flex:1 1 auto;flex-direction:column;min-height:0;overflow:hidden}
+.client-form-body{display:flex;flex:1 1 auto;flex-direction:column;gap:12px;min-height:0;overflow-y:auto!important;padding:clamp(14px,2.5vw,28px)!important;background:#f4f7fb!important}
+.client-form-intro{display:flex;align-items:center;gap:12px;width:100%;max-width:920px;margin:0 auto 3px;padding:13px 16px;border:1px solid #dce7f5;border-radius:11px;background:#fafdff}
+.client-form-intro-icon{display:grid;place-items:center;flex:none;width:38px;height:38px;border-radius:10px;background:#e8f1ff;color:#2867b5;font-size:16px}
+.client-form-intro>div{min-width:0}
+.client-form-intro strong{display:block;color:#2a3e56;font-size:13px}
+.client-form-intro p{margin:3px 0 0;color:#718197;font-size:11px;line-height:1.4}
+.client-form-section{width:100%;max-width:920px;margin:0 auto;border:1px solid #e1e8f0;border-radius:12px;background:#fff;overflow:hidden}
+.client-form-section>summary{display:flex;align-items:center;gap:12px;min-height:66px;padding:11px 16px;cursor:pointer;list-style:none}
+.client-form-section>summary::-webkit-details-marker{display:none}
+.client-form-section>summary:hover{background:#fbfcfe}
+.client-form-section-number{display:grid;place-items:center;flex:none;width:29px;height:29px;border-radius:9px;background:#f0f4f8;color:#536a84;font-size:12px;font-weight:750}
+.client-form-section-copy{display:flex;flex:1 1 auto;flex-direction:column;gap:3px;min-width:0}
+.client-form-section-copy strong{color:#2a3d54;font-size:13px;font-weight:750}
+.client-form-section-copy small{color:#7c8b9d;font-size:10px}
+.client-form-section-chevron{color:#8292a4;font-size:12px;transition:transform .15s ease}
+.client-form-section[open] .client-form-section-chevron{transform:rotate(180deg)}
+.client-form-section-fields{padding:0 16px 18px;margin:0}
+.client-form-section[open]>summary{border-bottom:1px solid #edf0f4;margin-bottom:16px}
+@media(max-width:600px){
+ .client-form-body{padding:10px!important}
+ .client-form-intro{align-items:flex-start;padding:12px}
+ .client-form-section>summary{min-height:60px;padding:10px 12px}
+ .client-form-section-fields{padding:0 12px 14px}
+}

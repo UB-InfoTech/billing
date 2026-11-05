@@ -12,6 +12,7 @@ const FILTERS=[
  {key:"overdue",label:"Overdue",status:"open",bucket:"overdue"},
  {key:"today",label:"Due today",status:"open",bucket:"today"},
  {key:"upcoming",label:"Upcoming",status:"open",bucket:"upcoming"},
+ {key:"no_date",label:"No due date",status:"open",bucket:"no_date"},
  {key:"completed",label:"Completed",status:"completed",bucket:"all"}
 ];
 const todayRange=()=>{
@@ -143,7 +144,7 @@ export default function ClientFollowUps(){
     <div className="client-followup-toolbar">
      <div className="client-followup-tabs" role="group" aria-label="Filter follow-ups">
       {FILTERS.map(item=>{
-       const count=item.key==="all"?summary.open:item.key==="overdue"?summary.overdue:item.key==="today"?summary.dueToday:item.key==="upcoming"?summary.upcoming:summary.completed;
+       const count=item.key==="all"?summary.open:item.key==="overdue"?summary.overdue:item.key==="today"?summary.dueToday:item.key==="upcoming"?summary.upcoming:item.key==="no_date"?summary.noDate:summary.completed;
        return <button type="button" key={item.key} className={filter===item.key?"is-active":""} onClick={()=>{setFilter(item.key);setPage(1);}}>
         {item.label}<span className="client-followup-tab-count">{count}</span>
        </button>;

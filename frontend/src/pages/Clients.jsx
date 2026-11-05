@@ -104,15 +104,13 @@ function Clients() {
     const params=new URLSearchParams(searchParams);
     params.delete("openClient");
     setSearchParams(params,{replace:true});
-    let cancelled=false;
     axios.get(linkone+"/api/clients/"+encodeURIComponent(clientId),{
       headers:{"x-auth-token":localStorage.getItem("token")||""}
     }).then(response=>{
-      if(!cancelled)setViewingClient(response.data);
+      setViewingClient(response.data);
     }).catch(error=>{
-      if(!cancelled)setPageMessage(error.response?.data?.message||"That customer profile could not be opened.");
+      setPageMessage(error.response?.data?.message||"That customer profile could not be opened.");
     });
-    return()=>{cancelled=true;};
   },[searchParams,setSearchParams,linkone]);
 
   const clientFormConfig=useFormConfiguration("clients.form",CLIENT_FORM_FIELDS);

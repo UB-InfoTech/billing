@@ -56,6 +56,7 @@ export default function ClientActivityPanel({clientId,apiBase}){
  const [error,setError]=useState("");
  const [filter,setFilter]=useState("all");
  const [limit,setLimit]=useState(150);
+ const [hasMore,setHasMore]=useState(false);
  const [type,setType]=useState("note");
  const [subject,setSubject]=useState("");
  const [description,setDescription]=useState("");
@@ -72,6 +73,7 @@ export default function ClientActivityPanel({clientId,apiBase}){
     params:{limit}
    });
    setActivities(response.data?.activities||[]);
+   setHasMore(Boolean(response.data?.hasMore));
   }catch(loadError){
    setError(loadError.response?.data?.message||"Customer activity could not be loaded. Please try again.");
   }finally{setLoading(false);}
@@ -215,7 +217,7 @@ export default function ClientActivityPanel({clientId,apiBase}){
        })}
       </div>
      )}
-     {!loading&&activities.length>=limit&&(
+     {!loading&&hasMore&&(
       <button type="button" className="btn btn-sm btn-light border client-activity-load-more" onClick={()=>setLimit(current=>Math.min(500,current+150))} disabled={limit>=500}>
        {limit>=500?"Showing up to 500 entries":"Load older activity"}
       </button>

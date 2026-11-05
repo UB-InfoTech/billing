@@ -23,7 +23,8 @@ test("combines interactions, invoices, payments, credit notes and expenses in ne
  });
  const types=result.activities.map(item=>item.type);
  for(const type of ["client_created","invoice_created","invoice_status","payment_added","credit_note_posted","credit_adjustment","call","expense_linked","calendar_event"])assert.ok(types.includes(type),type);
- assert.equal(result.activities[0].type,"expense_linked");
+ assert.equal(result.activities[0].type,"calendar_event");
+ assert.ok(result.activities.some(item=>item.type==="expense_linked"));
  assert.equal(result.hasMore,false);
 });
 

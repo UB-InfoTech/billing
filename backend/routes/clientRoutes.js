@@ -171,7 +171,17 @@ router.get("/:id",auth,async(req,res)=>{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid client ID."});
     const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)}).lean();
     if(!client)return res.status(404).json({message:"Client not found"});
-    res.json(client);
+    const [lastActivity,openFollowUpCount,nextFollowUp]=await Promise.all([
+      ClientActivity.findOne({clientId:client._id,createdBy:owner(req)}).sort({occurredAt:-1}).select("occurredAt").lean(),
+      ClientActivity.countDocuments({clientId:client._id,createdBy:owner(req),type:{$in:["task","follow_up"]},status:"open"}),
+      ClientActivity.findOne({clientId:client._id,createdBy:owner(req),type:{$in:["task","follow_up"]},status:"open",dueAt:{$ne:null}}).sort({dueAt:1}).select("dueAt").lean()
+    ]);
+    return res.json({
+      ...client,
+      lastCrmActivityAt:lastActivity?.occurredAt||null,
+      openFollowUpCount,
+      nextFollowUpAt:nextFollowUp?.dueAt||null
+    });
   }catch(error){res.status(500).json({message:error.message});}
 });
 

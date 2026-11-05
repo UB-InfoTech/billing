@@ -87,6 +87,12 @@ test("client activity APIs preserve business ownership and allow task completion
   assert.equal(hiddenFollowUps.response.status,200);
   assert.equal(hiddenFollowUps.payload.activities.length,0);
 
+  const profile=await request("/clients/"+clientId);
+  assert.equal(profile.response.status,200,JSON.stringify(profile.payload));
+  assert.equal(profile.payload.openFollowUpCount,1);
+  assert.ok(profile.payload.nextFollowUpAt);
+  assert.ok(profile.payload.lastCrmActivityAt);
+
   const list=await request("/clients/"+clientId+"/activities");
   assert.equal(list.response.status,200,JSON.stringify(list.payload));
   assert.ok(list.payload.activities.some(item=>item.title==="Design discussion"));

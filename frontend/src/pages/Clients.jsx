@@ -30,6 +30,7 @@ function Clients() {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [viewingClient,setViewingClient]=useState(null);
+  const [clientProfileTab,setClientProfileTab]=useState("activity");
   const [statementFor,setStatementFor]=useState(null);
   const [statementData,setStatementData]=useState(null);
   const [statementLoading,setStatementLoading]=useState(false);
@@ -107,6 +108,7 @@ function Clients() {
     axios.get(linkone+"/api/clients/"+encodeURIComponent(clientId),{
       headers:{"x-auth-token":localStorage.getItem("token")||""}
     }).then(response=>{
+      setClientProfileTab("activity");
       setViewingClient(response.data);
     }).catch(error=>{
       setPageMessage(error.response?.data?.message||"That customer profile could not be opened.");
@@ -228,6 +230,10 @@ function Clients() {
     setStatementTo("");
     setViewingClient(null);
     fetchCustomerStatement(client,"","");
+  };
+  const openClientProfile=client=>{
+    setClientProfileTab("activity");
+    setViewingClient(client);
   };
   const closeCustomerStatement=()=>{
     statementRequestRef.current+=1;
@@ -621,43 +627,44 @@ function Clients() {
         <div className="py-2">
           <div className="card p-3">
             <div className="row g-2 align-items-center">
-              <div className="col-lg-6">
+              <div className="col-lg-8">
                 <label className="visually-hidden" htmlFor="customer-search">Search customers</label>
-                <div className="input-group">
+                <div className="input-group customer-search-input">
                   <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
-                  <input id="customer-search" type="search" className="form-control" placeholder="Search company, name, phone or GST" value={search} onChange={event=>{setSearch(event.target.value);setCurrentPage(1);}}/>
+                  <input id="customer-search" type="search" className="form-control" placeholder="Search by customer, phone, email or GST number" value={search} onChange={event=>{setSearch(event.target.value);setCurrentPage(1);}}/>
                   {search&&<button type="button" className="btn btn-light border" onClick={()=>{setSearch("");setCurrentPage(1);}}>Clear</button>}
                 </div>
               </div>
-              <div className="col-sm-6 col-lg-3">
-                <select aria-label="Filter by business type" className="form-select" value={filters.businessType} onChange={event=>{setFilters(prev=>({...prev,businessType:event.target.value}));setCurrentPage(1);}}>
-                  <option value="">All customer types</option>
-                  <option value="Retail">Retail</option>
-                  <option value="Wholesale">Wholesale</option>
-                  <option value="Other">Other</option>
-                  <option value="Manufacturer">Manufacturer</option>
-                  <option value="Trader">Trader</option>
-                  <option value="Supplier">Supplier</option>
-                </select>
-              </div>
-              <div className="col-sm-6 col-lg-3">
-                <select aria-label="Filter by status" className="form-select" value={filters.accountStatus} onChange={event=>{setFilters(prev=>({...prev,accountStatus:event.target.value}));setCurrentPage(1);}}>
-                  <option value="">All statuses</option>
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
+              <div className="col-lg-4">
+                <select aria-label="Filter by customer status" className="form-select" value={filters.accountStatus} onChange={event=>{setFilters(prev=>({...prev,accountStatus:event.target.value}));setCurrentPage(1);}}>
+                  <option value="">All customers</option>
+                  <option value="Active">Active only</option>
+                  <option value="Inactive">Inactive only</option>
                 </select>
               </div>
             </div>
 
             <details className="filter-details mt-3">
-              <summary><i className="bi bi-sliders me-2"></i>More filters <span className="text-secondary fw-normal">(optional)</span></summary>
+              <summary><i className="bi bi-sliders me-2"></i>More filters</summary>
               <div className="row g-2 align-items-end pt-3">
-                <div className="col-sm-6">
-                  <label className="form-label small" htmlFor="customer-min-revenue">Minimum total sales (₹)</label>
+                <div className="col-sm-6 col-lg-4">
+                  <label className="form-label small" htmlFor="customer-type-filter">Customer type</label>
+                  <select id="customer-type-filter" className="form-select" value={filters.businessType} onChange={event=>{setFilters(prev=>({...prev,businessType:event.target.value}));setCurrentPage(1);}}>
+                    <option value="">All types</option>
+                    <option value="Retail">Retail</option>
+                    <option value="Wholesale">Wholesale</option>
+                    <option value="Manufacturer">Manufacturer</option>
+                    <option value="Trader">Trader</option>
+                    <option value="Supplier">Supplier</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div className="col-sm-6 col-lg-4">
+                  <label className="form-label small" htmlFor="customer-min-revenue">Minimum sales (₹)</label>
                   <input id="customer-min-revenue" type="number" min="0" className="form-control" placeholder="No minimum" value={filters.minRevenue} onChange={event=>{setFilters(prev=>({...prev,minRevenue:event.target.value}));setCurrentPage(1);}}/>
                 </div>
-                <div className="col-sm-6">
-                  <label className="form-label small" htmlFor="customer-max-revenue">Maximum total sales (₹)</label>
+                <div className="col-sm-6 col-lg-4">
+                  <label className="form-label small" htmlFor="customer-max-revenue">Maximum sales (₹)</label>
                   <input id="customer-max-revenue" type="number" min="0" className="form-control" placeholder="No maximum" value={filters.maxRevenue} onChange={event=>{setFilters(prev=>({...prev,maxRevenue:event.target.value}));setCurrentPage(1);}}/>
                 </div>
               </div>
@@ -677,28 +684,28 @@ function Clients() {
               emptyText={clientsLoadError?"Customer records could not be loaded. Try again above.":hasActiveClientFilters?"No customers match these filters. Use Clear filters to see everyone.":"No customers yet. Add a customer so their details are ready when you create an invoice."}
               getRowKey={client => client._id}
               columns={[
-                { key:"__rowNumber", label:"#", locked:false, render:(_row,index)=>index+1 },
                 { key:"companyName", label:"Customer", sortKey:"companyName", render:client=>(
                   <div className="customer-crm-name">
                     <strong>{client.companyName||client.name||"Unnamed customer"}</strong>
-                    <small>{client.lastCrmActivityAt?"Last CRM activity · "+new Date(client.lastCrmActivityAt).toLocaleDateString("en-IN"):"No CRM activity logged yet"}</small>
+                    <small>{[client.name,client.phone].filter(Boolean).join(" · ")||"Contact details not added"}</small>
+                    <small>{client.lastCrmActivityAt?"Last activity "+new Date(client.lastCrmActivityAt).toLocaleDateString("en-IN"):"No activity logged yet"}</small>
                   </div>
                 ) },
-                { key:"phone", label:"Phone", sortKey:"phone" },
+                { key:"phone", label:"Phone", sortKey:"phone", visible:false },
                 { key:"address", label:"Address", visible:false },
                 { key:"gstNumber", label:"GST No.", visible:false },
                 { key:"businessType", label:"Business Type", sortKey:"businessType", visible:false },
-                { key:"paymentTerms", label:"Payment Terms", visible:false, render:client=>`${client.paymentTerms||""}${client.paymentTerms!=="Advance"&&client.paymentTerms?" days":""}` },
-                { key:"discountRate", label:"Dis%", visible:false, render:client=>`${client.discountRate??0} %` },
-                { key:"orderCount", label:"Orders", sortKey:"orderCount", visible:false },
+                { key:"paymentTerms", label:"Payment Terms", visible:false, render:client=>String(client.paymentTerms||"")+(client.paymentTerms!=="Advance"&&client.paymentTerms?" days":"") },
+                { key:"discountRate", label:"Discount", visible:false, render:client=>String(client.discountRate??0)+"%" },
+                { key:"orderCount", label:"Invoices", sortKey:"orderCount", visible:false },
                 { key:"nextFollowUpAt", label:"Next follow-up", sortKey:"nextFollowUpAt", render:client=>{
-                  if(!client.nextFollowUpAt)return <span className="small text-secondary">{client.openFollowUpCount?"Open · no due date":"—"}</span>;
+                  if(!client.nextFollowUpAt)return <span className="customer-next-followup-empty">{client.openFollowUpCount?client.openFollowUpCount+" open":"Not scheduled"}</span>;
                   const due=new Date(client.nextFollowUpAt);
                   const overdue=due<new Date();
-                  return <span className={overdue?"text-danger fw-semibold":"small"}>{overdue?"Overdue · ":""}{due.toLocaleDateString("en-IN")}</span>;
+                  return <span className={overdue?"customer-next-followup is-overdue":"customer-next-followup"}>{overdue?"Overdue · ":""}{due.toLocaleDateString("en-IN")}</span>;
                 } },
-                { key:"totalRevenue", label:"Total Revenue", sortKey:"totalRevenue", render:client=>`₹${Number(client.totalRevenue||0).toFixed(2)}` },
-                { key:"accountStatus", label:"A/C Status", render:client=><span className={`badge ${client.accountStatus==="Active"?"bg-success":"bg-danger"}`}>{client.accountStatus}</span> },
+                { key:"totalRevenue", label:"Total billed", sortKey:"totalRevenue", render:client=><span className="customer-total-billed">₹{Number(client.totalRevenue||0).toLocaleString("en-IN",{maximumFractionDigits:2})}</span> },
+                { key:"accountStatus", label:"Status", render:client=><span className={client.accountStatus==="Inactive"?"customer-status is-inactive":"customer-status"}>{client.accountStatus||"Active"}</span> },
                 { key:"notes", label:"Notes", visible:false },
               ]}
               onSort={handleSort}
@@ -707,12 +714,8 @@ function Clients() {
                 locked:true,
                 render:client=>(
                   <div className="d-flex gap-1 justify-content-end">
-                    <button className="btn btn-sm btn-light border" onClick={()=>setViewingClient(client)} title="Open customer profile and activity"><i className="bi bi-person-lines-fill me-1"></i>Open</button>
-                    <button className="btn btn-sm btn-light border" onClick={()=>handleEditClient(client)} title="Edit customer">
-                      <i className="bi bi-pencil me-1"></i>Edit
-                    </button>
-                    <button className="btn btn-sm btn-outline-danger" onClick={()=>handleDeleteClient(client._id)} title="Delete customer">
-                      <i className="bi bi-trash me-1"></i>Delete
+                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>openClientProfile(client)}>
+                      Open profile <i className="bi bi-arrow-right ms-1"></i>
                     </button>
                   </div>
                 )
@@ -768,45 +771,118 @@ function Clients() {
           </div>
 
           {viewingClient&&(
-            <div className="modal show d-block customer-view-backdrop client-crm-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-label="Customer CRM profile">
-              <div className="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable client-crm-dialog">
-                <div className="modal-content customer-view-modal border-0">
-                  <div className="modal-header customer-view-toolbar">
-                    <div className="min-w-0"><div className="small text-primary text-uppercase fw-semibold mb-1">CUSTOMER PROFILE</div><h5 className="modal-title fw-bold mb-1">{viewingClient.companyName||viewingClient.name||"Customer details"}</h5><div className="small text-secondary">Activities, conversations, invoices, payments and follow-ups for this customer.</div></div>
-                    <div className="d-flex gap-2"><button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>{handleEditClient(viewingClient);setViewingClient(null);}}><i className="bi bi-pencil me-1"></i>Edit</button><button type="button" className="btn-close" aria-label="Close customer details" onClick={()=>setViewingClient(null)} /></div>
-                  </div>
-                  <div className="modal-body customer-view-body client-crm-body">
-                    <ClientActivityPanel clientId={viewingClient._id} apiBase={linkone}/>
-                    <div className="client-crm-details-heading"><h6 className="mb-0 fw-bold">Customer details</h6><span className="small text-secondary">Contact information and saved form fields</span></div>
-                    <article className="customer-a4-sheet customer-a4-read-sheet">
-                      <div className="customer-record-title"><span className="customer-record-avatar"><i className="bi bi-person-vcard"></i></span><div><div className="small text-secondary">CUSTOMER / BUSINESS</div><h3>{viewingClient.companyName||viewingClient.name||"Unnamed customer"}</h3><div className="small text-secondary">{viewingClient.phone||"No phone added"}{viewingClient.email?" · "+viewingClient.email:""}</div></div></div>
-                      {clientFormSections.map(section=>{
-                         const fields=section.fields.filter(field=>getFieldState(field,{...viewingClient,...(viewingClient.customFields||{})}).visible);
-                         if(!fields.length)return null;
-                         return (
-                           <section key={section.key} className="customer-record-form-section">
-                             <div className="customer-record-section-title">{section.label}</div>
-                             <div className="row g-3">
-                               {fields.map(field=>{
-                                 const value=(field.custom?viewingClient.customFields?.[field.key]??viewingClient[field.key]:viewingClient[field.key])??field.defaultValue;
-                                 const display=Array.isArray(value)?value.join(", "):typeof value==="boolean"?(value?"Yes":"No"):value===null||value===undefined||value===""?"—":field.key==="paymentTerms"&&value!=="Advance"?value+" days":field.key==="discountRate"?value+"%":String(value);
-                                 return <div className={`col-12 col-sm-${field.width||6}`} key={field.key}><div className="customer-record-field"><div className="customer-record-label">{field.label}</div><div className="customer-record-value">{display}</div></div></div>;
-                               })}
-                             </div>
-                           </section>
-                         );
-                       })}
-                       <div className="customer-record-section-title mt-4">Account summary</div>
-                      <div className="row g-3"><div className="col-6"><div className="customer-record-field"><div className="customer-record-label">Orders</div><div className="customer-record-value">{Number(viewingClient.orderCount||0)}</div></div></div><div className="col-6"><div className="customer-record-field"><div className="customer-record-label">Total billed</div><div className="customer-record-value">₹{Number(viewingClient.totalRevenue||0).toFixed(2)}</div></div></div></div>
-                    </article>
-                  </div>
-                  <div className="modal-footer customer-view-footer"><button type="button" className="btn btn-outline-primary" onClick={()=>openCustomerStatement(viewingClient)}><i className="bi bi-journal-text me-2"></i>Account statement</button><button type="button" className="btn btn-light border" onClick={()=>setViewingClient(null)}>Close</button><button type="button" className="btn btn-primary" onClick={()=>window.print()}><i className="bi bi-printer me-2"></i>Print details</button></div>
+            <div className="modal show d-block customer-view-backdrop client-crm-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-label="Customer profile">
+              <div className="modal-dialog client-crm-dialog">
+                <div className="modal-content customer-view-modal client-crm-shell border-0">
+                  <header className="client-profile-header">
+                    <button type="button" className="client-profile-back" onClick={()=>setViewingClient(null)}>
+                      <i className="bi bi-arrow-left"></i><span>Customers</span>
+                    </button>
+                    <div className="client-profile-identity">
+                      <span className="client-profile-avatar">{String(viewingClient.companyName||viewingClient.name||"C").trim().charAt(0).toUpperCase()}</span>
+                      <div className="min-w-0">
+                        <div className="client-profile-name-line">
+                          <h2>{viewingClient.companyName||viewingClient.name||"Customer"}</h2>
+                          <span className={"client-profile-status "+(viewingClient.accountStatus==="Inactive"?"is-inactive":"")}>{viewingClient.accountStatus||"Active"}</span>
+                        </div>
+                        <div className="client-profile-contact-line">
+                          {viewingClient.name&&viewingClient.companyName&&<span>{viewingClient.name}</span>}
+                          {viewingClient.phone&&<a href={"tel:"+viewingClient.phone}><i className="bi bi-telephone"></i>{viewingClient.phone}</a>}
+                          {viewingClient.email&&<a href={"mailto:"+viewingClient.email}><i className="bi bi-envelope"></i>{viewingClient.email}</a>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="client-profile-actions">
+                      <button type="button" className="btn btn-light border" onClick={()=>openCustomerStatement(viewingClient)}>
+                        <i className="bi bi-journal-text"></i><span>Statement</span>
+                      </button>
+                      <button type="button" className="btn btn-primary" onClick={()=>{handleEditClient(viewingClient);setViewingClient(null);}}>
+                        <i className="bi bi-pencil"></i><span>Edit customer</span>
+                      </button>
+                      <button type="button" className="btn btn-light border client-profile-close" aria-label="Close customer profile" onClick={()=>setViewingClient(null)}>
+                        <i className="bi bi-x-lg"></i>
+                      </button>
+                    </div>
+                  </header>
+
+                  <section className="client-profile-metrics" aria-label="Customer summary">
+                    <div><span>Total billed</span><strong>₹{Number(viewingClient.totalRevenue||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></div>
+                    <div><span>Invoices</span><strong>{Number(viewingClient.orderCount||0).toLocaleString("en-IN")}</strong></div>
+                    <div><span>Outstanding</span><strong>₹{Number(viewingClient.outstanding_balance||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2})}</strong></div>
+                    <div><span>Open reminders</span><strong>{Number(viewingClient.openFollowUpCount||0).toLocaleString("en-IN")}</strong></div>
+                  </section>
+
+                  <nav className="client-profile-tabs" aria-label="Customer profile sections">
+                    <button type="button" className={clientProfileTab==="activity"?"is-active":""} onClick={()=>setClientProfileTab("activity")}><i className="bi bi-clock-history"></i>Activity</button>
+                    <button type="button" className={clientProfileTab==="overview"?"is-active":""} onClick={()=>setClientProfileTab("overview")}><i className="bi bi-grid"></i>Overview</button>
+                    <button type="button" className={clientProfileTab==="details"?"is-active":""} onClick={()=>setClientProfileTab("details")}><i className="bi bi-person-vcard"></i>All details</button>
+                  </nav>
+
+                  <main className="modal-body client-profile-content">
+                    {clientProfileTab==="activity"&&<ClientActivityPanel clientId={viewingClient._id} apiBase={linkone}/>}
+
+                    {clientProfileTab==="overview"&&(
+                      <div className="client-profile-overview">
+                        <section className="client-profile-card">
+                          <div className="client-profile-card-heading"><h3>Contact information</h3><span>How to reach this customer</span></div>
+                          <div className="client-profile-contact-grid">
+                            <div><span>Contact person</span><strong>{viewingClient.name||"Not added"}</strong></div>
+                            <div><span>Phone number</span>{viewingClient.phone?<a href={"tel:"+viewingClient.phone}>{viewingClient.phone}</a>:<strong>Not added</strong>}</div>
+                            <div><span>Email address</span>{viewingClient.email?<a href={"mailto:"+viewingClient.email}>{viewingClient.email}</a>:<strong>Not added</strong>}</div>
+                            <div><span>GST number</span><strong>{viewingClient.gstNumber||"Not added"}</strong></div>
+                            <div className="is-wide"><span>Address</span><strong>{[viewingClient.address,viewingClient.city,viewingClient.state,viewingClient.pinCode].filter(Boolean).join(", ")||"No address saved"}</strong></div>
+                          </div>
+                          <div className="client-profile-quick-links">
+                            {viewingClient.phone&&<a className="btn btn-light border" href={"tel:"+viewingClient.phone}><i className="bi bi-telephone"></i>Call</a>}
+                            {viewingClient.email&&<a className="btn btn-light border" href={"mailto:"+viewingClient.email}><i className="bi bi-envelope"></i>Email</a>}
+                            {viewingClient.phone&&<a className="btn btn-light border" href={"https://wa.me/"+String(viewingClient.phone).replace(/\D/g,"")} target="_blank" rel="noreferrer"><i className="bi bi-whatsapp"></i>WhatsApp</a>}
+                          </div>
+                        </section>
+                        <section className="client-profile-card">
+                          <div className="client-profile-card-heading"><h3>Business relationship</h3><span>Account at a glance</span></div>
+                          <div className="client-profile-contact-grid">
+                            <div><span>Customer type</span><strong>{viewingClient.businessType||"Not specified"}</strong></div>
+                            <div><span>Payment terms</span><strong>{viewingClient.paymentTerms?(viewingClient.paymentTerms==="Advance"?"Advance":viewingClient.paymentTerms+" days"):"Not specified"}</strong></div>
+                            <div><span>Default discount</span><strong>{Number(viewingClient.discountRate||0)}%</strong></div>
+                            <div><span>Customer since</span><strong>{viewingClient.createdAt?new Date(viewingClient.createdAt).toLocaleDateString("en-IN"):"—"}</strong></div>
+                            <div className="is-wide"><span>Next follow-up</span><strong>{viewingClient.nextFollowUpAt?new Date(viewingClient.nextFollowUpAt).toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"}):"No follow-up scheduled"}</strong></div>
+                          </div>
+                          {viewingClient.notes&&<div className="client-profile-notes"><span>Notes</span><p>{viewingClient.notes}</p></div>}
+                        </section>
+                      </div>
+                    )}
+
+                    {clientProfileTab==="details"&&(
+                      <div className="client-profile-details">
+                        {clientFormSections.map(section=>{
+                          const fields=section.fields.filter(field=>getFieldState(field,{...viewingClient,...(viewingClient.customFields||{})}).visible);
+                          if(!fields.length)return null;
+                          return (
+                            <section key={section.key} className="client-profile-card">
+                              <div className="client-profile-card-heading"><h3>{section.label}</h3></div>
+                              <div className="client-profile-contact-grid">
+                                {fields.map(field=>{
+                                  const value=(field.custom?viewingClient.customFields?.[field.key]??viewingClient[field.key]:viewingClient[field.key])??field.defaultValue;
+                                  const display=Array.isArray(value)?value.join(", "):typeof value==="boolean"?(value?"Yes":"No"):value===null||value===undefined||value===""?"—":field.key==="paymentTerms"&&value!=="Advance"?value+" days":field.key==="discountRate"?value+"%":String(value);
+                                  return <div key={field.key} className={Number(field.width||6)>=12?"is-wide":""}><span>{field.label}</span><strong>{display}</strong></div>;
+                                })}
+                              </div>
+                            </section>
+                          );
+                        })}
+                        <div className="client-profile-danger-zone">
+                          <div><strong>Remove this customer</strong><span>Only possible when no invoices or history depend on this record.</span></div>
+                          <button type="button" className="btn btn-outline-danger" onClick={()=>handleDeleteClient(viewingClient._id)}><i className="bi bi-trash"></i>Delete customer</button>
+                        </div>
+                      </div>
+                    )}
+                  </main>
                 </div>
               </div>
             </div>
           )}
 
-          {statementFor&&(
+                    {statementFor&&(
             <div className="modal show d-block customer-view-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-label="Customer account statement">
               <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable customer-statement-dialog">
                 <div className="modal-content customer-view-modal customer-statement-modal border-0">

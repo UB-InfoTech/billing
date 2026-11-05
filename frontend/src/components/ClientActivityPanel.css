@@ -185,3 +185,14 @@
  .customer-page .customer-overview-card{gap:9px;padding:12px}
  .customer-page .customer-overview-card strong{font-size:18px}
 }
+
+.client-profile-detail-actions{display:flex;justify-content:flex-end;margin-top:14px}
+.client-profile-detail-actions .btn{font-size:12px;font-weight:650}
+@media print{
+ .client-crm-backdrop{position:absolute!important;display:block!important;overflow:visible!important;background:#fff!important}
+ .customer-view-modal.client-crm-shell{position:absolute!important;display:block!important;width:210mm!important;height:auto!important;max-height:none!important;overflow:visible!important;background:#fff!important}
+ .client-profile-header,.client-profile-metrics,.client-profile-tabs,.client-profile-danger-zone,.client-profile-detail-actions{display:none!important}
+ .client-profile-content{display:block!important;overflow:visible!important;padding:0!important;background:#fff!important}
+ .client-profile-details{display:block!important;max-width:none!important}
+ .client-profile-card{margin-bottom:12px;border:1px solid #dfe5eb!important;box-shadow:none!important;break-inside:avoid}
+}

@@ -4,6 +4,8 @@ const mongoose=require("mongoose");
 const Client=require("../models/Client");
 const Order=require("../models/Order2");
 const CreditNote=require("../models/CreditNote");
+const ClientActivity=require("../models/ClientActivity");
+const {buildClientActivityTimeline}=require("../utils/clientActivityTimeline");
 const Expense=require("../models/Expense");
 const {buildClientCreditBalanceMutation}=require("../utils/clientCreditBalance");
 const {assertClientIdentity,hasClientIdentity}=require("../utils/clientIdentity");
@@ -381,6 +383,82 @@ router.get("/:id/transactions",auth,async(req,res)=>{
   }catch(error){res.status(500).json({message:error.message});}
 });
 
+
+router.get("/:id/activities",auth,async(req,res)=>{
+ try{
+  if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid client ID."});
+  const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)}).select("_id name companyName createdAt creditBalanceHistory").lean();
+  if(!client)return res.status(404).json({message:"Client not found."});
+  const rawLimit=Number(req.query.limit||150);
+  const limit=Number.isFinite(rawLimit)?Math.min(500,Math.max(1,Math.floor(rawLimit))):150;
+  const sourceLimit=1000;
+  const [manualActivities,orders,expenses]=await Promise.all([
+   ClientActivity.find({clientId:client._id,createdBy:owner(req)}).sort({occurredAt:-1}).limit(sourceLimit).lean(),
+   Order.find({createdBy:owner(req),$or:[
+    {clientId:client._id},
+    {"financialHistory.previous.clientId":client._id},
+    {"financialHistory.next.clientId":client._id}
+   ]}).select("orderNumber orderDate createdAt updatedAt clientId statusHistory payments paymentHistory financialHistory totalAmount roundOffFinalRevenue")
+     .sort({createdAt:-1}).limit(sourceLimit).lean(),
+   Expense.find({clientId:client._id,createdBy:owner(req)}).select("title description category amount date createdAt orderId")
+     .sort({date:-1,createdAt:-1}).limit(sourceLimit).lean()
+  ]);
+  const orderIds=orders.map(order=>order._id);
+  const creditNotes=await CreditNote.find({createdBy:owner(req),$or:[
+   {clientId:client._id},{originalOrderId:{$in:orderIds}}
+  ]}).select("creditNoteNumber originalInvoiceNumber originalOrderId clientId reason status totals settlementHistory creditNoteDate createdAt")
+    .sort({creditNoteDate:-1,createdAt:-1}).limit(sourceLimit).lean();
+  return res.json(buildClientActivityTimeline({
+   client,manualActivities,orders,creditNotes,expenses,limit,
+   sourceTruncated:manualActivities.length===sourceLimit||orders.length===sourceLimit||expenses.length===sourceLimit||creditNotes.length===sourceLimit
+  }));
+ }catch(error){
+  console.error("Client activity timeline error:",error);
+  return res.status(500).json({message:"Unable to load this customer's activity."});
+ }
+});
+
+router.post("/:id/activities",auth,async(req,res)=>{
+ try{
+  if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid client ID."});
+  const client=await Client.findOne({_id:req.params.id,createdBy:owner(req)}).select("_id");
+  if(!client)return res.status(404).json({message:"Client not found."});
+  const types=["note","call","email","meeting","follow_up","task","whatsapp","other"];
+  const type=String(req.body?.type||"note");
+  const subject=String(req.body?.subject||"").trim();
+  const description=String(req.body?.description||"").trim();
+  if(!types.includes(type))return res.status(400).json({message:"Choose a valid activity type."});
+  if(!subject)return res.status(400).json({message:"Add a short title for this activity."});
+  if(subject.length>160||description.length>4000)return res.status(400).json({message:"The activity details are too long."});
+  const occurredAt=req.body?.occurredAt?new Date(req.body.occurredAt):new Date();
+  const dueAt=req.body?.dueAt?new Date(req.body.dueAt):null;
+  if(Number.isNaN(occurredAt.getTime())||(req.body?.dueAt&&Number.isNaN(dueAt?.getTime()))){
+   return res.status(400).json({message:"Enter a valid activity date."});
+  }
+  const isFollowUp=["task","follow_up"].includes(type);
+  const activity=await ClientActivity.create({
+   clientId:client._id,createdBy:owner(req),type,subject,description,occurredAt,
+   dueAt:isFollowUp?dueAt:null,status:isFollowUp?"open":"completed"
+  });
+  return res.status(201).json(activity);
+ }catch(error){return res.status(400).json({message:error.message||"Unable to save this activity."});}
+});
+
+router.patch("/:id/activities/:activityId",auth,async(req,res)=>{
+ try{
+  if(!mongoose.isValidObjectId(req.params.id)||!mongoose.isValidObjectId(req.params.activityId))return res.status(400).json({message:"Invalid activity reference."});
+  const status=String(req.body?.status||"");
+  if(!["open","completed","cancelled"].includes(status))return res.status(400).json({message:"Choose a valid follow-up status."});
+  const activity=await ClientActivity.findOne({_id:req.params.activityId,clientId:req.params.id,createdBy:owner(req)});
+  if(!activity)return res.status(404).json({message:"Activity not found."});
+  if(!["task","follow_up"].includes(activity.type))return res.status(400).json({message:"Only tasks and follow-ups have a completion status."});
+  activity.status=status;
+  activity.completedAt=status==="completed"?new Date():null;
+  await activity.save();
+  return res.json(activity);
+ }catch(error){return res.status(400).json({message:error.message||"Unable to update this follow-up."});}
+});
+
 router.delete("/:id",auth,async(req,res)=>{
   try{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid client ID."});
@@ -390,6 +468,8 @@ router.delete("/:id",auth,async(req,res)=>{
     if(linkedCreditNote)return res.status(409).json({message:"Customer cannot be deleted because Credit Notes are linked to it. Keep the record for accounting history and mark it Inactive instead."});
     const linkedExpense=await Expense.exists({clientId:req.params.id,createdBy:owner(req)});
     if(linkedExpense)return res.status(409).json({message:"Customer cannot be deleted because expenses are linked to it. Keep the customer record for history and mark it Inactive instead."});
+    const linkedActivity=await ClientActivity.exists({clientId:req.params.id,createdBy:owner(req)});
+    if(linkedActivity)return res.status(409).json({message:"Customer cannot be deleted because activity history is linked to it. Keep the customer record and mark it Inactive instead."});
     const client=await Client.findOneAndDelete({_id:req.params.id,createdBy:owner(req)});
     if(!client)return res.status(404).json({message:"Client not found"});
     res.json({message:"Client deleted successfully"});

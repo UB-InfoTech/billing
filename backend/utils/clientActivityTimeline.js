@@ -118,6 +118,12 @@ function buildClientActivityTimeline({client,manualActivities=[],orders=[],credi
   description:[expense.title||expense.category,expense.description].filter(Boolean).join(" · "),
   occurredAt:expense.date||expense.createdAt,reference:expense.orderId?"Linked invoice":"Expense",amount:expense.amount
  });
+ for(const event of calendarEvents)add({
+  id:"calendar-event-"+String(event._id),source:"calendar",sourceId:event._id,
+  type:"calendar_event",category:"interaction",title:event.title||"Calendar event",
+  description:"Scheduled customer event"+(event.end?" · Until "+new Date(event.end).toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"}):""),
+  occurredAt:event.start||event.createdAt,reference:"Calendar event"
+ });
  (Array.isArray(client?.creditBalanceHistory)?client.creditBalanceHistory:[]).forEach((item,index)=>{
   const amount=round2(item.amount);
   add({

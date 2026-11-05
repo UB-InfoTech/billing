@@ -8,6 +8,7 @@ process.env.JWT_SECRET ||= "client-activity-integration-tests-only-secret";
 const app=require("../server");
 const Client=require("../models/Client");
 const ClientActivity=require("../models/ClientActivity");
+const CalendarEvent=require("../models/Calendar");
 
 const mongoUri=process.env.MONGO_URI;
 
@@ -51,6 +52,13 @@ test("client activity APIs preserve business ownership and allow task completion
    return {response,payload};
   };
 
+  const createCalendar=await request("/events",{
+   method:"POST",
+   body:{title:"Customer review meeting",start:"2026-11-05T10:00:00.000Z",end:"2026-11-05T11:00:00.000Z",clientId}
+  });
+  assert.equal(createCalendar.response.status,201,JSON.stringify(createCalendar.payload));
+  assert.equal(String(createCalendar.payload.clientId),String(clientId));
+
   const createNote=await request("/clients/"+clientId+"/activities",{
    method:"POST",
    body:{type:"note",subject:"Design discussion",description:"Shared the new catalogue."}
@@ -73,6 +81,7 @@ test("client activity APIs preserve business ownership and allow task completion
   const list=await request("/clients/"+clientId+"/activities");
   assert.equal(list.response.status,200,JSON.stringify(list.payload));
   assert.ok(list.payload.activities.some(item=>item.title==="Design discussion"));
+  assert.ok(list.payload.activities.some(item=>item.title==="Customer review meeting"));
   const profileUpdate=list.payload.activities.find(item=>item.type==="profile_update");
   assert.ok(profileUpdate);
   assert.ok(profileUpdate.description.includes("Notes"));
@@ -87,6 +96,11 @@ test("client activity APIs preserve business ownership and allow task completion
   assert.equal(complete.payload.status,"completed");
   assert.ok(complete.payload.completedAt);
 
+  const hiddenCalendarCreate=await request("/events",{
+   method:"POST",token:otherToken,
+   body:{title:"Invalid cross-business calendar link",start:"2026-11-05T10:00:00.000Z",end:"2026-11-05T11:00:00.000Z",clientId}
+  });
+  assert.equal(hiddenCalendarCreate.response.status,400);
   const hiddenList=await request("/clients/"+clientId+"/activities",{token:otherToken});
   assert.equal(hiddenList.response.status,404);
   const hiddenCreate=await request("/clients/"+clientId+"/activities",{
@@ -106,6 +120,7 @@ test("client activity APIs preserve business ownership and allow task completion
   if(server)await new Promise(resolve=>server.close(resolve));
   if(ownerId){
    await ClientActivity.deleteMany({createdBy:ownerId});
+   await CalendarEvent.deleteMany({createdBy:ownerId});
    await Client.deleteMany({createdBy:ownerId,name:/Activity Integration/});
   }
   if(mongoose.connection.readyState===1)await mongoose.disconnect();

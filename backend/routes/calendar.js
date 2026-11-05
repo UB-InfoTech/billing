@@ -1,6 +1,7 @@
 const express=require("express");
 const mongoose=require("mongoose");
 const Event=require("../models/Calendar");
+const Client=require("../models/Client");
 const auth=require("../middleware/auth");
 const {applyWorkflows}=require("../utils/workflowEngine");
 const {buildCalendarOverlapQuery}=require("../utils/calendarDateRange");
@@ -64,6 +65,14 @@ const applyConfiguredEventValues=(event,values,customFields,fields)=>{
   }
   event.customFields=customFields;
 };
+const validateEventClientId=async(value,createdBy)=>{
+  const raw=String(value??"").trim();
+  if(!raw)return null;
+  if(!mongoose.isValidObjectId(raw))throw calendarValidationError("Choose a valid customer for this event.");
+  const client=await Client.findOne({_id:raw,createdBy}).select("_id").lean();
+  if(!client)throw calendarValidationError("The selected customer is not available in this business.");
+  return client._id;
+};
 const validDate=value=>{
   const date=new Date(value);
   return Number.isNaN(date.getTime())?null:date;
@@ -86,7 +95,8 @@ router.post("/",auth,async(req,res)=>{
       title:req.body?.title,
       start,
       end,
-      color:req.body?.color??"#3788d8"
+      color:req.body?.color??"#3788d8",
+      clientId:await validateEventClientId(req.body?.clientId,owner(req))
     };
     const prepared=await prepareConfiguredFormValues({
       ownerId:owner(req),
@@ -134,7 +144,8 @@ router.put("/:id",auth,async(req,res)=>{
     const originalValues=event.toObject({depopulate:true});
     const originalCustomFields=plainCustomFields(event.customFields);
     const values={...originalValues};
-    for(const key of ["title","start","end","color"]){
+    if(req.body?.clientId!==undefined)values.clientId=await validateEventClientId(req.body.clientId,owner(req));
+    for(const key of ["title","start","end","color","clientId"]){
       if(req.body?.[key]===undefined)continue;
       if(key==="start"||key==="end"){
         const parsed=validDate(req.body[key]);
@@ -158,13 +169,13 @@ router.put("/:id",auth,async(req,res)=>{
       existingCustomFields:originalCustomFields,
       onlyChangedLookups:true
     });
-    for(const key of ["title","start","end","color"]){
+    for(const key of ["title","start","end","color","clientId"]){
       if(Object.prototype.hasOwnProperty.call(prepared.values,key)){
         values[key]=prepared.values[key];
       }
     }
 
-    for(const key of ["title","start","end","color"]){
+    for(const key of ["title","start","end","color","clientId"]){
       if(Object.prototype.hasOwnProperty.call(values,key))event.set(key,values[key]);
     }
     event.customFields=prepared.customFields;

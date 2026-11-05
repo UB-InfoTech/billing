@@ -7,6 +7,7 @@ const CreditNote=require("../models/CreditNote");
 const ClientActivity=require("../models/ClientActivity");
 const {buildClientActivityTimeline}=require("../utils/clientActivityTimeline");
 const Expense=require("../models/Expense");
+const CalendarEvent=require("../models/Calendar");
 const {buildClientCreditBalanceMutation}=require("../utils/clientCreditBalance");
 const {assertClientIdentity,hasClientIdentity}=require("../utils/clientIdentity");
 const {getInvoiceRevenue}=require("../utils/syncClientData");
@@ -423,7 +424,7 @@ router.get("/:id/activities",auth,async(req,res)=>{
   const rawLimit=Number(req.query.limit||150);
   const limit=Number.isFinite(rawLimit)?Math.min(500,Math.max(1,Math.floor(rawLimit))):150;
   const sourceLimit=1000;
-  const [manualActivities,orders,expenses]=await Promise.all([
+  const [manualActivities,orders,expenses,calendarEvents]=await Promise.all([
    ClientActivity.find({clientId:client._id,createdBy:owner(req)}).sort({occurredAt:-1}).limit(sourceLimit).lean(),
    Order.find({createdBy:owner(req),$or:[
     {clientId:client._id},
@@ -432,7 +433,9 @@ router.get("/:id/activities",auth,async(req,res)=>{
    ]}).select("orderNumber orderDate createdAt updatedAt clientId statusHistory payments paymentHistory financialHistory totalAmount roundOffFinalRevenue")
      .sort({createdAt:-1}).limit(sourceLimit).lean(),
    Expense.find({clientId:client._id,createdBy:owner(req)}).select("title description category amount date createdAt orderId")
-     .sort({date:-1,createdAt:-1}).limit(sourceLimit).lean()
+     .sort({date:-1,createdAt:-1}).limit(sourceLimit).lean(),
+   CalendarEvent.find({clientId:client._id,createdBy:owner(req)}).select("title start end createdAt")
+     .sort({start:-1}).limit(sourceLimit).lean()
   ]);
   const orderIds=orders.map(order=>order._id);
   const creditNotes=await CreditNote.find({createdBy:owner(req),$or:[
@@ -440,8 +443,8 @@ router.get("/:id/activities",auth,async(req,res)=>{
   ]}).select("creditNoteNumber originalInvoiceNumber originalOrderId clientId reason status totals settlementHistory creditNoteDate createdAt")
     .sort({creditNoteDate:-1,createdAt:-1}).limit(sourceLimit).lean();
   return res.json(buildClientActivityTimeline({
-   client,manualActivities,orders,creditNotes,expenses,limit,
-   sourceTruncated:manualActivities.length===sourceLimit||orders.length===sourceLimit||expenses.length===sourceLimit||creditNotes.length===sourceLimit
+   client,manualActivities,orders,creditNotes,expenses,calendarEvents,limit,
+   sourceTruncated:manualActivities.length===sourceLimit||orders.length===sourceLimit||expenses.length===sourceLimit||calendarEvents.length===sourceLimit||creditNotes.length===sourceLimit
   }));
  }catch(error){
   console.error("Client activity timeline error:",error);

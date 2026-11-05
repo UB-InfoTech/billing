@@ -49,6 +49,7 @@ const emptyEvent=fields=>{
     start:localInput(start),
     end:localInput(end),
     color:DEFAULT_COLOR,
+    clientId:"",
     customFields:{}
   },fields);
 };
@@ -173,6 +174,7 @@ export default function Calendar(){
       start,
       end,
       color:String(values.color||DEFAULT_COLOR),
+      clientId:values.clientId||null,
       customFields:values.customFields||{}
     };
 

@@ -18,10 +18,11 @@ test("combines interactions, invoices, payments, credit notes and expenses in ne
   }],
   creditNotes:[{_id:"credit-1",creditNoteNumber:"CN-001",reason:"Sales Return",status:"Posted",creditNoteDate:"2026-01-05T09:00:00.000Z",totals:{grandTotal:100},settlementHistory:[{eventType:"posted",effectiveAt:"2026-01-05T09:00:00.000Z",status:"Posted"}]}],
   expenses:[{_id:"expense-1",title:"Delivery charge",amount:50,date:"2026-01-07T09:00:00.000Z",description:"Local delivery"}],
+  calendarEvents:[{_id:"event-1",title:"Product review meeting",start:"2026-01-08T09:00:00.000Z",end:"2026-01-08T10:00:00.000Z"}],
   limit:50
  });
  const types=result.activities.map(item=>item.type);
- for(const type of ["client_created","invoice_created","invoice_status","payment_added","credit_note_posted","credit_adjustment","call","expense_linked"])assert.ok(types.includes(type),type);
+ for(const type of ["client_created","invoice_created","invoice_status","payment_added","credit_note_posted","credit_adjustment","call","expense_linked","calendar_event"])assert.ok(types.includes(type),type);
  assert.equal(result.activities[0].type,"expense_linked");
  assert.equal(result.hasMore,false);
 });

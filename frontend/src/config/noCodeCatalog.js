@@ -161,7 +161,8 @@ export const CALENDAR_EVENT_FIELDS=[
  {key:"title",label:"Event Title",fieldType:"text",width:6,section:"event",required:true,order:0,system:true,locked:true},
  {key:"start",label:"Start",fieldType:"datetime",width:3,section:"event",required:true,order:1,system:true,locked:true},
  {key:"end",label:"End",fieldType:"datetime",width:3,section:"event",required:true,order:2,system:true,locked:true},
- {key:"color",label:"Color",fieldType:"text",width:4,section:"appearance",order:3,defaultValue:"#3788d8"},
+ {key:"clientId",label:"Related customer (optional)",fieldType:"reference",width:6,section:"event",order:3,system:true,locked:true,dataSource:{type:"lookup",resource:"clients",valueField:"_id",labelField:"companyName",searchField:"companyName",multiple:false,autoFill:[]}},
+ {key:"color",label:"Color",fieldType:"text",width:4,section:"appearance",order:4,defaultValue:"#3788d8"},
 ];
 
 export const EWAY_BILL_FIELDS=[

@@ -625,6 +625,21 @@ export default function CreditNote() {
         }
     };
 
+    useEffect(()=>{
+        const creditNoteId=searchParams.get("openCreditNote");
+        if(!creditNoteId)return;
+        const params=new URLSearchParams(searchParams);
+        params.delete("openCreditNote");
+        setSearchParams(params,{replace:true});
+        axios.get(API_BASE+"/api/credit-notes/"+encodeURIComponent(creditNoteId),getAuthConfig())
+            .then(response=>{
+                const note=response.data?.creditNote;
+                if(note){setPreviewNote(note);setView("preview");}
+                else setError("The linked Credit Note could not be found.");
+            })
+            .catch(error=>setError(getErrorMessage(error)));
+    },[searchParams,setSearchParams]);
+
     const startEditNote = async (note) => {
         if (!note || note.status === "Cancelled") {
             setError("Cancelled Credit Notes cannot be edited.");

@@ -1,4 +1,5 @@
 import React,{useCallback,useEffect,useMemo,useState} from "react";
+import {useNavigate} from "react-router-dom";
 import axios from "axios";
 import "./ClientActivityPanel.css";
 
@@ -50,6 +51,7 @@ const localDateTimeValue=value=>{
 };
 
 export default function ClientActivityPanel({clientId,apiBase}){
+ const navigate=useNavigate();
  const [activities,setActivities]=useState([]);
  const [loading,setLoading]=useState(true);
  const [saving,setSaving]=useState(false);
@@ -123,6 +125,13 @@ export default function ClientActivityPanel({clientId,apiBase}){
  };
 
  const needsDueDate=["task","follow_up"].includes(type);
+ const openLinkedRecord=activity=>{
+  const id=encodeURIComponent(activity.sourceId||"");
+  if(!id)return;
+  if(["invoice","payment"].includes(activity.source))navigate("/orders?openInvoice="+id);
+  else if(activity.source==="credit_note")navigate("/credit-notes?openCreditNote="+id);
+  else if(activity.source==="calendar")navigate("/calendar?openEvent="+id);
+ };
 
  return (
   <section className="client-activity-panel" aria-label="Customer activity timeline">
@@ -200,6 +209,9 @@ export default function ClientActivityPanel({clientId,apiBase}){
            <div className="client-activity-entry-foot">
             {activity.reference&&<span><i className="bi bi-link-45deg me-1"></i>{activity.reference}</span>}
             {activity.amount!==null&&activity.amount!==undefined&&<strong>{money(activity.amount)}</strong>}
+            {activity.sourceId&&["invoice","payment","credit_note","calendar"].includes(activity.source)&&(
+             <button type="button" className="btn btn-sm btn-link p-0" onClick={()=>openLinkedRecord(activity)}>Open record <i className="bi bi-arrow-up-right ms-1"></i></button>
+            )}
             {activity.dueAt&&<span className={isOpen?"text-primary":""}><i className="bi bi-calendar2-check me-1"></i>Due {dateTime(activity.dueAt)}</span>}
             {activity.status&&!activity.canUpdateStatus&&<span className="client-activity-status">{activity.status}</span>}
            </div>

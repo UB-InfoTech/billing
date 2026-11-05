@@ -47,7 +47,33 @@ router.get("/search",auth,async(req,res)=>{
     if(req.query.accountStatus)query.accountStatus=req.query.accountStatus;
     const minRevenue=Number(req.query.minRevenue),maxRevenue=Number(req.query.maxRevenue);
     if(Number.isFinite(minRevenue)||Number.isFinite(maxRevenue)){query.totalRevenue={};if(Number.isFinite(minRevenue))query.totalRevenue.$gte=minRevenue;if(Number.isFinite(maxRevenue))query.totalRevenue.$lte=maxRevenue;}
-    res.json(await Client.find(query).sort({companyName:1,name:1}).lean());
+    const clients=await Client.find(query).sort({companyName:1,name:1}).lean();
+    if(!clients.length)return res.json([]);
+    const clientIds=clients.map(client=>client._id);
+    const ownerId=new mongoose.Types.ObjectId(owner(req));
+    const [lastActivities,openFollowUps,nextFollowUps]=await Promise.all([
+      ClientActivity.aggregate([
+        {$match:{createdBy:ownerId,clientId:{$in:clientIds}}},
+        {$group:{_id:"$clientId",lastCrmActivityAt:{$max:"$occurredAt"}}}
+      ]),
+      ClientActivity.aggregate([
+        {$match:{createdBy:ownerId,clientId:{$in:clientIds},type:{$in:["task","follow_up"]},status:"open"}},
+        {$group:{_id:"$clientId",openFollowUpCount:{$sum:1}}}
+      ]),
+      ClientActivity.aggregate([
+        {$match:{createdBy:ownerId,clientId:{$in:clientIds},type:{$in:["task","follow_up"]},status:"open",dueAt:{$ne:null}}},
+        {$group:{_id:"$clientId",nextFollowUpAt:{$min:"$dueAt"}}}
+      ])
+    ]);
+    const lastByClient=new Map(lastActivities.map(item=>[String(item._id),item.lastCrmActivityAt]));
+    const openByClient=new Map(openFollowUps.map(item=>[String(item._id),item.openFollowUpCount]));
+    const nextByClient=new Map(nextFollowUps.map(item=>[String(item._id),item.nextFollowUpAt]));
+    return res.json(clients.map(client=>({
+      ...client,
+      lastCrmActivityAt:lastByClient.get(String(client._id))||null,
+      nextFollowUpAt:nextByClient.get(String(client._id))||null,
+      openFollowUpCount:openByClient.get(String(client._id))||0
+    })));
   }catch(error){res.status(500).json({message:error.message});}
 });
 
@@ -64,6 +90,80 @@ router.get("/",auth,async(req,res)=>{
     const sortDir=req.query.order==="asc"?1:-1;
     res.json(await Client.find(query).sort({[sortField]:sortDir}).lean());
   }catch(error){res.status(500).json({message:error.message});}
+});
+
+router.get("/follow-ups",auth,async(req,res)=>{
+  try{
+    const ownerId=new mongoose.Types.ObjectId(owner(req));
+    const status=String(req.query.status||"open");
+    if(!["open","completed","all"].includes(status))return res.status(400).json({message:"Choose a valid follow-up status."});
+    const bucket=String(req.query.bucket||"all");
+    if(!["all","overdue","today","upcoming","no_date"].includes(bucket))return res.status(400).json({message:"Choose a valid follow-up filter."});
+    const page=Math.max(1,Math.floor(Number(req.query.page)||1));
+    const limit=Math.min(100,Math.max(1,Math.floor(Number(req.query.limit)||25)));
+    const todayStart=req.query.todayStart?new Date(req.query.todayStart):null;
+    const tomorrowStart=req.query.tomorrowStart?new Date(req.query.tomorrowStart):null;
+    if((todayStart&&!Number.isFinite(todayStart.getTime()))||(tomorrowStart&&!Number.isFinite(tomorrowStart.getTime()))){
+      return res.status(400).json({message:"The follow-up date range is invalid."});
+    }
+    const start=todayStart||new Date(new Date().setHours(0,0,0,0));
+    const end=tomorrowStart||new Date(start.getTime()+24*60*60*1000);
+    const base={createdBy:ownerId,type:{$in:["task","follow_up"]}};
+    if(status!=="all")base.status=status;
+    if(bucket!=="all"){
+      if(status==="completed")return res.status(400).json({message:"Date filters are available for open follow-ups."});
+      if(bucket==="overdue")base.dueAt={$ne:null,$lt:start};
+      if(bucket==="today")base.dueAt={$gte:start,$lt:end};
+      if(bucket==="upcoming")base.dueAt={$gte:end};
+      if(bucket==="no_date")base.dueAt=null;
+    }
+    const search=String(req.query.search||"").trim().slice(0,100);
+    if(search){
+      const rx=new RegExp(escapeRegex(search),"i");
+      const matchingClients=await Client.find({
+        createdBy:owner(req),
+        $or:[{companyName:rx},{name:rx},{phone:rx},{email:rx}]
+      }).select("_id").limit(500).lean();
+      const alternatives=[{subject:rx},{description:rx}];
+      if(matchingClients.length)alternatives.push({clientId:{$in:matchingClients.map(client=>client._id)}});
+      base.$or=alternatives;
+    }
+    const [total,activities,openCount,overdueCount,todayCount,upcomingCount,noDateCount,completedCount]=await Promise.all([
+      ClientActivity.countDocuments(base),
+      ClientActivity.aggregate([
+        {$match:base},
+        {$addFields:{dueOrder:{$cond:[{$ifNull:["$dueAt",false]},0,1]}}},
+        {$sort:{dueOrder:1,dueAt:1,createdAt:-1}},
+        {$skip:(page-1)*limit},
+        {$limit:limit},
+        {$lookup:{
+          from:Client.collection.name,
+          let:{clientId:"$clientId"},
+          pipeline:[
+            {$match:{$expr:{$and:[{$eq:["$_id","$clientId"]},{$eq:["$createdBy",ownerId]}]}}},
+            {$project:{companyName:1,name:1,phone:1,email:1,accountStatus:1}}
+          ],
+          as:"client"
+        }},
+        {$unwind:{path:"$client",preserveNullAndEmptyArrays:false}},
+        {$project:{dueOrder:0}}
+      ]),
+      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open"}),
+      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:{$ne:null,$lt:start}}),
+      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:{$gte:start,$lt:end}}),
+      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:{$gte:end}}),
+      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:null}),
+      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"completed"})
+    ]);
+    return res.json({
+      activities,
+      pagination:{page,limit,total,pages:Math.max(1,Math.ceil(total/limit))},
+      summary:{open:openCount,overdue:overdueCount,dueToday:todayCount,upcoming:upcomingCount,noDate:noDateCount,completed:completedCount}
+    });
+  }catch(error){
+    console.error("Client follow-up list error:",error);
+    return res.status(500).json({message:"Unable to load customer follow-ups."});
+  }
 });
 
 router.get("/:id",auth,async(req,res)=>{

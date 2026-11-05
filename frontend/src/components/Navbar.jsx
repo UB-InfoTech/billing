@@ -49,6 +49,12 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
         if(!recoveryWasConfigured&&byKey.has(recoveryKey)){
           next.push(byKey.get(recoveryKey));
         }
+        const followUpsKey="follow-ups";
+        const followUpsConfigured=saved.some(item=>item.key===followUpsKey);
+        if(!followUpsConfigured&&byKey.has(followUpsKey)){
+          const clientsIndex=next.findIndex(item=>item.key==="clients");
+          next.splice(clientsIndex>=0?clientsIndex+1:next.length,0,byKey.get(followUpsKey));
+        }
         // Existing businesses may have saved their menu before this module
         // existed. Add it once by default, but respect an explicit hidden choice.
         const organizationProfileKey="organization-profile";

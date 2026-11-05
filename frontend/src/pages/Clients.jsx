@@ -97,6 +97,24 @@ function Clients() {
       setSearchParams(searchParams,{replace:true});
     }
   },[searchParams,setSearchParams]);
+
+  useEffect(()=>{
+    const clientId=searchParams.get("openClient");
+    if(!clientId)return;
+    const params=new URLSearchParams(searchParams);
+    params.delete("openClient");
+    setSearchParams(params,{replace:true});
+    let cancelled=false;
+    axios.get(linkone+"/api/clients/"+encodeURIComponent(clientId),{
+      headers:{"x-auth-token":localStorage.getItem("token")||""}
+    }).then(response=>{
+      if(!cancelled)setViewingClient(response.data);
+    }).catch(error=>{
+      if(!cancelled)setPageMessage(error.response?.data?.message||"That customer profile could not be opened.");
+    });
+    return()=>{cancelled=true;};
+  },[searchParams,setSearchParams,linkone]);
+
   const clientFormConfig=useFormConfiguration("clients.form",CLIENT_FORM_FIELDS);
   const linkedClientSources=useMemo(()=>Array.from(new Set(clientFormConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean))),[clientFormConfig.fields]);
   const {records:linkedRecords,searchRecords:searchLinkedRecords}=useNoCodeDataSources(linkedClientSources);
@@ -662,7 +680,12 @@ function Clients() {
               getRowKey={client => client._id}
               columns={[
                 { key:"__rowNumber", label:"#", locked:false, render:(_row,index)=>index+1 },
-                { key:"companyName", label:"Customer", sortKey:"companyName" },
+                { key:"companyName", label:"Customer", sortKey:"companyName", render:client=>(
+                  <div className="customer-crm-name">
+                    <strong>{client.companyName||client.name||"Unnamed customer"}</strong>
+                    <small>{client.lastCrmActivityAt?"Last CRM activity · "+new Date(client.lastCrmActivityAt).toLocaleDateString("en-IN"):"No CRM activity logged yet"}</small>
+                  </div>
+                ) },
                 { key:"phone", label:"Phone", sortKey:"phone" },
                 { key:"address", label:"Address", visible:false },
                 { key:"gstNumber", label:"GST No.", visible:false },
@@ -670,6 +693,12 @@ function Clients() {
                 { key:"paymentTerms", label:"Payment Terms", visible:false, render:client=>`${client.paymentTerms||""}${client.paymentTerms!=="Advance"&&client.paymentTerms?" days":""}` },
                 { key:"discountRate", label:"Dis%", visible:false, render:client=>`${client.discountRate??0} %` },
                 { key:"orderCount", label:"Orders", sortKey:"orderCount", visible:false },
+                { key:"nextFollowUpAt", label:"Next follow-up", sortKey:"nextFollowUpAt", render:client=>{
+                  if(!client.nextFollowUpAt)return <span className="small text-secondary">{client.openFollowUpCount?"Open · no due date":"—"}</span>;
+                  const due=new Date(client.nextFollowUpAt);
+                  const overdue=due<new Date(new Date().setHours(0,0,0,0));
+                  return <span className={overdue?"text-danger fw-semibold":"small"}>{overdue?"Overdue · ":""}{due.toLocaleDateString("en-IN")}</span>;
+                } },
                 { key:"totalRevenue", label:"Total Revenue", sortKey:"totalRevenue", render:client=>`₹${Number(client.totalRevenue||0).toFixed(2)}` },
                 { key:"accountStatus", label:"A/C Status", render:client=><span className={`badge ${client.accountStatus==="Active"?"bg-success":"bg-danger"}`}>{client.accountStatus}</span> },
                 { key:"notes", label:"Notes", visible:false },

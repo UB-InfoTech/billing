@@ -78,6 +78,15 @@ test("client activity APIs preserve business ownership and allow task completion
   });
   assert.equal(updateProfile.response.status,200,JSON.stringify(updateProfile.payload));
 
+  const followUpList=await request("/clients/follow-ups?status=open&bucket=all");
+  assert.equal(followUpList.response.status,200,JSON.stringify(followUpList.payload));
+  assert.ok(followUpList.payload.activities.some(item=>item.subject==="Send quotation"));
+  assert.ok(followUpList.payload.activities.some(item=>String(item.client?._id||item.clientId)===String(clientId)));
+  assert.equal(followUpList.payload.summary.open,1);
+  const hiddenFollowUps=await request("/clients/follow-ups?status=open",{token:otherToken});
+  assert.equal(hiddenFollowUps.response.status,200);
+  assert.equal(hiddenFollowUps.payload.activities.length,0);
+
   const list=await request("/clients/"+clientId+"/activities");
   assert.equal(list.response.status,200,JSON.stringify(list.payload));
   assert.ok(list.payload.activities.some(item=>item.title==="Design discussion"));

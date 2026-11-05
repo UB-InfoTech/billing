@@ -261,6 +261,23 @@ function Order2() {
     };
 
 
+    const crmInvoiceOpenRef=useRef("");
+    useEffect(()=>{
+        const invoiceId=searchParams.get("openInvoice");
+        if(!invoiceId||crmInvoiceOpenRef.current===invoiceId)return;
+        crmInvoiceOpenRef.current=invoiceId;
+        const params=new URLSearchParams(searchParams);
+        params.delete("openInvoice");
+        setSearchParams(params,{replace:true});
+        axios.get(linkone+"/api/order/orders/"+encodeURIComponent(invoiceId),authConfig())
+            .then(response=>{
+                if(response.data?.order)setViewingOrder(response.data.order);
+            })
+            .catch(error=>{
+                setOrdersError(error.response?.data?.message||"The linked invoice could not be opened.");
+            });
+    },[searchParams,setSearchParams,linkone]);
+
     // const fetchOrdersLength = orders.length + 1;
     // OrderBillNo = profile.billNoPrefix + billNoSequence + billNoSuffix
 

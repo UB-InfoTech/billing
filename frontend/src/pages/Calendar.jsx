@@ -56,7 +56,7 @@ const emptyEvent=fields=>{
 
 export default function Calendar(){
   const navigate=useNavigate();
-  const [searchParams]=useSearchParams();
+  const [searchParams,setSearchParams]=useSearchParams();
   const {fields,loading:formLoading,save:saveForm,reset:resetForm,saving:formSaving}=useFormConfiguration("calendar.event",CALENDAR_EVENT_FIELDS);
   const [events,setEvents]=useState([]);
   const [modal,setModal]=useState({open:false,id:null,values:{}});
@@ -122,6 +122,28 @@ export default function Calendar(){
       },eventFields)
     });
   };
+
+  useEffect(()=>{
+    const eventId=searchParams.get("openEvent");
+    if(!eventId||loading)return;
+    const params=new URLSearchParams(searchParams);
+    params.delete("openEvent");
+    setSearchParams(params,{replace:true});
+    const event=events.find(item=>String(item._id||item.id)===String(eventId));
+    if(!event){
+      setError("The linked calendar event could not be found.");
+      return;
+    }
+    setModal({
+      open:true,id:event._id||event.id,
+      values:hydrateConfiguredValues({
+        ...event,
+        start:event.start?localInput(event.start):"",
+        end:event.end?localInput(event.end):"",
+        customFields:event.customFields&&typeof event.customFields==="object"?event.customFields:{}
+      },eventFields)
+    });
+  },[searchParams,setSearchParams,events,loading,eventFields]);
 
   const updateValue=(field,value,record=null)=>{
     setError("");

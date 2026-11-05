@@ -3,6 +3,7 @@ export const MODULE_CATALOG=[
   {key:"analytics",label:"Reports",route:"/analytics",icon:"bi-graph-up-arrow",description:"Sales and business reports"},
   {key:"orders",label:"Invoices",route:"/orders",icon:"bi-receipt",description:"Create and manage invoices"},
   {key:"clients",label:"Customers",route:"/clients",icon:"bi-people",description:"Customer details and history"},
+  {key:"follow-ups",label:"Follow-ups",route:"/follow-ups",icon:"bi-bell",description:"Customer tasks, reminders and overdue follow-ups"},
   {key:"products",label:"Products",route:"/products",icon:"bi-box-seam",description:"Products, stock and pricing"},
   {key:"expense",label:"Expenses",route:"/expense",icon:"bi-wallet2",description:"Business expenses"},
   {key:"calendar",label:"Calendar",route:"/calendar",icon:"bi-calendar3",description:"Important dates and reminders"},

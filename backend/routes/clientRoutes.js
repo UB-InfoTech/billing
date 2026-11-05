@@ -128,7 +128,7 @@ router.get("/follow-ups",auth,async(req,res)=>{
       if(matchingClients.length)alternatives.push({clientId:{$in:matchingClients.map(client=>client._id)}});
       base.$or=alternatives;
     }
-    const [total,activities,openCount,overdueCount,todayCount,upcomingCount,noDateCount,completedCount]=await Promise.all([
+    const [total,records,openCount,overdueCount,todayCount,upcomingCount,noDateCount,completedCount]=await Promise.all([
       ClientActivity.countDocuments(base),
       ClientActivity.aggregate([
         {$match:base},
@@ -136,17 +136,6 @@ router.get("/follow-ups",auth,async(req,res)=>{
         {$sort:{dueOrder:1,dueAt:1,createdAt:-1}},
         {$skip:(page-1)*limit},
         {$limit:limit},
-        {$lookup:{
-          from:Client.collection.name,
-          localField:"clientId",
-          foreignField:"_id",
-          pipeline:[
-            {$match:{createdBy:ownerId}},
-            {$project:{companyName:1,name:1,phone:1,email:1,accountStatus:1}}
-          ],
-          as:"client"
-        }},
-        {$unwind:{path:"$client",preserveNullAndEmptyArrays:false}},
         {$project:{dueOrder:0}}
       ]),
       ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open"}),
@@ -156,6 +145,15 @@ router.get("/follow-ups",auth,async(req,res)=>{
       ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:null}),
       ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"completed"})
     ]);
+    const linkedClientIds=[...new Set(records.map(item=>String(item.clientId)))];
+    const linkedClients=await Client.find({createdBy:owner(req),_id:{$in:linkedClientIds}})
+      .select("companyName name phone email accountStatus").lean();
+    const linkedClientMap=new Map(linkedClients.map(client=>[String(client._id),client]));
+    const activities=records.filter(item=>linkedClientMap.has(String(item.clientId))).map(item=>({
+      ...item,
+      clientId:String(item.clientId),
+      client:linkedClientMap.get(String(item.clientId))
+    }));
     return res.json({
       activities,
       pagination:{page,limit,total,pages:Math.max(1,Math.ceil(total/limit))},

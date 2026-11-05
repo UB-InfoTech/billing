@@ -31,7 +31,7 @@ function buildClientActivityTimeline({client,manualActivities=[],orders=[],credi
  });
  for(const activity of manualActivities)add({
   id:"manual-"+String(activity._id),source:"manual",sourceId:activity._id,type:activity.type,
-  category:["task","follow_up"].includes(activity.type)?"follow_up":"interaction",
+  category:activity.type==="profile_update"?"account":["task","follow_up"].includes(activity.type)?"follow_up":"interaction",
   title:activity.subject,description:activity.description,
   occurredAt:activity.occurredAt||activity.createdAt,dueAt:activity.dueAt,
   status:activity.status,canUpdateStatus:["task","follow_up"].includes(activity.type)

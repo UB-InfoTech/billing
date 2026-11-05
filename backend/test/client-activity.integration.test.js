@@ -65,9 +65,17 @@ test("client activity APIs preserve business ownership and allow task completion
   assert.equal(createTask.response.status,201,JSON.stringify(createTask.payload));
   assert.equal(createTask.payload.status,"open");
 
+  const updateProfile=await request("/clients/"+clientId,{
+   method:"PATCH",body:{notes:"Prefers WhatsApp contact."}
+  });
+  assert.equal(updateProfile.response.status,200,JSON.stringify(updateProfile.payload));
+
   const list=await request("/clients/"+clientId+"/activities");
   assert.equal(list.response.status,200,JSON.stringify(list.payload));
   assert.ok(list.payload.activities.some(item=>item.title==="Design discussion"));
+  const profileUpdate=list.payload.activities.find(item=>item.type==="profile_update");
+  assert.ok(profileUpdate);
+  assert.ok(profileUpdate.description.includes("Notes"));
   const task=list.payload.activities.find(item=>item.title==="Send quotation");
   assert.ok(task);
   assert.equal(task.canUpdateStatus,true);

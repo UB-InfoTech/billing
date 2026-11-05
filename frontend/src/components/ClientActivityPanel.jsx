@@ -20,7 +20,7 @@ const FILTERS=[
  {value:"finance",label:"Other finance"}
 ];
 const TYPE_LABELS={
- client_created:"Customer",invoice_created:"Invoice",invoice_updated:"Invoice",
+ client_created:"Customer",profile_update:"Profile update",invoice_created:"Invoice",invoice_updated:"Invoice",
  invoice_status:"Invoice status",payment_added:"Payment",payment_edited:"Payment",
  payment_deleted:"Payment",payment_received:"Payment",credit_note_posted:"Credit Note",
  credit_note_edited:"Credit Note",credit_note_cancelled:"Credit Note",credit_note_created:"Credit Note",
@@ -28,7 +28,7 @@ const TYPE_LABELS={
  email:"Email",meeting:"Meeting",whatsapp:"WhatsApp",follow_up:"Follow-up",task:"Task",other:"Activity"
 };
 const ICONS={
- client_created:"bi-person-plus",invoice_created:"bi-receipt",invoice_updated:"bi-pencil-square",
+ client_created:"bi-person-plus",profile_update:"bi-person-gear",invoice_created:"bi-receipt",invoice_updated:"bi-pencil-square",
  invoice_status:"bi-arrow-left-right",payment_added:"bi-cash-coin",payment_edited:"bi-cash",
  payment_deleted:"bi-cash-stack",payment_received:"bi-cash-coin",credit_note_posted:"bi-file-earmark-minus",
  credit_note_edited:"bi-file-earmark-text",credit_note_cancelled:"bi-file-earmark-x",

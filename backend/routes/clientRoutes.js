@@ -195,6 +195,37 @@ router.patch("/:id",auth,async(req,res)=>{
       assertClientIdentity(client);
     }
     await client.save();
+
+    const changedStandardFields=allowed.filter(key=>{
+      if(key==="customFields"||req.body?.[key]===undefined)return false;
+      return JSON.stringify(originalValues[key]??null)!==JSON.stringify(client.get(key)??null);
+    });
+    const nextCustomFields=cleanCustomFields(client.customFields);
+    const customKeys=[...new Set([...Object.keys(originalCustomFields),...Object.keys(nextCustomFields)])]
+      .filter(key=>JSON.stringify(originalCustomFields[key]??null)!==JSON.stringify(nextCustomFields[key]??null));
+    const customLabels=customKeys.map(key=>configuredFields.find(field=>field.custom&&field.key===key)?.label||"Additional information");
+    const fieldLabels={
+      name:"Customer name",companyName:"Company name",email:"Email",phone:"Phone",
+      address:"Address",city:"City",state:"State",pinCode:"PIN code",
+      gstNumber:"GST number",businessType:"Business type",paymentTerms:"Payment terms",
+      discountRate:"Discount rate",accountStatus:"Account status",notes:"Notes"
+    };
+    const changedLabels=[...changedStandardFields.map(key=>fieldLabels[key]||"Customer details"),...customLabels];
+    if(changedLabels.length){
+      try{
+        await ClientActivity.create({
+          clientId:client._id,
+          createdBy:owner(req),
+          type:"profile_update",
+          subject:"Customer details updated",
+          description:"Updated: "+[...new Set(changedLabels)].join(", "),
+          occurredAt:new Date(),
+          status:"completed"
+        });
+      }catch(activityError){
+        console.error("Unable to record customer profile update:",activityError.message);
+      }
+    }
     res.json(client);
   }catch(error){res.status(400).json({message:error.message});}
 });

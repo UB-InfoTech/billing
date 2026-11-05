@@ -2,7 +2,7 @@ const sameId=(left,right)=>String(left??"")===String(right??"");
 const validDate=value=>{const date=value?new Date(value):null;return date&&!Number.isNaN(date.getTime())?date:null;};
 const round2=value=>Math.round((Number(value||0)+Number.EPSILON)*100)/100;
 
-function buildClientActivityTimeline({client,manualActivities=[],orders=[],creditNotes=[],expenses=[],limit=150,sourceTruncated=false}){
+function buildClientActivityTimeline({client,manualActivities=[],orders=[],creditNotes=[],expenses=[],calendarEvents=[],limit=150,sourceTruncated=false}){
  const entries=[];
  const clientId=client?._id;
  const add=entry=>{

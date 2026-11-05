@@ -70,7 +70,7 @@ router.get("/search",auth,async(req,res)=>{
     const nextByClient=new Map(nextFollowUps.map(item=>[String(item._id),item.nextFollowUpAt]));
     return res.json(clients.map(client=>({
       ...client,
-      lastCrmActivityAt:lastByClient.get(String(client._id))||null,
+      lastCrmActivityAt:lastByClient.get(String(client._id))||client.lastOrderDate||client.createdAt||null,
       nextFollowUpAt:nextByClient.get(String(client._id))||null,
       openFollowUpCount:openByClient.get(String(client._id))||0
     })));
@@ -178,7 +178,7 @@ router.get("/:id",auth,async(req,res)=>{
     ]);
     return res.json({
       ...client,
-      lastCrmActivityAt:lastActivity?.occurredAt||null,
+      lastCrmActivityAt:lastActivity?.occurredAt||client.lastOrderDate||client.createdAt||null,
       openFollowUpCount,
       nextFollowUpAt:nextFollowUp?.dueAt||null
     });

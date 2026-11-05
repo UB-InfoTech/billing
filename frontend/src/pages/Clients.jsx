@@ -455,6 +455,7 @@ function Clients() {
     try {
       await axios.delete(`${linkone}/api/clients/${id}`,authConfig);
       setPageMessage("Customer deleted.");
+      if(String(viewingClient?._id)===String(id))setViewingClient(null);
       if(String(editingClient)===String(id)){
         setShowModal(false);
         setEditingClient(null);
@@ -835,7 +836,7 @@ function Clients() {
                           <div className="client-profile-quick-links">
                             {viewingClient.phone&&<a className="btn btn-light border" href={"tel:"+viewingClient.phone}><i className="bi bi-telephone"></i>Call</a>}
                             {viewingClient.email&&<a className="btn btn-light border" href={"mailto:"+viewingClient.email}><i className="bi bi-envelope"></i>Email</a>}
-                            {viewingClient.phone&&<a className="btn btn-light border" href={"https://wa.me/"+String(viewingClient.phone).replace(/\D/g,"")} target="_blank" rel="noreferrer"><i className="bi bi-whatsapp"></i>WhatsApp</a>}
+                            {viewingClient.phone&&<a className="btn btn-light border" href={"https://wa.me/"+(String(viewingClient.phone).replace(/\D/g,"").length===10?"91":"")+String(viewingClient.phone).replace(/\D/g,"")} target="_blank" rel="noreferrer"><i className="bi bi-whatsapp"></i>WhatsApp</a>}
                           </div>
                         </section>
                         <section className="client-profile-card">
@@ -870,6 +871,9 @@ function Clients() {
                             </section>
                           );
                         })}
+                        <div className="client-profile-detail-actions">
+                          <button type="button" className="btn btn-light border" onClick={()=>window.print()}><i className="bi bi-printer me-2"></i>Print customer details</button>
+                        </div>
                         <div className="client-profile-danger-zone">
                           <div><strong>Remove this customer</strong><span>Only possible when no invoices or history depend on this record.</span></div>
                           <button type="button" className="btn btn-outline-danger" onClick={()=>handleDeleteClient(viewingClient._id)}><i className="bi bi-trash"></i>Delete customer</button>

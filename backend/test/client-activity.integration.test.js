@@ -66,6 +66,12 @@ test("client activity APIs preserve business ownership and allow task completion
   assert.equal(createNote.response.status,201,JSON.stringify(createNote.payload));
   assert.equal(createNote.payload.type,"note");
 
+  const updateNote=await request("/clients/"+clientId+"/activities/"+createNote.payload._id,{
+   method:"PATCH",body:{subject:"Updated design discussion",description:"Customer approved the revised catalogue."}
+  });
+  assert.equal(updateNote.response.status,200,JSON.stringify(updateNote.payload));
+  assert.equal(updateNote.payload.subject,"Updated design discussion");
+
   const createTask=await request("/clients/"+clientId+"/activities",{
    method:"POST",
    body:{type:"task",subject:"Send quotation",dueAt:"2026-12-01T10:00:00.000Z"}
@@ -110,6 +116,13 @@ test("client activity APIs preserve business ownership and allow task completion
   assert.equal(complete.response.status,200,JSON.stringify(complete.payload));
   assert.equal(complete.payload.status,"completed");
   assert.ok(complete.payload.completedAt);
+
+  const hiddenNoteDelete=await request("/clients/"+clientId+"/activities/"+createNote.payload._id,{
+   method:"DELETE",token:otherToken
+  });
+  assert.equal(hiddenNoteDelete.response.status,404);
+  const deleteNote=await request("/clients/"+clientId+"/activities/"+createNote.payload._id,{method:"DELETE"});
+  assert.equal(deleteNote.response.status,200,JSON.stringify(deleteNote.payload));
 
   const hiddenCalendarCreate=await request("/events",{
    method:"POST",token:otherToken,

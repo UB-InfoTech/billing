@@ -22,6 +22,12 @@ const FILTERS=[
  {value:"finance",label:"Other"}
 ];
 
+const ACTIVITY_FILTERS=[
+ {value:"all",label:"All activities"},
+ {value:"interaction",label:"Conversations"},
+ {value:"follow_up",label:"Tasks & reminders"}
+];
+
 const TYPE_LABELS={
  client_created:"Customer added",profile_update:"Details changed",calendar_event:"Calendar event",
  invoice_created:"Invoice created",invoice_updated:"Invoice updated",invoice_status:"Invoice status",
@@ -56,7 +62,7 @@ const localDateTimeValue=value=>{
  return local.toISOString().slice(0,16);
 };
 
-export default function ClientActivityPanel({clientId,apiBase}){
+export default function ClientActivityPanel({clientId,apiBase,mode="timeline"}){
  const navigate=useNavigate();
  const [activities,setActivities]=useState([]);
  const [loading,setLoading]=useState(true);
@@ -94,10 +100,14 @@ export default function ClientActivityPanel({clientId,apiBase}){
 
  useEffect(()=>{loadActivities();},[loadActivities]);
 
+ const filterOptions=mode==="activities"?ACTIVITY_FILTERS:FILTERS;
  const visibleActivities=useMemo(()=>{
-  if(filter==="all")return activities;
-  return activities.filter(item=>item.category===filter);
- },[activities,filter]);
+  const source=mode==="activities"
+   ?activities.filter(item=>item.type!=="note"&&["interaction","follow_up"].includes(item.category))
+   :activities;
+  if(filter==="all")return source;
+  return source.filter(item=>item.category===filter);
+ },[activities,filter,mode]);
 
  const resetComposer=()=>{
   setSubject("");
@@ -164,8 +174,8 @@ export default function ClientActivityPanel({clientId,apiBase}){
   <section className="client-activity-panel" aria-label="Customer activity">
    <div className="client-activity-heading">
     <div>
-     <h3>Activity history</h3>
-     <p>Every important conversation and account update, together in one place.</p>
+     <h3>{mode==="activities"?"Activities":"Customer timeline"}</h3>
+     <p>{mode==="activities"?"Record calls, messages, meetings, tasks and customer follow-ups.":"A chronological view of customer conversations, account changes, bills and payments."}</p>
     </div>
     <div className="client-activity-heading-actions">
      <button type="button" className="btn btn-light border" onClick={loadActivities} disabled={loading} aria-label="Refresh activity">
@@ -227,10 +237,10 @@ export default function ClientActivityPanel({clientId,apiBase}){
     <div className="client-activity-feed-toolbar">
      <div>
       <strong>Recent activity</strong>
-      <span>{activities.length} entr{activities.length===1?"y":"ies"}</span>
+      <span>{visibleActivities.length} entr{visibleActivities.length===1?"y":"ies"}</span>
      </div>
      <div className="client-activity-filters" role="group" aria-label="Filter activity">
-      {FILTERS.map(item=>(
+      {filterOptions.map(item=>(
        <button type="button" key={item.value} className={filter===item.value?"is-active":""} onClick={()=>setFilter(item.value)}>{item.label}</button>
       ))}
      </div>

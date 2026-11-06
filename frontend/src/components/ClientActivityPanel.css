@@ -117,7 +117,7 @@
  .client-profile-header{grid-template-columns:1fr auto;gap:10px}
  .client-profile-back{grid-column:1/-1;justify-self:start;border:0;padding:3px;background:transparent}
  .client-profile-identity{grid-column:1;grid-row:2}
- .client-profile-actions{grid-column:2;grid-row:2}
+ .client-profile-actions{grid-column:2;grid-row:2;flex-wrap:wrap;justify-content:flex-end}
  .client-profile-overview,.client-profile-details{grid-template-columns:1fr}
 }
 @media(max-width:600px){

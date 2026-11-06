@@ -73,7 +73,7 @@ export default function ClientActivityPanel({clientId,apiBase,mode="timeline"}){
  const [limit,setLimit]=useState(100);
  const [hasMore,setHasMore]=useState(false);
  const [showComposer,setShowComposer]=useState(false);
- const [type,setType]=useState("note");
+ const [type,setType]=useState(mode==="activities"?"call":"note");
  const [subject,setSubject]=useState("");
  const [description,setDescription]=useState("");
  const [dueAt,setDueAt]=useState("");
@@ -115,7 +115,7 @@ export default function ClientActivityPanel({clientId,apiBase,mode="timeline"}){
   setDueAt("");
   setOccurredAt("");
   setShowPastDate(false);
-  setType("note");
+  setType(mode==="activities"?"call":"note");
   setShowComposer(false);
  };
 
@@ -196,7 +196,7 @@ export default function ClientActivityPanel({clientId,apiBase,mode="timeline"}){
       <button type="button" className="btn-close" aria-label="Close activity form" onClick={resetComposer}/>
      </div>
      <div className="client-activity-type-options" role="group" aria-label="Activity type">
-      {ACTIVITY_TYPES.map(item=>(
+      {(mode==="activities"?ACTIVITY_TYPES.filter(item=>item.value!=="note"):ACTIVITY_TYPES).map(item=>(
        <button type="button" key={item.value} className={type===item.value?"is-selected":""} onClick={()=>setType(item.value)}>
         <i className={"bi "+item.icon}></i>{item.label}
        </button>

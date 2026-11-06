@@ -26,8 +26,8 @@
 .client-profile-metrics>div:last-child{border-right:0}
 .client-profile-metrics span{color:#748296;font-size:11px;font-weight:650}
 .client-profile-metrics strong{color:#1f2e43;font-size:17px;font-weight:750;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-.client-profile-tabs{display:flex;align-items:center;gap:8px;padding:0 clamp(16px,3vw,36px);background:#fff;border-bottom:1px solid #e5eaf0}
-.client-profile-tabs button{display:inline-flex;align-items:center;gap:8px;min-height:48px;padding:0 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:#68788c;font-size:13px;font-weight:650}
+.client-profile-tabs{display:flex;align-items:center;gap:8px;padding:0 clamp(16px,3vw,36px);background:#fff;border-bottom:1px solid #e5eaf0;min-width:0;overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:thin}
+.client-profile-tabs button{display:inline-flex;align-items:center;gap:8px;flex:0 0 auto;min-height:48px;padding:0 12px;border:0;border-bottom:2px solid transparent;background:transparent;color:#68788c;font-size:13px;font-weight:650;white-space:nowrap}
 .client-profile-tabs button:hover{color:#1d4ed8}
 .client-profile-tabs button.is-active{border-bottom-color:#2563c7;color:#1d4ed8}
 .client-profile-content{flex:1 1 auto;min-height:0;overflow:auto!important;padding:clamp(14px,2vw,26px)!important;background:#f4f7fb}
@@ -117,14 +117,14 @@
  .client-profile-header{grid-template-columns:1fr auto;gap:10px}
  .client-profile-back{grid-column:1/-1;justify-self:start;border:0;padding:3px;background:transparent}
  .client-profile-identity{grid-column:1;grid-row:2}
- .client-profile-actions{grid-column:2;grid-row:2}
+ .client-profile-actions{grid-column:2;grid-row:2;flex-wrap:wrap;justify-content:flex-end}
  .client-profile-overview,.client-profile-details{grid-template-columns:1fr}
 }
 @media(max-width:600px){
  .client-profile-header{grid-template-columns:minmax(0,1fr);gap:10px;padding:12px 14px}
  .client-profile-back{grid-column:1;grid-row:1}
  .client-profile-identity{grid-column:1;grid-row:2}
- .client-profile-actions{grid-column:1;grid-row:3;justify-content:stretch}
+ .client-profile-actions{grid-column:1;grid-row:3;justify-content:stretch;flex-wrap:wrap}
  .client-profile-actions .btn{flex:1}
  .client-profile-actions .client-profile-close{flex:0 0 38px}
  .client-profile-contact-line{gap:5px 11px}
@@ -136,7 +136,7 @@
  .client-profile-metrics>div:nth-child(4){border-right:0;border-bottom:0}
  .client-profile-metrics strong{font-size:14px}
  .client-profile-tabs{padding:0 12px;gap:2px}
- .client-profile-tabs button{flex:1;justify-content:center;gap:5px;padding:0 5px;font-size:11px}
+ .client-profile-tabs button{flex:0 0 auto;justify-content:center;gap:5px;padding:0 10px;font-size:11px}
  .client-profile-content{padding:10px!important}
  .client-profile-card{padding:15px}
  .client-profile-contact-grid{grid-template-columns:1fr 1fr;gap:13px}

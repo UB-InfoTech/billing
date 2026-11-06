@@ -7,6 +7,8 @@ import DynamicTable from '../components/DynamicTable';
 import FormConfigurator from '../components/FormConfigurator';
 import ConfiguredField from '../components/ConfiguredField';
 import ClientActivityPanel from "../components/ClientActivityPanel";
+import ClientNotesPanel from "../components/ClientNotesPanel";
+import ClientBillingPanel from "../components/ClientBillingPanel";
 import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,syncConfiguredCustomFields,buildConfiguredDefaults,buildNewRecordDefaults,groupFieldsBySection} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
@@ -30,7 +32,7 @@ function Clients() {
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [viewingClient,setViewingClient]=useState(null);
-  const [clientProfileTab,setClientProfileTab]=useState("activity");
+  const [clientProfileTab,setClientProfileTab]=useState("timeline");
   const [statementFor,setStatementFor]=useState(null);
   const [statementData,setStatementData]=useState(null);
   const [statementLoading,setStatementLoading]=useState(false);
@@ -108,7 +110,7 @@ function Clients() {
     axios.get(linkone+"/api/clients/"+encodeURIComponent(clientId),{
       headers:{"x-auth-token":localStorage.getItem("token")||""}
     }).then(response=>{
-      setClientProfileTab("activity");
+      setClientProfileTab("timeline");
       setViewingClient(response.data);
     }).catch(error=>{
       setPageMessage(error.response?.data?.message||"That customer profile could not be opened.");
@@ -232,7 +234,7 @@ function Clients() {
     fetchCustomerStatement(client,"","");
   };
   const openClientProfile=client=>{
-    setClientProfileTab("activity");
+    setClientProfileTab("timeline");
     setViewingClient(client);
   };
   const closeCustomerStatement=()=>{
@@ -794,6 +796,9 @@ function Clients() {
                       </div>
                     </div>
                     <div className="client-profile-actions">
+                      {viewingClient.phone&&<a className="btn btn-light border" href={"tel:"+viewingClient.phone}><i className="bi bi-telephone"></i><span>Call</span></a>}
+                      {viewingClient.phone&&<a className="btn btn-light border" href={"https://wa.me/"+(String(viewingClient.phone).replace(/\D/g,"").length===10?"91":"")+String(viewingClient.phone).replace(/\D/g,"")} target="_blank" rel="noreferrer"><i className="bi bi-whatsapp"></i><span>WhatsApp</span></a>}
+                      {viewingClient.email&&<a className="btn btn-light border" href={"mailto:"+viewingClient.email}><i className="bi bi-envelope"></i><span>Email</span></a>}
                       <button type="button" className="btn btn-light border" onClick={()=>openCustomerStatement(viewingClient)}>
                         <i className="bi bi-journal-text"></i><span>Statement</span>
                       </button>
@@ -814,13 +819,19 @@ function Clients() {
                   </section>
 
                   <nav className="client-profile-tabs" aria-label="Customer profile sections">
-                    <button type="button" className={clientProfileTab==="activity"?"is-active":""} onClick={()=>setClientProfileTab("activity")}><i className="bi bi-clock-history"></i>Activity</button>
                     <button type="button" className={clientProfileTab==="overview"?"is-active":""} onClick={()=>setClientProfileTab("overview")}><i className="bi bi-grid"></i>Overview</button>
-                    <button type="button" className={clientProfileTab==="details"?"is-active":""} onClick={()=>setClientProfileTab("details")}><i className="bi bi-person-vcard"></i>All details</button>
+                    <button type="button" className={clientProfileTab==="timeline"?"is-active":""} onClick={()=>setClientProfileTab("timeline")}><i className="bi bi-clock-history"></i>Timeline</button>
+                    <button type="button" className={clientProfileTab==="notes"?"is-active":""} onClick={()=>setClientProfileTab("notes")}><i className="bi bi-sticky"></i>Notes</button>
+                    <button type="button" className={clientProfileTab==="activities"?"is-active":""} onClick={()=>setClientProfileTab("activities")}><i className="bi bi-calendar2-check"></i>Activities</button>
+                    <button type="button" className={clientProfileTab==="billing"?"is-active":""} onClick={()=>setClientProfileTab("billing")}><i className="bi bi-receipt"></i>Billing</button>
+                    <button type="button" className={clientProfileTab==="details"?"is-active":""} onClick={()=>setClientProfileTab("details")}><i className="bi bi-person-vcard"></i>Details</button>
                   </nav>
 
                   <main className="modal-body client-profile-content">
-                    {clientProfileTab==="activity"&&<ClientActivityPanel clientId={viewingClient._id} apiBase={linkone}/>}
+                    {clientProfileTab==="timeline"&&<ClientActivityPanel clientId={viewingClient._id} apiBase={linkone} mode="timeline"/>}
+                    {clientProfileTab==="notes"&&<ClientNotesPanel clientId={viewingClient._id} apiBase={linkone}/>}
+                    {clientProfileTab==="activities"&&<ClientActivityPanel clientId={viewingClient._id} apiBase={linkone} mode="activities"/>}
+                    {clientProfileTab==="billing"&&<ClientBillingPanel clientId={viewingClient._id} apiBase={linkone}/>}
 
                     {clientProfileTab==="overview"&&(
                       <div className="client-profile-overview">

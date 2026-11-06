@@ -101,7 +101,7 @@ test("client activity APIs preserve business ownership and allow task completion
 
   const list=await request("/clients/"+clientId+"/activities");
   assert.equal(list.response.status,200,JSON.stringify(list.payload));
-  assert.ok(list.payload.activities.some(item=>item.title==="Design discussion"));
+  assert.ok(list.payload.activities.some(item=>item.title==="Updated design discussion"));
   assert.ok(list.payload.activities.some(item=>item.title==="Customer review meeting"));
   const profileUpdate=list.payload.activities.find(item=>item.type==="profile_update");
   assert.ok(profileUpdate);

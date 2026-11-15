@@ -203,15 +203,28 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
   assert.equal(duplicateLink.payload.created,false);
   assert.equal(String(duplicateLink.payload.customerId),String(clientId));
 
-  const performanceStart=new Date(Date.now()-2*24*60*60*1000).toISOString();
-  const performanceEnd=new Date(Date.now()+4*24*60*60*1000).toISOString();
-  const performance=await request("/deals/performance?startAt="+encodeURIComponent(performanceStart)+"&endAt="+encodeURIComponent(performanceEnd));
+  const performanceStart=new Date(Date.now()-2*24*60*60*1000);
+  const performanceEnd=new Date(Date.now()+4*24*60*60*1000);
+  const previousPeriodDuration=performanceEnd.getTime()-performanceStart.getTime();
+  const historicalDeal=await Deal.create({
+   title:"Previous period opportunity",contactName:"Previous period prospect",value:20000,
+   stageKey:"won",status:"won",probability:100,source:"Referral",createdBy:ownerId
+  });
+  const previousCreatedAt=new Date(performanceStart.getTime()-previousPeriodDuration+24*60*60*1000);
+  const previousClosedAt=new Date(performanceStart.getTime()-previousPeriodDuration+48*60*60*1000);
+  await Deal.collection.updateOne({_id:historicalDeal._id},{$set:{createdAt:previousCreatedAt,closedAt:previousClosedAt,updatedAt:previousClosedAt}});
+  const performance=await request("/deals/performance?startAt="+encodeURIComponent(performanceStart.toISOString())+"&endAt="+encodeURIComponent(performanceEnd.toISOString()));
   assert.equal(performance.response.status,200,JSON.stringify(performance.payload));
   assert.ok(performance.payload.summary.createdCount>=5);
   assert.equal(performance.payload.summary.closedCount,3);
   assert.equal(performance.payload.summary.wonCount,2);
   assert.equal(performance.payload.summary.lostCount,1);
   assert.equal(performance.payload.summary.winRate,66.67);
+  assert.equal(performance.payload.comparison.previous.createdCount,1);
+  assert.equal(performance.payload.comparison.previous.wonCount,1);
+  assert.equal(performance.payload.comparison.previous.winRate,100);
+  assert.equal(performance.payload.comparison.winRateChangePoints,-33.3);
+  assert.ok(performance.payload.comparison.createdCountChange>0);
   assert.ok(performance.payload.summary.pipelineCount>=2);
   assert.ok(performance.payload.summary.pipelineValue>=30000);
   assert.ok(performance.payload.closedTrend.length>=1);
@@ -222,14 +235,14 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
   assert.ok(performance.payload.followUps.overdueOpenCount>=1);
   assert.ok(performance.payload.followUps.completionRate>0);
 
-  const hiddenPerformance=await request("/deals/performance?startAt="+encodeURIComponent(performanceStart)+"&endAt="+encodeURIComponent(performanceEnd),{token:otherToken});
+  const hiddenPerformance=await request("/deals/performance?startAt="+encodeURIComponent(performanceStart.toISOString())+"&endAt="+encodeURIComponent(performanceEnd.toISOString()),{token:otherToken});
   assert.equal(hiddenPerformance.response.status,200);
   assert.equal(hiddenPerformance.payload.summary.createdCount,0);
   assert.equal(hiddenPerformance.payload.summary.closedCount,0);
   assert.equal(hiddenPerformance.payload.summary.pipelineValue,0);
   assert.equal(hiddenPerformance.payload.followUps.dueCount,0);
   assert.equal(hiddenPerformance.payload.sources.length,0);
-  const invalidPerformance=await request("/deals/performance?startAt=not-a-date&endAt="+encodeURIComponent(performanceEnd));
+  const invalidPerformance=await request("/deals/performance?startAt=not-a-date&endAt="+encodeURIComponent(performanceEnd.toISOString()));
   assert.equal(invalidPerformance.response.status,400);
 
   const removeInUse=await request("/deals/pipeline",{

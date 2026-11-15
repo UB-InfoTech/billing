@@ -328,6 +328,7 @@ export default function Calendar(){
               label:"Actions",
               render:event=>(
                 <div className="btn-group btn-group-sm">
+                  {event.clientId&&<button type="button" className="btn btn-light border" title="Open customer" aria-label="Open customer" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(event.clientId?._id||event.clientId))}><i className="bi bi-person"/></button>}
                   <button type="button" className="btn btn-outline-primary" onClick={()=>openEdit(event)}>Edit</button>
                   <button type="button" className="btn btn-outline-danger" onClick={()=>remove(event._id||event.id)}>Delete</button>
                 </div>

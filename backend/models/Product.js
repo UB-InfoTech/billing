@@ -8,6 +8,7 @@ const ProductSchema=new mongoose.Schema({
   quantity:{type:Number,default:0,min:0},
   stockUnit:{type:String,enum:["PCS","MTR"],default:"PCS"},
   trackInventory:{type:Boolean,default:false},
+  trackInventoryStartedAt:{type:Date,default:null},
   minStock:{type:Number,default:0,min:0},
   serialNumber:{type:String,sparse:true,trim:true},
   designNo:{type:String,sparse:true,trim:true},

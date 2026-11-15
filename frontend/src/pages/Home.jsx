@@ -133,7 +133,9 @@ export default function Home(){
         </div>
       )}
 
-      <section className="ux-dashboard-block mb-4" aria-labelledby="ux-dashboard-actions-title">
+      <div className="ux-dashboard-panels">
+      {isVisible("quickActions")&&(
+        <section className="ux-dashboard-block mb-4" aria-labelledby="ux-dashboard-actions-title" style={style("quickActions")}>
         <div className="ux-dashboard-block-heading">
           <div>
             <h2 id="ux-dashboard-actions-title">What would you like to do?</h2>
@@ -154,9 +156,10 @@ export default function Home(){
             </button>
           ))}
         </div>
-      </section>
+        </section>
+      )}
 
-      <section className="ux-dashboard-block mb-4" aria-labelledby="ux-dashboard-summary-title">
+      <section className="ux-dashboard-block mb-4" aria-labelledby="ux-dashboard-summary-title" style={{order:metrics.reduce((order,metric)=>isVisible(metric.key)?Math.min(order,Number(widget(metric.key).order??99)):order,99)}}>
         <div className="ux-dashboard-block-heading">
           <div>
             <h2 id="ux-dashboard-summary-title">Business at a glance</h2>
@@ -183,6 +186,8 @@ export default function Home(){
           ):null)}
         </div>
       </section>
+
+      </div>
 
       {completedSetupTasks<gettingStartedTasks.length&&(
         setupGuideDismissed?(

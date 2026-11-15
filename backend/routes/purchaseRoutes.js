@@ -234,6 +234,9 @@ router.post("/:id/cancel",auth,async(req,res)=>{
   const purchase=await Purchase.findOne({_id:req.params.id,createdBy:owner(req)});
   if(!purchase)return res.status(404).json({message:"Purchase not found."});
   if(purchase.status==="Cancelled")return res.json({message:"This purchase is already cancelled.",purchase});
+  if(Number(purchase.paidAmount||0)>0||(purchase.payments||[]).length>0){
+   return res.status(409).json({message:"This purchase has supplier payments recorded. Record and reconcile a supplier refund before cancelling it; payment history will not be erased."});
+  }
   const stockMovements=await StockMovement.find({createdBy:owner(req),sourceType:"purchase",sourceId:purchase._id,movementType:"purchase_received"}).lean();
   const netByItem=new Map();
   stockMovements.forEach(item=>{

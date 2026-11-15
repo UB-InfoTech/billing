@@ -175,7 +175,7 @@ export default function Suppliers(){
    </div>
   </section>
 
-  {dialogOpen&&<div className="supplier-modal-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget&&!saving)setDialogOpen(false);}}>
+  {dialogOpen&&<div className="supplier-modal-backdrop supplier-edit-backdrop" role="presentation" onMouseDown={event=>{if(event.target===event.currentTarget&&!saving)setDialogOpen(false);}}>
    <form className="supplier-modal" role="dialog" aria-modal="true" aria-labelledby="supplier-form-title" onSubmit={save}>
     <header className="supplier-modal-header">
      <div><span className="small text-primary fw-semibold text-uppercase">SUPPLIER DETAILS</span><h2 id="supplier-form-title">{editingId?"Edit supplier":"Add a supplier"}</h2><p>Save the contact once, then reuse it on every purchase and expense.</p></div>

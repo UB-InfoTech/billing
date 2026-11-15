@@ -1,6 +1,6 @@
 import BusinessPageHeader from "../components/BusinessPageHeader";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import {useSearchParams} from "react-router-dom";
+import {useNavigate,useSearchParams} from "react-router-dom";
 import {ORDER_FORM_FIELDS,ORDER_ITEM_FIELDS,PAYMENT_FORM_FIELDS} from "../config/noCodeCatalog";
 import axios from "axios";
 import editSVG from '../assets/edit.svg';
@@ -37,6 +37,7 @@ const getInvoiceTotal = (order = {}) => {
 import { useReactToPrint } from "react-to-print";
 
 function Order2() {
+    const navigate=useNavigate();
     const linkone = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
     
     const [orders, setOrders] = useState([]);
@@ -1845,7 +1846,8 @@ const styles = {
                                     <h5 className="modal-title fw-bold mb-1">Invoice {viewingOrder.orderNumber||"Details"}</h5>
                                     <div className="small text-secondary">{viewingOrder.companyName||clients.find(client=>client._id===viewingOrder.clientId)?.companyName||"Customer not linked"} · {viewingOrder.orderDate?new Date(viewingOrder.orderDate).toLocaleDateString("en-IN"):"No date"}</div>
                                 </div>
-                                <div className="d-flex align-items-center gap-2">
+                                <div className="d-flex align-items-center gap-2 flex-wrap">
+                                    {(viewingOrder.clientId?._id||viewingOrder.clientId)&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(viewingOrder.clientId?._id||viewingOrder.clientId))}><i className="bi bi-person me-1"></i>Customer</button>}
                                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>{handleEdit(viewingOrder);setViewingOrder(null);}}><i className="bi bi-pencil me-1"></i>Edit</button>
                                     <button type="button" className="btn-close" aria-label="Close invoice details" onClick={()=>setViewingOrder(null)} />
                                 </div>
@@ -1902,7 +1904,10 @@ const styles = {
                                                 const itemViewSections=groupFieldsBySection(fields);
                                                 return (
                                                     <div className="invoice-view-item" key={item._id||index}>
-                                                        <div className="invoice-view-item-title">Item {index+1}: {item.orderName||item.productName||"Item"}</div>
+                                                        <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
+                                                            <div className="invoice-view-item-title">Item {index+1}: {item.orderName||item.productName||"Item"}</div>
+                                                            {item.productId&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/products?openProduct="+encodeURIComponent(item.productId?._id||item.productId))}><i className="bi bi-box-seam me-1"></i>Open product</button>}
+                                                        </div>
                                                         {itemViewSections.map(section=>(
                                                             <section className="invoice-view-item-section" key={section.key}>
                                                                 <div className="invoice-view-field-label">{section.label}</div>

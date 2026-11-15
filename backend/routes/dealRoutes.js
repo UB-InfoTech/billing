@@ -259,6 +259,10 @@ router.get("/",auth,async(req,res)=>{
   const status=String(req.query.status||"");
   if(["open","won","lost"].includes(status))query.status=status;
   if(req.query.stageKey)query.stageKey=String(req.query.stageKey).slice(0,50);
+  if(req.query.clientId){
+   if(!mongoose.isValidObjectId(req.query.clientId))return res.status(400).json({message:"Choose a valid customer."});
+   query.clientId=new mongoose.Types.ObjectId(String(req.query.clientId));
+  }
   const search=String(req.query.search||"").trim();
   if(search){
    const rx=new RegExp(escapeRegex(search.slice(0,100)),"i");

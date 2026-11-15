@@ -181,6 +181,7 @@ router.get("/:id/usage",auth,async(req,res)=>{
     }
     const orders=await Order.find({
       createdBy:owner(req),
+      status:{$ne:"Cancelled"},
       "subOrders.productId":product._id
     })
       .select("orderNumber orderDate status paymentStatus totalAmount paidAmount dueAmount clientId subOrders")
@@ -229,7 +230,7 @@ router.get("/:id/usage",auth,async(req,res)=>{
         lines
       });
     }
-    const hasMore=invoiceRows.length>100;
+    const hasMore=orders.length>100;
     const invoices=invoiceRows.slice(0,100);
     return res.json({
       product:{_id:String(product._id),productName:product.productName},

@@ -172,6 +172,7 @@ const orderSchema=new mongoose.Schema({
 orderSchema.index({createdBy:1,orderDate:-1});
 orderSchema.index({createdBy:1,status:1,paymentStatus:1});
 orderSchema.index({createdBy:1,clientId:1,orderDate:-1});
+orderSchema.index({createdBy:1,"subOrders.productId":1,orderDate:-1});
 orderSchema.index({createdBy:1,orderNumber:1});
 
 function applyFinancials(doc){

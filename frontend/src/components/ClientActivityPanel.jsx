@@ -18,6 +18,7 @@ const FILTERS=[
  {value:"all",label:"Everything"},
  {value:"interaction",label:"Conversations"},
  {value:"billing",label:"Bills & payments"},
+ {value:"opportunity",label:"Opportunities"},
  {value:"follow_up",label:"Reminders"},
  {value:"finance",label:"Other"}
 ];
@@ -171,6 +172,7 @@ export default function ClientActivityPanel({clientId,apiBase,mode="timeline"}){
   if(activity.source==="invoice"||activity.source==="payment")navigate("/orders?openInvoice="+id);
   else if(activity.source==="credit_note")navigate("/credit-notes?openCreditNote="+id);
   else if(activity.source==="calendar")navigate("/calendar?openEvent="+id);
+  else if(activity.source==="expense")navigate("/edit-expense/"+id);
   else if(activity.source==="deal")navigate("/deals?dealId="+id);
   else if(activity.source==="deal_activity"&&activity.dealId)navigate("/deals?dealId="+encodeURIComponent(activity.dealId));
  };
@@ -269,7 +271,7 @@ export default function ClientActivityPanel({clientId,apiBase,mode="timeline"}){
       {visibleActivities.map(activity=>{
        const isOpen=activity.status==="open";
        const statusLabel=activity.status==="completed"?"Done":activity.status==="cancelled"?"Cancelled":"To do";
-       const linked=["invoice","payment","credit_note","calendar","deal"].includes(activity.source)&&Boolean(activity.sourceId)
+       const linked=["invoice","payment","credit_note","calendar","expense","deal"].includes(activity.source)&&Boolean(activity.sourceId)
         ||activity.source==="deal_activity"&&Boolean(activity.dealId);
        return (
         <article className="client-activity-entry" key={activity.id}>

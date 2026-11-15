@@ -18,7 +18,7 @@ const mongoUri=process.env.MONGO_URI;
 test("supplier purchases, payments, invoice stock and movement history stay connected",{
  skip:!mongoUri?"Set MONGO_URI to run supplier purchase integration tests.":false
 },async()=>{
- let server,ownerId,otherOwnerId,supplierId,otherSupplierId,productId,purchaseId,orderId;
+ let server,ownerId,otherOwnerId,supplierId,otherSupplierId,productId,purchaseId,paidPurchaseId,orderId;
  try{
   await mongoose.connect(mongoUri,{serverSelectionTimeoutMS:10000});
   await Promise.all([
@@ -78,39 +78,39 @@ test("supplier purchases, payments, invoice stock and movement history stay conn
     supplierInvoiceNumber:"BILL-"+suffix.toUpperCase(),
     purchaseDate:new Date().toISOString().slice(0,10),
     items:[{productId:String(productId),quantity:10,unit:"PCS",unitCost:100,taxRate:0,discountRate:0}],
-    initialPayment:{amount:100,method:"Bank Transfer",reference:"BANK-"+suffix}
+    initialPayment:{amount:0,method:"Bank Transfer",reference:""}
    }
   });
   assert.equal(purchaseResponse.response.status,201,JSON.stringify(purchaseResponse.payload));
   purchaseId=purchaseResponse.payload.purchase._id;
   assert.equal(purchaseResponse.payload.purchase.grandTotal,1000);
-  assert.equal(purchaseResponse.payload.purchase.paidAmount,100);
-  assert.equal(purchaseResponse.payload.purchase.dueAmount,900);
+  assert.equal(purchaseResponse.payload.purchase.paidAmount,0);
+  assert.equal(purchaseResponse.payload.purchase.dueAmount,1000);
 
   let updatedProduct=await Product.findOne({_id:productId,createdBy:ownerId}).lean();
-  assert.equal(updatedProduct.quantity,10);
+  assert.equal(updatedProduct.quantity,12);
   assert.equal(updatedProduct.trackInventory,true);
   assert.equal(updatedProduct.stockUnit,"PCS");
   assert.ok(updatedProduct.trackInventoryStartedAt);
 
-  const addPayment=await request("/purchases/"+purchaseId+"/payments",{
+  const paidPurchaseResponse=await request("/purchases",{\n   method:"POST",\n   body:{\n    supplierId,\n    supplierInvoiceNumber:"BILL-PAID-"+suffix.toUpperCase(),\n    purchaseDate:new Date().toISOString().slice(0,10),\n    items:[{productId:String(productId),quantity:2,unit:"PCS",unitCost:100,taxRate:0,discountRate:0}],\n    initialPayment:{amount:100,method:"Bank Transfer",reference:"BANK-PAID-"+suffix}\n   }\n  });\n  assert.equal(paidPurchaseResponse.response.status,201,JSON.stringify(paidPurchaseResponse.payload));\n  paidPurchaseId=paidPurchaseResponse.payload.purchase._id;\n\n  const addPayment=await request("/purchases/"+paidPurchaseId+"/payments",{
    method:"POST",body:{amount:50,method:"UPI",reference:"UPI-"+suffix}
   });
   assert.equal(addPayment.response.status,200,JSON.stringify(addPayment.payload));
   assert.equal(addPayment.payload.purchase.paidAmount,150);
-  assert.equal(addPayment.payload.purchase.dueAmount,850);
+  assert.equal(addPayment.payload.purchase.dueAmount,50);
 
   const purchaseList=await request("/purchases");
   assert.equal(purchaseList.response.status,200);
-  assert.equal(purchaseList.payload.summary.purchaseCount,1);
-  assert.equal(purchaseList.payload.summary.totalPurchased,1000);
+  assert.equal(purchaseList.payload.summary.purchaseCount,2);
+  assert.equal(purchaseList.payload.summary.totalPurchased,1200);
   assert.equal(purchaseList.payload.summary.totalPaid,150);
-  assert.equal(purchaseList.payload.summary.outstanding,850);
+  assert.equal(purchaseList.payload.summary.outstanding,1050);
 
   const supplierProfile=await request("/suppliers/"+supplierId);
   assert.equal(supplierProfile.response.status,200);
-  assert.equal(supplierProfile.payload.summary.purchaseCount,1);
-  assert.equal(supplierProfile.payload.summary.outstanding,850);
+  assert.equal(supplierProfile.payload.summary.purchaseCount,2);
+  assert.equal(supplierProfile.payload.summary.outstanding,1050);
 
   const duplicateGstinInSameBusiness=await request("/suppliers",{
    method:"POST",body:{name:"Duplicate GST supplier "+suffix,gstin}
@@ -140,7 +140,7 @@ test("supplier purchases, payments, invoice stock and movement history stay conn
   assert.equal(invoiceMovements[0].movementType,"invoice_sale");
 
   updatedProduct=await Product.findOne({_id:productId,createdBy:ownerId}).lean();
-  assert.equal(updatedProduct.quantity,7);
+  assert.equal(updatedProduct.quantity,9);
 
   const productUsage=await request("/products/"+productId+"/usage");
   assert.equal(productUsage.response.status,200,JSON.stringify(productUsage.payload));
@@ -162,7 +162,7 @@ test("supplier purchases, payments, invoice stock and movement history stay conn
   assert.equal(returnedMovements[0].movementType,"invoice_cancelled");
 
   updatedProduct=await Product.findOne({_id:productId,createdBy:ownerId}).lean();
-  assert.equal(updatedProduct.quantity,10);
+  assert.equal(updatedProduct.quantity,12);
 
   const noSalesAfterCancellation=await request("/products/"+productId+"/usage");
   assert.equal(noSalesAfterCancellation.response.status,200);
@@ -177,8 +177,11 @@ test("supplier purchases, payments, invoice stock and movement history stay conn
   const purchaseCancel=await request("/purchases/"+purchaseId+"/cancel",{method:"POST",body:{}});
   assert.equal(purchaseCancel.response.status,200,JSON.stringify(purchaseCancel.payload));
   assert.equal(purchaseCancel.payload.purchase.status,"Cancelled");
+  const paidPurchaseCancel=await request("/purchases/"+paidPurchaseId+"/cancel",{method:"POST",body:{}});
+  assert.equal(paidPurchaseCancel.response.status,409);
+  assert.match(paidPurchaseCancel.payload.message,/supplier payments recorded/i);
   updatedProduct=await Product.findOne({_id:productId,createdBy:ownerId}).lean();
-  assert.equal(updatedProduct.quantity,0);
+  assert.equal(updatedProduct.quantity,2);
 
   const historyAfterCancel=await request("/products/"+productId+"/stock-movements");
   assert.ok(historyAfterCancel.payload.movements.some(item=>item.movementType==="purchase_cancelled"));
@@ -199,7 +202,7 @@ test("supplier purchases, payments, invoice stock and movement history stay conn
   if(ownerId){
    await StockMovement.deleteMany({createdBy:ownerId});
    if(orderId)await Order.deleteOne({_id:orderId,createdBy:ownerId});
-   if(purchaseId)await Purchase.deleteOne({_id:purchaseId,createdBy:ownerId});
+   if(purchaseId)await Purchase.deleteOne({_id:purchaseId,createdBy:ownerId});\n   if(paidPurchaseId)await Purchase.deleteOne({_id:paidPurchaseId,createdBy:ownerId});
    if(productId)await Product.deleteOne({_id:productId,createdBy:ownerId});
    if(supplierId)await Supplier.deleteOne({_id:supplierId,createdBy:ownerId});
   }

@@ -6865,3 +6865,5 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
     white-space: normal;
   }
 }
+
+.ux-dashboard-panels { display: flex; flex-direction: column; }

@@ -7,6 +7,7 @@ const jwt=require("jsonwebtoken");
 process.env.JWT_SECRET ||= "sales-deals-integration-tests-only-secret";
 const app=require("../server");
 const Deal=require("../models/Deal");
+const DealActivity=require("../models/DealActivity");
 const SalesPipeline=require("../models/SalesPipeline");
 const Client=require("../models/Client");
 
@@ -18,7 +19,7 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
  let server,ownerId,otherOwnerId,clientId;
  try{
   await mongoose.connect(mongoUri,{serverSelectionTimeoutMS:10000});
-  await Promise.all([Deal.init(),SalesPipeline.init(),Client.init()]);
+  await Promise.all([Deal.init(),DealActivity.init(),SalesPipeline.init(),Client.init()]);
   ownerId=new mongoose.Types.ObjectId();
   otherOwnerId=new mongoose.Types.ObjectId();
   const ownerToken=jwt.sign({user:{id:String(ownerId)}},process.env.JWT_SECRET);
@@ -61,6 +62,32 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
   assert.equal(create.payload.value,125000);
   assert.equal(create.payload.stageHistory.length,1);
   assert.equal(create.payload.clientId,null);
+
+  const reminder=await request("/deals/"+dealId+"/activities",{
+   method:"POST",body:{
+    type:"follow_up",subject:"Send fabric samples",description:"Share the sample photos before calling.",
+    dueAt:new Date(Date.now()+60*60*1000).toISOString()
+   }
+  });
+  assert.equal(reminder.response.status,201,JSON.stringify(reminder.payload));
+  assert.equal(reminder.payload.status,"open");
+  const activityList=await request("/deals/"+dealId+"/activities");
+  assert.equal(activityList.response.status,200);
+  assert.equal(activityList.payload.activities.length,1);
+  const combinedFollowUps=await request("/clients/follow-ups?status=open&bucket=all&page=1&limit=20");
+  assert.equal(combinedFollowUps.response.status,200,JSON.stringify(combinedFollowUps.payload));
+  const dealFollowUp=combinedFollowUps.payload.activities.find(item=>item.recordType==="deal");
+  assert.ok(dealFollowUp);
+  assert.equal(dealFollowUp.deal.title,"Annual uniform supply");
+  const hiddenActivity=await request("/deals/"+dealId+"/activities",{token:otherToken});
+  assert.equal(hiddenActivity.response.status,404);
+  const completeReminder=await request("/deals/"+dealId+"/activities/"+reminder.payload._id,{
+   method:"PATCH",body:{status:"completed"}
+  });
+  assert.equal(completeReminder.response.status,200,JSON.stringify(completeReminder.payload));
+  assert.equal(completeReminder.payload.status,"completed");
+  const completedFollowUps=await request("/clients/follow-ups?status=completed&bucket=all&page=1&limit=20");
+  assert.ok(completedFollowUps.payload.activities.some(item=>item.recordType==="deal"&&String(item._id)===String(reminder.payload._id)));
 
   const linked=await request("/deals",{
    method:"POST",body:{title:"Repeat order",clientId:String(clientId),value:25000}
@@ -143,6 +170,7 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
  }finally{
   if(server)await new Promise(resolve=>server.close(resolve));
   if(ownerId){
+   await DealActivity.deleteMany({createdBy:ownerId});
    await Deal.deleteMany({createdBy:ownerId});
    await SalesPipeline.deleteMany({createdBy:ownerId});
    await Client.deleteMany({createdBy:ownerId});

@@ -107,6 +107,10 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
   const hiddenMove=await request("/deals/"+dealId+"/stage",{method:"PATCH",token:otherToken,body:{stageKey:"won"}});
   assert.equal(hiddenMove.response.status,404);
 
+  const stageInUse=await request("/deals",{
+   method:"POST",body:{title:"Stage migration check",contactName:"Test prospect",stageKey:"proposal-sent",value:5000}
+  });
+  assert.equal(stageInUse.response.status,201,JSON.stringify(stageInUse.payload));
   const removeInUse=await request("/deals/pipeline",{
    method:"PUT",body:{stages:stages.filter(stage=>stage.key!=="proposal-sent")}
   });

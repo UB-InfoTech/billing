@@ -65,17 +65,20 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
           });
 
         // Keep newer modules available to businesses whose saved menus predate them.
+        const afterKey=key=>{
+          const index=next.findIndex(item=>item.key===key);
+          return index<0?next.length:index+1;
+        };
         const addMissing=(key,position)=>{
           if(saved.some(item=>item.key===key)||!byKey.has(key))return;
-          const item=byKey.get(key);
-          const insertAt=typeof position==="function"?position():next.length;
-          next.splice(insertAt,0,item);
+          const insertAt=position?position():next.length;
+          next.splice(Math.min(next.length,Math.max(0,insertAt)),0,byKey.get(key));
         };
-        addMissing("follow-ups",()=>Math.max(0,next.findIndex(item=>item.key==="clients")+1));
-        addMissing("deals",()=>Math.max(0,next.findIndex(item=>item.key==="follow-ups")+1));
-        addMissing("sales-performance",()=>Math.max(0,next.findIndex(item=>item.key==="deals")+1));
-        addMissing("suppliers",()=>Math.max(0,next.findIndex(item=>item.key==="products")+1));
-        addMissing("purchases",()=>Math.max(0,next.findIndex(item=>item.key==="suppliers")+1));
+        addMissing("follow-ups",()=>afterKey("clients"));
+        addMissing("deals",()=>afterKey("follow-ups"));
+        addMissing("sales-performance",()=>afterKey("deals"));
+        addMissing("suppliers",()=>afterKey("products"));
+        addMissing("purchases",()=>afterKey("suppliers"));
         addMissing("financial-recovery",()=>next.length);
         addMissing("organization-profile",()=>next.length);
 
@@ -139,6 +142,19 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
     navigate("/login");
     closeMobile();
   };
+
+  useEffect(()=>{
+    if(!quickCreateOpen)return undefined;
+    const handleKeyDown=event=>{
+      if(event.key==="Escape")setQuickCreateOpen(false);
+    };
+    window.addEventListener("keydown",handleKeyDown);
+    return()=>window.removeEventListener("keydown",handleKeyDown);
+  },[quickCreateOpen]);
+
+  useEffect(()=>{
+    setQuickCreateOpen(false);
+  },[location.pathname]);
 
   const compactNavigation=collapsed&&!mobileOpen;
   const openCreateAction=to=>{

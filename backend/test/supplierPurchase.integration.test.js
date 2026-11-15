@@ -93,7 +93,20 @@ test("supplier purchases, payments, invoice stock and movement history stay conn
   assert.equal(updatedProduct.stockUnit,"PCS");
   assert.ok(updatedProduct.trackInventoryStartedAt);
 
-  const paidPurchaseResponse=await request("/purchases",{\n   method:"POST",\n   body:{\n    supplierId,\n    supplierInvoiceNumber:"BILL-PAID-"+suffix.toUpperCase(),\n    purchaseDate:new Date().toISOString().slice(0,10),\n    items:[{productId:String(productId),quantity:2,unit:"PCS",unitCost:100,taxRate:0,discountRate:0}],\n    initialPayment:{amount:100,method:"Bank Transfer",reference:"BANK-PAID-"+suffix}\n   }\n  });\n  assert.equal(paidPurchaseResponse.response.status,201,JSON.stringify(paidPurchaseResponse.payload));\n  paidPurchaseId=paidPurchaseResponse.payload.purchase._id;\n\n  const addPayment=await request("/purchases/"+paidPurchaseId+"/payments",{
+  const paidPurchaseResponse=await request("/purchases",{
+   method:"POST",
+   body:{
+    supplierId,
+    supplierInvoiceNumber:"BILL-PAID-"+suffix.toUpperCase(),
+    purchaseDate:new Date().toISOString().slice(0,10),
+    items:[{productId:String(productId),quantity:2,unit:"PCS",unitCost:100,taxRate:0,discountRate:0}],
+    initialPayment:{amount:100,method:"Bank Transfer",reference:"BANK-PAID-"+suffix}
+   }
+  });
+  assert.equal(paidPurchaseResponse.response.status,201,JSON.stringify(paidPurchaseResponse.payload));
+  paidPurchaseId=paidPurchaseResponse.payload.purchase._id;
+
+  const addPayment=await request("/purchases/"+paidPurchaseId+"/payments",{
    method:"POST",body:{amount:50,method:"UPI",reference:"UPI-"+suffix}
   });
   assert.equal(addPayment.response.status,200,JSON.stringify(addPayment.payload));
@@ -202,7 +215,8 @@ test("supplier purchases, payments, invoice stock and movement history stay conn
   if(ownerId){
    await StockMovement.deleteMany({createdBy:ownerId});
    if(orderId)await Order.deleteOne({_id:orderId,createdBy:ownerId});
-   if(purchaseId)await Purchase.deleteOne({_id:purchaseId,createdBy:ownerId});\n   if(paidPurchaseId)await Purchase.deleteOne({_id:paidPurchaseId,createdBy:ownerId});
+   if(purchaseId)await Purchase.deleteOne({_id:purchaseId,createdBy:ownerId});
+   if(paidPurchaseId)await Purchase.deleteOne({_id:paidPurchaseId,createdBy:ownerId});
    if(productId)await Product.deleteOne({_id:productId,createdBy:ownerId});
    if(supplierId)await Supplier.deleteOne({_id:supplierId,createdBy:ownerId});
   }

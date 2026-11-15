@@ -668,10 +668,11 @@ router.patch("/:id/activities/:activityId",auth,async(req,res)=>{
   if(!mongoose.isValidObjectId(req.params.id)||!mongoose.isValidObjectId(req.params.activityId))return res.status(400).json({message:"Invalid activity reference."});
   const activity=await ClientActivity.findOne({_id:req.params.activityId,clientId:req.params.id,createdBy:owner(req)});
   if(!activity)return res.status(404).json({message:"Activity not found."});
-
+  const body=req.body||{};
+  const has=key=>Object.prototype.hasOwnProperty.call(body,key);
   if(activity.type==="note"){
-   const subject=String(req.body?.subject||"").trim();
-   const description=String(req.body?.description||"").trim();
+   const subject=String(body.subject||"").trim();
+   const description=String(body.description||"").trim();
    if(!subject)return res.status(400).json({message:"Give this note a short title."});
    if(subject.length>160||description.length>4000)return res.status(400).json({message:"The note is too long."});
    activity.subject=subject;
@@ -679,12 +680,36 @@ router.patch("/:id/activities/:activityId",auth,async(req,res)=>{
    await activity.save();
    return res.json(activity);
   }
-
-  const status=String(req.body?.status||"");
-  if(!["open","completed","cancelled"].includes(status))return res.status(400).json({message:"Choose a valid follow-up status."});
   if(!["task","follow_up"].includes(activity.type))return res.status(400).json({message:"Only notes, tasks and follow-ups can be updated."});
-  activity.status=status;
-  activity.completedAt=status==="completed"?new Date():null;
+  let changed=false;
+  if(has("subject")){
+   const subject=String(body.subject||"").trim();
+   if(!subject)return res.status(400).json({message:"Give this follow-up a short title."});
+   if(subject.length>160)return res.status(400).json({message:"The follow-up title is too long."});
+   activity.subject=subject;changed=true;
+  }
+  if(has("description")){
+   const description=String(body.description||"").trim();
+   if(description.length>4000)return res.status(400).json({message:"The follow-up details are too long."});
+   activity.description=description;changed=true;
+  }
+  if(has("dueAt")){
+   if(body.dueAt===null||body.dueAt==="")activity.dueAt=null;
+   else{
+    const dueAt=new Date(body.dueAt);
+    if(Number.isNaN(dueAt.getTime()))return res.status(400).json({message:"Enter a valid follow-up date."});
+    activity.dueAt=dueAt;
+   }
+   changed=true;
+  }
+  if(has("status")){
+   const status=String(body.status||"");
+   if(!["open","completed","cancelled"].includes(status))return res.status(400).json({message:"Choose a valid follow-up status."});
+   activity.status=status;
+   activity.completedAt=status==="completed"?new Date():null;
+   changed=true;
+  }
+  if(!changed)return res.status(400).json({message:"Make a change before saving this follow-up."});
   await activity.save();
   return res.json(activity);
  }catch(error){return res.status(400).json({message:error.message||"Unable to update this customer activity."});}

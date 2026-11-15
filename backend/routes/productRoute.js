@@ -8,6 +8,9 @@ const mongoose=require("mongoose");
 const Product=require("../models/Product");
 const Order=require("../models/Order2");
 const CreditNote=require("../models/CreditNote");
+const Purchase=require("../models/Purchase");
+const StockMovement=require("../models/StockMovement");
+const {recordStockMovement}=require("../utils/stockMovement");
 const auth=require("../middleware/auth");
 const {getSafeUploadExtension,isAllowedUploadType}=require("../utils/uploadFileTypes");
 const {escapeRegex}=require("../utils/escapeRegex");
@@ -73,7 +76,7 @@ async function nextProductCode(createdBy){
 }
 
 const PRODUCT_FORM_KEYS=[
-  "productName","productCode","description","rate","quantity","serialNumber",
+  "productName","productCode","description","rate","quantity","stockUnit","trackInventory","serialNumber",
   "designNo","purchaseDate","purchasePrice","barcode","minStock"
 ];
 
@@ -274,6 +277,8 @@ router.post("/",auth,receiveProductImages,async(req,res)=>{
       description:String(values.description||"").trim(),
       rate:Number(values.rate||0),
       quantity:Number(values.quantity||0),
+      stockUnit:values.stockUnit||"PCS",
+      trackInventory:values.trackInventory===true||String(values.trackInventory).toLowerCase()==="true",
       serialNumber:serialNumber||undefined,
       designNo:String(values.designNo||"").trim(),
       purchaseDate:values.purchaseDate||null,
@@ -349,6 +354,15 @@ router.put("/:id",auth,receiveProductImages,async(req,res)=>{
     for(const key of ["rate","quantity","purchasePrice","minStock"]){
       if(req.body?.[key]!==undefined)values[key]=Number(req.body[key]);
     }
+    if(req.body?.trackInventory!==undefined){
+      const value=req.body.trackInventory;
+      if(![true,false,"true","false",1,0,"1","0"].includes(value))return res.status(400).json({message:"Choose whether stock tracking is enabled."});
+      values.trackInventory=value===true||value===1||value==="1"||value==="true";
+    }
+    if(req.body?.stockUnit!==undefined){
+      values.stockUnit=String(req.body.stockUnit||"").toUpperCase();
+      if(!["PCS","MTR"].includes(values.stockUnit))return res.status(400).json({message:"Choose PCS or MTR as the stock unit."});
+    }
     if(req.body?.purchaseDate!==undefined)values.purchaseDate=req.body.purchaseDate||null;
 
     const nextCustomFields=cleanCustomFields(req.body?.customFields,originalCustomFields);
@@ -407,6 +421,14 @@ router.put("/:id",auth,receiveProductImages,async(req,res)=>{
       return res.status(400).json({message:"Stock and pricing values must be valid non-negative numbers."});
     }
 
+    if(product.trackInventory&&values.trackInventory===false){
+      const hasMovements=await StockMovement.exists({productId:product._id,createdBy:owner(req)});
+      if(hasMovements)return res.status(409).json({message:"Stock tracking cannot be turned off because this product already has stock history. Keep the history intact and make the product inactive instead."});
+    }
+    if(product.trackInventory&&values.stockUnit!==product.stockUnit){
+      const hasMovements=await StockMovement.exists({productId:product._id,createdBy:owner(req)});
+      if(hasMovements)return res.status(409).json({message:"The stock unit cannot be changed after stock movements have been recorded."});
+    }
     await applyWorkflows({resource:"products",event:"record_updated",doc:product,createdBy:owner(req)});
     if(hasConfiguredCustomCalculations(configuredFields)){
       product.customFields=calculateConfiguredCustomFields(
@@ -444,30 +466,39 @@ router.put("/:id",auth,receiveProductImages,async(req,res)=>{
   }
 });
 
+router.get("/:id/stock-movements",auth,async(req,res)=>{
+  try{
+    if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid product ID."});
+    const product=await Product.findOne({_id:req.params.id,createdBy:owner(req)}).select("_id productName productCode quantity stockUnit trackInventory").lean();
+    if(!product)return res.status(404).json({message:"Product not found."});
+    const page=Math.max(1,Number.parseInt(req.query.page,10)||1);
+    const limit=Math.min(100,Math.max(1,Number.parseInt(req.query.limit,10)||50));
+    const query={productId:product._id,createdBy:owner(req)};
+    const [movements,total]=await Promise.all([
+      StockMovement.find(query).sort({createdAt:-1,_id:-1}).skip((page-1)*limit).limit(limit)
+        .populate({path:"sourceId",select:"purchaseNumber supplierName orderNumber creditNoteNumber",match:{createdBy:owner(req)}}).lean(),
+      StockMovement.countDocuments(query)
+    ]);
+    return res.json({product,movements,pagination:{page,limit,total,pages:Math.max(1,Math.ceil(total/limit))}});
+  }catch(error){return res.status(500).json({message:"Unable to load stock history."});}
+});
+
 router.patch("/:id/stock",auth,async(req,res)=>{
   try{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid product ID."});
     const delta=Number(req.body.quantity);
     if(!Number.isFinite(delta)||delta===0)return res.status(400).json({message:"Enter a non-zero stock adjustment."});
-
-    // Apply stock changes atomically. Reading the quantity and saving a new
-    // total separately lets simultaneous adjustments overwrite one another.
-    const filter={_id:req.params.id,createdBy:owner(req)};
-    if(delta<0)filter.quantity={$gte:Math.abs(delta)};
-    const product=await Product.findOneAndUpdate(
-      filter,
-      {$inc:{quantity:delta}},
-      {new:true,runValidators:true}
-    );
-
-    if(!product){
-      const exists=await Product.exists({_id:req.params.id,createdBy:owner(req)});
-      if(!exists)return res.status(404).json({message:"Product not found."});
-      return res.status(400).json({message:"Insufficient stock."});
-    }
-
-    res.json({message:"Stock updated successfully.",product});
-  }catch(error){res.status(400).json({message:error.message});}
+    const product=await Product.findOne({_id:req.params.id,createdBy:owner(req)}).select("_id stockUnit").lean();
+    if(!product)return res.status(404).json({message:"Product not found."});
+    const unit=String(req.body.unit||product.stockUnit||"PCS").toUpperCase();
+    const result=await recordStockMovement({
+      createdBy:owner(req),productId:product._id,quantityChange:delta,unit,
+      sourceType:"manual",movementType:"manual_adjustment",
+      note:String(req.body.note||"Manual stock adjustment").trim().slice(0,500),
+      activateTracking:true
+    });
+    return res.json({message:"Stock updated successfully.",product:result.product,movement:result.movement});
+  }catch(error){return res.status(error.status||400).json({message:error.message});}
 });
 
 router.delete("/:id",auth,async(req,res)=>{
@@ -479,8 +510,10 @@ router.delete("/:id",auth,async(req,res)=>{
     // Keep catalogue records that form part of invoice history or a posted
     // stock-affecting Credit Note. Removing such a product can make future
     // returns impossible to post or reverse safely.
-    const [invoiceReference,creditNoteReference]=await Promise.all([
+    const [invoiceReference,creditNoteReference,purchaseReference,stockReference]=await Promise.all([
       Order.exists({createdBy:owner(req),"subOrders.productId":product._id}),
+      Purchase.exists({createdBy:owner(req),"items.productId":product._id}),
+      StockMovement.exists({createdBy:owner(req),productId:product._id}),
       CreditNote.exists({
         createdBy:owner(req),
         $or:[
@@ -489,7 +522,7 @@ router.delete("/:id",auth,async(req,res)=>{
         ]
       })
     ]);
-    if(invoiceReference||creditNoteReference){
+    if(invoiceReference||creditNoteReference||purchaseReference||stockReference){
       return res.status(409).json({
         message:"This product is linked to invoice history or a posted stock Credit Note, so it cannot be deleted. Set its stock to zero and keep the record for history."
       });

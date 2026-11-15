@@ -94,7 +94,6 @@ export default function Home(){
   const widget=key=>widgets.find(item=>item.key===key)||DEFAULT_WIDGETS.find(item=>item.key===key)||{};
   const isVisible=key=>widget(key).visible!==false;
   const title=key=>widget(key).title||key;
-  const style=key=>({order:Number(widget(key).order??99)});
 
   const metrics=[
     {key:"revenue",value:money(data?.revenue),detail:"Sales recorded",icon:"bi-graph-up-arrow",to:"/analytics",tone:"blue"},
@@ -185,7 +184,7 @@ export default function Home(){
               <strong>Need a hand getting started?</strong>
               <p>Your setup guide is optional. You can add business details whenever you're ready.</p>
             </div>
-            <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>{setSetupGuideDismissed(false);try{localStorage.removeItem(setupGuideStorageKey);}catch{}}}>Show guide</button>
+            <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>{setSetupGuideDismissed(false);try{localStorage.removeItem(setupGuideStorageKey);}catch{ /* Browser storage is optional. */ } }}>Show guide</button>
           </div>
         ):(
           <section className="ux-dashboard-setup" aria-labelledby="ux-dashboard-setup-title">

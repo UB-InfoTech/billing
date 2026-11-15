@@ -1,0 +1,22 @@
+.client-opportunities-panel{min-width:0}
+.client-opportunities-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.client-opportunities-heading h3{margin:0;color:#2b4057;font-size:1rem;font-weight:750}
+.client-opportunities-heading p{margin:5px 0 0;color:#7d8c9b;font-size:.8rem;line-height:1.45}
+.client-opportunities-heading .btn{font-size:.78rem}
+.client-opportunities-state{display:flex;align-items:center;justify-content:center;min-height:160px;color:#7b8c9c;font-size:.84rem}
+.client-opportunities-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:210px;padding:24px;text-align:center}
+.client-opportunities-empty>span{display:grid;place-items:center;width:46px;height:46px;margin-bottom:10px;border-radius:13px;background:#eef5fb;color:#477fae;font-size:1.2rem}
+.client-opportunities-empty strong{color:#30475d;font-size:.9rem}
+.client-opportunities-empty p{max-width:420px;margin:6px 0 12px;color:#7d8d9b;font-size:.78rem;line-height:1.5}
+.client-opportunities-list{display:flex;flex-direction:column;gap:8px}
+.client-opportunity-row{display:flex;align-items:center;gap:12px;width:100%;min-width:0;padding:12px;border:1px solid #e7edf2;border-radius:10px;background:#fff;text-align:left;transition:border-color .15s,background .15s}
+.client-opportunity-row:hover{border-color:#c8dae8;background:#f9fbfd}
+.client-opportunity-icon{display:grid;place-items:center;flex:0 0 36px;width:36px;height:36px;border-radius:10px;background:#eef4f8;color:#4d7799}
+.client-opportunity-icon.is-won{background:#edf7f1;color:#39805f}
+.client-opportunity-icon.is-lost{background:#fcf0ed;color:#b96e5f}
+.client-opportunity-main{display:flex;flex:1;flex-direction:column;gap:4px;min-width:0}
+.client-opportunity-main strong{overflow:hidden;color:#2d4359;font-size:.84rem;font-weight:720;text-overflow:ellipsis;white-space:nowrap}
+.client-opportunity-main span{overflow:hidden;color:#7d8d9c;font-size:.74rem;text-overflow:ellipsis;white-space:nowrap;text-transform:capitalize}
+.client-opportunity-value{flex:0 0 auto;color:#35546f;font-size:.84rem;font-weight:750;font-variant-numeric:tabular-nums}
+.client-opportunity-arrow{flex:0 0 auto;color:#9aa7b3;font-size:.78rem}
+@media(max-width:520px){.client-opportunity-row{gap:8px;padding:10px}.client-opportunity-icon{width:32px;height:32px;flex-basis:32px}.client-opportunity-value{font-size:.76rem}}

@@ -172,10 +172,11 @@ router.get("/:id/usage",auth,async(req,res)=>{
     })
       .select("orderNumber orderDate status paymentStatus totalAmount paidAmount dueAmount clientId subOrders")
       .sort({orderDate:-1,createdAt:-1})
-      .limit(100)
+      .limit(101)
       .populate({path:"clientId",select:"name companyName",match:{createdBy:owner(req)}})
       .lean();
-    const invoices=orders.map(order=>{
+    const hasMore=orders.length>100;
+    const invoices=orders.slice(0,100).map(order=>{
       const lines=(Array.isArray(order.subOrders)?order.subOrders:[])
         .filter(item=>String(item.productId||"")===String(product._id))
         .map(item=>({
@@ -204,7 +205,7 @@ router.get("/:id/usage",auth,async(req,res)=>{
       product:{_id:String(product._id),productName:product.productName},
       invoices,
       totalInvoices:invoices.length,
-      hasMore:invoices.length===100
+      hasMore
     });
   }catch(error){
     console.error("Product sales history error:",error);

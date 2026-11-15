@@ -169,6 +169,16 @@ router.get("/:id/usage",auth,async(req,res)=>{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid product ID."});
     const product=await Product.findOne({_id:req.params.id,createdBy:owner(req)}).select("_id productName").lean();
     if(!product)return res.status(404).json({message:"Product not found."});
+    const movements=await StockMovement.find({
+      createdBy:owner(req),productId:product._id,sourceType:"invoice"
+    }).select("sourceId sourceItemId unit quantityChange").lean();
+    const movementNet=new Map();
+    for(const movement of movements){
+      const key=String(movement.sourceId)+"|"+String(movement.sourceItemId||"");
+      const current=movementNet.get(key)||{quantity:0,unit:movement.unit||"PCS"};
+      current.quantity+=Number(movement.quantityChange||0);
+      movementNet.set(key,current);
+    }
     const orders=await Order.find({
       createdBy:owner(req),
       "subOrders.productId":product._id
@@ -178,19 +188,34 @@ router.get("/:id/usage",auth,async(req,res)=>{
       .limit(101)
       .populate({path:"clientId",select:"name companyName",match:{createdBy:owner(req)}})
       .lean();
-    const hasMore=orders.length>100;
-    const invoices=orders.slice(0,100).map(order=>{
+    const invoiceRows=[];
+    for(const order of orders){
+      if(order.status==="Cancelled")continue;
       const lines=(Array.isArray(order.subOrders)?order.subOrders:[])
         .filter(item=>String(item.productId||"")===String(product._id))
-        .map(item=>({
-          productName:item.orderName||product.productName,
-          quantity:Number(item.quantity||0),
-          meters:Number(item.MTR||0),
-          unit:item.qtyUnit||"PCS",
-          rate:Number(item.unitPrice||0),
-          designNumber:item.designNumber||""
-        }));
-      return {
+        .map(item=>{
+          const sourceItemId=String(item._id||"");
+          const movement=movementNet.get(String(order._id)+"|"+sourceItemId);
+          if(movement&&movement.quantity>=-0.0001)return null;
+          const unit=movement?.unit||item.qtyUnit||"PCS";
+          const fallbackEntered=unit==="MTR"?Number(item.MTR||0):Number(item.quantity||0);
+          const fallbackShort=Math.max(0,Number(item.shortPcs||0));
+          const soldQuantity=movement
+            ?Math.abs(Number(movement.quantity||0))
+            :Math.max(0,fallbackEntered-fallbackShort);
+          if(soldQuantity<=0)return null;
+          return {
+            productName:item.orderName||product.productName,
+            quantity:unit==="PCS"?soldQuantity:0,
+            meters:unit==="MTR"?soldQuantity:0,
+            unit,
+            rate:Number(item.unitPrice||0),
+            designNumber:item.designNumber||""
+          };
+        })
+        .filter(Boolean);
+      if(!lines.length)continue;
+      invoiceRows.push({
         invoiceId:String(order._id),
         invoiceNumber:order.orderNumber||"Invoice",
         invoiceDate:order.orderDate||null,
@@ -202,8 +227,10 @@ router.get("/:id/usage",auth,async(req,res)=>{
         paidAmount:Number(order.paidAmount||0),
         dueAmount:Number(order.dueAmount||0),
         lines
-      };
-    });
+      });
+    }
+    const hasMore=invoiceRows.length>100;
+    const invoices=invoiceRows.slice(0,100);
     return res.json({
       product:{_id:String(product._id),productName:product.productName},
       invoices,

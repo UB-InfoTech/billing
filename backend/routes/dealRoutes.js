@@ -2,6 +2,7 @@ const express=require("express");
 const mongoose=require("mongoose");
 const auth=require("../middleware/auth");
 const Deal=require("../models/Deal");
+const DealActivity=require("../models/DealActivity");
 const SalesPipeline=require("../models/SalesPipeline");
 const Client=require("../models/Client");
 const {DEFAULT_DEAL_STAGES,normalizeOpenStages}=require("../utils/dealPipeline");
@@ -225,6 +226,130 @@ router.post("/:id/convert-customer",auth,async(req,res)=>{
  }catch(error){
   console.error("Opportunity conversion error:",error);
   return res.status(400).json({message:error.message||"The customer record could not be created."});
+ }
+});
+
+
+async function syncDealNextAction(deal,completedSubject=""){
+ const next=await DealActivity.findOne({
+  dealId:deal._id,createdBy:deal.createdBy,type:{$in:["task","follow_up"]},status:"open"
+ }).sort({dueAt:1,createdAt:1}).lean();
+ if(next){
+  deal.nextAction=next.subject;
+  deal.nextActionAt=next.dueAt||null;
+ }else if(!completedSubject||deal.nextAction===completedSubject){
+  deal.nextAction="";
+  deal.nextActionAt=null;
+ }
+ await deal.save();
+}
+
+router.get("/:id/activities",auth,async(req,res)=>{
+ try{
+  if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid opportunity ID."});
+  const deal=await Deal.findOne({_id:req.params.id,createdBy:owner(req)}).select("_id");
+  if(!deal)return res.status(404).json({message:"Opportunity not found."});
+  const rawLimit=Number(req.query.limit||150);
+  const limit=Number.isFinite(rawLimit)?Math.min(300,Math.max(1,Math.floor(rawLimit))):150;
+  const activities=await DealActivity.find({dealId:deal._id,createdBy:owner(req)})
+   .sort({occurredAt:-1,createdAt:-1}).limit(limit).lean();
+  return res.json({activities,hasMore:activities.length===limit});
+ }catch(error){
+  console.error("Opportunity activity load error:",error);
+  return res.status(500).json({message:"Unable to load this opportunity's activity."});
+ }
+});
+
+router.post("/:id/activities",auth,async(req,res)=>{
+ try{
+  if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid opportunity ID."});
+  const deal=await Deal.findOne({_id:req.params.id,createdBy:owner(req)});
+  if(!deal)return res.status(404).json({message:"Opportunity not found."});
+  const allowed=["note","call","email","meeting","whatsapp","quotation","follow_up","task","other"];
+  const type=String(req.body?.type||"note");
+  const subject=cleanText(req.body?.subject,160,"Activity title");
+  const description=cleanText(req.body?.description,4000,"Activity details");
+  if(!allowed.includes(type))return res.status(400).json({message:"Choose a valid activity type."});
+  if(!subject)return res.status(400).json({message:"Add a short title for this activity."});
+  const occurredAt=parseDate(req.body?.occurredAt,"activity date")||new Date();
+  const isReminder=["task","follow_up"].includes(type);
+  const dueAt=isReminder?parseDate(req.body?.dueAt,"reminder date"):null;
+  const activity=await DealActivity.create({
+   dealId:deal._id,createdBy:owner(req),type,subject,description,occurredAt,dueAt,
+   status:isReminder?"open":"completed"
+  });
+  if(isReminder){
+   deal.nextAction=subject;
+   deal.nextActionAt=dueAt;
+   await deal.save();
+  }
+  return res.status(201).json(activity);
+ }catch(error){
+  return res.status(400).json({message:error.message||"Unable to save this activity."});
+ }
+});
+
+router.patch("/:id/activities/:activityId",auth,async(req,res)=>{
+ try{
+  if(!mongoose.isValidObjectId(req.params.id)||!mongoose.isValidObjectId(req.params.activityId)){
+   return res.status(400).json({message:"Invalid activity reference."});
+  }
+  const [deal,activity]=await Promise.all([
+   Deal.findOne({_id:req.params.id,createdBy:owner(req)}),
+   DealActivity.findOne({_id:req.params.activityId,dealId:req.params.id,createdBy:owner(req)})
+  ]);
+  if(!deal||!activity)return res.status(404).json({message:"Opportunity activity not found."});
+  if(activity.type==="note"){
+   const subject=cleanText(req.body?.subject,160,"Note title");
+   const description=cleanText(req.body?.description,4000,"Note details");
+   if(!subject)return res.status(400).json({message:"Give this note a short title."});
+   activity.subject=subject;
+   activity.description=description;
+   await activity.save();
+   return res.json(activity);
+  }
+  if(!["task","follow_up"].includes(activity.type)){
+   return res.status(400).json({message:"Only notes and reminders can be edited."});
+  }
+  if(Object.prototype.hasOwnProperty.call(req.body||{},"subject")){
+   const subject=cleanText(req.body.subject,160,"Reminder title");
+   if(!subject)return res.status(400).json({message:"Give this reminder a short title."});
+   activity.subject=subject;
+  }
+  if(Object.prototype.hasOwnProperty.call(req.body||{},"description")){
+   activity.description=cleanText(req.body.description,4000,"Reminder details");
+  }
+  if(Object.prototype.hasOwnProperty.call(req.body||{},"dueAt")){
+   activity.dueAt=parseDate(req.body.dueAt,"reminder date");
+  }
+  if(Object.prototype.hasOwnProperty.call(req.body||{},"status")){
+   const status=String(req.body.status||"");
+   if(!["open","completed","cancelled"].includes(status)){
+    return res.status(400).json({message:"Choose a valid reminder status."});
+   }
+   activity.status=status;
+   activity.completedAt=status==="completed"?new Date():null;
+  }
+  await activity.save();
+  await syncDealNextAction(deal,activity.subject);
+  return res.json(activity);
+ }catch(error){
+  return res.status(400).json({message:error.message||"Unable to update this opportunity activity."});
+ }
+});
+
+router.delete("/:id/activities/:activityId",auth,async(req,res)=>{
+ try{
+  if(!mongoose.isValidObjectId(req.params.id)||!mongoose.isValidObjectId(req.params.activityId)){
+   return res.status(400).json({message:"Invalid activity reference."});
+  }
+  const activity=await DealActivity.findOneAndDelete({
+   _id:req.params.activityId,dealId:req.params.id,createdBy:owner(req),type:"note"
+  });
+  if(!activity)return res.status(404).json({message:"Opportunity note not found."});
+  return res.json({message:"Opportunity note deleted."});
+ }catch(error){
+  return res.status(400).json({message:error.message||"Unable to delete this opportunity note."});
  }
 });
 

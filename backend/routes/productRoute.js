@@ -447,7 +447,7 @@ router.put("/:id",auth,receiveProductImages,async(req,res)=>{
       &&Number(values.quantity)!==Number(originalValues.quantity)){
       return res.status(409).json({message:"Stock is tracked automatically for this product. Use Stock history to add or reduce quantities so the change is recorded."});
     }
-    if(product.trackInventory&&values.stockUnit!==product.stockUnit){    if(product.trackInventory&&values.stockUnit!==product.stockUnit){
+    if(product.trackInventory&&values.stockUnit!==product.stockUnit){
       const hasMovements=await StockMovement.exists({productId:product._id,createdBy:owner(req)});
       if(hasMovements)return res.status(409).json({message:"The stock unit cannot be changed after stock movements have been recorded."});
     }

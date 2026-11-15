@@ -76,7 +76,7 @@ async function nextProductCode(createdBy){
 }
 
 const PRODUCT_FORM_KEYS=[
-  "productName","productCode","description","rate","quantity","stockUnit","trackInventory","serialNumber",
+  "productName","productCode","description","rate","quantity","stockUnit","serialNumber",
   "designNo","purchaseDate","purchasePrice","barcode","minStock"
 ];
 
@@ -278,7 +278,6 @@ router.post("/",auth,receiveProductImages,async(req,res)=>{
       rate:Number(values.rate||0),
       quantity:Number(values.quantity||0),
       stockUnit:values.stockUnit||"PCS",
-      trackInventory:values.trackInventory===true||String(values.trackInventory).toLowerCase()==="true",
       serialNumber:serialNumber||undefined,
       designNo:String(values.designNo||"").trim(),
       purchaseDate:values.purchaseDate||null,
@@ -354,11 +353,6 @@ router.put("/:id",auth,receiveProductImages,async(req,res)=>{
     for(const key of ["rate","quantity","purchasePrice","minStock"]){
       if(req.body?.[key]!==undefined)values[key]=Number(req.body[key]);
     }
-    if(req.body?.trackInventory!==undefined){
-      const value=req.body.trackInventory;
-      if(![true,false,"true","false",1,0,"1","0"].includes(value))return res.status(400).json({message:"Choose whether stock tracking is enabled."});
-      values.trackInventory=value===true||value===1||value==="1"||value==="true";
-    }
     if(req.body?.stockUnit!==undefined){
       values.stockUnit=String(req.body.stockUnit||"").toUpperCase();
       if(!["PCS","MTR"].includes(values.stockUnit))return res.status(400).json({message:"Choose PCS or MTR as the stock unit."});
@@ -421,11 +415,11 @@ router.put("/:id",auth,receiveProductImages,async(req,res)=>{
       return res.status(400).json({message:"Stock and pricing values must be valid non-negative numbers."});
     }
 
-    if(product.trackInventory&&values.trackInventory===false){
-      const hasMovements=await StockMovement.exists({productId:product._id,createdBy:owner(req)});
-      if(hasMovements)return res.status(409).json({message:"Stock tracking cannot be turned off because this product already has stock history. Keep the history intact and make the product inactive instead."});
+    if(product.trackInventory&&req.body?.quantity!==undefined
+      &&Number(values.quantity)!==Number(originalValues.quantity)){
+      return res.status(409).json({message:"Stock is tracked automatically for this product. Use Stock history to add or reduce quantities so the change is recorded."});
     }
-    if(product.trackInventory&&values.stockUnit!==product.stockUnit){
+    if(product.trackInventory&&values.stockUnit!==product.stockUnit){    if(product.trackInventory&&values.stockUnit!==product.stockUnit){
       const hasMovements=await StockMovement.exists({productId:product._id,createdBy:owner(req)});
       if(hasMovements)return res.status(409).json({message:"The stock unit cannot be changed after stock movements have been recorded."});
     }
@@ -475,8 +469,7 @@ router.get("/:id/stock-movements",auth,async(req,res)=>{
     const limit=Math.min(100,Math.max(1,Number.parseInt(req.query.limit,10)||50));
     const query={productId:product._id,createdBy:owner(req)};
     const [movements,total]=await Promise.all([
-      StockMovement.find(query).sort({createdAt:-1,_id:-1}).skip((page-1)*limit).limit(limit)
-        .populate({path:"sourceId",select:"purchaseNumber supplierName orderNumber creditNoteNumber",match:{createdBy:owner(req)}}).lean(),
+      StockMovement.find(query).sort({createdAt:-1,_id:-1}).skip((page-1)*limit).limit(limit).lean(),
       StockMovement.countDocuments(query)
     ]);
     return res.json({product,movements,pagination:{page,limit,total,pages:Math.max(1,Math.ceil(total/limit))}});

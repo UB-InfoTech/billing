@@ -591,16 +591,39 @@ router.post("/:id/activities",auth,async(req,res)=>{
 router.patch("/:id/activities/:activityId",auth,async(req,res)=>{
  try{
   if(!mongoose.isValidObjectId(req.params.id)||!mongoose.isValidObjectId(req.params.activityId))return res.status(400).json({message:"Invalid activity reference."});
-  const status=String(req.body?.status||"");
-  if(!["open","completed","cancelled"].includes(status))return res.status(400).json({message:"Choose a valid follow-up status."});
   const activity=await ClientActivity.findOne({_id:req.params.activityId,clientId:req.params.id,createdBy:owner(req)});
   if(!activity)return res.status(404).json({message:"Activity not found."});
-  if(!["task","follow_up"].includes(activity.type))return res.status(400).json({message:"Only tasks and follow-ups have a completion status."});
+
+  if(activity.type==="note"){
+   const subject=String(req.body?.subject||"").trim();
+   const description=String(req.body?.description||"").trim();
+   if(!subject)return res.status(400).json({message:"Give this note a short title."});
+   if(subject.length>160||description.length>4000)return res.status(400).json({message:"The note is too long."});
+   activity.subject=subject;
+   activity.description=description;
+   await activity.save();
+   return res.json(activity);
+  }
+
+  const status=String(req.body?.status||"");
+  if(!["open","completed","cancelled"].includes(status))return res.status(400).json({message:"Choose a valid follow-up status."});
+  if(!["task","follow_up"].includes(activity.type))return res.status(400).json({message:"Only notes, tasks and follow-ups can be updated."});
   activity.status=status;
   activity.completedAt=status==="completed"?new Date():null;
   await activity.save();
   return res.json(activity);
- }catch(error){return res.status(400).json({message:error.message||"Unable to update this follow-up."});}
+ }catch(error){return res.status(400).json({message:error.message||"Unable to update this customer activity."});}
+});
+
+router.delete("/:id/activities/:activityId",auth,async(req,res)=>{
+ try{
+  if(!mongoose.isValidObjectId(req.params.id)||!mongoose.isValidObjectId(req.params.activityId))return res.status(400).json({message:"Invalid activity reference."});
+  const note=await ClientActivity.findOneAndDelete({
+   _id:req.params.activityId,clientId:req.params.id,createdBy:owner(req),type:"note"
+  });
+  if(!note)return res.status(404).json({message:"Customer note not found."});
+  return res.json({message:"Customer note deleted."});
+ }catch(error){return res.status(400).json({message:error.message||"Unable to delete this customer note."});}
 });
 
 router.delete("/:id",auth,async(req,res)=>{

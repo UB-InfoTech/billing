@@ -55,6 +55,14 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
           const clientsIndex=next.findIndex(item=>item.key==="clients");
           next.splice(clientsIndex>=0?clientsIndex+1:next.length,0,byKey.get(followUpsKey));
         }
+
+        // Add the sales pipeline to older saved menus unless it was explicitly hidden.
+        const dealsKey="deals";
+        const dealsConfigured=saved.some(item=>item.key===dealsKey);
+        if(!dealsConfigured&&byKey.has(dealsKey)){
+          const clientsIndex=next.findIndex(item=>item.key==="clients");
+          next.splice(clientsIndex>=0?clientsIndex+1:next.length,0,byKey.get(dealsKey));
+        }
         // Existing businesses may have saved their menu before this module
         // existed. Add it once by default, but respect an explicit hidden choice.
         const organizationProfileKey="organization-profile";

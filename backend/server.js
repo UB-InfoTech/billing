@@ -103,6 +103,7 @@ app.get("/api/health",(req,res)=>{
 
 app.use("/api/auth",require("./routes/auth"));
 app.use("/api/clients",require("./routes/clientRoutes"));
+app.use("/api/deals",require("./routes/dealRoutes"));
 app.use("/api/order",require("./routes/orderRoutes2"));
 app.use("/api/events",require("./routes/calendar"));
 app.use("/api/expenses",require("./routes/expenseRoutes2"));

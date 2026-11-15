@@ -10,6 +10,8 @@ const Profile=require("../models/Profile");
 const Client=require("../models/Client");
 const Product=require("../models/Product");
 const CreditNote=require("../models/CreditNote");
+const StockMovement=require("../models/StockMovement");
+const {synchronizeInvoiceStock,rollbackStockMovements}=require("../utils/stockMovement");
 const InvoiceConfiguration=require("../models/InvoiceConfiguration");
 const PaymentLog=require("../models/PaymentLog2");
 const auth=require("../middleware/auth");
@@ -219,6 +221,8 @@ router.get("/all-orders",auth,async(req,res)=>{
 });
 
 router.post("/orders/create",auth,async(req,res)=>{
+  const inventoryMovements=[];
+  let invoiceSaved=false;
   try{
     // Do not accept payments, credit applications, stored totals, ownership,
     // or other system-maintained fields from the normal invoice form.
@@ -319,10 +323,18 @@ router.post("/orders/create",auth,async(req,res)=>{
       actor:userId(req),
       next:buildInvoiceFinancialSnapshot(order,Order.calculateFinancials(order).roundOffFinalRevenue)
     });
+    inventoryMovements.push(...await synchronizeInvoiceStock({createdBy:userId(req),order}));
     await order.save();
+    invoiceSaved=true;
     await syncClientDataSafely(order.clientId,"invoice creation",userId(req));
     res.status(201).json({success:true,order});
-  }catch(error){res.status(400).json({success:false,message:error.message});}
+  }catch(error){
+    if(!invoiceSaved&&inventoryMovements.length){
+      try{await rollbackStockMovements(inventoryMovements,userId(req));}
+      catch(rollbackError){console.error("Invoice stock rollback failed:",rollbackError);}
+    }
+    res.status(error.status||400).json({success:false,message:error.message});
+  }
 });
 
 router.get("/orders",auth,async(req,res)=>{
@@ -353,6 +365,8 @@ router.get("/orders/:id",auth,async(req,res)=>{
 });
 
 router.put("/orders/:id/update",auth,async(req,res)=>{
+  const inventoryMovements=[];
+  let invoiceSaved=false;
   try{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid order ID."});
     const order=await Order.findOne({_id:req.params.id,createdBy:userId(req)});if(!order)return res.status(404).json({message:"Order not found"});
@@ -575,12 +589,18 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
       });
     }
 
+    inventoryMovements.push(...await synchronizeInvoiceStock({createdBy:userId(req),order}));
     applyOrderSaveConcurrencyGuard(order,userId(req));
     await order.save();
+    invoiceSaved=true;
     const newClient=String(order.clientId||"");
     if(oldClient)await syncClientDataSafely(oldClient,"invoice update",userId(req));if(newClient&&newClient!==oldClient)await syncClientDataSafely(newClient,"invoice update",userId(req));
     res.json({success:true,message:"Order updated successfully",order});
   }catch(error){
+    if(!invoiceSaved&&inventoryMovements.length){
+      try{await rollbackStockMovements(inventoryMovements,userId(req));}
+      catch(rollbackError){console.error("Invoice update stock rollback failed:",rollbackError);}
+    }
     const staleSave=error?.name==="DocumentNotFoundError"||error?.name==="VersionError";
     return res.status(error.status||(staleSave?409:400)).json({
       success:false,
@@ -592,6 +612,8 @@ router.put("/orders/:id/update",auth,async(req,res)=>{
 });
 
 router.patch("/orders/:id/upd",auth,async(req,res)=>{
+  const inventoryMovements=[];
+  let invoiceSaved=false;
   try{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid order ID."});
     if(!STATUSES.includes(req.body?.status))return res.status(400).json({message:"Invalid order status."});
@@ -605,11 +627,17 @@ router.patch("/orders/:id/upd",auth,async(req,res)=>{
     order.statusHistory=Array.isArray(order.statusHistory)?order.statusHistory:[];
     order.statusHistory.push({status:req.body.status,timestamp:new Date()});
     await applyWorkflows({resource:"orders",event:"record_updated",doc:order,createdBy:userId(req)});
+    inventoryMovements.push(...await synchronizeInvoiceStock({createdBy:userId(req),order}));
     applyOrderSaveConcurrencyGuard(order,userId(req));
     await order.save();
+    invoiceSaved=true;
     await syncClientDataSafely(order.clientId,"an invoice status update",userId(req));
     return res.json({message:"Order status updated",order});
   }catch(error){
+    if(!invoiceSaved&&inventoryMovements.length){
+      try{await rollbackStockMovements(inventoryMovements,userId(req));}
+      catch(rollbackError){console.error("Invoice status stock rollback failed:",rollbackError);}
+    }
     const staleSave=error?.name==="DocumentNotFoundError"||error?.name==="VersionError";
     return res.status(error.status||(staleSave?409:400)).json({
       message:staleSave
@@ -629,6 +657,8 @@ router.delete("/orders/:id/delete",auth,async(req,res)=>{
     if(Number(order.creditAppliedAmount||0)>0||Number(order.creditNoteCount||0)>0){
       return res.status(409).json({success:false,message:"This invoice has credit history and cannot be permanently deleted. Cancel or reconcile its Credit Notes first."});
     }
+    const hasInventoryHistory=await StockMovement.exists({createdBy:userId(req),sourceType:"invoice",sourceId:order._id});
+    if(hasInventoryHistory)return res.status(409).json({message:"This invoice has stock movement history. Keep it for audit purposes and use Cancelled status to reverse stock."});
     const postedCredits=await CreditNote.countDocuments({originalOrderId:order._id,createdBy:userId(req),status:"Posted"});
     if(postedCredits>0)return res.status(409).json({message:"Cancel or reconcile posted Credit Notes before deleting this invoice."});
     await Order.deleteOne({_id:order._id,createdBy:userId(req)});

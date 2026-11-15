@@ -98,7 +98,7 @@ export const PRODUCT_FORM_FIELDS=[
  {key:"minStock",label:"Minimum Stock",fieldType:"number",width:4,section:"stock",order:6},
  {key:"quantity",label:"Current Stock",fieldType:"number",width:4,section:"stock",order:2},
  {key:"stockUnit",label:"Stock Unit",fieldType:"select",width:4,section:"stock",order:3,options:[{value:"PCS",label:"Pieces (PCS)"},{value:"MTR",label:"Metres (MTR)"}]},
- {key:"trackInventory",label:"Track stock automatically",fieldType:"boolean",width:4,section:"stock",order:4,defaultValue:false,helpText:"When enabled, purchases add stock and invoices deduct sold quantities."},
+
  {key:"serialNumber",label:"Serial Number",fieldType:"text",width:4,section:"stock",order:7},
  {key:"barcode",label:"Barcode",fieldType:"text",width:4,section:"stock",order:8},
  {key:"purchaseDate",label:"Purchase Date",fieldType:"date",width:4,section:"stock",order:9},

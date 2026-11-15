@@ -70,24 +70,34 @@ function buildClientActivityTimeline({client,manualActivities=[],orders=[],credi
    occurredAt:item.timestamp||order.updatedAt||order.createdAt,reference:number,status:item.status
   }));
   const paymentHistory=Array.isArray(order.paymentHistory)?order.paymentHistory:[];
-  if(paymentHistory.length){
-   paymentHistory.forEach((item,index)=>{
-    const snapshot=item.after||item.before||{};
-    const verb=item.action==="added"?"received":item.action==="edited"?"updated":"removed";
-    add({
-     id:"payment-history-"+String(order._id)+"-"+index,source:"payment",sourceId:order._id,
-     type:"payment_"+String(item.action||"updated"),category:"billing",title:"Payment "+verb,
-     description:number+" · "+String(snapshot.method||"Payment")+(snapshot.amountReference?" · "+snapshot.amountReference:""),
-     occurredAt:item.effectiveAt||item.recordedAt||snapshot.paymentDate,
-     reference:number,amount:snapshot.amount,status:item.action
-    });
+  const auditedPaymentIds=new Set();
+  paymentHistory.forEach((item,index)=>{
+   if(item.paymentId)auditedPaymentIds.add(String(item.paymentId));
+   const snapshot=item.after||item.before||{};
+   const verb=item.action==="added"?"received":item.action==="edited"?"updated":"removed";
+   add({
+    id:"payment-history-"+String(order._id)+"-"+index,source:"payment",sourceId:order._id,
+    type:"payment_"+String(item.action||"updated"),category:"billing",title:"Payment "+verb,
+    description:number+" · "+String(snapshot.method||"Payment")+(snapshot.amountReference?" · "+snapshot.amountReference:""),
+    occurredAt:item.effectiveAt||item.recordedAt||snapshot.paymentDate,
+    reference:number,amount:snapshot.amount,status:item.action
    });
-  }else if(sameId(order.clientId,clientId))(Array.isArray(order.payments)?order.payments:[]).forEach((payment,index)=>add({
-   id:"payment-"+String(order._id)+"-"+String(payment._id||index),source:"payment",sourceId:order._id,
-   type:"payment_received",category:"billing",title:"Payment received",
-   description:number+" · "+String(payment.method||"Payment")+(payment.amountReference?" · "+payment.amountReference:""),
-   occurredAt:payment.paymentDate||payment.createdAt,reference:number,amount:payment.amount
-  }));
+  });
+
+  // Payment audit history was introduced after some invoices already contained
+  // payments. A partially populated history must not hide those older payments.
+  // Use the live payment record only when no audit event exists for its ID, so
+  // audited payments are not shown twice.
+  if(sameId(order.clientId,clientId))(Array.isArray(order.payments)?order.payments:[]).forEach((payment,index)=>{
+   const paymentId=String(payment?._id||"");
+   if(paymentId&&auditedPaymentIds.has(paymentId))return;
+   add({
+    id:"payment-"+String(order._id)+"-"+(paymentId||index),source:"payment",sourceId:order._id,
+    type:"payment_received",category:"billing",title:"Payment received",
+    description:number+" · "+String(payment.method||"Payment")+(payment.amountReference?" · "+payment.amountReference:""),
+    occurredAt:payment.paymentDate||payment.createdAt,reference:number,amount:payment.amount
+   });
+  });
  }
 
  const dealTitles=new Map();

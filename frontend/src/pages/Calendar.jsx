@@ -110,6 +110,19 @@ export default function Calendar(){
     setModal({open:true,id:null,values});
   };
 
+  useEffect(()=>{
+    const action=searchParams.get("action");
+    const clientId=searchParams.get("clientId");
+    if(action!=="new"&&!clientId)return;
+    const params=new URLSearchParams(searchParams);
+    params.delete("action");
+    params.delete("clientId");
+    setSearchParams(params,{replace:true});
+    const values=emptyEvent(eventFields);
+    if(clientId)values.clientId=clientId;
+    setModal({open:true,id:null,values});
+  },[searchParams,setSearchParams,eventFields]);
+
   const openEdit=event=>{
     setModal({
       open:true,

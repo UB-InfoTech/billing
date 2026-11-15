@@ -462,7 +462,7 @@ export default function Deals(){
         </div>}
        </div>
        <footer className="deals-modal-footer">
-        <div>{editingId&&selectedDeal?.status==="won"&&!selectedDeal?.clientId&&<button type="button" className="btn btn-outline-primary" onClick={()=>convertToCustomer(selectedDeal)} disabled={conversionSaving}>{conversionSaving?"Creating...":"Create customer record"}</button>}{editingId&&selectedDeal?.clientId&&typeof selectedDeal.clientId==="object"&&<button type="button" className="btn btn-light border" onClick={()=>navigate("/clients?openClient="+selectedDeal.clientId._id)}>Open customer</button>}</div>
+        <div>{editingId&&selectedDeal?.status==="won"&&!selectedDeal?.clientId&&<button type="button" className="btn btn-outline-primary" onClick={()=>convertToCustomer(selectedDeal)} disabled={conversionSaving}>{conversionSaving?"Creating...":"Create customer record"}</button>}{editingId&&selectedDeal?.clientId&&typeof selectedDeal.clientId==="object"&&<button type="button" className="btn btn-light border" onClick={()=>navigate("/clients?openClient="+selectedDeal.clientId._id)}>Open customer</button>}{editingId&&selectedDeal?.status==="won"&&selectedDeal?.clientId&&typeof selectedDeal.clientId==="object"&&<button type="button" className="btn btn-outline-primary" onClick={()=>navigate("/orders?action=new&clientId="+encodeURIComponent(selectedDeal.clientId._id))}>Create invoice</button>}</div>
         <div><button type="button" className="btn btn-light border" onClick={closeComposer}>Cancel</button><button type="submit" className="btn btn-primary" disabled={saving}>{saving?"Saving...":editingId?"Save changes":"Add opportunity"}</button></div>
        </footer>
       </form>

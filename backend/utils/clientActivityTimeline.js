@@ -96,22 +96,27 @@ function buildClientActivityTimeline({client,manualActivities=[],orders=[],credi
   dealTitles.set(String(deal._id),title);
   const history=Array.isArray(deal.stageHistory)?deal.stageHistory:[];
   if(history.length){
-   history.forEach((item,index)=>add({
-    id:"deal-stage-"+String(deal._id)+"-"+index,
-    source:"deal",sourceId:deal._id,
-    type:index===0?"deal_created":"deal_stage_changed",
-    category:"opportunity",
-    title:index===0?"Sales opportunity created":"Opportunity moved to "+String(item.stageLabel||"another stage"),
-    description:title,
-    occurredAt:item.enteredAt||deal.createdAt,
-    reference:title,amount:deal.value,status:deal.status
-   }));
+   history.forEach((item,index)=>{
+    const finalClosedStage=index===history.length-1&&["won","lost"].includes(deal.status)&&Boolean(deal.closedAt);
+    const type=finalClosedStage?(deal.status==="won"?"deal_won":"deal_lost"):index===0?"deal_created":"deal_stage_changed";
+    const eventTitle=finalClosedStage
+     ?deal.status==="won"?"Opportunity won":"Opportunity lost"
+     :index===0?"Sales opportunity created":"Opportunity moved to "+String(item.stageLabel||"another stage");
+    add({
+     id:"deal-stage-"+String(deal._id)+"-"+index,
+     source:"deal",sourceId:deal._id,
+     type,category:"opportunity",title:eventTitle,
+     description:title,
+     occurredAt:item.enteredAt||deal.createdAt,
+     reference:title,amount:deal.value,status:deal.status
+    });
+   });
   }else add({
    id:"deal-created-"+String(deal._id),source:"deal",sourceId:deal._id,
    type:"deal_created",category:"opportunity",title:"Sales opportunity created",
    description:title,occurredAt:deal.createdAt,reference:title,amount:deal.value,status:deal.status
   });
-  if(deal.closedAt&&!history.some(item=>validDate(item.enteredAt)?.getTime()===validDate(deal.closedAt)?.getTime())){
+  if(deal.closedAt&&!history.length){
    add({
     id:"deal-closed-"+String(deal._id),source:"deal",sourceId:deal._id,
     type:deal.status==="won"?"deal_won":"deal_lost",category:"opportunity",

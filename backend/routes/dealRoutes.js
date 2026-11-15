@@ -148,6 +148,9 @@ router.get("/performance",auth,async(req,res)=>{
   if(!startAt){endAt=now;startAt=new Date(now);startAt.setDate(startAt.getDate()-90);}
   if(endAt<=startAt)return res.status(400).json({message:"The end date must be after the start date."});
   const range={$gte:startAt,$lt:endAt};
+  const periodDuration=endAt.getTime()-startAt.getTime();
+  const previousStartAt=new Date(startAt.getTime()-periodDuration);
+  const previousRange={$gte:previousStartAt,$lt:startAt};
   const trendFormat=(endAt-startAt)>120*24*60*60*1000?"%Y-%m":"%G-W%V";
   const trendTimeframe=trendFormat==="%Y-%m"?"monthly":"weekly";
 
@@ -164,7 +167,7 @@ router.get("/performance",auth,async(req,res)=>{
    return {dueCount:Number(due.dueCount||0),completedDueCount:Number(due.completedDueCount||0),openDueCount:Number(due.openDueCount||0),overdueOpenCount:Number(row.overdue?.[0]?.count||0),completedDuringPeriod:Number(row.completedDuring?.[0]?.count||0)};
   };
 
-  const [createdRows,closedRows,trendRows,pipelineRows,sourceRows,customerReminders,dealReminders,pipelineDoc]=await Promise.all([
+  const [createdRows,closedRows,trendRows,pipelineRows,sourceRows,customerReminders,dealReminders,pipelineDoc,comparisonRows]=await Promise.all([
    Deal.aggregate([{$match:{createdBy:ownerId,createdAt:range}},{$group:{_id:null,count:{$sum:1},value:{$sum:"$value"}}}]),
    Deal.aggregate([{$match:{createdBy:ownerId,status:{$in:["won","lost"]},closedAt:range}},{$group:{
     _id:null,closedCount:{$sum:1},
@@ -181,6 +184,19 @@ router.get("/performance",auth,async(req,res)=>{
    ]),
    Deal.aggregate([{$match:{createdBy:ownerId,status:"open"}},{$group:{_id:"$stageKey",count:{$sum:1},value:{$sum:"$value"},weightedValue:{$sum:{$multiply:["$value",{$divide:["$probability",100]}]}}}}]),
    Deal.aggregate([
+    {$match:{createdBy:ownerId,$or:[
+     {createdAt:range},{createdAt:previousRange},
+     {status:{$in:["won","lost"]},closedAt:range},
+     {status:{$in:["won","lost"]},closedAt:previousRange}
+    ]}},
+    {$facet:{
+     createdCurrent:[{$match:{createdAt:range}},{$group:{_id:null,count:{$sum:1},value:{$sum:"$value"}}}],
+     createdPrevious:[{$match:{createdAt:previousRange}},{$group:{_id:null,count:{$sum:1},value:{$sum:"$value"}}}],
+     closedCurrent:[{$match:{status:{$in:["won","lost"]},closedAt:range}},{$group:{_id:null,count:{$sum:1},wonCount:{$sum:{$cond:[{$eq:["$status","won"]},1,0]}},lostCount:{$sum:{$cond:[{$eq:["$status","lost"]},1,0]}},wonValue:{$sum:{$cond:[{$eq:["$status","won"]},{$ifNull:["$value",0]},0]}}}}],
+     closedPrevious:[{$match:{status:{$in:["won","lost"]},closedAt:previousRange}},{$group:{_id:null,count:{$sum:1},wonCount:{$sum:{$cond:[{$eq:["$status","won"]},1,0]}},lostCount:{$sum:{$cond:[{$eq:["$status","lost"]},1,0]}},wonValue:{$sum:{$cond:[{$eq:["$status","won"]},{$ifNull:["$value",0]},0]}}}}]
+    }}
+   ]),
+   Deal.aggregate([
     {$match:{createdBy:ownerId,createdAt:range}},
     {$set:{sourceLabel:{$let:{vars:{cleaned:{$trim:{input:{$ifNull:["$source",""]}}}},in:{$cond:[{$eq:["$$cleaned",""]},"Not recorded","$$cleaned"]}}}}},
     {$group:{_id:"$sourceLabel",leadCount:{$sum:1},wonCount:{$sum:{$cond:[{$eq:["$status","won"]},1,0]}},lostCount:{$sum:{$cond:[{$eq:["$status","lost"]},1,0]}},wonValue:{$sum:{$cond:[{$eq:["$status","won"]},{$ifNull:["$value",0]},0]}}}},
@@ -191,6 +207,14 @@ router.get("/performance",auth,async(req,res)=>{
   ]);
 
   const created=createdRows[0]||{},closed=closedRows[0]||{};
+  const comparisonRow=comparisonRows[0]||{};
+  const createdCurrent=comparisonRow.createdCurrent?.[0]||{},createdPrevious=comparisonRow.createdPrevious?.[0]||{};
+  const closedCurrent=comparisonRow.closedCurrent?.[0]||{},closedPrevious=comparisonRow.closedPrevious?.[0]||{};
+  const currentClosedCount=Number(closedCurrent.count||0),previousClosedCount=Number(closedPrevious.count||0);
+  const currentWonCount=Number(closedCurrent.wonCount||0),previousWonCount=Number(closedPrevious.wonCount||0);
+  const currentWinRate=currentClosedCount?Math.round(currentWonCount*10000/currentClosedCount)/100:null;
+  const previousWinRate=previousClosedCount?Math.round(previousWonCount*10000/previousClosedCount)/100:null;
+  const percentageChange=(current,previous)=>Number(previous)>0?Math.round(((Number(current)-Number(previous))/Number(previous))*1000)/10:null;
   const stageMap=new Map(pipelineRows.map(row=>[String(row._id),row]));
   const pipelineStages=(pipelineDoc?.stages||DEFAULT_DEAL_STAGES)
    .filter(stage=>stage.outcome==="open").slice().sort((a,b)=>a.order-b.order)
@@ -207,7 +231,14 @@ router.get("/performance",auth,async(req,res)=>{
   followUps.completionRate=followUps.dueCount?Math.round(followUps.completedDueCount*10000/followUps.dueCount)/100:null;
   const closedCount=Number(closed.closedCount||0),wonCount=Number(closed.wonCount||0),lostCount=Number(closed.lostCount||0);
   return res.json({
-   range:{startAt:startAt.toISOString(),endAt:endAt.toISOString(),trendTimeframe},
+   range:{startAt:startAt.toISOString(),endAt:endAt.toISOString(),previousStartAt:previousStartAt.toISOString(),previousEndAt:startAt.toISOString(),trendTimeframe},
+   comparison:{
+    previous:{createdCount:Number(createdPrevious.count||0),createdValue:Number(createdPrevious.value||0),closedCount:previousClosedCount,wonCount:previousWonCount,lostCount:Number(closedPrevious.lostCount||0),wonValue:Number(closedPrevious.wonValue||0),winRate:previousWinRate},
+    createdCountChange:percentageChange(createdCurrent.count,createdPrevious.count),
+    wonCountChange:percentageChange(closedCurrent.wonCount,closedPrevious.wonCount),
+    wonValueChange:percentageChange(closedCurrent.wonValue,closedPrevious.wonValue),
+    winRateChangePoints:currentWinRate===null||previousWinRate===null?null:Math.round((currentWinRate-previousWinRate)*10)/10
+   },
    summary:{
     createdCount:Number(created.count||0),createdValue:Number(created.value||0),closedCount,wonCount,lostCount,
     winRate:closedCount?Math.round(wonCount*10000/closedCount)/100:null,

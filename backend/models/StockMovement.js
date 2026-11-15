@@ -6,7 +6,7 @@ const stockMovementSchema=new mongoose.Schema({
   productCode:{type:String,trim:true,default:""},
   movementType:{type:String,enum:[
     "purchase_received","purchase_cancelled","invoice_sale","invoice_cancelled",
-    "credit_note_return","manual_adjustment"
+    "credit_note_return","credit_note_reversal","manual_adjustment"
   ],required:true},
   sourceType:{type:String,enum:["purchase","invoice","credit_note","manual"],required:true},
   sourceId:{type:mongoose.Schema.Types.ObjectId,default:null},

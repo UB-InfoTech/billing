@@ -76,7 +76,7 @@ export default function ProductSalesHistory({product,onClose}){
        {data?.hasMore&&<p className="small text-secondary mt-3 mb-0">Showing the latest 100 linked invoices.</p>}
       </>}
     </div>
-    <footer className="modal-footer"><button type="button" className="btn btn-light border" onClick={onClose}>Close</button><button type="button" className="btn btn-primary" onClick={()=>navigate("/orders?action=new")}><i className="bi bi-plus-lg me-1"/>Create invoice</button></footer>
+    <footer className="modal-footer"><button type="button" className="btn btn-light border" onClick={onClose}>Close</button><button type="button" className="btn btn-primary" onClick={()=>navigate("/orders?action=new&productId="+encodeURIComponent(product._id))}><i className="bi bi-plus-lg me-1"/>Create invoice</button></footer>
    </div>
   </section>
  </div>;

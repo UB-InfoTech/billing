@@ -298,7 +298,7 @@ export default function ProductPage(){
     const state=getFieldState(field,{...form,...(form.customFields||{})});
     if(!state.visible)return null;
     const common={
-      field:{...field,...state},
+      field:{...field,...state,...(field.key==="quantity"&&editingProduct?.trackInventory?{helpText:"Stock is managed through the Stock button so every change appears in the movement history."}:{})},
       value:productValue(field),
       onChange:value=>updateField(field,value,null),
       onRecordChange:record=>updateField(field,record?.[field.dataSource?.valueField||"_id"]??"",record),

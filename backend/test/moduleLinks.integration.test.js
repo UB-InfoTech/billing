@@ -12,20 +12,19 @@ const Client=require("../models/Client");
 const Deal=require("../models/Deal");
 const DealActivity=require("../models/DealActivity");
 const ClientActivity=require("../models/ClientActivity");
-const SalesPipeline=require("../models/SalesPipeline");
+const {DEFAULT_DEAL_STAGES}=require("../utils/dealPipeline");
 
 const mongoUri=process.env.MONGO_URI;
 
 test("linked module records remain owner-scoped and appear in customer/product views",{
  skip:!mongoUri?"Set MONGO_URI to run module linking integration tests.":false
 },async()=>{
- let server,ownerId,otherOwnerId,clientId,productId;
- const createdDealIds=[];
+ let server,ownerId,otherOwnerId,clientId,productId,orderId,dealId;
  try{
   await mongoose.connect(mongoUri,{serverSelectionTimeoutMS:10000});
   await Promise.all([
    Product.init(),Order.init(),Client.init(),Deal.init(),
-   DealActivity.init(),ClientActivity.init(),SalesPipeline.init()
+   DealActivity.init(),ClientActivity.init()
   ]);
   ownerId=new mongoose.Types.ObjectId();
   otherOwnerId=new mongoose.Types.ObjectId();
@@ -65,9 +64,9 @@ test("linked module records remain owner-scoped and appear in customer/product v
    }],
    createdBy:ownerId
   });
+  orderId=order._id;
 
-  const pipeline=await SalesPipeline.findOne({createdBy:ownerId}).lean();
-  const stage=pipeline?.stages?.find(item=>item.outcome==="open");
+  const stage=DEFAULT_DEAL_STAGES.find(item=>item.outcome==="open");
   assert.ok(stage,"An open sales stage should be available.");
   const deal=await Deal.create({
    title:"Linked opportunity "+suffix,
@@ -86,12 +85,16 @@ test("linked module records remain owner-scoped and appear in customer/product v
     changedBy:ownerId
    }]
   });
-  createdDealIds.push(deal._id);
+  dealId=deal._id;
   const dealActivity=await DealActivity.create({
-   dealId:deal._id,createdBy:ownerId,type:"follow_up",
+   dealId:deal._id,
+   createdBy:ownerId,
+   type:"follow_up",
    subject:"Call about sample approval",
    description:"Discuss the sample before preparing the next quotation.",
-   occurredAt:new Date(),dueAt:new Date(Date.now()+60*60*1000),status:"open"
+   occurredAt:new Date(),
+   dueAt:new Date(Date.now()+60*60*1000),
+   status:"open"
   });
 
   server=app.listen(0,"127.0.0.1");
@@ -101,9 +104,9 @@ test("linked module records remain owner-scoped and appear in customer/product v
   const base="http://127.0.0.1:"+server.address().port+"/api";
   const request=async(path,token=ownerToken)=>{
    const response=await fetch(base+path,{headers:{"x-auth-token":token}});
-   const text=await response.text();
+   const body=await response.text();
    let payload;
-   try{payload=text?JSON.parse(text):null;}catch{payload=text;}
+   try{payload=body?JSON.parse(body):null;}catch{payload=body;}
    return {response,payload};
   };
 
@@ -137,7 +140,9 @@ test("linked module records remain owner-scoped and appear in customer/product v
   const sources=await request("/no-code-data/sources");
   assert.equal(sources.response.status,200);
   const sourceKeys=(sources.payload.sources||[]).map(item=>item.key);
-  for(const key of ["deals","creditNotes","calendar"])assert.ok(sourceKeys.includes(key),key+" should be available as a linked-record source.");
+  for(const key of ["deals","creditNotes","calendar"]){
+   assert.ok(sourceKeys.includes(key),key+" should be available as a linked-record source.");
+  }
 
   const dealSource=await request("/no-code-data/deals");
   assert.equal(dealSource.response.status,200);
@@ -150,11 +155,10 @@ test("linked module records remain owner-scoped and appear in customer/product v
   if(ownerId){
    await DealActivity.deleteMany({createdBy:ownerId});
    await ClientActivity.deleteMany({createdBy:ownerId});
-   await Deal.deleteMany({createdBy:ownerId});
-   await Order.deleteMany({createdBy:ownerId,orderNumber:{$regex:"^LINK-"}});
-   await Product.deleteMany({_id:productId,createdBy:ownerId});
-   await SalesPipeline.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}});
-   await Client.deleteMany({_id:clientId,createdBy:ownerId});
+   if(dealId)await Deal.deleteOne({_id:dealId,createdBy:ownerId});
+   if(orderId)await Order.deleteOne({_id:orderId,createdBy:ownerId});
+   if(productId)await Product.deleteOne({_id:productId,createdBy:ownerId});
+   if(clientId)await Client.deleteOne({_id:clientId,createdBy:ownerId});
   }
   if(mongoose.connection.readyState===1)await mongoose.disconnect();
  }

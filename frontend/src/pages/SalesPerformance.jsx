@@ -139,7 +139,7 @@ function TrendChart({items,averageDays}){
  const showEvery=items.length>9?2:1;
  const totalWon=items.reduce((sum,item)=>sum+item.wonCount,0);
  const totalLost=items.reduce((sum,item)=>sum+item.lostCount,0);
- if(!items.length)return <div className="sp-empty">No closed opportunities in this period. Move opportunities to Won or Lost to build your sales trend.</div>;
+ if(!items.length||!items.some(item=>item.wonCount+item.lostCount>0))return <div className="sp-empty">No opportunities were closed in this period. Move opportunities to Won or Lost to see how your results change over time.</div>;
  return <div className="sp-chart-area">
   <div className="sp-chart-summary">
    <div><span className="sp-dot sp-dot-won"></span><strong>{count(totalWon)}</strong><small>Won</small></div>
@@ -274,9 +274,9 @@ export default function SalesPerformance(){
    <div className="sp-loading-message"><span className="spinner-border spinner-border-sm me-2" role="status"></span>Loading your sales results…</div>
   </section>:!error&&range.valid&&<>
    {!hasAnyOpportunities&&<section className="sp-first-use">
-    <div className="sp-first-use-icon"><i className="bi bi-graph-up-arrow" aria-hidden="true"></i></div>
-    <div><h2>Your sales picture starts here</h2><p>Add your first opportunity to track pipeline value, wins and follow-ups in one place.</p></div>
-    <button type="button" className="btn btn-primary" onClick={()=>navigate("/deals")}>Add an opportunity <i className="bi bi-arrow-right ms-1" aria-hidden="true"></i></button>
+    <div className="sp-first-use-icon"><i className="bi bi-calendar2-range" aria-hidden="true"></i></div>
+    <div><h2>No opportunity activity in this period</h2><p>No opportunities were created or closed in these dates, and there are no open opportunities right now. Try a longer reporting period or add a new opportunity.</p></div>
+    <button type="button" className="btn btn-primary" onClick={()=>navigate("/deals")}>Open sales pipeline <i className="bi bi-arrow-right ms-1" aria-hidden="true"></i></button>
    </section>}
 
    <section className="sp-metrics" aria-label="Sales summary">

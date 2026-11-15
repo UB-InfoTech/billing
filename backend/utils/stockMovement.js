@@ -93,8 +93,10 @@ async function undoStockMovement(movement,createdBy){
  const delta=Number(movement.quantityChange||0);
  const filter={_id:movement.productId,createdBy};
  if(delta>0)filter.quantity={$gte:delta};
- const result=await Product.updateOne(filter,{$inc:{quantity:-delta}});
- if(result.matchedCount!==1){
+ const restored=await Product.findOneAndUpdate(
+  filter,{$inc:{quantity:-delta}},{new:true,runValidators:true}
+ );
+ if(!restored){
   throw stockError("Stock changed before the operation could be rolled back. Check the product stock history.",409);
  }
  await StockMovement.deleteOne({_id:movement._id,createdBy});

@@ -6876,3 +6876,169 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
 @media (max-width:575.98px) {
   .ux-dashboard-panels > .ux-dashboard-metric { flex-basis:100%; }
 }
+
+
+/* Consistent full-workspace record entry and record reading surfaces. */
+@media screen {
+  .ux-record-fullscreen-backdrop {
+    position: fixed !important;
+    inset: 0 !important;
+    z-index: 1500 !important;
+    display: flex !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-width: 100vw !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+    background: #f5f7fa !important;
+  }
+
+  .ux-record-fullscreen-dialog {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .ux-record-fullscreen-content {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    max-height: 100vh !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .ux-record-fullscreen-header,
+  .ux-record-fullscreen-footer {
+    flex: 0 0 auto !important;
+    min-width: 0;
+    background: #fff;
+  }
+
+  .ux-record-fullscreen-header {
+    border-bottom: 1px solid var(--workspace-border, #dfe6ee) !important;
+  }
+
+  .ux-record-fullscreen-body {
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    background: #f7f9fc;
+  }
+
+  .ux-record-fullscreen-footer {
+    position: relative;
+    border-top: 1px solid var(--workspace-border, #dfe6ee) !important;
+  }
+
+  .customer-form-workspace {
+    display: flex !important;
+    flex: 1 1 auto !important;
+    flex-direction: column !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .customer-form-workspace .ux-record-fullscreen-body {
+    flex: 1 1 auto !important;
+    width: 100%;
+  }
+
+  .client-crm-shell .client-profile-content {
+    padding: clamp(14px, 2.2vw, 28px) !important;
+    background: #f5f7fa;
+  }
+
+  .client-crm-shell .client-profile-header {
+    min-width: 0;
+    flex: 0 0 auto;
+  }
+
+  .client-crm-shell .client-profile-metrics,
+  .client-crm-shell .client-profile-tabs {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .invoice-create-modal .invoice-create-body {
+    padding: clamp(14px, 2.2vw, 28px) !important;
+    background: #f7f9fc !important;
+  }
+
+  .invoice-create-modal .invoice-save-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    padding: 12px 0 max(12px, env(safe-area-inset-bottom));
+    background: rgba(255, 255, 255, .98);
+    backdrop-filter: blur(8px);
+  }
+
+  .invoice-view-modal .invoice-view-body {
+    background: #f5f7fa;
+  }
+
+  .supplier-edit-backdrop {
+    z-index: 1510;
+  }
+
+  .purchase-payment-modal {
+    flex: 0 1 auto;
+  }
+}
+
+@media screen and (max-width: 767.98px) {
+  .ux-record-fullscreen-header {
+    gap: 10px !important;
+    padding: 12px 14px !important;
+  }
+
+  .ux-record-fullscreen-body {
+    padding: 12px !important;
+  }
+
+  .ux-record-fullscreen-footer {
+    padding: 10px 12px !important;
+  }
+
+  .client-crm-shell .client-profile-content {
+    padding: 12px !important;
+  }
+
+  .invoice-create-modal .invoice-create-body {
+    padding: 12px !important;
+  }
+
+  .invoice-create-modal .invoice-save-footer {
+    align-items: stretch;
+    flex-direction: column;
+    margin-bottom: 0;
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+  }
+}

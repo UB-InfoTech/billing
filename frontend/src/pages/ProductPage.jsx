@@ -1,5 +1,6 @@
 import BusinessPageHeader from "../components/BusinessPageHeader";
 import React,{useEffect,useMemo,useState,useCallback,useRef} from "react";
+import axios from "axios";
 import {useNavigate,useSearchParams} from "react-router-dom";
 import { createProduct, fetchProducts, updateProduct, deleteProduct, searchProductByBarcode } from "../services/productService";
 import { Html5QrcodeScanner } from "html5-qrcode";
@@ -11,6 +12,9 @@ import { PRODUCT_FORM_FIELDS } from "../config/noCodeCatalog";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import { useFormConfiguration, applyFormulas, applyAutoFill, getFieldState, hydrateConfiguredValues, syncConfiguredCustomFields, buildConfiguredDefaults, buildNewRecordDefaults } from "../hooks/useFormConfiguration";
 import {formatDateInput} from "../utils/dateInput";
+
+const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
+const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
 
 const PRODUCT_PAGE_SIZE=100;
 
@@ -160,6 +164,19 @@ export default function ProductPage(){
     setShowForm(true);
     window.scrollTo({top:0,behavior:"smooth"});
   },[configuredFields]);
+
+  useEffect(()=>{
+    const productId=searchParams.get("openProduct");
+    if(!productId)return undefined;
+    let active=true;
+    const params=new URLSearchParams(searchParams);
+    params.delete("openProduct");
+    setSearchParams(params,{replace:true});
+    axios.get(API+"/api/products/"+encodeURIComponent(productId),auth())
+      .then(response=>{if(active&&response.data)handleEdit(response.data);})
+      .catch(loadError=>{if(active)setError(loadError.response?.data?.message||"The linked product could not be opened.");});
+    return()=>{active=false;};
+  },[searchParams,setSearchParams,handleEdit]);
 
   useEffect(()=>{
     if(!showBarcodeScanner)return undefined;

@@ -1,22 +1,32 @@
 import React,{useEffect,useState} from "react";
 import axios from "axios";
 import {useNavigate} from "react-router-dom";
+import BusinessPageHeader from "../components/BusinessPageHeader";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
-const money=v=>"₹"+Number(v||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+const money=value=>"₹"+Number(value||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 
 const DEFAULT_WIDGETS=[
-  {key:"invoices",title:"Invoices",visible:true,order:0},
-  {key:"clients",title:"Customers",visible:true,order:1},
-  {key:"products",title:"Products",visible:true,order:2},
-  {key:"revenue",title:"Revenue",visible:true,order:3},
-  {key:"outstanding",title:"To collect",visible:true,order:4},
-  {key:"expenses",title:"Expenses",visible:true,order:5},
-  {key:"paid",title:"Paid",visible:true,order:6},
-  {key:"creditNotes",title:"Credit Notes",visible:true,order:7},
-  {key:"netAfterExpenses",title:"Net after Expenses",visible:true,order:8},
-  {key:"quickActions",title:"Quick actions",visible:true,order:9}
+  {key:"quickActions",title:"Quick actions",visible:true,order:0},
+  {key:"revenue",title:"Revenue",visible:true,order:1},
+  {key:"outstanding",title:"To collect",visible:true,order:2},
+  {key:"paid",title:"Paid",visible:true,order:3},
+  {key:"invoices",title:"Invoices",visible:true,order:4},
+  {key:"clients",title:"Customers",visible:true,order:5},
+  {key:"products",title:"Products",visible:true,order:6},
+  {key:"expenses",title:"Expenses",visible:true,order:7},
+  {key:"creditNotes",title:"Credit Notes",visible:true,order:8},
+  {key:"netAfterExpenses",title:"Net after expenses",visible:true,order:9}
+];
+
+const DASHBOARD_ACTIONS=[
+  {key:"invoice",label:"New invoice",description:"Create a bill for a customer",icon:"bi-receipt",to:"/orders?action=new",primary:true},
+  {key:"customer",label:"Add customer",description:"Save a customer or company",icon:"bi-person-plus",to:"/clients?action=new"},
+  {key:"payment",label:"Record payment",description:"Add a customer payment",icon:"bi-cash-stack",to:"/bulk-payment"},
+  {key:"expense",label:"Add expense",description:"Record business spending",icon:"bi-wallet2",to:"/add-expense"},
+  {key:"product",label:"Add product",description:"Save an item and its price",icon:"bi-box-seam",to:"/products?action=new"},
+  {key:"purchase",label:"Record purchase",description:"Receive stock from a supplier",icon:"bi-cart-plus",to:"/purchases?action=new"}
 ];
 
 export default function Home(){
@@ -43,7 +53,7 @@ export default function Home(){
     try{
       localStorage.setItem(setupGuideStorageKey,"true");
     }catch{
-      // The guide can still be dismissed for this session if browser storage is unavailable.
+      // The guide remains dismissed for the current session when storage is unavailable.
     }
   };
 
@@ -66,26 +76,35 @@ export default function Home(){
         localStorage.removeItem("token");
         navigate("/login");
       }else{
-        setError(loadError.response?.data?.message||"Unable to load dashboard.");
+        setError(loadError.response?.data?.message||"Unable to load your business overview.");
       }
     }).finally(()=>alive&&setLoading(false));
     return()=>{alive=false;};
   },[navigate]);
 
-  if(loading)return <div className="container-fluid py-5 text-center"><span className="spinner-border text-primary"/></div>;
+  if(loading){
+    return(
+      <div className="ux-dashboard-loading" role="status" aria-live="polite">
+        <span className="spinner-border spinner-border-sm text-primary" aria-hidden="true"></span>
+        <span>Preparing your business overview…</span>
+      </div>
+    );
+  }
 
   const widget=key=>widgets.find(item=>item.key===key)||DEFAULT_WIDGETS.find(item=>item.key===key)||{};
   const isVisible=key=>widget(key).visible!==false;
   const title=key=>widget(key).title||key;
-  const style=key=>({order:Number(widget(key).order??99)});
 
-  const metricCards=[
-    ["invoices","/orders",data?.orders||0],
-    ["clients","/clients",data?.clients||0],
-    ["products","/products",data?.products||0],
-    ["revenue","/analytics",money(data?.revenue)],
-    ["outstanding","/orders",money(data?.due)],
-    ["expenses","/expense",money(data?.expenses)]
+  const metrics=[
+    {key:"revenue",value:money(data?.revenue),detail:"Sales recorded",icon:"bi-graph-up-arrow",to:"/analytics",tone:"blue"},
+    {key:"outstanding",value:money(data?.due),detail:"Customer balances to collect",icon:"bi-hourglass-split",to:"/orders",tone:"amber"},
+    {key:"paid",value:money(data?.paid),detail:"Payments received",icon:"bi-check-circle",to:"/bulk-payment",tone:"green"},
+    {key:"expenses",value:money(data?.expenses),detail:"Business spending",icon:"bi-wallet2",to:"/expense",tone:"slate"},
+    {key:"invoices",value:Number(data?.orders||0).toLocaleString("en-IN"),detail:"Bills created",icon:"bi-receipt",to:"/orders",tone:"slate"},
+    {key:"clients",value:Number(data?.clients||0).toLocaleString("en-IN"),detail:"Saved customers",icon:"bi-people",to:"/clients",tone:"slate"},
+    {key:"products",value:Number(data?.products||0).toLocaleString("en-IN"),detail:"Saved products",icon:"bi-box-seam",to:"/products",tone:"slate"},
+    {key:"creditNotes",value:money(data?.creditNotes),detail:"Credit notes issued",icon:"bi-file-earmark-minus",to:"/credit-notes",tone:"slate"},
+    {key:"netAfterExpenses",value:money(Number(data?.revenue||0)-Number(data?.expenses||0)),detail:"Revenue minus expenses",icon:"bi-calculator",to:"/analytics",tone:"slate"}
   ];
 
   const gettingStartedTasks=[
@@ -94,126 +113,113 @@ export default function Home(){
     {key:"invoice",title:"Create your first invoice",description:"Choose a customer, add items and save the bill.",done:Number(data?.orders||0)>0,to:"/orders?action=new"}
   ];
   const completedSetupTasks=gettingStartedTasks.filter(task=>task.done).length;
+  const dashboardItems=[
+    ...metrics.map(metric=>({...metric,type:"metric",order:Number(widget(metric.key).order??99)})),
+    {key:"quickActions",type:"actions",order:Number(widget("quickActions").order??99)}
+  ].filter(item=>isVisible(item.key)).sort((a,b)=>a.order-b.order);
 
-  return <div className="container-fluid py-4">
-    <div className="dashboard-welcome mb-4">
-      <div>
-        <span className="dashboard-eyebrow">YOUR BUSINESS TODAY</span>
-        <h2 className="mb-1">Welcome back{user?.username?", "+user.username:""}.</h2>
-        <div className="text-muted">Start with a task or check your most important numbers.</div>
-      </div>
-      <div className="dashboard-primary-actions">
-        <button className="btn btn-primary" onClick={()=>navigate("/orders?action=new")}><i className="bi bi-plus-lg me-2"></i>New invoice</button>
-        <button className="btn btn-light border" onClick={()=>navigate("/add-expense")}><i className="bi bi-wallet2 me-2"></i>Add expense</button>
-        <button className="btn btn-light border" onClick={()=>navigate("/clients")}><i className="bi bi-person-plus me-2"></i>Customers</button>
-        <button className="btn btn-light border" onClick={()=>navigate("/analytics")}><i className="bi bi-bar-chart me-2"></i>Reports</button>
-      </div>
-    </div>
+  return(
+    <div className="container-fluid py-3 ux-dashboard">
+      <BusinessPageHeader
+        eyebrow="BUSINESS OVERVIEW"
+        title={"Welcome back"+(user?.username?", "+user.username:"")}
+        description="Your key numbers and the actions you use to run your business."
+        className="ux-dashboard-header mb-4"
+      >
+        <span className="ux-dashboard-date">{new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</span>
+      </BusinessPageHeader>
 
-    {error&&<div className="alert alert-danger">{error}</div>}
+      {error&&(
+        <div className="alert alert-warning d-flex align-items-center justify-content-between gap-3" role="alert">
+          <span>{error}</span>
+          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={()=>window.location.reload()}>Try again</button>
+        </div>
+      )}
 
-    {completedSetupTasks<gettingStartedTasks.length&&(
-      setupGuideDismissed?(
-        <div className="d-flex align-items-center justify-content-between gap-3 flex-wrap mb-4 p-3 bg-white border rounded-3">
+      <section className="ux-dashboard-block mb-3" aria-labelledby="ux-dashboard-summary-title">
+        <div className="ux-dashboard-block-heading">
           <div>
-            <strong>Want help getting started?</strong>
-            <div className="small text-muted">Your setup guide is optional. You can add business details whenever you're ready.</div>
+            <h2 id="ux-dashboard-summary-title">Business at a glance</h2>
+            <p>Choose a number to open the related records or report.</p>
           </div>
-          <button type="button" className="btn btn-outline-primary btn-sm" onClick={()=>{setSetupGuideDismissed(false);try{localStorage.removeItem(setupGuideStorageKey);}catch(storageError){console.warn("Could not clear the setup guide preference.",storageError);}}}>Show setup guide</button>
-        </div>
-      ):(
-      <section className="getting-started-card mb-4" aria-labelledby="getting-started-title">
-        <div className="getting-started-heading">
-          <div>
-            <span className="dashboard-eyebrow">OPTIONAL · START WHEN YOU'RE READY</span>
-            <h3 id="getting-started-title">Get comfortable, one step at a time</h3>
-            <p>You can start billing now and add company details or products later. Nothing here is compulsory.</p>
-          </div>
-          <div className="d-flex align-items-center gap-3">
-            <div className="getting-started-progress">
-              <strong>{completedSetupTasks} of {gettingStartedTasks.length}</strong>
-              <span>steps complete</span>
-            </div>
-            <button type="button" className="btn btn-sm btn-light border" onClick={dismissSetupGuide}>Skip for now</button>
-          </div>
-        </div>
-        <div className="getting-started-progress-track" role="progressbar" aria-valuenow={completedSetupTasks} aria-valuemin={0} aria-valuemax={gettingStartedTasks.length}>
-          <span style={{width:(completedSetupTasks/gettingStartedTasks.length*100)+"%"}}/>
-        </div>
-        <div className="getting-started-steps">
-          {gettingStartedTasks.map((task,index)=>(
-            <div className={"getting-started-step "+(task.done?"is-complete":"")} key={task.key}>
-              <span className="getting-started-step-number">{task.done?<i className="bi bi-check-lg"></i>:index+1}</span>
-              <div className="getting-started-step-copy">
-                <strong>{task.title}</strong>
-                <span>{task.description}</span>
-              </div>
-              {task.done
-                ? <span className="getting-started-done">Done</span>
-                : <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>navigate(task.to)}>{task.key==="invoice"?"Create invoice":"Get started"} <i className="bi bi-arrow-right ms-1"></i></button>}
-            </div>
-          ))}
-        </div>
-        <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-3 pt-3 border-top">
-          <span className="small text-muted"><i className="bi bi-info-circle me-1"></i>Company details are optional and can be added later.</span>
-          <button type="button" className="btn btn-sm btn-link text-decoration-none" onClick={()=>navigate("/profile")}>Add company details <i className="bi bi-arrow-right ms-1"></i></button>
+          <button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/analytics")}>View reports <i className="bi bi-arrow-right ms-1"></i></button>
         </div>
       </section>
-      )
-    )}
 
-    <div className="row g-3">
-      {metricCards.map(([key,to,value])=>isVisible(key)?(
-        <div className="col-6 col-md-4 col-xl-2" key={key} style={style(key)}>
-          <button className="card border-0 shadow-sm w-100 h-100 text-start bg-white" onClick={()=>navigate(to)}>
-            <div className="card-body">
-              <div className="text-muted small">{title(key)}</div>
-              <div className="fs-4 fw-bold mt-1">{value}</div>
+      <div className="ux-dashboard-panels">
+        {dashboardItems.map(item=>item.type==="actions"?(
+          <section className="ux-dashboard-block ux-dashboard-action-panel" aria-labelledby="ux-dashboard-actions-title" key={item.key} style={{order:item.order}}>
+            <div className="ux-dashboard-block-heading">
+              <div>
+                <h2 id="ux-dashboard-actions-title">{title(item.key)}</h2>
+                <p>Start a common task directly. You can complete the details on the next screen.</p>
+              </div>
             </div>
+            <div className="ux-dashboard-actions">
+              {DASHBOARD_ACTIONS.map(action=>(
+                <button type="button" key={action.key} className={"ux-dashboard-action "+(action.primary?"is-primary":"")} onClick={()=>navigate(action.to)}>
+                  <span className="ux-dashboard-action-icon"><i className={"bi "+action.icon}></i></span>
+                  <span className="ux-dashboard-action-copy"><strong>{action.label}</strong><small>{action.description}</small></span>
+                  <i className="bi bi-arrow-up-right ux-dashboard-action-arrow" aria-hidden="true"></i>
+                </button>
+              ))}
+            </div>
+          </section>
+        ):(
+          <button type="button" key={item.key} className={"ux-dashboard-metric tone-"+item.tone} style={{order:item.order}} onClick={()=>navigate(item.to)}>
+            <span className="ux-dashboard-metric-top">
+              <span>{title(item.key)}</span>
+              <i className={"bi "+item.icon} aria-hidden="true"></i>
+            </span>
+            <strong>{item.value}</strong>
+            <small>{item.detail}</small>
           </button>
-        </div>
-      ):null)}
+        ))}
+      </div>
 
-      {isVisible("paid")&&(
-        <div className="col-md-4" style={style("paid")}>
-          <div className="card border-0 shadow-sm h-100"><div className="card-body">
-            <div className="small text-muted">{title("paid")}</div>
-            <div className="fs-5 fw-bold mt-1">{money(data?.paid)}</div>
-          </div></div>
-        </div>
-      )}
-
-      {isVisible("creditNotes")&&(
-        <div className="col-md-4" style={style("creditNotes")}>
-          <div className="card border-0 shadow-sm h-100"><div className="card-body">
-            <div className="small text-muted">{title("creditNotes")}</div>
-            <div className="fs-5 fw-bold mt-1">{money(data?.creditNotes)}</div>
-          </div></div>
-        </div>
-      )}
-
-      {isVisible("netAfterExpenses")&&(
-        <div className="col-md-4" style={style("netAfterExpenses")}>
-          <div className="card border-0 shadow-sm h-100"><div className="card-body">
-            <div className="small text-muted">{title("netAfterExpenses")}</div>
-            <div className="fs-5 fw-bold mt-1">{money(Number(data?.revenue||0)-Number(data?.expenses||0))}</div>
-          </div></div>
-        </div>
-      )}
-
-      {isVisible("quickActions")&&(
-        <div className="col-lg-4" style={style("quickActions")}>
-          <div className="card border-0 shadow-sm h-100"><div className="card-body">
-            <h5 className="mb-3">{title("quickActions")}</h5>
-            <div className="d-grid gap-2">
-              <button className="btn btn-outline-primary" onClick={()=>navigate("/bulk-payment")}>Record a payment</button>
-              <button className="btn btn-outline-secondary" onClick={()=>navigate("/add-expense")}>Add Expense</button>
-              <button className="btn btn-outline-success" onClick={()=>navigate("/calendar")}>Add a reminder</button>
-              <button className="btn btn-outline-dark" onClick={()=>navigate("/profile")}>Company Settings</button>
+      {completedSetupTasks<gettingStartedTasks.length&&(
+        setupGuideDismissed?(
+          <div className="ux-dashboard-setup-dismissed">
+            <div>
+              <strong>Need a hand getting started?</strong>
+              <p>Your setup guide is optional. You can add business details whenever you're ready.</p>
             </div>
-          </div></div>
-        </div>
+            <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>{setSetupGuideDismissed(false);try{localStorage.removeItem(setupGuideStorageKey);}catch{ /* Browser storage is optional. */ } }}>Show guide</button>
+          </div>
+        ):(
+          <section className="ux-dashboard-setup" aria-labelledby="ux-dashboard-setup-title">
+            <div className="ux-dashboard-setup-heading">
+              <div>
+                <span className="ux-dashboard-setup-kicker">OPTIONAL · DO THIS WHENEVER YOU'RE READY</span>
+                <h2 id="ux-dashboard-setup-title">A few helpful first steps</h2>
+                <p>You can start billing now. Company details are optional and can be added later.</p>
+              </div>
+              <div className="ux-dashboard-setup-progress">
+                <strong>{completedSetupTasks} of {gettingStartedTasks.length}</strong>
+                <small>completed</small>
+              </div>
+            </div>
+            <div className="ux-dashboard-setup-track" role="progressbar" aria-valuenow={completedSetupTasks} aria-valuemin={0} aria-valuemax={gettingStartedTasks.length}>
+              <span style={{width:(completedSetupTasks/gettingStartedTasks.length*100)+"%"}}/>
+            </div>
+            <div className="ux-dashboard-setup-list">
+              {gettingStartedTasks.map((task,index)=>(
+                <div className={"ux-dashboard-setup-task "+(task.done?"is-complete":"")} key={task.key}>
+                  <span className="ux-dashboard-setup-step">{task.done?<i className="bi bi-check-lg"></i>:index+1}</span>
+                  <div><strong>{task.title}</strong><small>{task.description}</small></div>
+                  {task.done
+                    ?<span className="ux-dashboard-setup-done">Done</span>
+                    :<button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>navigate(task.to)}>Start <i className="bi bi-arrow-right ms-1"></i></button>}
+                </div>
+              ))}
+            </div>
+            <div className="ux-dashboard-setup-footer">
+              <button type="button" className="btn btn-sm btn-link text-decoration-none" onClick={()=>navigate("/profile")}>Add company details <i className="bi bi-arrow-right ms-1"></i></button>
+              <button type="button" className="btn btn-sm btn-light border" onClick={dismissSetupGuide}>Hide guide</button>
+            </div>
+          </section>
+        )
       )}
     </div>
-  </div>;
+  );
 }

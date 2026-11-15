@@ -111,6 +111,27 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
    method:"POST",body:{title:"Stage migration check",contactName:"Test prospect",stageKey:"proposal-sent",value:5000}
   });
   assert.equal(stageInUse.response.status,201,JSON.stringify(stageInUse.payload));
+  const wonProspect=await request("/deals",{
+   method:"POST",body:{title:"New account conversion",contactName:"Converted prospect "+suffix,contactPhone:"9998887776",value:45000}
+  });
+  assert.equal(wonProspect.response.status,201,JSON.stringify(wonProspect.payload));
+  const markWon=await request("/deals/"+wonProspect.payload._id+"/stage",{method:"PATCH",body:{stageKey:"won"}});
+  assert.equal(markWon.response.status,200,JSON.stringify(markWon.payload));
+  const conversion=await request("/deals/"+wonProspect.payload._id+"/convert-customer",{method:"POST",body:{}});
+  assert.equal(conversion.response.status,201,JSON.stringify(conversion.payload));
+  assert.equal(conversion.payload.created,true);
+  assert.ok(conversion.payload.deal.clientId);
+
+  const duplicateProspect=await request("/deals",{
+   method:"POST",body:{title:"Existing contact opportunity",contactName:"Known customer again",contactPhone:"9876543210",value:5000}
+  });
+  const duplicateWon=await request("/deals/"+duplicateProspect.payload._id+"/stage",{method:"PATCH",body:{stageKey:"won"}});
+  assert.equal(duplicateWon.response.status,200);
+  const duplicateLink=await request("/deals/"+duplicateProspect.payload._id+"/convert-customer",{method:"POST",body:{}});
+  assert.equal(duplicateLink.response.status,200,JSON.stringify(duplicateLink.payload));
+  assert.equal(duplicateLink.payload.created,false);
+  assert.equal(String(duplicateLink.payload.customerId),String(clientId));
+
   const removeInUse=await request("/deals/pipeline",{
    method:"PUT",body:{stages:stages.filter(stage=>stage.key!=="proposal-sent")}
   });

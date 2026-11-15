@@ -145,7 +145,7 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
   if(ownerId){
    await Deal.deleteMany({createdBy:ownerId});
    await SalesPipeline.deleteMany({createdBy:ownerId});
-   await Client.deleteMany({createdBy:ownerId,companyName:/Deal Customer/});
+   await Client.deleteMany({createdBy:ownerId});
   }
   if(mongoose.connection.readyState===1)await mongoose.disconnect();
  }

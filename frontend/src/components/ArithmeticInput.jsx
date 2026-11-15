@@ -72,6 +72,11 @@ export default function ArithmeticInput({value,onValueChange,className="form-con
         onChange={event=>{
           const nextText=event.target.value;
           setText(nextText);
+          if(nextText.trim()===""){
+            updateError("");
+            onValueChange("");
+            return;
+          }
           try{
             const result=evaluateArithmeticExpression(nextText);
             const rangeError=rangeErrorFor(result,min,max);

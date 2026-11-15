@@ -40,6 +40,12 @@ const DATA_SOURCES=[
     ["_id","Supplier ID"],["name","Supplier"],["legalName","Legal name"],["gstin","GSTIN"],
     ["contact.phone","Phone"],["contact.email","Email"],["city","City"],["state","State"]
   ]},
+  {value:"stockMovements",label:"Stock movement records",fields:[
+    ["_id","Movement ID"],["productName","Product"],["productCode","Product Code"],
+    ["movementType","Movement Type"],["sourceType","Source"],["reference","Reference"],
+    ["unit","Unit"],["quantityChange","Quantity Change"],["quantityBefore","Stock Before"],
+    ["quantityAfter","Stock After"],["note","Reason"],["createdAt","Date"]
+  ]},
   {value:"purchases",label:"Purchase records",fields:[
     ["_id","Purchase ID"],["purchaseNumber","Purchase No."],["supplierName","Supplier"],
     ["supplierInvoiceNumber","Supplier invoice no."],["purchaseDate","Purchase date"],

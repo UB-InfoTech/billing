@@ -225,7 +225,7 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
                   onClick={closeMobile}
                   title={item.label}
                   aria-label={item.label}
-                  className={({isActive})=>"sidebar-nav-link "+(isActive?"active":"")}
+                  className={({isActive})=>"sidebar-nav-link "+(isActive||(item.key==="dashboard"&&location.pathname==="/")?"active":"")}
                 >
                   <span className="sidebar-nav-icon"><i className={"bi "+item.icon}></i></span>
                   <span className="sidebar-nav-label">{item.label}</span>
@@ -269,7 +269,7 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
                               end={item.key==="dashboard"}
                               onClick={()=>{setPageSearch("");closeMobile();}}
                               title={item.label}
-                              className={({isActive})=>"sidebar-nav-link "+(isActive?"active":"")}
+                              className={({isActive})=>"sidebar-nav-link "+(isActive||(item.key==="dashboard"&&location.pathname==="/")?"active":"")}
                             >
                               <span className="sidebar-nav-icon"><i className={"bi "+item.icon}></i></span>
                               <span className="sidebar-nav-label">{item.label}</span>

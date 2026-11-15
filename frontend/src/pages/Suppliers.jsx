@@ -60,12 +60,21 @@ export default function Suppliers(){
   const id=searchParams.get("openSupplier");
   if(!id)return;
   let active=true;
-  const params=new URLSearchParams(searchParams);
-  params.delete("openSupplier");
-  setSearchParams(params,{replace:true});
   axios.get(API+"/api/suppliers/"+encodeURIComponent(id),auth())
-   .then(response=>{if(active)setViewingSupplier(response.data);})
-   .catch(loadError=>{if(active)setError(loadError.response?.data?.message||"Supplier details could not be opened.");});
+   .then(response=>{
+    if(!active)return;
+    setViewingSupplier(response.data);
+    const params=new URLSearchParams(searchParams);
+    params.delete("openSupplier");
+    setSearchParams(params,{replace:true});
+   })
+   .catch(loadError=>{
+    if(!active)return;
+    setError(loadError.response?.data?.message||"Supplier details could not be opened.");
+    const params=new URLSearchParams(searchParams);
+    params.delete("openSupplier");
+    setSearchParams(params,{replace:true});
+   });
   return()=>{active=false;};
  },[searchParams,setSearchParams]);
 
@@ -75,12 +84,12 @@ export default function Suppliers(){
   params.delete("action");
   setSearchParams(params,{replace:true});
   startNew();
- },[searchParams,setSearchParams]);
+ },[searchParams,setSearchParams,startNew]);
 
- const startNew=()=>{
+ const startNew=useCallback(()=>{
   setEditingId("");setForm({...EMPTY,contact:{...EMPTY.contact}});
   setFormError("");setDialogOpen(true);
- };
+ },[]);
  const startEdit=supplier=>{
   const item=supplier.supplier||supplier;
   setEditingId(item._id);

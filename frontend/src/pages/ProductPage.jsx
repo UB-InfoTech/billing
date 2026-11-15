@@ -8,6 +8,7 @@ import FormConfigurator from "../components/FormConfigurator";
 import ConfiguredField from "../components/ConfiguredField";
 import DynamicTable from "../components/DynamicTable";
 import ProductSalesHistory from "../components/ProductSalesHistory";
+import ProductStockHistory from "../components/ProductStockHistory";
 import { PRODUCT_FORM_FIELDS } from "../config/noCodeCatalog";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import { useFormConfiguration, applyFormulas, applyAutoFill, getFieldState, hydrateConfiguredValues, syncConfiguredCustomFields, buildConfiguredDefaults, buildNewRecordDefaults } from "../hooks/useFormConfiguration";
@@ -56,6 +57,7 @@ export default function ProductPage(){
   const [currentPage,setCurrentPage]=useState(1);
   const [pagination,setPagination]=useState({page:1,pages:1,total:0});
   const [salesHistoryProduct,setSalesHistoryProduct]=useState(null);
+  const [stockHistoryProduct,setStockHistoryProduct]=useState(null);
   const productLoadRequestRef=useRef(0);
   const visiblePageStart=Math.max(1,Math.min(currentPage-3,pagination.pages-6));
   const visiblePageNumbers=Array.from(
@@ -304,7 +306,7 @@ export default function ProductPage(){
       onLookupSearch:searchLinkedRecords,
       required:state.required,
       disabled:state.disabled,
-      readOnly:state.readOnly
+      readOnly:state.readOnly||(field.key==="quantity"&&Boolean(editingProduct?.trackInventory))
     };
     return <div className={`col-12 col-md-${field.width||6}`} key={field.key}><ConfiguredField {...common}/></div>;
   };
@@ -453,7 +455,8 @@ export default function ProductPage(){
               label:"Actions",
               locked:true,
               render:product=>(
-                <div className="d-flex justify-content-end gap-1">
+                <div className="d-flex justify-content-end gap-1 flex-wrap">
+                  <button type="button" className="btn btn-sm btn-light border" onClick={()=>setStockHistoryProduct(product)} title="View or adjust stock"><i className="bi bi-boxes me-1"></i>Stock</button>
                   <button type="button" className="btn btn-sm btn-light border" onClick={()=>setSalesHistoryProduct(product)} title="View invoices that use this product"><i className="bi bi-receipt me-1"></i>Sales</button>
                   <button type="button" className="btn btn-sm btn-light border" onClick={()=>handleEdit(product)} title="Edit product"><i className="bi bi-pencil me-1"></i>Edit</button>
                   <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>handleDelete(product)} title="Delete product"><i className="bi bi-trash me-1"></i>Delete</button>
@@ -509,6 +512,7 @@ export default function ProductPage(){
       </details>
 
       {salesHistoryProduct&&<ProductSalesHistory product={salesHistoryProduct} onClose={()=>setSalesHistoryProduct(null)}/>}
+      {stockHistoryProduct&&<ProductStockHistory product={stockHistoryProduct} onClose={()=>setStockHistoryProduct(null)} onUpdated={loadProducts}/>}
 
       <FormConfigurator
         open={formSettingsOpen}

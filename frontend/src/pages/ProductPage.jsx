@@ -168,12 +168,23 @@ export default function ProductPage(){
     const productId=searchParams.get("openProduct");
     if(!productId)return undefined;
     let active=true;
-    const params=new URLSearchParams(searchParams);
-    params.delete("openProduct");
-    setSearchParams(params,{replace:true});
+    const clearProductLink=()=>{
+      if(!active)return;
+      const params=new URLSearchParams(searchParams);
+      params.delete("openProduct");
+      setSearchParams(params,{replace:true});
+    };
     axios.get(API+"/api/products/"+encodeURIComponent(productId),auth())
-      .then(response=>{if(active&&response.data)handleEdit(response.data);})
-      .catch(loadError=>{if(active)setError(loadError.response?.data?.message||"The linked product could not be opened.");});
+      .then(response=>{
+        if(!active)return;
+        if(response.data)handleEdit(response.data);
+        clearProductLink();
+      })
+      .catch(loadError=>{
+        if(!active)return;
+        setError(loadError.response?.data?.message||"The linked product could not be opened.");
+        clearProductLink();
+      });
     return()=>{active=false;};
   },[searchParams,setSearchParams,handleEdit]);
 

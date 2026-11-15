@@ -77,11 +77,13 @@ function Order2() {
     const [ewayCustomizeRequested,setEwayCustomizeRequested]=useState(false);
     const [searchParams,setSearchParams]=useSearchParams();
     const [crmPrefillClientId,setCrmPrefillClientId]=useState("");
+    const [crmPrefillProductId,setCrmPrefillProductId]=useState("");
 
     useEffect(()=>{
         const customize=searchParams.get("customize");
         const action=searchParams.get("action");
         const clientId=searchParams.get("clientId");
+        const productId=searchParams.get("productId");
         if(customize==="form")setFormSettingsOpen(true);
         if(customize==="items")setItemSettingsOpen(true);
         if(customize==="payments")setPaymentFormSettingsOpen(true);
@@ -89,6 +91,7 @@ function Order2() {
         if(customize==="ewaybill")setEwayCustomizeRequested(true);
         if(action==="new"){
             setCrmPrefillClientId(clientId||"");
+            setCrmPrefillProductId(productId||"");
             const newSubOrders=[emptyOrderItem()];
             setShowModal(true);
             setEditingOrder(null);
@@ -101,6 +104,7 @@ function Order2() {
             searchParams.delete("customize");
             searchParams.delete("action");
             searchParams.delete("clientId");
+            searchParams.delete("productId");
             setSearchParams(searchParams,{replace:true});
         }
     },[searchParams,setSearchParams]);
@@ -126,6 +130,20 @@ function Order2() {
         }));
         setCrmPrefillClientId("");
     },[crmPrefillClientId,showModal,clients]);
+
+    useEffect(()=>{
+        if(!crmPrefillProductId||!showModal||!products.length)return;
+        const product=products.find(item=>String(item._id)===String(crmPrefillProductId));
+        if(!product){
+            setInvoiceFormError("The selected product could not be found. Choose a product from the catalogue.");
+            setCrmPrefillProductId("");
+            return;
+        }
+        const firstItem={...emptyOrderItem(),productId:product._id,orderName:product.productName||"",designNumber:product.designNo||"",unitPrice:Number(product.rate||0)};
+        setSubOrders([firstItem]);
+        setFormData(previous=>({...previous,subOrders:[firstItem]}));
+        setCrmPrefillProductId("");
+    },[crmPrefillProductId,showModal,products]);
 
     const orderFormConfig=useFormConfiguration("orders.form",ORDER_FORM_FIELDS);
     const orderItemConfig=useFormConfiguration("orders.items",ORDER_ITEM_FIELDS);

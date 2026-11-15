@@ -14,7 +14,7 @@ const movementLabel=type=>({
  purchase_cancelled:"Purchase reversed",
  invoice_sale:"Issued on invoice",
  invoice_cancelled:"Invoice stock returned",
- credit_note_return:"Sales return",
+ credit_note_return:"Sales return",credit_note_reversal:"Credit Note stock reversed",
  manual_adjustment:"Manual adjustment"
 }[type]||"Stock movement");
 

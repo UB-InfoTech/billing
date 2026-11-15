@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
-import {useSearchParams} from "react-router-dom";
+import {useNavigate,useSearchParams} from "react-router-dom";
 import "bootstrap/dist/css/bootstrap.min.css";
 import DynamicTable from "../components/DynamicTable";
 import FormConfigurator from "../components/FormConfigurator";
@@ -121,6 +121,7 @@ function formatDate(date) {
 }
 
 export default function CreditNote() {
+    const navigate=useNavigate();
     const [searchParams,setSearchParams]=useSearchParams();
     const [view, setView] = useState(()=>searchParams.get("customize")==="items"?"create":"list");
     const [orders, setOrders] = useState([]);
@@ -958,7 +959,11 @@ export default function CreditNote() {
                                 columns={[
                                     {key:"creditNoteNumber",label:"CN No."},
                                     {key:"creditNoteDate",label:"Date",render:note=>formatDate(note.creditNoteDate)},
-                                    {key:"originalInvoiceNumber",label:"Invoice",render:note=>note.originalInvoiceNumber||note.originalOrder?.orderNumber||"-"},
+                                    {key:"originalInvoiceNumber",label:"Invoice",render:note=>{
+                                        const invoiceId=note.originalOrderId?._id||note.originalOrder?._id||note.originalOrderId;
+                                        const label=note.originalInvoiceNumber||note.originalOrder?.orderNumber||"-";
+                                        return invoiceId?<button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={()=>navigate("/orders?openInvoice="+encodeURIComponent(invoiceId))}>{label} <i className="bi bi-arrow-up-right ms-1"/></button>:label;
+                                    }},
                                     {key:"companyName",label:"Client",render:note=>note.companyName||"-"},
                                     {key:"reason",label:"Reason"},
                                     {key:"status",label:"Status",render:note=><span className={`badge ${note.status==="Cancelled"?"text-bg-danger":"text-bg-success"}`}>{note.status}</span>},
@@ -1287,7 +1292,7 @@ export default function CreditNote() {
                 )}
 
                 {view === "preview" && previewNote && <div className="credit-note-print">
-                    <div className="d-flex justify-content-end gap-2 mb-3 no-print"><button className="btn btn-outline-secondary" onClick={() => setView("list")}>Back</button>{previewNote.status === "Posted" && <><button className="btn btn-outline-warning" onClick={() => startEditNote(previewNote)}>Edit</button><button className="btn btn-outline-danger" onClick={() => deleteNote(previewNote._id)}>Cancel</button></>}<button className="btn btn-primary" onClick={print}>Print / Save PDF</button></div>
+                    <div className="d-flex justify-content-end gap-2 flex-wrap mb-3 no-print"><button className="btn btn-outline-secondary" onClick={() => setView("list")}>Back</button>{(previewNote.originalOrderId?._id||previewNote.originalOrder?._id||previewNote.originalOrderId)&&<button className="btn btn-light border" onClick={()=>navigate("/orders?openInvoice="+encodeURIComponent(previewNote.originalOrderId?._id||previewNote.originalOrder?._id||previewNote.originalOrderId))}><i className="bi bi-receipt me-1"/>Original invoice</button>}{previewNote.clientId&&<button className="btn btn-light border" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(previewNote.clientId?._id||previewNote.clientId))}><i className="bi bi-person me-1"/>Customer</button>}{previewNote.status === "Posted" && <><button className="btn btn-outline-warning" onClick={() => startEditNote(previewNote)}>Edit</button><button className="btn btn-outline-danger" onClick={() => deleteNote(previewNote._id)}>Cancel</button></>}<button className="btn btn-primary" onClick={print}>Print / Save PDF</button></div>
                     <CreditNotePrint note={previewNote} profile={profile} customFields={creditNoteFormConfig.fields} />
                 </div>}
                 <FormConfigurator

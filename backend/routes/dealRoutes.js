@@ -89,6 +89,9 @@ router.put("/pipeline",auth,async(req,res)=>{
   }
   pipeline.stages=stages;
   await pipeline.save();
+  await Promise.all(stages.filter(stage=>stage.outcome==="open").map(stage=>
+   Deal.updateMany({createdBy:owner(req),stageKey:stage.key,status:"open"},{$set:{probability:stage.probability}})
+  ));
   return res.json({name:pipeline.name,stages:pipeline.stages.slice().sort((a,b)=>a.order-b.order)});
  }catch(error){
   return res.status(400).json({message:error.message||"Sales stages could not be saved."});

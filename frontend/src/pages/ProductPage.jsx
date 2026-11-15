@@ -1,7 +1,7 @@
 import BusinessPageHeader from "../components/BusinessPageHeader";
 import React,{useEffect,useMemo,useState,useCallback,useRef} from "react";
 import axios from "axios";
-import {useNavigate,useSearchParams} from "react-router-dom";
+import {useSearchParams} from "react-router-dom";
 import { createProduct, fetchProducts, updateProduct, deleteProduct, searchProductByBarcode } from "../services/productService";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import FormConfigurator from "../components/FormConfigurator";
@@ -34,7 +34,6 @@ const emptyBase={
 };
 
 export default function ProductPage(){
-  const navigate=useNavigate();
   const [searchParams,setSearchParams]=useSearchParams();
   const productFormConfig=useFormConfiguration("products.form",PRODUCT_FORM_FIELDS);
   const linkedProductSources=useMemo(()=>Array.from(new Set(productFormConfig.fields.map(field=>field.dataSource?.resource).filter(Boolean))),[productFormConfig.fields]);

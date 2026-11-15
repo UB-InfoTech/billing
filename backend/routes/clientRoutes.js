@@ -100,7 +100,7 @@ router.get("/follow-ups",auth,async(req,res)=>{
     const status=String(req.query.status||"open");
     if(!["open","completed","all"].includes(status))return res.status(400).json({message:"Choose a valid follow-up status."});
     const bucket=String(req.query.bucket||"all");
-    if(!["all","overdue","today","upcoming","no_date"].includes(bucket))return res.status(400).json({message:"Choose a valid follow-up filter."});
+    if(!["all","my_day","overdue","today","upcoming","no_date"].includes(bucket))return res.status(400).json({message:"Choose a valid follow-up filter."});
     const page=Math.max(1,Math.floor(Number(req.query.page)||1));
     const limit=Math.min(100,Math.max(1,Math.floor(Number(req.query.limit)||25)));
     const todayStart=req.query.todayStart?new Date(req.query.todayStart):null;
@@ -120,6 +120,7 @@ router.get("/follow-ups",auth,async(req,res)=>{
     if(bucket!=="all"){
       if(status==="completed")return res.status(400).json({message:"Date filters are available for open follow-ups."});
       let dueFilter;
+      if(bucket==="my_day")dueFilter={$ne:null,$lt:end};
       if(bucket==="overdue")dueFilter={$ne:null,$lt:now};
       if(bucket==="today")dueFilter={$gte:now,$lt:end};
       if(bucket==="upcoming")dueFilter={$gte:end};

@@ -78,6 +78,11 @@ export default function Suppliers(){
   return()=>{active=false;};
  },[searchParams,setSearchParams]);
 
+ const startNew=useCallback(()=>{
+  setEditingId("");setForm({...EMPTY,contact:{...EMPTY.contact}});
+  setFormError("");setDialogOpen(true);
+ },[]);
+
  useEffect(()=>{
   if(searchParams.get("action")!=="new")return;
   const params=new URLSearchParams(searchParams);
@@ -86,10 +91,7 @@ export default function Suppliers(){
   startNew();
  },[searchParams,setSearchParams,startNew]);
 
- const startNew=useCallback(()=>{
-  setEditingId("");setForm({...EMPTY,contact:{...EMPTY.contact}});
-  setFormError("");setDialogOpen(true);
- },[]);
+
  const startEdit=supplier=>{
   const item=supplier.supplier||supplier;
   setEditingId(item._id);

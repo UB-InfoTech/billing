@@ -167,7 +167,7 @@ router.get("/performance",auth,async(req,res)=>{
    return {dueCount:Number(due.dueCount||0),completedDueCount:Number(due.completedDueCount||0),openDueCount:Number(due.openDueCount||0),overdueOpenCount:Number(row.overdue?.[0]?.count||0),completedDuringPeriod:Number(row.completedDuring?.[0]?.count||0)};
   };
 
-  const [createdRows,closedRows,trendRows,pipelineRows,sourceRows,customerReminders,dealReminders,pipelineDoc,comparisonRows]=await Promise.all([
+  const [createdRows,closedRows,trendRows,pipelineRows,comparisonRows,sourceRows,customerReminders,dealReminders,pipelineDoc]=await Promise.all([
    Deal.aggregate([{$match:{createdBy:ownerId,createdAt:range}},{$group:{_id:null,count:{$sum:1},value:{$sum:"$value"}}}]),
    Deal.aggregate([{$match:{createdBy:ownerId,status:{$in:["won","lost"]},closedAt:range}},{$group:{
     _id:null,closedCount:{$sum:1},

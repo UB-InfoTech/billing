@@ -49,8 +49,11 @@ export default function ClientFollowUps(){
  const [savingId,setSavingId]=useState("");
  const [composerOpen,setComposerOpen]=useState(false);
  const [clients,setClients]=useState([]);
+ const [deals,setDeals]=useState([]);
  const [clientsLoading,setClientsLoading]=useState(false);
+ const [relatedType,setRelatedType]=useState("customer");
  const [selectedClientId,setSelectedClientId]=useState("");
+ const [selectedDealId,setSelectedDealId]=useState("");
  const [subject,setSubject]=useState("");
  const [description,setDescription]=useState("");
  const [dueAt,setDueAt]=useState("");
@@ -76,29 +79,35 @@ export default function ClientFollowUps(){
 
  const openComposer=async()=>{
   setComposerOpen(true);setMessage("");setError("");
-  if(clients.length||clientsLoading)return;
+  if((clients.length&&deals.length)||clientsLoading)return;
   setClientsLoading(true);
   try{
-   const response=await axios.get(API+"/api/clients",auth());
-   setClients(Array.isArray(response.data)?response.data.filter(client=>client.accountStatus!=="Inactive"):[]);
+   const [clientResponse,dealResponse]=await Promise.all([
+    axios.get(API+"/api/clients",auth()),
+    axios.get(API+"/api/deals",{...auth(),params:{status:"open",limit:500}})
+   ]);
+   setClients(Array.isArray(clientResponse.data)?clientResponse.data.filter(client=>client.accountStatus!=="Inactive"):[]);
+   setDeals(Array.isArray(dealResponse.data?.deals)?dealResponse.data.deals:[]);
   }catch(loadError){
-   setError(loadError.response?.data?.message||"Customers could not be loaded.");
+   setError(loadError.response?.data?.message||"Customers and opportunities could not be loaded.");
   }finally{setClientsLoading(false);}
  };
 
  const resetComposer=()=>{
-  setComposerOpen(false);setSelectedClientId("");setSubject("");setDescription("");setDueAt("");
+  setComposerOpen(false);setSelectedClientId("");setSelectedDealId("");setRelatedType("customer");setSubject("");setDescription("");setDueAt("");
  };
 
  const saveFollowUp=async event=>{
   event.preventDefault();
-  if(!selectedClientId||!subject.trim()){
-   setError("Choose a customer and enter what needs to be done.");
+  const selectedId=relatedType==="deal"?selectedDealId:selectedClientId;
+  if(!selectedId||!subject.trim()){
+   setError("Choose a customer or opportunity and enter what needs to be done.");
    return;
   }
   setSaving(true);setError("");setMessage("");
   try{
-   await axios.post(API+"/api/clients/"+selectedClientId+"/activities",{
+   const endpoint=relatedType==="deal"?"/api/deals/"+selectedDealId+"/activities":"/api/clients/"+selectedClientId+"/activities";
+   await axios.post(API+endpoint,{
     type:"follow_up",subject:subject.trim(),description:description.trim(),
     ...(dueAt?{dueAt:new Date(dueAt).toISOString()}: {})
    },auth());
@@ -113,7 +122,10 @@ export default function ClientFollowUps(){
  const updateStatus=async(item,status)=>{
   setSavingId(String(item._id));setError("");
   try{
-   await axios.patch(API+"/api/clients/"+item.clientId+"/activities/"+item._id,{status},auth());
+   const endpoint=item.recordType==="deal"
+    ?"/api/deals/"+item.dealId+"/activities/"+item._id
+    :"/api/clients/"+item.clientId+"/activities/"+item._id;
+   await axios.patch(API+endpoint,{status},auth());
    await load();
   }catch(updateError){
    setError(updateError.response?.data?.message||"The follow-up could not be updated.");
@@ -129,7 +141,7 @@ export default function ClientFollowUps(){
    <BusinessPageHeader
     eyebrow="CUSTOMER REMINDERS"
     title="Follow-ups"
-    description="A simple list of what you need to do for your customers."
+    description="One simple list for customer and sales opportunity reminders."
     className="mb-3"
    >
     <button type="button" className="btn btn-primary client-followup-add" onClick={openComposer}>
@@ -167,15 +179,18 @@ export default function ClientFollowUps(){
      :<div className="client-followup-list">
       {filteredItems.map(item=>{
        const state=dueState(item);
-       const customer=item.client||{};
-       const customerName=customer.companyName||customer.name||"Customer";
+       const isDeal=item.recordType==="deal";
+       const deal=item.deal||{};
+       const customer=deal.client||item.client||{};
+       const relatedName=isDeal?(deal.title||"Sales opportunity"):(customer.companyName||customer.name||"Customer");
+       const relatedDetail=isDeal?(deal.contactName||customer.companyName||customer.name||"Prospect"):(customer.phone||"");
        return (
         <article className="client-followup-row" key={item._id}>
          <div className={"client-followup-marker "+state}><i className={item.type==="task"?"bi bi-check2-square":"bi bi-bell"}></i></div>
          <div className="client-followup-copy">
           <strong>{item.subject}</strong>
-          <button type="button" className="client-followup-customer" onClick={()=>navigate("/clients?openClient="+item.clientId)}>
-           {customerName}{customer.phone?" · "+customer.phone:""}<i className="bi bi-arrow-up-right"></i>
+          <button type="button" className="client-followup-customer" onClick={()=>navigate(isDeal?"/deals?dealId="+item.dealId:"/clients?openClient="+item.clientId)}>
+           <span>{isDeal?"Opportunity · ":"Customer · "}{relatedName}{relatedDetail?" · "+relatedDetail:""}</span><i className="bi bi-arrow-up-right"></i>
           </button>
           {item.description&&<p>{item.description}</p>}
           <div className="client-followup-row-meta">
@@ -214,10 +229,19 @@ export default function ClientFollowUps(){
        <div className="modal-body">
         {error&&<div className="alert alert-warning py-2" role="alert">{error}</div>}
         <div className="mb-3">
-         <label className="form-label" htmlFor="followup-client">Customer</label>
-         <select id="followup-client" className="form-select" value={selectedClientId} onChange={event=>setSelectedClientId(event.target.value)} disabled={clientsLoading} required>
-          <option value="">{clientsLoading?"Loading customers...":"Choose a customer"}</option>
-          {clients.map(client=><option key={client._id} value={client._id}>{client.companyName||client.name||"Unnamed customer"}</option>)}
+         <label className="form-label" htmlFor="followup-related-type">Add this reminder to</label>
+         <select id="followup-related-type" className="form-select" value={relatedType} onChange={event=>setRelatedType(event.target.value)} disabled={clientsLoading}>
+          <option value="customer">A customer</option><option value="deal">A sales opportunity</option>
+         </select>
+        </div>
+        <div className="mb-3">
+         <label className="form-label" htmlFor="followup-related">{relatedType==="deal"?"Opportunity":"Customer"}</label>
+         <select id="followup-related" className="form-select" value={relatedType==="deal"?selectedDealId:selectedClientId}
+          onChange={event=>relatedType==="deal"?setSelectedDealId(event.target.value):setSelectedClientId(event.target.value)} disabled={clientsLoading} required>
+          <option value="">{clientsLoading?"Loading...":relatedType==="deal"?"Choose an open opportunity":"Choose a customer"}</option>
+          {relatedType==="deal"
+           ?deals.map(deal=><option key={deal._id} value={deal._id}>{deal.title}{deal.contactName?" · "+deal.contactName:""}</option>)
+           :clients.map(client=><option key={client._id} value={client._id}>{client.companyName||client.name||"Unnamed customer"}</option>)}
          </select>
         </div>
         <div className="mb-3">
@@ -235,7 +259,7 @@ export default function ClientFollowUps(){
        </div>
        <div className="modal-footer">
         <button type="button" className="btn btn-light border" onClick={resetComposer}>Cancel</button>
-        <button type="submit" className="btn btn-primary" disabled={saving||clientsLoading||!clients.length}>
+        <button type="submit" className="btn btn-primary" disabled={saving||clientsLoading||(relatedType==="deal"?!deals.length:!clients.length)}>
          {saving?<><span className="spinner-border spinner-border-sm me-2"/>Saving...</>:"Save follow-up"}
         </button>
        </div>

@@ -11,12 +11,15 @@ const DEFAULT_NAVIGATION=[
   {key:"analytics",label:"Reports",visible:true,order:1},
   {key:"orders",label:"Bills",visible:true,order:2},
   {key:"clients",label:"Clients",visible:true,order:3},
-  {key:"products",label:"Products",visible:true,order:4},
-  {key:"expense",label:"Expenses",visible:true,order:5},
-  {key:"calendar",label:"Calendar",visible:true,order:6},
-  {key:"bulk-payment",label:"Payments",visible:true,order:7},
-  {key:"credit-notes",label:"Credit Notes",visible:true,order:8},
-  {key:"settings",label:"Settings",visible:true,order:9}
+  {key:"deals",label:"Sales pipeline",visible:true,order:4},
+  {key:"sales-performance",label:"Sales performance",visible:true,order:5},
+  {key:"follow-ups",label:"Follow-ups",visible:true,order:6},
+  {key:"products",label:"Products",visible:true,order:7},
+  {key:"expense",label:"Expenses",visible:true,order:8},
+  {key:"calendar",label:"Calendar",visible:true,order:9},
+  {key:"bulk-payment",label:"Payments",visible:true,order:10},
+  {key:"credit-notes",label:"Credit Notes",visible:true,order:11},
+  {key:"settings",label:"Settings",visible:true,order:12}
 ];
 
 const cleanNavigation=input=>{

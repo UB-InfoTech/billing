@@ -3,6 +3,7 @@ const mongoose=require("mongoose");
 const auth=require("../middleware/auth");
 const Deal=require("../models/Deal");
 const DealActivity=require("../models/DealActivity");
+const ClientActivity=require("../models/ClientActivity");
 const SalesPipeline=require("../models/SalesPipeline");
 const Client=require("../models/Client");
 const {DEFAULT_DEAL_STAGES,normalizeOpenStages}=require("../utils/dealPipeline");
@@ -132,6 +133,96 @@ router.get("/summary",auth,async(req,res)=>{
  }catch(error){
   console.error("Sales pipeline summary error:",error);
   return res.status(500).json({message:"The sales summary could not be loaded."});
+ }
+});
+
+
+router.get("/performance",auth,async(req,res)=>{
+ try{
+  const ownerId=new mongoose.Types.ObjectId(owner(req));
+  const now=new Date();
+  let startAt,endAt;
+  try{startAt=parseDate(req.query.startAt,"start date");endAt=parseDate(req.query.endAt,"end date");}
+  catch(error){return res.status(400).json({message:error.message});}
+  if(Boolean(startAt)!==Boolean(endAt))return res.status(400).json({message:"Choose both a start and end date."});
+  if(!startAt){endAt=now;startAt=new Date(now);startAt.setDate(startAt.getDate()-90);}
+  if(endAt<=startAt)return res.status(400).json({message:"The end date must be after the start date."});
+  const range={$gte:startAt,$lt:endAt};
+  const trendFormat=(endAt-startAt)>120*24*60*60*1000?"%Y-%m":"%G-W%V";
+  const trendTimeframe=trendFormat==="%Y-%m"?"monthly":"weekly";
+
+  const reminderStats=async Model=>{
+   const result=await Model.aggregate([
+    {$match:{createdBy:ownerId,type:{$in:["task","follow_up"]}}},
+    {$facet:{
+     due:[{$match:{dueAt:range,status:{$in:["open","completed"]}}},{$group:{_id:null,dueCount:{$sum:1},completedDueCount:{$sum:{$cond:[{$eq:["$status","completed"]},1,0]}},openDueCount:{$sum:{$cond:[{$eq:["$status","open"]},1,0]}}}}],
+     overdue:[{$match:{status:"open",dueAt:{$ne:null,$lt:now}}},{$count:"count"}],
+     completedDuring:[{$match:{status:"completed",completedAt:range}},{$count:"count"}]
+    }}
+   ]);
+   const row=result[0]||{},due=row.due?.[0]||{};
+   return {dueCount:Number(due.dueCount||0),completedDueCount:Number(due.completedDueCount||0),openDueCount:Number(due.openDueCount||0),overdueOpenCount:Number(row.overdue?.[0]?.count||0),completedDuringPeriod:Number(row.completedDuring?.[0]?.count||0)};
+  };
+
+  const [createdRows,closedRows,trendRows,pipelineRows,sourceRows,customerReminders,dealReminders,pipelineDoc]=await Promise.all([
+   Deal.aggregate([{$match:{createdBy:ownerId,createdAt:range}},{$group:{_id:null,count:{$sum:1},value:{$sum:"$value"}}}]),
+   Deal.aggregate([{$match:{createdBy:ownerId,status:{$in:["won","lost"]},closedAt:range}},{$group:{
+    _id:null,closedCount:{$sum:1},
+    wonCount:{$sum:{$cond:[{$eq:["$status","won"]},1,0]}},
+    lostCount:{$sum:{$cond:[{$eq:["$status","lost"]},1,0]}},
+    wonValue:{$sum:{$cond:[{$eq:["$status","won"]},{$ifNull:["$value",0]},0]}},
+    lostValue:{$sum:{$cond:[{$eq:["$status","lost"]},{$ifNull:["$value",0]},0]}},
+    averageSalesCycleDays:{$avg:{$cond:[{$and:[{$eq:["$status","won"]},{$ne:["$createdAt",null]}]},{$divide:[{$subtract:["$closedAt","$createdAt"]},86400000]},null]}}
+   }}]),
+   Deal.aggregate([
+    {$match:{createdBy:ownerId,status:{$in:["won","lost"]},closedAt:range}},
+    {$group:{_id:{$dateToString:{format:trendFormat,date:"$closedAt"}},wonCount:{$sum:{$cond:[{$eq:["$status","won"]},1,0]}},lostCount:{$sum:{$cond:[{$eq:["$status","lost"]},1,0]}},wonValue:{$sum:{$cond:[{$eq:["$status","won"]},{$ifNull:["$value",0]},0]}}}},
+    {$sort:{_id:1}}
+   ]),
+   Deal.aggregate([{$match:{createdBy:ownerId,status:"open"}},{$group:{_id:"$stageKey",count:{$sum:1},value:{$sum:"$value"},weightedValue:{$sum:{$multiply:["$value",{$divide:["$probability",100]}]}}}}]),
+   Deal.aggregate([
+    {$match:{createdBy:ownerId,createdAt:range}},
+    {$set:{sourceLabel:{$let:{vars:{cleaned:{$trim:{input:{$ifNull:["$source",""]}}}},in:{$cond:[{$eq:["$cleaned",""]},"Not recorded","$cleaned"]}}}}},
+    {$group:{_id:"$sourceLabel",leadCount:{$sum:1},wonCount:{$sum:{$cond:[{$eq:["$status","won"]},1,0]}},lostCount:{$sum:{$cond:[{$eq:["$status","lost"]},1,0]}},wonValue:{$sum:{$cond:[{$eq:["$status","won"]},{$ifNull:["$value",0]},0]}}}},
+    {$sort:{leadCount:-1,_id:1}}
+   ]),
+   reminderStats(ClientActivity),reminderStats(DealActivity),
+   SalesPipeline.findOne({createdBy:ownerId}).lean()
+  ]);
+
+  const created=createdRows[0]||{},closed=closedRows[0]||{};
+  const stageMap=new Map(pipelineRows.map(row=>[String(row._id),row]));
+  const pipelineStages=(pipelineDoc?.stages||DEFAULT_DEAL_STAGES)
+   .filter(stage=>stage.outcome==="open").slice().sort((a,b)=>a.order-b.order)
+   .map(stage=>{const row=stageMap.get(stage.key)||{};return {key:stage.key,label:stage.label,probability:Number(stage.probability||0),count:Number(row.count||0),value:Number(row.value||0),weightedValue:Number(row.weightedValue||0)};});
+  const pipelineSummary=pipelineStages.reduce((summary,stage)=>({count:summary.count+stage.count,value:summary.value+stage.value,weightedValue:summary.weightedValue+stage.weightedValue}),{count:0,value:0,weightedValue:0});
+  const followUps={
+   dueCount:customerReminders.dueCount+dealReminders.dueCount,
+   completedDueCount:customerReminders.completedDueCount+dealReminders.completedDueCount,
+   openDueCount:customerReminders.openDueCount+dealReminders.openDueCount,
+   overdueOpenCount:customerReminders.overdueOpenCount+dealReminders.overdueOpenCount,
+   completedDuringPeriod:customerReminders.completedDuringPeriod+dealReminders.completedDuringPeriod,
+   completionRate:null,customers:customerReminders,opportunities:dealReminders
+  };
+  followUps.completionRate=followUps.dueCount?Math.round(followUps.completedDueCount*10000/followUps.dueCount)/100:null;
+  const closedCount=Number(closed.closedCount||0),wonCount=Number(closed.wonCount||0),lostCount=Number(closed.lostCount||0);
+  return res.json({
+   range:{startAt:startAt.toISOString(),endAt:endAt.toISOString(),trendTimeframe},
+   summary:{
+    createdCount:Number(created.count||0),createdValue:Number(created.value||0),closedCount,wonCount,lostCount,
+    winRate:closedCount?Math.round(wonCount*10000/closedCount)/100:null,
+    wonValue:Number(closed.wonValue||0),lostValue:Number(closed.lostValue||0),
+    averageSalesCycleDays:closed.averageSalesCycleDays===null||closed.averageSalesCycleDays===undefined?null:Math.round(Number(closed.averageSalesCycleDays)*10)/10,
+    pipelineCount:pipelineSummary.count,pipelineValue:pipelineSummary.value,weightedForecast:pipelineSummary.weightedValue
+   },
+   closedTrend:trendRows.map(row=>({period:row._id,wonCount:Number(row.wonCount||0),lostCount:Number(row.lostCount||0),wonValue:Number(row.wonValue||0)})),
+   pipelineStages,
+   sources:sourceRows.map(row=>{const won=Number(row.wonCount||0),lost=Number(row.lostCount||0),totalClosed=won+lost;return {source:row._id,leadCount:Number(row.leadCount||0),wonCount:won,lostCount:lost,winRate:totalClosed?Math.round(won*10000/totalClosed)/100:null,wonValue:Number(row.wonValue||0)};}),
+   followUps
+  });
+ }catch(error){
+  console.error("Sales performance load error:",error);
+  return res.status(500).json({message:"The sales performance dashboard could not be loaded."});
  }
 });
 

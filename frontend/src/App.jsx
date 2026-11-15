@@ -7,6 +7,7 @@ import Register from "./pages/Register.jsx";
 import Clients from "./pages/Clients.jsx";
 import ClientFollowUps from "./pages/ClientFollowUps.jsx";
 import Deals from "./pages/Deals.jsx";
+import SalesPerformance from "./pages/SalesPerformance.jsx";
 import Orders2 from "./pages/Order2.jsx";
 import Calendar from "./pages/Calendar.jsx";
 import SalesAnalytics from "./pages/SalesAnalytics.jsx";
@@ -36,6 +37,7 @@ export default function App(){
       <Route path="clients" element={<ProtectedRoute><Clients/></ProtectedRoute>}/>
       <Route path="follow-ups" element={<ProtectedRoute><ClientFollowUps/></ProtectedRoute>}/>
       <Route path="deals" element={<ProtectedRoute><Deals/></ProtectedRoute>}/>
+      <Route path="sales-performance" element={<ProtectedRoute><SalesPerformance/></ProtectedRoute>}/>
       <Route path="products" element={<ProtectedRoute><ProductPage/></ProtectedRoute>}/>
       <Route path="expense" element={<ProtectedRoute><Expenses/></ProtectedRoute>}/>
       <Route path="add-expense" element={<ProtectedRoute><AddExpense/></ProtectedRoute>}/>

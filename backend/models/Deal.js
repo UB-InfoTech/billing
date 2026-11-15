@@ -35,5 +35,7 @@ dealSchema.index({createdBy:1,status:1,stageKey:1});
 dealSchema.index({createdBy:1,nextActionAt:1,status:1});
 dealSchema.index({createdBy:1,expectedCloseDate:1,status:1});
 dealSchema.index({createdBy:1,clientId:1,updatedAt:-1});
+dealSchema.index({createdBy:1,createdAt:1});
+dealSchema.index({createdBy:1,status:1,closedAt:1});
 
 module.exports=mongoose.model("Deal",dealSchema);

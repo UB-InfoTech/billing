@@ -37,7 +37,7 @@ const formatDue=value=>{
 };
 const contactNumbers=phone=>{
  const digits=String(phone||"").replace(/\D/g,"");
- if(!digits)return null;
+ if(digits.length<7||digits.length>15)return null;
  const normalized=digits.startsWith("0")?digits.slice(1):digits;
  const whatsapp=normalized.length===10?"91"+normalized:normalized;
  return {telephone:String(phone).trim().replace(/[^\d+]/g,""),whatsapp};

@@ -114,6 +114,10 @@ export default function Home(){
     {key:"invoice",title:"Create your first invoice",description:"Choose a customer, add items and save the bill.",done:Number(data?.orders||0)>0,to:"/orders?action=new"}
   ];
   const completedSetupTasks=gettingStartedTasks.filter(task=>task.done).length;
+  const dashboardItems=[
+    ...metrics.map(metric=>({...metric,type:"metric",order:Number(widget(metric.key).order??99)})),
+    {key:"quickActions",type:"actions",order:Number(widget("quickActions").order??99)}
+  ].filter(item=>isVisible(item.key)).sort((a,b)=>a.order-b.order);
 
   return(
     <div className="container-fluid py-3 ux-dashboard">
@@ -133,60 +137,45 @@ export default function Home(){
         </div>
       )}
 
-      <div className="ux-dashboard-panels">
-      {isVisible("quickActions")&&(
-        <section className="ux-dashboard-block mb-4" aria-labelledby="ux-dashboard-actions-title" style={style("quickActions")}>
-        <div className="ux-dashboard-block-heading">
-          <div>
-            <h2 id="ux-dashboard-actions-title">What would you like to do?</h2>
-            <p>Start a common task directly. You can complete the details on the next screen.</p>
-          </div>
-        </div>
-        <div className="ux-dashboard-actions">
-          {DASHBOARD_ACTIONS.map(action=>(
-            <button
-              type="button"
-              key={action.key}
-              className={"ux-dashboard-action "+(action.primary?"is-primary":"")}
-              onClick={()=>navigate(action.to)}
-            >
-              <span className="ux-dashboard-action-icon"><i className={"bi "+action.icon}></i></span>
-              <span className="ux-dashboard-action-copy"><strong>{action.label}</strong><small>{action.description}</small></span>
-              <i className="bi bi-arrow-up-right ux-dashboard-action-arrow" aria-hidden="true"></i>
-            </button>
-          ))}
-        </div>
-        </section>
-      )}
-
-      <section className="ux-dashboard-block mb-4" aria-labelledby="ux-dashboard-summary-title" style={{order:metrics.reduce((order,metric)=>isVisible(metric.key)?Math.min(order,Number(widget(metric.key).order??99)):order,99)}}>
+      <section className="ux-dashboard-block mb-3" aria-labelledby="ux-dashboard-summary-title">
         <div className="ux-dashboard-block-heading">
           <div>
             <h2 id="ux-dashboard-summary-title">Business at a glance</h2>
-            <p>Choose any number to open the related records or report.</p>
+            <p>Choose a number to open the related records or report.</p>
           </div>
           <button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/analytics")}>View reports <i className="bi bi-arrow-right ms-1"></i></button>
         </div>
-        <div className="ux-dashboard-metrics">
-          {metrics.map(metric=>isVisible(metric.key)?(
-            <button
-              type="button"
-              key={metric.key}
-              className={"ux-dashboard-metric tone-"+metric.tone}
-              style={style(metric.key)}
-              onClick={()=>navigate(metric.to)}
-            >
-              <span className="ux-dashboard-metric-top">
-                <span>{title(metric.key)}</span>
-                <i className={"bi "+metric.icon} aria-hidden="true"></i>
-              </span>
-              <strong>{metric.value}</strong>
-              <small>{metric.detail}</small>
-            </button>
-          ):null)}
-        </div>
       </section>
 
+      <div className="ux-dashboard-panels">
+        {dashboardItems.map(item=>item.type==="actions"?(
+          <section className="ux-dashboard-block ux-dashboard-action-panel" aria-labelledby="ux-dashboard-actions-title" key={item.key} style={{order:item.order}}>
+            <div className="ux-dashboard-block-heading">
+              <div>
+                <h2 id="ux-dashboard-actions-title">{title(item.key)}</h2>
+                <p>Start a common task directly. You can complete the details on the next screen.</p>
+              </div>
+            </div>
+            <div className="ux-dashboard-actions">
+              {DASHBOARD_ACTIONS.map(action=>(
+                <button type="button" key={action.key} className={"ux-dashboard-action "+(action.primary?"is-primary":"")} onClick={()=>navigate(action.to)}>
+                  <span className="ux-dashboard-action-icon"><i className={"bi "+action.icon}></i></span>
+                  <span className="ux-dashboard-action-copy"><strong>{action.label}</strong><small>{action.description}</small></span>
+                  <i className="bi bi-arrow-up-right ux-dashboard-action-arrow" aria-hidden="true"></i>
+                </button>
+              ))}
+            </div>
+          </section>
+        ):(
+          <button type="button" key={item.key} className={"ux-dashboard-metric tone-"+item.tone} style={{order:item.order}} onClick={()=>navigate(item.to)}>
+            <span className="ux-dashboard-metric-top">
+              <span>{title(item.key)}</span>
+              <i className={"bi "+item.icon} aria-hidden="true"></i>
+            </span>
+            <strong>{item.value}</strong>
+            <small>{item.detail}</small>
+          </button>
+        ))}
       </div>
 
       {completedSetupTasks<gettingStartedTasks.length&&(

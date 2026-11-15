@@ -69,6 +69,17 @@ export default function ExpenseForm({onSubmit,onCancel,initialData=EMPTY_INITIAL
     setForm(applyFormulas(fields,prepared));
   },[initialData,fields]);
 
+  useEffect(()=>{
+    const clientId=searchParams.get("clientId");
+    const orderId=searchParams.get("orderId");
+    if((!clientId&&!orderId)||initialData?._id)return;
+    setForm(previous=>({...previous,...(clientId?{clientId}:{}),...(orderId?{orderId}:{})}));
+    const params=new URLSearchParams(searchParams);
+    params.delete("clientId");
+    params.delete("orderId");
+    setSearchParams(params,{replace:true});
+  },[searchParams,setSearchParams,initialData?._id]);
+
   const primaryExpenseKeys=new Set(["date","description","amount","category"]);
   const currentExpenseValues={...form,...(form.customFields||{})};
   const primaryFields=visibleFields.filter(field=>{

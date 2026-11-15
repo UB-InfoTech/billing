@@ -7,6 +7,7 @@ const jwt=require("jsonwebtoken");
 process.env.JWT_SECRET ||= "supplier-purchase-integration-tests-only-secret";
 const app=require("../server");
 const Supplier=require("../models/Supplier");
+const Expense=require("../models/Expense");
 const Product=require("../models/Product");
 const Purchase=require("../models/Purchase");
 const StockMovement=require("../models/StockMovement");
@@ -18,11 +19,11 @@ const mongoUri=process.env.MONGO_URI;
 test("supplier purchases, payments, invoice stock and movement history stay connected",{
  skip:!mongoUri?"Set MONGO_URI to run supplier purchase integration tests.":false
 },async()=>{
- let server,ownerId,otherOwnerId,supplierId,otherSupplierId,productId,purchaseId,paidPurchaseId,orderId;
+ let server,ownerId,otherOwnerId,supplierId,otherSupplierId,expenseSupplierId,productId,purchaseId,paidPurchaseId,orderId;
  try{
   await mongoose.connect(mongoUri,{serverSelectionTimeoutMS:10000});
   await Promise.all([
-   Supplier.init(),Product.init(),Purchase.init(),StockMovement.init(),Order.init()
+   Supplier.init(),Expense.init(),Product.init(),Purchase.init(),StockMovement.init(),Order.init()
   ]);
   ownerId=new mongoose.Types.ObjectId();
   otherOwnerId=new mongoose.Types.ObjectId();
@@ -130,6 +131,20 @@ test("supplier purchases, payments, invoice stock and movement history stay conn
   });
   assert.equal(duplicateGstinInSameBusiness.response.status,409);
 
+  const expenseSupplier=await request("/suppliers",{
+   method:"POST",body:{name:"Expense-linked supplier "+suffix}
+  });
+  assert.equal(expenseSupplier.response.status,201,JSON.stringify(expenseSupplier.payload));
+  expenseSupplierId=expenseSupplier.payload.supplier._id;
+  await Expense.create({
+   description:"Supplier-linked business expense",
+   amount:25,category:"Purchases",supplierId:expenseSupplierId,createdBy:ownerId
+  });
+  const safeSupplierDelete=await request("/suppliers/"+expenseSupplierId,{method:"DELETE"});
+  assert.equal(safeSupplierDelete.response.status,200);
+  assert.equal(safeSupplierDelete.payload.supplier.status,"Inactive");
+  assert.match(safeSupplierDelete.payload.message,/expense history/i);
+
   const createOrder=new Order({
    orderNumber:"SALE-"+suffix.toUpperCase(),
    orderDate:new Date(),
@@ -214,11 +229,13 @@ test("supplier purchases, payments, invoice stock and movement history stay conn
   if(server)await new Promise(resolve=>server.close(resolve));
   if(ownerId){
    await StockMovement.deleteMany({createdBy:ownerId});
+   await Expense.deleteMany({createdBy:ownerId});
    if(orderId)await Order.deleteOne({_id:orderId,createdBy:ownerId});
    if(purchaseId)await Purchase.deleteOne({_id:purchaseId,createdBy:ownerId});
    if(paidPurchaseId)await Purchase.deleteOne({_id:paidPurchaseId,createdBy:ownerId});
    if(productId)await Product.deleteOne({_id:productId,createdBy:ownerId});
    if(supplierId)await Supplier.deleteOne({_id:supplierId,createdBy:ownerId});
+   if(expenseSupplierId)await Supplier.deleteOne({_id:expenseSupplierId,createdBy:ownerId});
   }
   if(otherOwnerId&&otherSupplierId)await Supplier.deleteOne({_id:otherSupplierId,createdBy:otherOwnerId});
   if(mongoose.connection.readyState===1)await mongoose.disconnect();

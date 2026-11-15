@@ -38,7 +38,8 @@ const formatDue=value=>{
 const contactNumbers=phone=>{
  const digits=String(phone||"").replace(/\D/g,"");
  if(!digits)return null;
- const whatsapp=digits.length===10?"91"+digits:digits.startsWith("0")?digits.slice(1):digits;
+ const normalized=digits.startsWith("0")?digits.slice(1):digits;
+ const whatsapp=normalized.length===10?"91"+normalized:normalized;
  return {telephone:String(phone).trim().replace(/[^\d+]/g,""),whatsapp};
 };
 
@@ -149,7 +150,7 @@ export default function ClientFollowUps(){
   const customer=deal.client||item.client||{};
   const relatedName=isDeal?(deal.title||"Sales opportunity"):(customer.companyName||customer.name||"Customer");
   const relatedDetail=isDeal?(deal.contactName||customer.companyName||customer.name||"Prospect"):(customer.phone||"");
-  const phone=contactNumbers((isDeal?deal.contactPhone:"")||customer.phone||"");
+  const phone=contactNumbers(customer.phone||(isDeal?deal.contactPhone:"")||"");
   return (
    <article className={"client-followup-row "+(state==="overdue"?"is-overdue":"")} key={item.recordType+":"+item._id}>
     <div className={"client-followup-marker "+state}><i className={item.type==="task"?"bi bi-check2-square":"bi bi-bell"}></i></div>

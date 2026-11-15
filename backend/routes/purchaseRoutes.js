@@ -170,7 +170,7 @@ router.post("/",auth,async(req,res)=>{
    notes:String(req.body?.notes||"").trim().slice(0,4000),
    createdBy:owner(req)
   });
-  for(const item of calculated.items){
+  for(const item of purchase.items){
    const result=await recordStockMovement({
     createdBy:owner(req),productId:item.productId,quantityChange:item.quantity,unit:item.unit,
     sourceType:"purchase",sourceId:purchase._id,sourceItemId:item._id,

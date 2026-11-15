@@ -34,9 +34,9 @@ function buildRange(period,customStart,customEnd){
  const end=new Date(start);
  end.setDate(end.getDate()+1);
 
- if(period==="30d")start.setDate(start.getDate()-30);
- else if(period==="12m")start.setFullYear(start.getFullYear()-1);
- else if(period==="90d")start.setDate(start.getDate()-90);
+ if(period==="30d"){start.setTime(end.getTime());start.setDate(start.getDate()-30);}
+ else if(period==="12m"){start.setTime(end.getTime());start.setFullYear(start.getFullYear()-1);}
+ else if(period==="90d"){start.setTime(end.getTime());start.setDate(start.getDate()-90);}
  else{
   if(!customStart||!customEnd)return {valid:false,error:"Choose both a start date and an end date."};
   const from=new Date(customStart+"T00:00:00");

@@ -143,6 +143,8 @@ export default function CreditNote() {
     const [loading, setLoading] = useState(true);
     const [listError, setListError] = useState("");
     const creditNoteListRequestRef = useRef(0);
+    const openInvoicePrefillRef=useRef("");
+    const loadOrderRef=useRef(null);
     const [orderLoading, setOrderLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [cancellingId, setCancellingId] = useState(null);
@@ -449,6 +451,7 @@ export default function CreditNote() {
             setLoading(false);
         }
     };
+    loadOrderRef.current=loadOrder;
 
     const startNew = () => {
         setSearchParams(previous=>{const next=new URLSearchParams(previous);next.delete("customize");return next;});
@@ -466,6 +469,21 @@ export default function CreditNote() {
         setError("");
         setSuccess("");
     };
+
+    useEffect(()=>{
+        const orderId=searchParams.get("originalOrderId");
+        if(!orderId||openInvoicePrefillRef.current===orderId)return;
+        openInvoicePrefillRef.current=orderId;
+        const params=new URLSearchParams(searchParams);
+        params.delete("originalOrderId");
+        setSearchParams(params,{replace:true});
+        setView("create");
+        setSelectedOrder(null);
+        setItems([]);
+        setError("");
+        setSuccess("");
+        loadOrderRef.current?.(orderId);
+    },[searchParams,setSearchParams]);
 
     const updateItem = (index, field, value) => {
         setItems((current) => current.map((item, itemIndex) => {
@@ -964,7 +982,9 @@ export default function CreditNote() {
                                         const label=note.originalInvoiceNumber||note.originalOrder?.orderNumber||"-";
                                         return invoiceId?<button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={()=>navigate("/orders?openInvoice="+encodeURIComponent(invoiceId))}>{label} <i className="bi bi-arrow-up-right ms-1"/></button>:label;
                                     }},
-                                    {key:"companyName",label:"Client",render:note=>note.companyName||"-"},
+                                    {key:"companyName",label:"Client",render:note=>note.clientId?(
+                                        <button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(note.clientId?._id||note.clientId))}>{note.companyName||"Open customer"} <i className="bi bi-arrow-up-right ms-1"/></button>
+                                    ):(note.companyName||"-")},
                                     {key:"reason",label:"Reason"},
                                     {key:"status",label:"Status",render:note=><span className={`badge ${note.status==="Cancelled"?"text-bg-danger":"text-bg-success"}`}>{note.status}</span>},
                                     {key:"totals.grandTotal",label:"Total",render:note=>money(note?.totals?.grandTotal)},

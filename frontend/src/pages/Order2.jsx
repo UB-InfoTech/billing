@@ -1848,6 +1848,8 @@ const styles = {
                                 </div>
                                 <div className="d-flex align-items-center gap-2 flex-wrap">
                                     {(viewingOrder.clientId?._id||viewingOrder.clientId)&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(viewingOrder.clientId?._id||viewingOrder.clientId))}><i className="bi bi-person me-1"></i>Customer</button>}
+                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/credit-notes?originalOrderId="+encodeURIComponent(viewingOrder._id))}><i className="bi bi-arrow-return-left me-1"></i>Credit Note</button>
+                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/add-expense?"+new URLSearchParams({orderId:String(viewingOrder._id),...(viewingOrder.clientId?{clientId:String(viewingOrder.clientId?._id||viewingOrder.clientId)}:{})}).toString())}><i className="bi bi-wallet2 me-1"></i>Add expense</button>
                                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>{handleEdit(viewingOrder);setViewingOrder(null);}}><i className="bi bi-pencil me-1"></i>Edit</button>
                                     <button type="button" className="btn-close" aria-label="Close invoice details" onClick={()=>setViewingOrder(null)} />
                                 </div>

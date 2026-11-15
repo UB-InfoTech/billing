@@ -72,6 +72,17 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
   });
   assert.equal(reminder.response.status,201,JSON.stringify(reminder.payload));
   assert.equal(reminder.payload.status,"open");
+  const rescheduledAt=new Date(Date.now()+2*60*60*1000).toISOString();
+  const editReminder=await request("/deals/"+dealId+"/activities/"+reminder.payload._id,{
+   method:"PATCH",body:{subject:"Confirm sample dispatch",description:"Customer needs the dispatch date.",dueAt:rescheduledAt}
+  });
+  assert.equal(editReminder.response.status,200,JSON.stringify(editReminder.payload));
+  assert.equal(editReminder.payload.subject,"Confirm sample dispatch");
+  assert.equal(editReminder.payload.description,"Customer needs the dispatch date.");
+  assert.equal(new Date(editReminder.payload.dueAt).toISOString(),rescheduledAt);
+  const syncedAfterEdit=await Deal.findById(dealId).lean();
+  assert.equal(syncedAfterEdit.nextAction,"Confirm sample dispatch");
+  assert.equal(new Date(syncedAfterEdit.nextActionAt).toISOString(),rescheduledAt);
   const activityList=await request("/deals/"+dealId+"/activities");
   assert.equal(activityList.response.status,200);
   assert.equal(activityList.payload.activities.length,1);
@@ -87,6 +98,9 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
   });
   assert.equal(completeReminder.response.status,200,JSON.stringify(completeReminder.payload));
   assert.equal(completeReminder.payload.status,"completed");
+  const syncedAfterCompletion=await Deal.findById(dealId).lean();
+  assert.equal(syncedAfterCompletion.nextAction,"");
+  assert.equal(syncedAfterCompletion.nextActionAt,null);
   const completedFollowUps=await request("/clients/follow-ups?status=completed&bucket=all&page=1&limit=20");
   assert.ok(completedFollowUps.payload.activities.some(item=>item.recordType==="deal"&&String(item._id)===String(reminder.payload._id)));
 

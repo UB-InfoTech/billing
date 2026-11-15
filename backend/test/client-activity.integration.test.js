@@ -79,6 +79,15 @@ test("client activity APIs preserve business ownership and allow task completion
   assert.equal(createTask.response.status,201,JSON.stringify(createTask.payload));
   assert.equal(createTask.payload.status,"open");
 
+  const rescheduledAt=new Date(Date.now()+3*60*60*1000).toISOString();
+  const editTask=await request("/clients/"+clientId+"/activities/"+createTask.payload._id,{
+   method:"PATCH",body:{subject:"Send updated quotation",description:"Include the revised delivery terms.",dueAt:rescheduledAt}
+  });
+  assert.equal(editTask.response.status,200,JSON.stringify(editTask.payload));
+  assert.equal(editTask.payload.subject,"Send updated quotation");
+  assert.equal(editTask.payload.description,"Include the revised delivery terms.");
+  assert.equal(new Date(editTask.payload.dueAt).toISOString(),rescheduledAt);
+
   const updateProfile=await request("/clients/"+clientId,{
    method:"PATCH",body:{notes:"Prefers WhatsApp contact."}
   });
@@ -106,7 +115,7 @@ test("client activity APIs preserve business ownership and allow task completion
   const profileUpdate=list.payload.activities.find(item=>item.type==="profile_update");
   assert.ok(profileUpdate);
   assert.ok(profileUpdate.description.includes("Notes"));
-  const task=list.payload.activities.find(item=>item.title==="Send quotation");
+  const task=list.payload.activities.find(item=>item.title==="Send updated quotation");
   assert.ok(task);
   assert.equal(task.canUpdateStatus,true);
 
@@ -136,7 +145,7 @@ test("client activity APIs preserve business ownership and allow task completion
   });
   assert.equal(hiddenCreate.response.status,404);
   const hiddenUpdate=await request("/clients/"+clientId+"/activities/"+createTask.payload._id,{
-   method:"PATCH",token:otherToken,body:{status:"open"}
+   method:"PATCH",token:otherToken,body:{subject:"Cross-business edit",dueAt:new Date().toISOString()}
   });
   assert.equal(hiddenUpdate.response.status,404);
 

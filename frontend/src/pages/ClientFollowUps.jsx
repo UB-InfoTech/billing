@@ -35,6 +35,12 @@ const formatDue=value=>{
  const date=new Date(value);
  return Number.isNaN(date.getTime())?"Date not set":date.toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"});
 };
+const toDateTimeLocal=value=>{
+ if(!value)return "";
+ const date=new Date(value);
+ if(Number.isNaN(date.getTime()))return "";
+ return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);
+};
 const contactNumbers=phone=>{
  const digits=String(phone||"").replace(/\D/g,"");
  if(digits.length<7||digits.length>15)return null;
@@ -56,6 +62,7 @@ export default function ClientFollowUps(){
  const [message,setMessage]=useState("");
  const [savingId,setSavingId]=useState("");
  const [composerOpen,setComposerOpen]=useState(false);
+ const [editingItem,setEditingItem]=useState(null);
  const [clients,setClients]=useState([]);
  const [deals,setDeals]=useState([]);
  const [clientsLoading,setClientsLoading]=useState(false);
@@ -86,7 +93,7 @@ export default function ClientFollowUps(){
  useEffect(()=>{load();},[load]);
 
  const openComposer=async()=>{
-  setComposerOpen(true);setMessage("");setError("");
+  setEditingItem(null);setComposerOpen(true);setMessage("");setError("");
   if((clients.length&&deals.length)||clientsLoading)return;
   setClientsLoading(true);
   try{
@@ -102,18 +109,46 @@ export default function ClientFollowUps(){
  };
 
  const resetComposer=()=>{
-  setComposerOpen(false);setSelectedClientId("");setSelectedDealId("");setRelatedType("customer");setSubject("");setDescription("");setDueAt("");
+  setComposerOpen(false);setEditingItem(null);setSelectedClientId("");setSelectedDealId("");setRelatedType("customer");setSubject("");setDescription("");setDueAt("");
+ };
+
+ const openEdit=item=>{
+  setEditingItem(item);
+  setRelatedType(item.recordType==="deal"?"deal":"customer");
+  setSubject(item.subject||"");
+  setDescription(item.description||"");
+  setDueAt(toDateTimeLocal(item.dueAt));
+  setMessage("");setError("");setComposerOpen(true);
  };
 
  const saveFollowUp=async event=>{
   event.preventDefault();
-  const selectedId=relatedType==="deal"?selectedDealId:selectedClientId;
-  if(!selectedId||!subject.trim()){
-   setError("Choose a customer or opportunity and enter what needs to be done.");
+  if(!subject.trim()){
+   setError("Enter what needs to be done.");
    return;
+  }
+  if(!editingItem){
+   const selectedId=relatedType==="deal"?selectedDealId:selectedClientId;
+   if(!selectedId){
+    setError("Choose a customer or opportunity.");
+    return;
+   }
   }
   setSaving(true);setError("");setMessage("");
   try{
+   if(editingItem){
+    const endpoint=editingItem.recordType==="deal"
+     ?"/api/deals/"+editingItem.dealId+"/activities/"+editingItem._id
+     :"/api/clients/"+editingItem.clientId+"/activities/"+editingItem._id;
+    await axios.patch(API+endpoint,{
+     subject:subject.trim(),description:description.trim(),
+     dueAt:dueAt?new Date(dueAt).toISOString():null
+    },auth());
+    resetComposer();
+    setMessage("Follow-up updated.");
+    await load();
+    return;
+   }
    const endpoint=relatedType==="deal"?"/api/deals/"+selectedDealId+"/activities":"/api/clients/"+selectedClientId+"/activities";
    await axios.post(API+endpoint,{
     type:"follow_up",subject:subject.trim(),description:description.trim(),
@@ -123,7 +158,7 @@ export default function ClientFollowUps(){
    setFilter("all");setPage(1);setSearch("");
    setMessage("Follow-up saved.");
   }catch(saveError){
-   setError(saveError.response?.data?.message||"The follow-up could not be saved.");
+   setError(saveError.response?.data?.message||(editingItem?"The follow-up could not be updated.":"The follow-up could not be saved."));
   }finally{setSaving(false);}
  };
 
@@ -168,6 +203,7 @@ export default function ClientFollowUps(){
     <div className="client-followup-actions">
      {phone&&<a className="btn btn-sm btn-light border client-followup-contact" href={"tel:"+phone.telephone} aria-label={"Call "+relatedName} title="Call"><i className="bi bi-telephone"></i></a>}
      {phone&&<a className="btn btn-sm btn-light border client-followup-contact" href={"https://wa.me/"+phone.whatsapp} target="_blank" rel="noopener noreferrer" aria-label={"Message "+relatedName+" on WhatsApp"} title="WhatsApp"><i className="bi bi-whatsapp"></i></a>}
+     <button type="button" className="btn btn-sm btn-light border" disabled={savingId===String(item._id)} onClick={()=>openEdit(item)}>Edit</button>
      {item.status==="completed"
       ?<button type="button" className="btn btn-sm btn-light border" disabled={savingId===String(item._id)} onClick={()=>updateStatus(item,"open")}>Reopen</button>
       :<button type="button" className="btn btn-sm btn-outline-success" disabled={savingId===String(item._id)} onClick={()=>updateStatus(item,"completed")}>{savingId===String(item._id)?"Saving...":"Mark done"}</button>}
@@ -252,31 +288,38 @@ export default function ClientFollowUps(){
    </section>
 
    {composerOpen&&(
-    <div className="modal show d-block client-followup-modal" role="dialog" aria-modal="true" aria-label="Add customer follow-up" onMouseDown={event=>{if(event.target===event.currentTarget)resetComposer();}}>
+    <div className="modal show d-block client-followup-modal" role="dialog" aria-modal="true" aria-label={editingItem?"Edit follow-up":"Add customer follow-up"} onMouseDown={event=>{if(event.target===event.currentTarget)resetComposer();}}>
      <div className="modal-dialog modal-dialog-centered">
       <form className="modal-content client-followup-dialog" onSubmit={saveFollowUp}>
        <div className="modal-header">
-        <div><h2 className="modal-title">Add a follow-up</h2><p>Choose who this is for and what you need to remember.</p></div>
+        <div><h2 className="modal-title">{editingItem?"Edit follow-up":"Add a follow-up"}</h2><p>{editingItem?"Update the details or choose a new date.":"Choose who this is for and what you need to remember."}</p></div>
         <button type="button" className="btn-close" aria-label="Close" onClick={resetComposer}/>
        </div>
        <div className="modal-body">
         {error&&<div className="alert alert-warning py-2" role="alert">{error}</div>}
-        <div className="mb-3">
-         <label className="form-label" htmlFor="followup-related-type">Add this reminder to</label>
-         <select id="followup-related-type" className="form-select" value={relatedType} onChange={event=>setRelatedType(event.target.value)} disabled={clientsLoading}>
-          <option value="customer">A customer</option><option value="deal">A sales opportunity</option>
-         </select>
-        </div>
-        <div className="mb-3">
-         <label className="form-label" htmlFor="followup-related">{relatedType==="deal"?"Opportunity":"Customer"}</label>
-         <select id="followup-related" className="form-select" value={relatedType==="deal"?selectedDealId:selectedClientId}
-          onChange={event=>relatedType==="deal"?setSelectedDealId(event.target.value):setSelectedClientId(event.target.value)} disabled={clientsLoading} required>
-          <option value="">{clientsLoading?"Loading...":relatedType==="deal"?"Choose an open opportunity":"Choose a customer"}</option>
-          {relatedType==="deal"
-           ?deals.map(deal=><option key={deal._id} value={deal._id}>{deal.title}{deal.contactName?" · "+deal.contactName:""}</option>)
-           :clients.map(client=><option key={client._id} value={client._id}>{client.companyName||client.name||"Unnamed customer"}</option>)}
-         </select>
-        </div>
+        {editingItem
+         ?<div className="mb-3 client-followup-related-readonly">
+           <span>For</span>
+           <strong>{editingItem.recordType==="deal"?(editingItem.deal?.title||"Sales opportunity"):(editingItem.client?.companyName||editingItem.client?.name||"Customer")}</strong>
+          </div>
+         :<>
+          <div className="mb-3">
+           <label className="form-label" htmlFor="followup-related-type">Add this reminder to</label>
+           <select id="followup-related-type" className="form-select" value={relatedType} onChange={event=>setRelatedType(event.target.value)} disabled={clientsLoading}>
+            <option value="customer">A customer</option><option value="deal">A sales opportunity</option>
+           </select>
+          </div>
+          <div className="mb-3">
+           <label className="form-label" htmlFor="followup-related">{relatedType==="deal"?"Opportunity":"Customer"}</label>
+           <select id="followup-related" className="form-select" value={relatedType==="deal"?selectedDealId:selectedClientId}
+            onChange={event=>relatedType==="deal"?setSelectedDealId(event.target.value):setSelectedClientId(event.target.value)} disabled={clientsLoading} required>
+            <option value="">{clientsLoading?"Loading...":relatedType==="deal"?"Choose an open opportunity":"Choose a customer"}</option>
+            {relatedType==="deal"
+             ?deals.map(deal=><option key={deal._id} value={deal._id}>{deal.title}{deal.contactName?" · "+deal.contactName:""}</option>)
+             :clients.map(client=><option key={client._id} value={client._id}>{client.companyName||client.name||"Unnamed customer"}</option>)}
+           </select>
+          </div>
+         </>}
         <div className="mb-3">
          <label className="form-label" htmlFor="followup-subject">What needs to be done?</label>
          <input id="followup-subject" className="form-control" value={subject} onChange={event=>setSubject(event.target.value)} maxLength={160} placeholder="Example: Call about pending payment" required autoFocus/>
@@ -292,8 +335,8 @@ export default function ClientFollowUps(){
        </div>
        <div className="modal-footer">
         <button type="button" className="btn btn-light border" onClick={resetComposer}>Cancel</button>
-        <button type="submit" className="btn btn-primary" disabled={saving||clientsLoading||(relatedType==="deal"?!deals.length:!clients.length)}>
-         {saving?<><span className="spinner-border spinner-border-sm me-2"/>Saving...</>:"Save follow-up"}
+        <button type="submit" className="btn btn-primary" disabled={saving||(!editingItem&&(clientsLoading||(relatedType==="deal"?!deals.length:!clients.length)))}>
+         {saving?<><span className="spinner-border spinner-border-sm me-2"/>Saving...</>:(editingItem?"Save changes":"Save follow-up")}
         </button>
        </div>
       </form>

@@ -230,14 +230,14 @@ router.post("/:id/convert-customer",auth,async(req,res)=>{
 });
 
 
-async function syncDealNextAction(deal,completedSubject=""){
+async function syncDealNextAction(deal){
  const next=await DealActivity.findOne({
   dealId:deal._id,createdBy:deal.createdBy,type:{$in:["task","follow_up"]},status:"open"
  }).sort({dueAt:1,createdAt:1}).lean();
  if(next){
   deal.nextAction=next.subject;
   deal.nextActionAt=next.dueAt||null;
- }else if(!completedSubject||deal.nextAction===completedSubject){
+ }else{
   deal.nextAction="";
   deal.nextActionAt=null;
  }
@@ -331,7 +331,7 @@ router.patch("/:id/activities/:activityId",auth,async(req,res)=>{
    activity.completedAt=status==="completed"?new Date():null;
   }
   await activity.save();
-  await syncDealNextAction(deal,activity.subject);
+  await syncDealNextAction(deal);
   return res.json(activity);
  }catch(error){
   return res.status(400).json({message:error.message||"Unable to update this opportunity activity."});

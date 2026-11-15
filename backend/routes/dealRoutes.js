@@ -186,6 +186,45 @@ router.post("/",auth,async(req,res)=>{
  }
 });
 
+router.post("/:id/convert-customer",auth,async(req,res)=>{
+ try{
+  if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid opportunity ID."});
+  const deal=await Deal.findOne({_id:req.params.id,createdBy:owner(req)});
+  if(!deal)return res.status(404).json({message:"Opportunity not found."});
+  if(deal.clientId)return res.json({deal:await populatedDeal(deal._id,owner(req)),customerId:String(deal.clientId),created:false});
+  if(deal.status!=="won")return res.status(400).json({message:"Mark this opportunity as Won before creating a customer record."});
+  const contactName=String(deal.contactName||"").trim();
+  if(!contactName)return res.status(400).json({message:"Add a contact or business name before creating a customer record."});
+  const duplicateConditions=[];
+  if(deal.contactPhone)duplicateConditions.push({phone:deal.contactPhone});
+  if(deal.contactEmail)duplicateConditions.push({email:deal.contactEmail.toLowerCase()});
+  let client=duplicateConditions.length
+   ?await Client.findOne({createdBy:owner(req),$or:duplicateConditions})
+   :null;
+  const created=!client;
+  if(!client){
+   client=await Client.create({
+    name:contactName,companyName:contactName,
+    phone:deal.contactPhone||"",email:deal.contactEmail||"",
+    accountStatus:"Active",createdBy:owner(req)
+   });
+  }
+  deal.clientId=client._id;
+  deal.contactName=client.name||client.companyName||contactName;
+  deal.contactPhone=client.phone||"";
+  deal.contactEmail=client.email||"";
+  await deal.save();
+  return res.status(created?201:200).json({
+   deal:await populatedDeal(deal._id,owner(req)),
+   customerId:String(client._id),
+   created
+  });
+ }catch(error){
+  console.error("Opportunity conversion error:",error);
+  return res.status(400).json({message:error.message||"The customer record could not be created."});
+ }
+});
+
 router.get("/:id",auth,async(req,res)=>{
  try{
   if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid opportunity ID."});

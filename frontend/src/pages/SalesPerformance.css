@@ -1,0 +1,63 @@
+.sales-performance-page{min-width:0;max-width:100%;overflow-x:hidden;color:#293b50}
+.sales-performance-page .business-page-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sales-performance-toolbar{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;margin-bottom:15px;padding:14px 17px;border:1px solid #e4eaf1;border-radius:12px;background:#fff}
+.sales-performance-toolbar>div:first-child{display:flex;flex-direction:column;gap:3px}
+.sales-performance-toolbar strong{color:#30445b;font-size:12px;font-weight:750}.sales-performance-toolbar span{color:#8492a2;font-size:10px}
+.sales-performance-periods{display:flex;align-items:center;gap:4px;padding:3px;border:1px solid #e3e9f0;border-radius:9px;background:#f8fafc}
+.sales-performance-periods button{min-height:32px;padding:5px 11px;border:0;border-radius:7px;background:transparent;color:#66788d;font-size:11px;font-weight:650}
+.sales-performance-periods button:hover{background:#edf2f7}.sales-performance-periods button.is-active{background:#fff;color:#205ca6;box-shadow:0 1px 4px rgba(20,40,65,.12)}
+.sales-performance-loading{display:flex;align-items:center;justify-content:center;min-height:260px;color:#7b8999;font-size:12px}
+.sales-performance-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin-bottom:12px}
+.sales-performance-metric{display:flex;flex-direction:column;gap:7px;min-width:0;padding:15px 16px;border:1px solid #e4eaf1;border-radius:12px;background:#fff}
+.sales-performance-metric-top{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#75869a;font-size:10px;font-weight:750}
+.sales-performance-metric-top i{display:grid;place-items:center;width:29px;height:29px;border-radius:8px;background:#f1f5fa;color:#66809d;font-size:13px}
+.sales-performance-metric>strong{color:#26394f;font-size:24px;font-weight:780;line-height:1.2;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.sales-performance-metric>small{min-height:14px;color:#8794a3;font-size:10px;line-height:1.4}
+.sales-performance-forecast{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;margin-bottom:15px;overflow:hidden;border:1px solid #e4eaf1;border-radius:12px;background:#e9eef3}
+.sales-performance-forecast-item{display:flex;flex-direction:column;gap:4px;min-width:0;padding:13px 16px;background:#fff}
+.sales-performance-forecast-item>span{color:#7d8da0;font-size:10px;font-weight:700}.sales-performance-forecast-item>strong{color:#30445c;font-size:17px;font-weight:780;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.sales-performance-forecast-item>small{color:#8a97a6;font-size:9px;line-height:1.45}
+.sales-performance-main-grid,.sales-performance-bottom-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:13px;margin-bottom:13px;min-width:0}
+.sales-performance-bottom-grid{grid-template-columns:minmax(0,1.1fr) minmax(320px,.9fr)}
+.sales-performance-panel{min-width:0;padding:17px;border:1px solid #e4eaf1;border-radius:12px;background:#fff;box-shadow:0 2px 10px rgba(29,47,69,.02)}
+.sales-performance-panel-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:15px}
+.sales-performance-panel-heading h2{margin:0;color:#2d4057;font-size:13px;font-weight:780}.sales-performance-panel-heading p{margin:4px 0 0;color:#8694a3;font-size:10px;line-height:1.45}
+.sales-performance-legend{display:flex;align-items:center;gap:6px;color:#7b8999;font-size:9px;white-space:nowrap}
+.sales-performance-legend i{width:8px;height:8px;border-radius:2px;background:#4e91c9}.sales-performance-legend i.is-lost{margin-left:6px;background:#d99a63}
+.sales-performance-chart{display:flex;align-items:stretch;gap:8px;min-height:195px;padding:4px 2px 0;overflow-x:auto;scrollbar-width:thin}
+.sales-performance-chart-column{display:flex;flex:1 0 32px;flex-direction:column;align-items:center;justify-content:flex-end;gap:5px;min-width:32px}
+.sales-performance-chart-track{display:flex;flex-direction:column-reverse;justify-content:flex-start;align-items:stretch;width:min(30px,72%);height:145px;overflow:hidden;border-radius:5px 5px 2px 2px;background:#f3f6f9}
+.sales-performance-bar-won{display:block;min-height:0;background:#4e91c9}.sales-performance-bar-lost{display:block;min-height:0;background:#d99a63}
+.sales-performance-chart-column>strong{color:#5f7187;font-size:9px;font-weight:750}.sales-performance-chart-column>small{color:#8b98a7;font-size:8px;white-space:nowrap}
+.sales-performance-empty{display:grid;place-items:center;min-height:150px;padding:20px;color:#8794a3;font-size:11px;text-align:center;line-height:1.5}
+.sales-performance-stage-list{display:flex;flex-direction:column;gap:13px}.sales-performance-stage{display:flex;flex-direction:column;gap:5px}
+.sales-performance-stage-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sales-performance-stage-top strong{color:#40556d;font-size:10px;font-weight:750}.sales-performance-stage-top span{color:#687b91;font-size:9px;font-weight:650;text-align:right;white-space:nowrap}
+.sales-performance-stage-track{height:7px;overflow:hidden;border-radius:99px;background:#eef2f6}.sales-performance-stage-track span{display:block;height:100%;border-radius:99px;background:#82a9cf}
+.sales-performance-stage>small{color:#929eab;font-size:8px}
+.sales-performance-table-wrap{width:100%;overflow-x:auto}.sales-performance-source-table{width:100%;border-collapse:collapse;font-size:10px}
+.sales-performance-source-table th{padding:9px 8px;background:#f8fafc;color:#8592a1;text-align:left;font-size:9px;font-weight:750;white-space:nowrap}
+.sales-performance-source-table td{padding:11px 8px;border-bottom:1px solid #eef1f4;color:#576b82;white-space:nowrap}
+.sales-performance-source-table td:first-child{color:#30445c;font-weight:700}.sales-performance-source-table tr:last-child td{border-bottom:0}
+.sales-performance-completion{padding:12px 13px;border:1px solid #eaf0f5;border-radius:10px;background:#fafbfd}
+.sales-performance-completion>div:first-child{display:flex;align-items:baseline;gap:8px}
+.sales-performance-completion>div:first-child strong{color:#2e4e6e;font-size:23px;font-weight:800;font-variant-numeric:tabular-nums}.sales-performance-completion>div:first-child span{color:#7e8d9d;font-size:10px}
+.sales-performance-completion-track{height:8px;margin:9px 0 7px;overflow:hidden;border-radius:99px;background:#e9eef3}
+.sales-performance-completion-track span{display:block;height:100%;border-radius:99px;background:#6f9e83}.sales-performance-completion>small{color:#8996a5;font-size:9px}
+.sales-performance-followup-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+.sales-performance-followup-stats>div{display:flex;flex-direction:column;gap:4px;min-width:0;padding:9px 10px;border:1px solid #edf0f4;border-radius:8px}
+.sales-performance-followup-stats span{color:#8190a0;font-size:8px;line-height:1.35}.sales-performance-followup-stats strong{color:#31475f;font-size:16px;font-weight:780}
+.sales-performance-followup-stats .is-warning strong{color:#b45d4c}
+.sales-performance-followup-split{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:12px;color:#8090a1;font-size:9px}
+.sales-performance-followup-split strong{margin-left:4px;color:#526981;font-size:10px}.sales-performance-followup-link{margin-top:12px;color:#54708d;font-size:10px;font-weight:650}
+.sales-performance-spin{animation:sales-performance-rotate 1s linear infinite}@keyframes sales-performance-rotate{to{transform:rotate(360deg)}}
+@media(max-width:1000px){.sales-performance-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.sales-performance-main-grid,.sales-performance-bottom-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){
+ .sales-performance-page{padding-right:12px!important;padding-left:12px!important}
+ .sales-performance-toolbar{align-items:flex-start;flex-direction:column;padding:13px}
+ .sales-performance-periods{width:100%}.sales-performance-periods button{flex:1;padding-right:7px;padding-left:7px}
+ .sales-performance-metrics{gap:8px}.sales-performance-metric{padding:12px}.sales-performance-metric>strong{font-size:20px}
+ .sales-performance-forecast{grid-template-columns:minmax(0,1fr)}.sales-performance-forecast-item{padding:11px 14px}
+ .sales-performance-panel{padding:14px}.sales-performance-followup-stats{gap:6px}.sales-performance-followup-stats>div{padding:8px}
+ .sales-performance-panel-heading{gap:8px}
+}

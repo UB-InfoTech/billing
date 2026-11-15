@@ -14,5 +14,6 @@ const clientActivitySchema=new mongoose.Schema({
 
 clientActivitySchema.index({createdBy:1,clientId:1,occurredAt:-1});
 clientActivitySchema.index({createdBy:1,clientId:1,status:1,dueAt:1});
+clientActivitySchema.index({createdBy:1,type:1,dueAt:1,status:1});
 
 module.exports=mongoose.model("ClientActivity",clientActivitySchema);

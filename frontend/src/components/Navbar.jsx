@@ -70,6 +70,12 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
         if(!organizationProfileWasConfigured&&byKey.has(organizationProfileKey)){
           next.push(byKey.get(organizationProfileKey));
         }
+        const performanceKey="sales-performance";
+        const performanceConfigured=saved.some(item=>item.key===performanceKey);
+        if(!performanceConfigured&&byKey.has(performanceKey)){
+          const dealsIndex=next.findIndex(item=>item.key==="deals");
+          next.splice(dealsIndex>=0?dealsIndex+1:next.length,0,byKey.get(performanceKey));
+        }
         if(next.length)setMenuItems(next);
       }catch{
         if(!cancelled)setMenuItems(MENU_ITEMS);

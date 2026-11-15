@@ -203,6 +203,35 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
   assert.equal(duplicateLink.payload.created,false);
   assert.equal(String(duplicateLink.payload.customerId),String(clientId));
 
+  const performanceStart=new Date(Date.now()-2*24*60*60*1000).toISOString();
+  const performanceEnd=new Date(Date.now()+4*24*60*60*1000).toISOString();
+  const performance=await request("/deals/performance?startAt="+encodeURIComponent(performanceStart)+"&endAt="+encodeURIComponent(performanceEnd));
+  assert.equal(performance.response.status,200,JSON.stringify(performance.payload));
+  assert.ok(performance.payload.summary.createdCount>=5);
+  assert.equal(performance.payload.summary.closedCount,3);
+  assert.equal(performance.payload.summary.wonCount,2);
+  assert.equal(performance.payload.summary.lostCount,1);
+  assert.equal(performance.payload.summary.winRate,66.67);
+  assert.ok(performance.payload.summary.pipelineCount>=2);
+  assert.ok(performance.payload.summary.pipelineValue>=30000);
+  assert.ok(performance.payload.closedTrend.length>=1);
+  assert.ok(performance.payload.pipelineStages.some(stage=>stage.key==="proposal-sent"));
+  assert.ok(performance.payload.sources.some(source=>source.source==="Referral"));
+  assert.ok(performance.payload.followUps.dueCount>=4);
+  assert.ok(performance.payload.followUps.completedDueCount>=1);
+  assert.ok(performance.payload.followUps.overdueOpenCount>=1);
+  assert.ok(performance.payload.followUps.completionRate>0);
+
+  const hiddenPerformance=await request("/deals/performance?startAt="+encodeURIComponent(performanceStart)+"&endAt="+encodeURIComponent(performanceEnd),{token:otherToken});
+  assert.equal(hiddenPerformance.response.status,200);
+  assert.equal(hiddenPerformance.payload.summary.createdCount,0);
+  assert.equal(hiddenPerformance.payload.summary.closedCount,0);
+  assert.equal(hiddenPerformance.payload.summary.pipelineValue,0);
+  assert.equal(hiddenPerformance.payload.followUps.dueCount,0);
+  assert.equal(hiddenPerformance.payload.sources.length,0);
+  const invalidPerformance=await request("/deals/performance?startAt=not-a-date&endAt="+encodeURIComponent(performanceEnd));
+  assert.equal(invalidPerformance.response.status,400);
+
   const removeInUse=await request("/deals/pipeline",{
    method:"PUT",body:{stages:stages.filter(stage=>stage.key!=="proposal-sent")}
   });
@@ -217,7 +246,7 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
    await DealActivity.deleteMany({createdBy:ownerId});
    await ClientActivity.deleteMany({createdBy:ownerId});
    await Deal.deleteMany({createdBy:ownerId});
-   await SalesPipeline.deleteMany({createdBy:ownerId});
+   await SalesPipeline.deleteMany({createdBy:{$in:[ownerId,otherOwnerId]}});
    await Client.deleteMany({createdBy:ownerId});
   }
   if(mongoose.connection.readyState===1)await mongoose.disconnect();

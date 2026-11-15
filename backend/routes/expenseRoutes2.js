@@ -407,7 +407,8 @@ router.post("/",auth,async(req,res)=>{
     expense.recurringEndDate=expense.isRecurring?expense.recurringEndDate||null:null;
     await validateReferenceOwnership({
       clientId:expense.clientId,
-      orderId:expense.orderId
+      orderId:expense.orderId,
+      supplierId:expense.supplierId
     },owner(req));
     validateRecurringExpense(expense);
 
@@ -498,7 +499,8 @@ router.put("/:id",auth,async(req,res)=>{
     expense.recurringEndDate=expense.isRecurring?expense.recurringEndDate||null:null;
     await validateReferenceOwnership({
       clientId:expense.clientId,
-      orderId:expense.orderId
+      orderId:expense.orderId,
+      supplierId:expense.supplierId
     },owner(req));
     validateRecurringExpense(expense);
     Object.assign(expense,normalizeExpenseFinancials(expense.amount,expense.taxRate));

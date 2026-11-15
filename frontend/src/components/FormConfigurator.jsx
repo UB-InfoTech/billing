@@ -39,6 +39,19 @@ const DATA_SOURCES=[
   {value:"expenses",label:"Expense records",fields:[
     ["_id","Expense ID"],["title","Title"],["category","Category"],["amount","Amount"],["vendor","Vendor"],["date","Date"]
   ]},
+  {value:"deals",label:"Sales opportunities",fields:[
+    ["_id","Opportunity ID"],["title","Opportunity"],["contactName","Contact"],
+    ["value","Potential value"],["stageKey","Sales stage"],["status","Outcome"],
+    ["expectedCloseDate","Expected close date"],["nextAction","Next step"],["source","Lead source"]
+  ]},
+  {value:"creditNotes",label:"Credit Notes",fields:[
+    ["_id","Credit Note ID"],["creditNoteNumber","Credit Note No."],
+    ["originalInvoiceNumber","Original invoice"],["companyName","Customer"],
+    ["reason","Reason"],["creditNoteDate","Credit Note date"],["status","Status"]
+  ]},
+  {value:"calendar",label:"Calendar events",fields:[
+    ["_id","Event ID"],["title","Event"],["start","Starts"],["end","Ends"]
+  ]},
   {value:"users",label:"Your account",fields:[
     ["_id","Account ID"],["username","Username"],["email","Email"]
   ]},

@@ -29,3 +29,5 @@
 .supplier-recent-purchases strong{color:#354b60;font-size:.84rem}
 .supplier-recent-purchases small{color:#82909d;font-size:.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(max-width:640px){.supplier-modal-backdrop{padding:0}.supplier-modal{width:100%;height:100dvh;max-height:100dvh;border-radius:0}.supplier-modal-header,.supplier-modal-body{padding:16px}.supplier-modal-footer{padding:12px}.supplier-profile-details{grid-template-columns:1fr}.supplier-search{width:100%}}
+
+.supplier-edit-backdrop{z-index:1510}

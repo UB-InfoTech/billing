@@ -2,7 +2,7 @@ const sameId=(left,right)=>String(left??"")===String(right??"");
 const validDate=value=>{const date=value?new Date(value):null;return date&&!Number.isNaN(date.getTime())?date:null;};
 const round2=value=>Math.round((Number(value||0)+Number.EPSILON)*100)/100;
 
-function buildClientActivityTimeline({client,manualActivities=[],orders=[],creditNotes=[],expenses=[],calendarEvents=[],limit=150,sourceTruncated=false}){
+function buildClientActivityTimeline({client,manualActivities=[],orders=[],creditNotes=[],expenses=[],calendarEvents=[],deals=[],dealActivities=[],limit=150,sourceTruncated=false}){
  const entries=[];
  const clientId=client?._id;
  const add=entry=>{
@@ -21,7 +21,8 @@ function buildClientActivityTimeline({client,manualActivities=[],orders=[],credi
    amount:entry.amount===null||entry.amount===undefined||entry.amount===""?null:Number(entry.amount),
    status:entry.status||"",
    dueAt:validDate(entry.dueAt),
-   canUpdateStatus:Boolean(entry.canUpdateStatus)
+   canUpdateStatus:Boolean(entry.canUpdateStatus),
+   dealId:entry.dealId?String(entry.dealId):""
   });
  };
  if(client?.createdAt)add({
@@ -89,6 +90,50 @@ function buildClientActivityTimeline({client,manualActivities=[],orders=[],credi
   }));
  }
 
+ const dealTitles=new Map();
+ for(const deal of deals){
+  const title=String(deal.title||"Sales opportunity");
+  dealTitles.set(String(deal._id),title);
+  const history=Array.isArray(deal.stageHistory)?deal.stageHistory:[];
+  if(history.length){
+   history.forEach((item,index)=>add({
+    id:"deal-stage-"+String(deal._id)+"-"+index,
+    source:"deal",sourceId:deal._id,
+    type:index===0?"deal_created":"deal_stage_changed",
+    category:"opportunity",
+    title:index===0?"Sales opportunity created":"Opportunity moved to "+String(item.stageLabel||"another stage"),
+    description:title,
+    occurredAt:item.enteredAt||deal.createdAt,
+    reference:title,amount:deal.value,status:deal.status
+   }));
+  }else add({
+   id:"deal-created-"+String(deal._id),source:"deal",sourceId:deal._id,
+   type:"deal_created",category:"opportunity",title:"Sales opportunity created",
+   description:title,occurredAt:deal.createdAt,reference:title,amount:deal.value,status:deal.status
+  });
+  if(deal.closedAt&&!history.some(item=>validDate(item.enteredAt)?.getTime()===validDate(deal.closedAt)?.getTime())){
+   add({
+    id:"deal-closed-"+String(deal._id),source:"deal",sourceId:deal._id,
+    type:deal.status==="won"?"deal_won":"deal_lost",category:"opportunity",
+    title:deal.status==="won"?"Opportunity won":"Opportunity lost",
+    description:title,occurredAt:deal.closedAt,reference:title,amount:deal.value,status:deal.status
+   });
+  }
+ }
+ for(const activity of dealActivities){
+  const dealId=String(activity.dealId||"");
+  const dealTitle=dealTitles.get(dealId)||"Sales opportunity";
+  const isReminder=["task","follow_up"].includes(activity.type);
+  add({
+   id:"deal-activity-"+String(activity._id),source:"deal_activity",sourceId:activity._id,
+   dealId:activity.dealId,type:activity.type,
+   category:isReminder?"follow_up":"interaction",
+   title:activity.subject||"Opportunity activity",
+   description:[dealTitle,activity.description].filter(Boolean).join(" · "),
+   occurredAt:activity.occurredAt||activity.createdAt,dueAt:activity.dueAt,
+   status:activity.status,canUpdateStatus:isReminder
+  });
+ }
  for(const creditNote of creditNotes){
   const reference=String(creditNote.creditNoteNumber||"Credit Note");
   const history=Array.isArray(creditNote.settlementHistory)?creditNote.settlementHistory:[];

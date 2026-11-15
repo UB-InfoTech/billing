@@ -36,10 +36,10 @@ const formatDue=value=>{
  return Number.isNaN(date.getTime())?"Date not set":date.toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"});
 };
 const contactNumbers=phone=>{
- const digits=String(phone||"").replace(/\\D/g,"");
+ const digits=String(phone||"").replace(/\D/g,"");
  if(!digits)return null;
  const whatsapp=digits.length===10?"91"+digits:digits.startsWith("0")?digits.slice(1):digits;
- return {telephone:String(phone).trim().replace(/[^\\d+]/g,""),whatsapp};
+ return {telephone:String(phone).trim().replace(/[^\d+]/g,""),whatsapp};
 };
 
 export default function ClientFollowUps(){

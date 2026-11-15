@@ -9,6 +9,7 @@ import ConfiguredField from '../components/ConfiguredField';
 import ClientActivityPanel from "../components/ClientActivityPanel";
 import ClientNotesPanel from "../components/ClientNotesPanel";
 import ClientBillingPanel from "../components/ClientBillingPanel";
+import ClientOpportunitiesPanel from "../components/ClientOpportunitiesPanel";
 import {useFormConfiguration,applyFormulas,applyAutoFill,getFieldState,syncConfiguredCustomFields,buildConfiguredDefaults,buildNewRecordDefaults,groupFieldsBySection} from "../hooks/useFormConfiguration";
 import {useNoCodeDataSources} from "../hooks/useNoCodeDataSources";
 import * as XLSX from 'xlsx';
@@ -828,6 +829,7 @@ function Clients() {
                     <button type="button" className={clientProfileTab==="notes"?"is-active":""} onClick={()=>setClientProfileTab("notes")}><i className="bi bi-sticky"></i>Notes</button>
                     <button type="button" className={clientProfileTab==="activities"?"is-active":""} onClick={()=>setClientProfileTab("activities")}><i className="bi bi-calendar2-check"></i>Activities</button>
                     <button type="button" className={clientProfileTab==="billing"?"is-active":""} onClick={()=>setClientProfileTab("billing")}><i className="bi bi-receipt"></i>Billing</button>
+                    <button type="button" className={clientProfileTab==="opportunities"?"is-active":""} onClick={()=>setClientProfileTab("opportunities")}><i className="bi bi-kanban"></i>Opportunities</button>
                     <button type="button" className={clientProfileTab==="details"?"is-active":""} onClick={()=>setClientProfileTab("details")}><i className="bi bi-person-vcard"></i>Details</button>
                   </nav>
 
@@ -836,6 +838,7 @@ function Clients() {
                     {clientProfileTab==="notes"&&<ClientNotesPanel clientId={viewingClient._id} apiBase={linkone}/>}
                     {clientProfileTab==="activities"&&<ClientActivityPanel clientId={viewingClient._id} apiBase={linkone} mode="activities"/>}
                     {clientProfileTab==="billing"&&<ClientBillingPanel clientId={viewingClient._id} apiBase={linkone}/>}
+                    {clientProfileTab==="opportunities"&&<ClientOpportunitiesPanel clientId={viewingClient._id}/>}
 
                     {clientProfileTab==="overview"&&(
                       <div className="client-profile-overview">

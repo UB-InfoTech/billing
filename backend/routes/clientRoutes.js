@@ -609,7 +609,7 @@ router.get("/:id/activities",auth,async(req,res)=>{
   const rawLimit=Number(req.query.limit||150);
   const limit=Number.isFinite(rawLimit)?Math.min(500,Math.max(1,Math.floor(rawLimit))):150;
   const sourceLimit=1000;
-  const [manualActivities,orders,expenses,calendarEvents]=await Promise.all([
+  const [manualActivities,orders,expenses,calendarEvents,deals]=await Promise.all([
    ClientActivity.find({clientId:client._id,createdBy:owner(req)}).sort({occurredAt:-1}).limit(sourceLimit).lean(),
    Order.find({createdBy:owner(req),$or:[
     {clientId:client._id},
@@ -620,16 +620,21 @@ router.get("/:id/activities",auth,async(req,res)=>{
    Expense.find({clientId:client._id,createdBy:owner(req)}).select("title description category amount date createdAt orderId")
      .sort({date:-1,createdAt:-1}).limit(sourceLimit).lean(),
    CalendarEvent.find({clientId:client._id,createdBy:owner(req)}).select("title start end createdAt")
-     .sort({start:-1}).limit(sourceLimit).lean()
+     .sort({start:-1}).limit(sourceLimit).lean(),
+   Deal.find({clientId:client._id,createdBy:owner(req)}).select("title value stageKey status probability createdAt closedAt stageHistory")
+     .sort({updatedAt:-1}).limit(sourceLimit).lean()
   ]);
+  const dealIds=deals.map(deal=>deal._id);
+  const dealActivities=dealIds.length?await DealActivity.find({dealId:{$in:dealIds},createdBy:owner(req)})
+    .sort({occurredAt:-1}).limit(sourceLimit).lean():[];
   const orderIds=orders.map(order=>order._id);
   const creditNotes=await CreditNote.find({createdBy:owner(req),$or:[
    {clientId:client._id},{originalOrderId:{$in:orderIds}}
   ]}).select("creditNoteNumber originalInvoiceNumber originalOrderId clientId reason status totals settlementHistory creditNoteDate createdAt")
     .sort({creditNoteDate:-1,createdAt:-1}).limit(sourceLimit).lean();
   return res.json(buildClientActivityTimeline({
-   client,manualActivities,orders,creditNotes,expenses,calendarEvents,limit,
-   sourceTruncated:manualActivities.length===sourceLimit||orders.length===sourceLimit||expenses.length===sourceLimit||calendarEvents.length===sourceLimit||creditNotes.length===sourceLimit
+   client,manualActivities,orders,creditNotes,expenses,calendarEvents,deals,dealActivities,limit,
+   sourceTruncated:manualActivities.length===sourceLimit||orders.length===sourceLimit||expenses.length===sourceLimit||calendarEvents.length===sourceLimit||creditNotes.length===sourceLimit||deals.length===sourceLimit||dealActivities.length===sourceLimit
   }));
  }catch(error){
   console.error("Client activity timeline error:",error);

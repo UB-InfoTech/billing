@@ -1855,10 +1855,10 @@ const styles = {
 
 
             {viewingOrder&&(
-                <div className="modal show d-block invoice-view-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-label="Invoice details">
-                    <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable invoice-view-dialog">
-                        <div className="modal-content invoice-view-modal border-0">
-                            <div className="modal-header invoice-view-toolbar">
+                <div className="modal show d-block invoice-view-backdrop ux-record-fullscreen-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-label="Invoice details">
+                    <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable invoice-view-dialog ux-record-fullscreen-dialog">
+                        <div className="modal-content invoice-view-modal border-0 ux-record-fullscreen-content">
+                            <div className="modal-header invoice-view-toolbar ux-record-fullscreen-header">
                                 <div>
                                     <div className="small text-primary text-uppercase fw-semibold mb-1">INVOICE RECORD</div>
                                     <h5 className="modal-title fw-bold mb-1">Invoice {viewingOrder.orderNumber||"Details"}</h5>
@@ -1872,7 +1872,7 @@ const styles = {
                                     <button type="button" className="btn-close" aria-label="Close invoice details" onClick={()=>setViewingOrder(null)} />
                                 </div>
                             </div>
-                            <div className="modal-body invoice-view-body">
+                            <div className="modal-body invoice-view-body ux-record-fullscreen-body">
                                 <article className="invoice-view-sheet">
                                     <div className="invoice-view-paper-heading">
                                         <div>
@@ -1960,7 +1960,7 @@ const styles = {
                                     </section>
                                 </article>
                             </div>
-                            <div className="modal-footer invoice-view-footer">
+                            <div className="modal-footer invoice-view-footer ux-record-fullscreen-footer">
                                 <button type="button" className="btn btn-light border" onClick={()=>setViewingOrder(null)}>Close</button>
                                 <button type="button" className="btn btn-primary" onClick={()=>window.print()}><i className="bi bi-printer me-2"></i>Print details</button>
                             </div>
@@ -1970,10 +1970,10 @@ const styles = {
             )}
 
             {showModal && (
-                <div className="modal show d-block invoice-modal-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="invoice-modal-title">
-                    <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable invoice-a4-dialog">
-                        <div className="modal-content invoice-create-modal border-0" ref={modalRef}>
-                            <div className="modal-header invoice-create-header p-4">
+                <div className="modal show d-block invoice-modal-backdrop ux-record-fullscreen-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-labelledby="invoice-modal-title">
+                    <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable invoice-a4-dialog ux-record-fullscreen-dialog">
+                        <div className="modal-content invoice-create-modal border-0 ux-record-fullscreen-content" ref={modalRef}>
+                            <div className="modal-header invoice-create-header p-4 ux-record-fullscreen-header">
                                 <div className="d-flex flex-wrap align-items-center justify-content-between gap-3 w-100">
                                     <div className="d-flex align-items-center gap-2">
                                         <div>
@@ -1999,7 +1999,7 @@ const styles = {
                                     aria-label="Close invoice form"
                                 ></button>
                             </div>
-                            <div className="modal-body p-4 invoice-create-body">
+                            <div className="modal-body p-4 invoice-create-body ux-record-fullscreen-body">
                                 <form className="invoice-form-workspace" onSubmit={handleSubmit}>
                                     {invoiceFormError&&<div className="alert alert-danger d-flex gap-2 align-items-start" role="alert"><i className="bi bi-exclamation-circle-fill mt-1"></i><div>{invoiceFormError}</div></div>}
                                     <section className="invoice-configured-fields">

@@ -183,6 +183,11 @@ export default function Expenses(){
     {key:"vendor",label:"Vendor",sortKey:"vendor",visible:false},
     {key:"amount",label:"Amount",sortKey:"amount",render:expense=>money(expense.amount)},
     {key:"taxAmount",label:"Tax",visible:false,render:expense=>money(expense.taxAmount)},
+    {key:"supplier",label:"Supplier",visible:false,render:expense=>expense.supplierId?(
+      <button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={()=>navigate("/suppliers?openSupplier="+encodeURIComponent(expense.supplierId._id||expense.supplierId))} title="Open supplier profile">
+        {expense.supplierId.name||"Open supplier"} <i className="bi bi-arrow-up-right ms-1" aria-hidden="true"></i>
+      </button>
+    ):"—"},
     {key:"client",label:"Customer",visible:false,render:expense=>expense.clientId?(
       <button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(expense.clientId._id||expense.clientId))} title="Open customer profile">
         {expense.clientId.companyName||expense.clientId.name||"Open customer"} <i className="bi bi-arrow-up-right ms-1" aria-hidden="true"></i>
@@ -283,6 +288,7 @@ export default function Expenses(){
           locked:true,
           render:expense=>(
             <div className="d-flex gap-1 justify-content-end flex-wrap">
+              {expense.supplierId&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/suppliers?openSupplier="+encodeURIComponent(expense.supplierId._id||expense.supplierId))} title="Open supplier" aria-label="Open supplier"><i className="bi bi-truck"/></button>}
               {expense.clientId&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(expense.clientId._id||expense.clientId))} title="Open customer" aria-label="Open customer"><i className="bi bi-person"/></button>}
               {expense.orderId&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/orders?openInvoice="+encodeURIComponent(expense.orderId._id||expense.orderId))} title="Open linked invoice" aria-label="Open linked invoice"><i className="bi bi-receipt"/></button>}
               <button className="btn btn-sm btn-light border" onClick={()=>navigate("/edit-expense/"+expense._id)} title="Edit expense"><i className="bi bi-pencil me-1"></i>Edit</button>

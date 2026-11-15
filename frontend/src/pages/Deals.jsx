@@ -76,6 +76,8 @@ export default function Deals(){
  const [draft,setDraft]=useState(emptyDraft());
  const [stageManagerOpen,setStageManagerOpen]=useState(false);
  const [stageDraft,setStageDraft]=useState([]);
+ const [draggedStageIndex,setDraggedStageIndex]=useState(null);
+ const [dropStageIndex,setDropStageIndex]=useState(null);
  const [draggedId,setDraggedId]=useState("");
  const [lossTarget,setLossTarget]=useState(null);
  const [lossReason,setLossReason]=useState("");
@@ -352,13 +354,22 @@ export default function Deals(){
  const updateStageDraft=(index,key,value)=>{
   setStageDraft(previous=>previous.map((stage,i)=>i===index?{...stage,[key]:value}:stage));
  };
- const reorderStage=(index,direction)=>{
+ const moveStage=(fromIndex,toIndex)=>{
+  if(fromIndex===toIndex||fromIndex<0||toIndex<0||fromIndex>=stageDraft.length||toIndex>=stageDraft.length)return;
   setStageDraft(previous=>{
-   const next=previous.slice(),target=index+direction;
-   if(target<0||target>=next.length)return previous;
-   [next[index],next[target]]=[next[target],next[index]];
+   const next=previous.slice();
+   const [moved]=next.splice(fromIndex,1);
+   next.splice(toIndex,0,moved);
    return next;
   });
+ };
+ const handleStageDrop=(event,targetIndex)=>{
+  event.preventDefault();
+  const raw=event.dataTransfer?.getData("text/plain");
+  const sourceIndex=raw===""||raw===undefined?draggedStageIndex:Number(raw);
+  if(Number.isInteger(sourceIndex))moveStage(sourceIndex,targetIndex);
+  setDraggedStageIndex(null);
+  setDropStageIndex(null);
  };
  const savePipelineStages=async()=>{
   setSaving(true);setError("");
@@ -583,8 +594,8 @@ export default function Deals(){
       <header className="deals-modal-header"><div><span className="deals-modal-eyebrow">MAKE IT MATCH YOUR BUSINESS</span><h2>Sales stages</h2><p>Use a few clear steps that match the way you really sell. Won and Lost stay available automatically.</p></div><button type="button" className="btn-close" aria-label="Close" onClick={()=>setStageManagerOpen(false)}/></header>
       {error&&<div className="alert alert-warning py-2 mx-4 mt-3 mb-0" role="alert">{error}</div>}
       <div className="deals-stage-manager-body">
-       {stageDraft.map((stage,index)=><div className="deals-stage-edit-row" key={stage.key}>
-        <div className="deals-stage-order"><button type="button" className="btn btn-light border" aria-label={"Move "+stage.label+" up"} disabled={index===0} onClick={()=>reorderStage(index,-1)}><i className="bi bi-chevron-up"></i></button><button type="button" className="btn btn-light border" aria-label={"Move "+stage.label+" down"} disabled={index===stageDraft.length-1} onClick={()=>reorderStage(index,1)}><i className="bi bi-chevron-down"></i></button></div>
+       {stageDraft.map((stage,index)=><div className={"deals-stage-edit-row "+(dropStageIndex===index&&draggedStageIndex!==index?"is-drop-target":"")} key={stage.key} onDragOver={event=>{if(draggedStageIndex!==null&&draggedStageIndex!==index){event.preventDefault();setDropStageIndex(index);}}} onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDropStageIndex(current=>current===index?null:current);}} onDrop={event=>handleStageDrop(event,index)}>
+        <div className="deals-stage-order"><button type="button" className="btn btn-light border" draggable aria-label={"Drag to move "+stage.label} title="Drag to change stage order" onDragStart={event=>{event.dataTransfer?.setData("text/plain",String(index));if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDraggedStageIndex(index);setDropStageIndex(null);}} onDragEnd={()=>{setDraggedStageIndex(null);setDropStageIndex(null);}}><i className="bi bi-grip-vertical"></i></button></div>
         <div className="deals-stage-name"><label className="form-label">Stage name</label><input className="form-control" maxLength={48} value={stage.label} onChange={event=>updateStageDraft(index,"label",event.target.value)}/></div>
         <div className="deals-stage-probability"><label className="form-label">Chance (%)</label><input className="form-control" type="number" min="0" max="100" value={stage.probability} onChange={event=>updateStageDraft(index,"probability",event.target.value)}/></div>
         <button type="button" className="btn btn-light border deals-stage-remove" aria-label={"Remove "+stage.label} disabled={stageDraft.length<=2} onClick={()=>setStageDraft(previous=>previous.filter((_,i)=>i!==index))}><i className="bi bi-trash"></i></button>

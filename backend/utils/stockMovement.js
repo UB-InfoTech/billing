@@ -35,6 +35,9 @@ async function recordStockMovement({
  if(current.trackInventory&&current.stockUnit!==unit){
   throw stockError((current.productName||"This product")+" is tracked in "+current.stockUnit+". Use the same unit on this record.");
  }
+ if(!current.trackInventory&&Number(current.quantity||0)>0&&current.stockUnit!==unit){
+  throw stockError((current.productName||"This product")+" already has "+current.stockUnit+" stock. Change the stock unit on the product before receiving it in "+unit+".");
+ }
 
  const update={$inc:{quantity:delta}};
  if(activateTracking&&!current.trackInventory){

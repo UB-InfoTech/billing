@@ -182,7 +182,7 @@ router.get("/performance",auth,async(req,res)=>{
    Deal.aggregate([{$match:{createdBy:ownerId,status:"open"}},{$group:{_id:"$stageKey",count:{$sum:1},value:{$sum:"$value"},weightedValue:{$sum:{$multiply:["$value",{$divide:["$probability",100]}]}}}}]),
    Deal.aggregate([
     {$match:{createdBy:ownerId,createdAt:range}},
-    {$set:{sourceLabel:{$let:{vars:{cleaned:{$trim:{input:{$ifNull:["$source",""]}}}},in:{$cond:[{$eq:["$cleaned",""]},"Not recorded","$cleaned"]}}}}},
+    {$set:{sourceLabel:{$let:{vars:{cleaned:{$trim:{input:{$ifNull:["$source",""]}}}},in:{$cond:[{$eq:["$$cleaned",""]},"Not recorded","$$cleaned"]}}}}},
     {$group:{_id:"$sourceLabel",leadCount:{$sum:1},wonCount:{$sum:{$cond:[{$eq:["$status","won"]},1,0]}},lostCount:{$sum:{$cond:[{$eq:["$status","lost"]},1,0]}},wonValue:{$sum:{$cond:[{$eq:["$status","won"]},{$ifNull:["$value",0]},0]}}}},
     {$sort:{leadCount:-1,_id:1}}
    ]),

@@ -776,10 +776,10 @@ function Clients() {
           </div>
 
           {viewingClient&&(
-            <div className="modal show d-block customer-view-backdrop client-crm-backdrop ux-record-fullscreen-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-label="Customer profile">
-              <div className="modal-dialog client-crm-dialog ux-record-fullscreen-dialog">
-                <div className="modal-content customer-view-modal client-crm-shell border-0 ux-record-fullscreen-content">
-                  <header className="client-profile-header ux-record-fullscreen-header">
+            <div className="modal show d-block customer-view-backdrop client-crm-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-label="Customer profile">
+              <div className="modal-dialog client-crm-dialog">
+                <div className="modal-content customer-view-modal client-crm-shell border-0">
+                  <header className="client-profile-header">
                     <button type="button" className="client-profile-back" onClick={()=>setViewingClient(null)}>
                       <i className="bi bi-arrow-left"></i><span>Customers</span>
                     </button>
@@ -842,7 +842,7 @@ function Clients() {
                     <button type="button" className={clientProfileTab==="details"?"is-active":""} onClick={()=>setClientProfileTab("details")}><i className="bi bi-person-vcard"></i>Details</button>
                   </nav>
 
-                  <main className="modal-body client-profile-content ux-record-fullscreen-body">
+                  <main className="modal-body client-profile-content">
                     {clientProfileTab==="timeline"&&<ClientActivityPanel clientId={viewingClient._id} apiBase={linkone} mode="timeline"/>}
                     {clientProfileTab==="notes"&&<ClientNotesPanel clientId={viewingClient._id} apiBase={linkone}/>}
                     {clientProfileTab==="activities"&&<ClientActivityPanel clientId={viewingClient._id} apiBase={linkone} mode="activities"/>}
@@ -914,10 +914,10 @@ function Clients() {
           )}
 
                     {statementFor&&(
-            <div className="modal show d-block customer-view-backdrop ux-record-fullscreen-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-label="Customer account statement">
-              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable customer-statement-dialog ux-record-fullscreen-dialog">
-                <div className="modal-content customer-view-modal customer-statement-modal border-0 ux-record-fullscreen-content">
-                  <div className="modal-header customer-view-toolbar customer-statement-toolbar ux-record-fullscreen-header">
+            <div className="modal show d-block customer-view-backdrop" tabIndex="-1" role="dialog" aria-modal="true" aria-label="Customer account statement">
+              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable customer-statement-dialog">
+                <div className="modal-content customer-view-modal customer-statement-modal border-0">
+                  <div className="modal-header customer-view-toolbar customer-statement-toolbar">
                     <div className="min-w-0">
                       <div className="small text-primary text-uppercase fw-semibold mb-1">CUSTOMER ACCOUNT</div>
                       <h5 className="modal-title fw-bold mb-1">Account statement</h5>
@@ -928,7 +928,7 @@ function Clients() {
                       <button type="button" className="btn-close" aria-label="Close account statement" onClick={closeCustomerStatement}/>
                     </div>
                   </div>
-                  <div className="modal-body customer-statement-body ux-record-fullscreen-body">
+                  <div className="modal-body customer-statement-body">
                     <div className="customer-statement-filter">
                       <div>
                         <label className="form-label small fw-semibold" htmlFor="statement-from">From date</label>
@@ -1023,7 +1023,7 @@ function Clients() {
                       </>
                     )}
                   </div>
-                  <div className="modal-footer customer-view-footer customer-statement-footer ux-record-fullscreen-footer">
+                  <div className="modal-footer customer-view-footer customer-statement-footer">
                     <button type="button" className="btn btn-light border" onClick={closeCustomerStatement}>Back to customer</button>
                     <button type="button" className="btn btn-primary" onClick={()=>window.print()} disabled={!statementData||statementLoading}><i className="bi bi-printer me-2"></i>Print statement</button>
                   </div>
@@ -1034,7 +1034,7 @@ function Clients() {
 
           {showModal && (
             <div
-              className="modal show d-block ux-record-fullscreen-backdrop"
+              className="modal show d-block"
               tabIndex="-1"
               role="dialog"
               aria-modal="true"
@@ -1042,9 +1042,9 @@ function Clients() {
               onKeyDown={handleCustomerModalKeyDown}
               style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}
             >
-              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable customer-a4-dialog ux-record-fullscreen-dialog">
-                <div className="modal-content customer-form-modal shadow-sm border-0 ux-record-fullscreen-content">
-                  <div className="modal-header bg-white text-dark p-3 border-bottom d-flex justify-content-between align-items-center ux-record-fullscreen-header">
+              <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable customer-a4-dialog">
+                <div className="modal-content customer-form-modal shadow-sm border-0">
+                  <div className="modal-header bg-white text-dark p-3 border-bottom d-flex justify-content-between align-items-center">
                     <div className="d-flex align-items-center gap-2">
                       <div>
                         <h5 id="customer-form-title" className="modal-title fw-bold mb-1">{editingClient ? "Edit customer" : "Add a customer"}</h5>
@@ -1061,7 +1061,7 @@ function Clients() {
 
                   {formError&&<div className="alert alert-danger mx-3 mt-3 mb-0" role="alert">{formError}</div>}
                   <form className="customer-form-workspace" onSubmit={editingClient?handleUpdateClient:handleAddClient}>
-                    <div className="modal-body p-3 customer-a4-sheet-body client-form-body ux-record-fullscreen-body">
+                    <div className="modal-body p-3 customer-a4-sheet-body client-form-body">
                       <div className="client-form-intro">
                         <span className="client-form-intro-icon"><i className="bi bi-person-plus"></i></span>
                         <div><strong>Start with the customer name</strong><p>Only complete the information you have. You can add or update the rest later.</p></div>
@@ -1086,7 +1086,7 @@ function Clients() {
                         );
                       })}
                     </div>
-                    <div className="modal-footer bg-white p-3 border-top sticky-bottom ux-record-fullscreen-footer">
+                    <div className="modal-footer bg-white p-3 border-top sticky-bottom">
                       <button type="button" className="btn btn-light border" onClick={()=>{setShowModal(false);setFormError("");}}>Cancel</button>
                       <button type="submit" className="btn btn-primary px-4" disabled={formSaving||clientFormConfig.loading}>
                         {formSaving?<><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving...</>:(editingClient?"Save changes":"Add customer")}

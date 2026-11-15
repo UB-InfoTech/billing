@@ -201,6 +201,7 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
   if(server)await new Promise(resolve=>server.close(resolve));
   if(ownerId){
    await DealActivity.deleteMany({createdBy:ownerId});
+   await ClientActivity.deleteMany({createdBy:ownerId});
    await Deal.deleteMany({createdBy:ownerId});
    await SalesPipeline.deleteMany({createdBy:ownerId});
    await Client.deleteMany({createdBy:ownerId});

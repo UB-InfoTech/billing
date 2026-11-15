@@ -15,6 +15,8 @@ import Expenses from "./pages/Expenses.jsx";
 import AddExpense from "./pages/AddExpense.jsx";
 import EditExpense from "./pages/EditExpense.jsx";
 import ProductPage from "./pages/ProductPage.jsx";
+import Suppliers from "./pages/Suppliers.jsx";
+import Purchases from "./pages/Purchases.jsx";
 import Profile from "./pages/Profile.jsx";
 import BulkPayment from "./pages/BulkPayment.jsx";
 import CreditNote from "./pages/CreditNote.jsx";
@@ -39,6 +41,8 @@ export default function App(){
       <Route path="deals" element={<ProtectedRoute><Deals/></ProtectedRoute>}/>
       <Route path="sales-performance" element={<ProtectedRoute><SalesPerformance/></ProtectedRoute>}/>
       <Route path="products" element={<ProtectedRoute><ProductPage/></ProtectedRoute>}/>
+      <Route path="suppliers" element={<ProtectedRoute><Suppliers/></ProtectedRoute>}/>
+      <Route path="purchases" element={<ProtectedRoute><Purchases/></ProtectedRoute>}/>
       <Route path="expense" element={<ProtectedRoute><Expenses/></ProtectedRoute>}/>
       <Route path="add-expense" element={<ProtectedRoute><AddExpense/></ProtectedRoute>}/>
       <Route path="edit-expense/:id" element={<ProtectedRoute><EditExpense/></ProtectedRoute>}/>

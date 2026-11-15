@@ -6866,4 +6866,6 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
   }
 }
 
-.ux-dashboard-panels { display: flex; flex-direction: column; }
+.ux-dashboard-panels { display:flex; flex-wrap:wrap; align-items:stretch; gap:12px; }
+.ux-dashboard-action-panel { flex:1 1 100%; min-width:0; }
+.ux-dashboard-panels > .ux-dashboard-metric { flex:1 1 calc(33.333% - 12px); }

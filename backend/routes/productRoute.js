@@ -161,6 +161,58 @@ router.get("/",auth,async(req,res)=>{
   }catch(error){res.status(500).json({message:error.message});}
 });
 
+router.get("/:id/usage",auth,async(req,res)=>{
+  try{
+    if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid product ID."});
+    const product=await Product.findOne({_id:req.params.id,createdBy:owner(req)}).select("_id productName").lean();
+    if(!product)return res.status(404).json({message:"Product not found."});
+    const orders=await Order.find({
+      createdBy:owner(req),
+      "subOrders.productId":product._id
+    })
+      .select("orderNumber orderDate status paymentStatus totalAmount paidAmount dueAmount clientId subOrders")
+      .sort({orderDate:-1,createdAt:-1})
+      .limit(101)
+      .populate({path:"clientId",select:"name companyName",match:{createdBy:owner(req)}})
+      .lean();
+    const hasMore=orders.length>100;
+    const invoices=orders.slice(0,100).map(order=>{
+      const lines=(Array.isArray(order.subOrders)?order.subOrders:[])
+        .filter(item=>String(item.productId||"")===String(product._id))
+        .map(item=>({
+          productName:item.orderName||product.productName,
+          quantity:Number(item.quantity||0),
+          meters:Number(item.MTR||0),
+          unit:item.qtyUnit||"PCS",
+          rate:Number(item.unitPrice||0),
+          designNumber:item.designNumber||""
+        }));
+      return {
+        invoiceId:String(order._id),
+        invoiceNumber:order.orderNumber||"Invoice",
+        invoiceDate:order.orderDate||null,
+        customerId:order.clientId?String(order.clientId._id):"",
+        customerName:order.clientId?.companyName||order.clientId?.name||"Customer not linked",
+        status:order.status||"Pending",
+        paymentStatus:order.paymentStatus||"Unpaid",
+        totalAmount:Number(order.totalAmount||0),
+        paidAmount:Number(order.paidAmount||0),
+        dueAmount:Number(order.dueAmount||0),
+        lines
+      };
+    });
+    return res.json({
+      product:{_id:String(product._id),productName:product.productName},
+      invoices,
+      totalInvoices:invoices.length,
+      hasMore
+    });
+  }catch(error){
+    console.error("Product sales history error:",error);
+    return res.status(500).json({message:"Unable to load product sales history."});
+  }
+});
+
 router.get("/:id",auth,async(req,res)=>{
   try{
     if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid product ID."});

@@ -8,6 +8,9 @@ const Expense=require("../models/Expense");
 const Supplier=require("../models/Supplier");
 const Machine=require("../models/Machine");
 const User=require("../models/User");
+const Deal=require("../models/Deal");
+const CreditNote=require("../models/CreditNote");
+const CalendarEvent=require("../models/Calendar");
 const {isNoCodeSourceSafe,buildNoCodeSourceQuery,getNoCodeSourceProjection}=require("../utils/noCodeSourcePolicy");
 const {escapeRegex}=require("../utils/escapeRegex");
 
@@ -44,6 +47,36 @@ const SOURCES={
       ["orderNumber","Invoice No."],["companyName","Client"],["orderDate","Bill Date"],
       ["totalAmount","Total"],["paidAmount","Paid"],["dueAmount","Due"],
       ["paymentStatus","Payment Status"],["status","Status"]
+    ]
+  },
+  deals:{
+    label:"Sales opportunities",
+    model:Deal,
+    searchFields:["title","contactName","contactPhone","source"],
+    fields:[
+      ["title","Opportunity"],["contactName","Contact"],["value","Potential value"],
+      ["stageKey","Sales stage"],["status","Outcome"],["probability","Win probability"],
+      ["expectedCloseDate","Expected close date"],["nextAction","Next step"],
+      ["nextActionAt","Next follow-up"],["source","Lead source"],["clientId","Linked customer"]
+    ]
+  },
+  creditNotes:{
+    label:"Credit Notes",
+    model:CreditNote,
+    searchFields:["creditNoteNumber","originalInvoiceNumber","companyName"],
+    fields:[
+      ["creditNoteNumber","Credit Note No."],["originalInvoiceNumber","Original invoice"],
+      ["companyName","Customer"],["reason","Reason"],["creditNoteDate","Credit Note date"],
+      ["status","Status"],["settlementStatus","Settlement status"],["clientId","Linked customer"],
+      ["originalOrderId","Original invoice record"]
+    ]
+  },
+  calendar:{
+    label:"Calendar events",
+    model:CalendarEvent,
+    searchFields:["title"],
+    fields:[
+      ["title","Event"],["start","Starts"],["end","Ends"],["clientId","Linked customer"]
     ]
   },
   expenses:{

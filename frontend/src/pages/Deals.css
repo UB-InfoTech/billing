@@ -94,9 +94,11 @@
 .deals-editor .deals-modal-footer>div:first-child:empty{display:none}
 .deals-stage-manager{width:min(700px,100%)}
 .deals-stage-manager-body{padding:16px 22px;overflow-y:auto}
-.deals-stage-edit-row{display:grid;grid-template-columns:58px minmax(0,1fr) 110px 36px;align-items:end;gap:9px;padding:10px 0;border-bottom:1px solid #edf0f4}
-.deals-stage-order{display:flex;gap:3px;padding-bottom:1px}
-.deals-stage-order .btn{width:26px;height:34px;padding:0;font-size:10px}
+.deals-stage-edit-row{display:grid;grid-template-columns:36px minmax(0,1fr) 110px 36px;align-items:end;gap:9px;padding:10px 8px;border:1px solid transparent;border-bottom-color:#edf0f4;border-radius:8px;transition:background .15s,border-color .15s}
+.deals-stage-edit-row.is-drop-target{border-color:#9fc4e1;background:#f0f7fc}
+.deals-stage-order{display:flex;align-items:center;justify-content:center;gap:3px;padding-bottom:1px}
+.deals-stage-order .btn{width:32px;height:35px;padding:0;font-size:14px;cursor:grab;touch-action:none}
+.deals-stage-order .btn:active{cursor:grabbing}
 .deals-stage-name,.deals-stage-probability{min-width:0}
 .deals-stage-name .form-label,.deals-stage-probability .form-label{margin-bottom:4px;color:#68798d;font-size:9px;font-weight:700}
 .deals-stage-edit-row .form-control{min-height:35px;border-color:#dce4ed;border-radius:7px;font-size:11px}

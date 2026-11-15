@@ -1,6 +1,6 @@
 import BusinessPageHeader from "../components/BusinessPageHeader";
 import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import {useSearchParams} from "react-router-dom";
+import {useNavigate,useSearchParams} from "react-router-dom";
 import {ORDER_FORM_FIELDS,ORDER_ITEM_FIELDS,PAYMENT_FORM_FIELDS} from "../config/noCodeCatalog";
 import axios from "axios";
 import editSVG from '../assets/edit.svg';
@@ -37,6 +37,7 @@ const getInvoiceTotal = (order = {}) => {
 import { useReactToPrint } from "react-to-print";
 
 function Order2() {
+    const navigate=useNavigate();
     const linkone = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
     
     const [orders, setOrders] = useState([]);
@@ -76,11 +77,13 @@ function Order2() {
     const [ewayCustomizeRequested,setEwayCustomizeRequested]=useState(false);
     const [searchParams,setSearchParams]=useSearchParams();
     const [crmPrefillClientId,setCrmPrefillClientId]=useState("");
+    const [crmPrefillProductId,setCrmPrefillProductId]=useState("");
 
     useEffect(()=>{
         const customize=searchParams.get("customize");
         const action=searchParams.get("action");
         const clientId=searchParams.get("clientId");
+        const productId=searchParams.get("productId");
         if(customize==="form")setFormSettingsOpen(true);
         if(customize==="items")setItemSettingsOpen(true);
         if(customize==="payments")setPaymentFormSettingsOpen(true);
@@ -88,6 +91,7 @@ function Order2() {
         if(customize==="ewaybill")setEwayCustomizeRequested(true);
         if(action==="new"){
             setCrmPrefillClientId(clientId||"");
+            setCrmPrefillProductId(productId||"");
             const newSubOrders=[emptyOrderItem()];
             setShowModal(true);
             setEditingOrder(null);
@@ -100,6 +104,7 @@ function Order2() {
             searchParams.delete("customize");
             searchParams.delete("action");
             searchParams.delete("clientId");
+            searchParams.delete("productId");
             setSearchParams(searchParams,{replace:true});
         }
     },[searchParams,setSearchParams]);
@@ -125,6 +130,20 @@ function Order2() {
         }));
         setCrmPrefillClientId("");
     },[crmPrefillClientId,showModal,clients]);
+
+    useEffect(()=>{
+        if(!crmPrefillProductId||!showModal||!products.length)return;
+        const product=products.find(item=>String(item._id)===String(crmPrefillProductId));
+        if(!product){
+            setInvoiceFormError("The selected product could not be found. Choose a product from the catalogue.");
+            setCrmPrefillProductId("");
+            return;
+        }
+        const firstItem={...emptyOrderItem(),productId:product._id,orderName:product.productName||"",designNumber:product.designNo||"",unitPrice:Number(product.rate||0)};
+        setSubOrders([firstItem]);
+        setFormData(previous=>({...previous,subOrders:[firstItem]}));
+        setCrmPrefillProductId("");
+    },[crmPrefillProductId,showModal,products]);
 
     const orderFormConfig=useFormConfiguration("orders.form",ORDER_FORM_FIELDS);
     const orderItemConfig=useFormConfiguration("orders.items",ORDER_ITEM_FIELDS);
@@ -158,6 +177,8 @@ function Order2() {
     const [subOrders, setSubOrders] = useState([
         { designNumber: "", orderName: "", hsnCode: 0, qtyUnit: "", quantity: 0, cut: 0, MTR: 0, unitPrice: 0, shortPcs: 0, customFields: {} }
     ]);
+    const [draggedItemIndex,setDraggedItemIndex]=useState(null);
+    const [dropItemIndex,setDropItemIndex]=useState(null);
 
 
 
@@ -373,10 +394,17 @@ function Order2() {
 
         if(name==="orderName"&&!record&&!field?.custom){
             const selectedProduct=products.find(product=>product.productName===value);
+            next.productId=selectedProduct?._id||null;
             if(selectedProduct){
                 next.unitPrice=selectedProduct.rate||"";
                 next.designNumber=selectedProduct.designNo||"";
             }
+        }
+        if(record&&field?.dataSource?.resource==="products"){
+            next.productId=record._id||null;
+            next.orderName=record.productName||next.orderName;
+            if(record.rate!==undefined)next.unitPrice=record.rate;
+            if(record.designNo)next.designNumber=record.designNo;
         }
 
         next=applyFormulas(orderItemConfig.fields,next);
@@ -456,6 +484,24 @@ function Order2() {
     const deleteSubOrder = (index) => {
         const updated = subOrders.filter((_, i) => i !== index);
         setSubOrders(updated);
+    };
+
+    const moveSubOrder=(fromIndex,toIndex)=>{
+        if(fromIndex===toIndex||fromIndex<0||toIndex<0||fromIndex>=subOrders.length||toIndex>=subOrders.length)return;
+        const updated=subOrders.slice();
+        const [moved]=updated.splice(fromIndex,1);
+        updated.splice(toIndex,0,moved);
+        setSubOrders(updated);
+        setFormData(previous=>({...previous,subOrders:updated}));
+    };
+
+    const handleSubOrderDrop=(event,targetIndex)=>{
+        event.preventDefault();
+        const raw=event.dataTransfer?.getData("text/plain");
+        const sourceIndex=raw===""||raw===undefined?draggedItemIndex:Number(raw);
+        if(Number.isInteger(sourceIndex))moveSubOrder(sourceIndex,targetIndex);
+        setDraggedItemIndex(null);
+        setDropItemIndex(null);
     };
 
     // Bind '+' key only when modal is open
@@ -1818,7 +1864,10 @@ const styles = {
                                     <h5 className="modal-title fw-bold mb-1">Invoice {viewingOrder.orderNumber||"Details"}</h5>
                                     <div className="small text-secondary">{viewingOrder.companyName||clients.find(client=>client._id===viewingOrder.clientId)?.companyName||"Customer not linked"} · {viewingOrder.orderDate?new Date(viewingOrder.orderDate).toLocaleDateString("en-IN"):"No date"}</div>
                                 </div>
-                                <div className="d-flex align-items-center gap-2">
+                                <div className="d-flex align-items-center gap-2 flex-wrap">
+                                    {(viewingOrder.clientId?._id||viewingOrder.clientId)&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(viewingOrder.clientId?._id||viewingOrder.clientId))}><i className="bi bi-person me-1"></i>Customer</button>}
+                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/credit-notes?originalOrderId="+encodeURIComponent(viewingOrder._id))}><i className="bi bi-arrow-return-left me-1"></i>Credit Note</button>
+                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/add-expense?"+new URLSearchParams({orderId:String(viewingOrder._id),...(viewingOrder.clientId?{clientId:String(viewingOrder.clientId?._id||viewingOrder.clientId)}:{})}).toString())}><i className="bi bi-wallet2 me-1"></i>Add expense</button>
                                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>{handleEdit(viewingOrder);setViewingOrder(null);}}><i className="bi bi-pencil me-1"></i>Edit</button>
                                     <button type="button" className="btn-close" aria-label="Close invoice details" onClick={()=>setViewingOrder(null)} />
                                 </div>
@@ -1875,7 +1924,10 @@ const styles = {
                                                 const itemViewSections=groupFieldsBySection(fields);
                                                 return (
                                                     <div className="invoice-view-item" key={item._id||index}>
-                                                        <div className="invoice-view-item-title">Item {index+1}: {item.orderName||item.productName||"Item"}</div>
+                                                        <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
+                                                            <div className="invoice-view-item-title">Item {index+1}: {item.orderName||item.productName||"Item"}</div>
+                                                            {item.productId&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/products?openProduct="+encodeURIComponent(item.productId?._id||item.productId))}><i className="bi bi-box-seam me-1"></i>Open product</button>}
+                                                        </div>
                                                         {itemViewSections.map(section=>(
                                                             <section className="invoice-view-item-section" key={section.key}>
                                                                 <div className="invoice-view-field-label">{section.label}</div>
@@ -2032,9 +2084,12 @@ const styles = {
                                                             </div>
                                                         );
                                                         return (
-                                                            <div key={index} className="order-config-item-row border rounded-3 bg-light p-3 mb-3">
+                                                            <div key={index} className={`order-config-item-row border rounded-3 bg-light p-3 mb-3 ${dropItemIndex===index&&draggedItemIndex!==index?"border-primary shadow-sm":""}`} onDragOver={event=>{if(draggedItemIndex!==null&&draggedItemIndex!==index){event.preventDefault();setDropItemIndex(index);}}} onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDropItemIndex(current=>current===index?null:current);}} onDrop={event=>handleSubOrderDrop(event,index)}>
                                                                 <div className="d-flex align-items-center justify-content-between mb-3">
-                                                                    <span className="fw-semibold">Item {index+1}</span>
+                                                                    <div className="d-flex align-items-center gap-2">
+                                                                        <button type="button" className="btn btn-sm btn-light border" draggable onDragStart={event=>{event.dataTransfer?.setData("text/plain",String(index));if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDraggedItemIndex(index);setDropItemIndex(null);}} onDragEnd={()=>{setDraggedItemIndex(null);setDropItemIndex(null);}} title="Drag to change item order" aria-label={`Drag to move item ${index+1}`}><i className="bi bi-grip-vertical"></i></button>
+                                                                        <span className="fw-semibold">Item {index+1}</span>
+                                                                    </div>
                                                                     {subOrders.length>1&&(
                                                                         <button type="button" className="btn btn-sm btn-light border" onClick={()=>deleteSubOrder(index)} aria-label={`Remove item ${index+1}`}>
                                                                             <i className="bi bi-trash me-1"></i>Remove
@@ -2054,7 +2109,7 @@ const styles = {
                                                     })}
                                                     <div className="small text-secondary">
                                                         <i className="bi bi-lightbulb me-1"></i>
-                                                        Choose a product, enter its quantity, and check the rate. Item amounts and invoice totals update automatically.
+                                                        Choose a product, enter its quantity, and check the rate. Drag the grip beside an item number to change its position. Amounts and invoice totals update automatically.
                                                     </div>
                                                 </div>
                                             </section>

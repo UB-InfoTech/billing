@@ -18,6 +18,7 @@ const FILTERS=[
  {value:"all",label:"Everything"},
  {value:"interaction",label:"Conversations"},
  {value:"billing",label:"Bills & payments"},
+ {value:"opportunity",label:"Opportunities"},
  {value:"follow_up",label:"Reminders"},
  {value:"finance",label:"Other"}
 ];
@@ -30,6 +31,7 @@ const ACTIVITY_FILTERS=[
 
 const TYPE_LABELS={
  client_created:"Customer added",profile_update:"Details changed",calendar_event:"Calendar event",
+ deal_created:"Sales opportunity created",deal_stage_changed:"Opportunity stage changed",deal_won:"Opportunity won",deal_lost:"Opportunity lost",
  invoice_created:"Invoice created",invoice_updated:"Invoice updated",invoice_status:"Invoice status",
  payment_added:"Payment received",payment_edited:"Payment changed",payment_deleted:"Payment removed",
  payment_received:"Payment received",credit_note_posted:"Credit Note posted",credit_note_edited:"Credit Note updated",
@@ -40,6 +42,7 @@ const TYPE_LABELS={
 
 const ICONS={
  client_created:"bi-person-plus",profile_update:"bi-person-gear",calendar_event:"bi-calendar-event",
+ deal_created:"bi-kanban",deal_stage_changed:"bi-arrow-left-right",deal_won:"bi-trophy",deal_lost:"bi-flag",
  invoice_created:"bi-receipt",invoice_updated:"bi-pencil-square",invoice_status:"bi-arrow-left-right",
  payment_added:"bi-cash-coin",payment_edited:"bi-cash",payment_deleted:"bi-cash-stack",
  payment_received:"bi-cash-coin",credit_note_posted:"bi-file-earmark-minus",
@@ -149,7 +152,10 @@ export default function ClientActivityPanel({clientId,apiBase,mode="timeline"}){
   setError("");
   setUpdatingId(String(activity.sourceId));
   try{
-   await axios.patch(apiBase+"/api/clients/"+clientId+"/activities/"+activity.sourceId,{status},{
+   const endpoint=activity.source==="deal_activity"&&activity.dealId
+    ?apiBase+"/api/deals/"+encodeURIComponent(activity.dealId)+"/activities/"+encodeURIComponent(activity.sourceId)
+    :apiBase+"/api/clients/"+clientId+"/activities/"+encodeURIComponent(activity.sourceId);
+   await axios.patch(endpoint,{status},{
     headers:{"x-auth-token":localStorage.getItem("token")||""}
    });
    await loadActivities();
@@ -166,6 +172,9 @@ export default function ClientActivityPanel({clientId,apiBase,mode="timeline"}){
   if(activity.source==="invoice"||activity.source==="payment")navigate("/orders?openInvoice="+id);
   else if(activity.source==="credit_note")navigate("/credit-notes?openCreditNote="+id);
   else if(activity.source==="calendar")navigate("/calendar?openEvent="+id);
+  else if(activity.source==="expense")navigate("/edit-expense/"+id);
+  else if(activity.source==="deal")navigate("/deals?dealId="+id);
+  else if(activity.source==="deal_activity"&&activity.dealId)navigate("/deals?dealId="+encodeURIComponent(activity.dealId));
  };
 
  const needsDueDate=type==="task"||type==="follow_up";
@@ -262,7 +271,8 @@ export default function ClientActivityPanel({clientId,apiBase,mode="timeline"}){
       {visibleActivities.map(activity=>{
        const isOpen=activity.status==="open";
        const statusLabel=activity.status==="completed"?"Done":activity.status==="cancelled"?"Cancelled":"To do";
-       const linked=["invoice","payment","credit_note","calendar"].includes(activity.source)&&Boolean(activity.sourceId);
+       const linked=["invoice","payment","credit_note","calendar","expense","deal"].includes(activity.source)&&Boolean(activity.sourceId)
+        ||activity.source==="deal_activity"&&Boolean(activity.dealId);
        return (
         <article className="client-activity-entry" key={activity.id}>
          <div className="client-activity-entry-icon"><i className={"bi "+(ICONS[activity.type]||"bi-clock-history")}></i></div>

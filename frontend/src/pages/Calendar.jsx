@@ -110,6 +110,19 @@ export default function Calendar(){
     setModal({open:true,id:null,values});
   };
 
+  useEffect(()=>{
+    const action=searchParams.get("action");
+    const clientId=searchParams.get("clientId");
+    if(action!=="new"&&!clientId)return;
+    const params=new URLSearchParams(searchParams);
+    params.delete("action");
+    params.delete("clientId");
+    setSearchParams(params,{replace:true});
+    const values=emptyEvent(eventFields);
+    if(clientId)values.clientId=clientId;
+    setModal({open:true,id:null,values});
+  },[searchParams,setSearchParams,eventFields]);
+
   const openEdit=event=>{
     setModal({
       open:true,
@@ -251,6 +264,7 @@ export default function Calendar(){
     {key:"start",label:"Start",render:event=>event.start?new Date(event.start).toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"}):""},
     {key:"end",label:"End",render:event=>event.end?new Date(event.end).toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"}):""},
     {key:"title",label:"Event"},
+    {key:"client",label:"Customer",visible:false,render:event=>event.clientId?<button type="button" className="btn btn-link btn-sm p-0 text-decoration-none" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(event.clientId?._id||event.clientId))}>Open customer <i className="bi bi-arrow-up-right ms-1"/></button>:"—"},
     {key:"color",label:"Color",render:event=><span className="d-inline-flex align-items-center gap-2"><span className="event-color-dot" style={{backgroundColor:event.color||DEFAULT_COLOR}}></span>{event.color||DEFAULT_COLOR}</span>}
   ];
 
@@ -314,6 +328,7 @@ export default function Calendar(){
               label:"Actions",
               render:event=>(
                 <div className="btn-group btn-group-sm">
+                  {event.clientId&&<button type="button" className="btn btn-light border" title="Open customer" aria-label="Open customer" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(event.clientId?._id||event.clientId))}><i className="bi bi-person"/></button>}
                   <button type="button" className="btn btn-outline-primary" onClick={()=>openEdit(event)}>Edit</button>
                   <button type="button" className="btn btn-outline-danger" onClick={()=>remove(event._id||event.id)}>Delete</button>
                 </div>
@@ -370,6 +385,7 @@ export default function Calendar(){
                   </div>}
             </div>
             <div className="modal-footer">
+              {modal.values.clientId&&<button type="button" className="btn btn-light border me-auto" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(modal.values.clientId?._id||modal.values.clientId))}><i className="bi bi-person me-1"/>Open customer</button>}
               {modal.id&&<button type="button" className="btn btn-outline-danger me-auto" onClick={()=>remove(modal.id)} disabled={saving}>Delete</button>}
               <button type="button" className="btn btn-secondary" onClick={close} disabled={saving}>Close</button>
               <button type="button" className="btn btn-primary" onClick={save} disabled={formLoading||saving}>{saving?"Saving...":formLoading?"Loading...":"Save"}</button>

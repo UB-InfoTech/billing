@@ -2,6 +2,7 @@ const express=require("express");
 const mongoose=require("mongoose");
 const Supplier=require("../models/Supplier");
 const Purchase=require("../models/Purchase");
+const Expense=require("../models/Expense");
 const auth=require("../middleware/auth");
 const {escapeRegex}=require("../utils/escapeRegex");
 
@@ -128,11 +129,14 @@ router.delete("/:id",auth,async(req,res)=>{
   if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid supplier ID."});
   const supplier=await Supplier.findOne({_id:req.params.id,createdBy:owner(req)});
   if(!supplier)return res.status(404).json({message:"Supplier not found."});
-  const hasPurchases=await Purchase.exists({supplierId:supplier._id,createdBy:owner(req)});
-  if(hasPurchases){
+  const [hasPurchases,hasExpenses]=await Promise.all([
+   Purchase.exists({supplierId:supplier._id,createdBy:owner(req)}),
+   Expense.exists({supplierId:supplier._id,createdBy:owner(req)})
+  ]);
+  if(hasPurchases||hasExpenses){
    supplier.status="Inactive";
    await supplier.save();
-   return res.json({message:"Supplier has purchase history, so it was marked inactive instead of deleted.",supplier});
+   return res.json({message:"Supplier is linked to purchase or expense history, so it was marked inactive instead of deleted.",supplier});
   }
   await Supplier.deleteOne({_id:supplier._id,createdBy:owner(req)});
   return res.json({message:"Supplier deleted successfully."});

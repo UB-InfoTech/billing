@@ -8,16 +8,16 @@ const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
 const money=value=>"₹"+Number(value||0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
 
 const DEFAULT_WIDGETS=[
-  {key:"invoices",title:"Invoices",visible:true,order:0},
-  {key:"clients",title:"Customers",visible:true,order:1},
-  {key:"products",title:"Products",visible:true,order:2},
-  {key:"revenue",title:"Revenue",visible:true,order:3},
-  {key:"outstanding",title:"To collect",visible:true,order:4},
-  {key:"expenses",title:"Expenses",visible:true,order:5},
-  {key:"paid",title:"Paid",visible:true,order:6},
-  {key:"creditNotes",title:"Credit Notes",visible:true,order:7},
-  {key:"netAfterExpenses",title:"Net after expenses",visible:true,order:8},
-  {key:"quickActions",title:"Quick actions",visible:true,order:9}
+  {key:"quickActions",title:"Quick actions",visible:true,order:0},
+  {key:"revenue",title:"Revenue",visible:true,order:1},
+  {key:"outstanding",title:"To collect",visible:true,order:2},
+  {key:"paid",title:"Paid",visible:true,order:3},
+  {key:"invoices",title:"Invoices",visible:true,order:4},
+  {key:"clients",title:"Customers",visible:true,order:5},
+  {key:"products",title:"Products",visible:true,order:6},
+  {key:"expenses",title:"Expenses",visible:true,order:7},
+  {key:"creditNotes",title:"Credit Notes",visible:true,order:8},
+  {key:"netAfterExpenses",title:"Net after expenses",visible:true,order:9}
 ];
 
 const DASHBOARD_ACTIONS=[

@@ -360,7 +360,7 @@ export default function SalesPerformance(){
     <section className="sp-panel sp-followup-panel">
      <header className="sp-panel-heading"><div><h2>Follow-up health</h2><p>Customer and opportunity tasks due in this period</p></div></header>
      <div className="sp-followup-rate">
-      <div><strong>{percent(followUps.completionRate)}</strong><span>completed by due date</span></div>
+      <div><strong>{percent(followUps.completionRate)}</strong><span>of due follow-ups completed</span></div>
       <div className="sp-progress-track"><span style={{width:progressWidth+"%"}}></span></div>
       <small>{count(followUps.completedDueCount)} of {count(followUps.dueCount)} due follow-ups completed</small>
      </div>

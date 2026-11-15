@@ -125,6 +125,7 @@ const creditNoteSchema = new mongoose.Schema(
           ref: "Product",
           required: true,
         },
+        sourceItemId: { type: mongoose.Schema.Types.ObjectId, default: null },
         unit: { type: String, enum: ["PCS", "MTR"], required: true },
         quantity: { type: Number, required: true, min: 0 },
       },

@@ -48,3 +48,31 @@ test("respects activity feed limits and reports more history",()=>{
  assert.equal(result.hasMore,true);
  assert.equal(result.total,6);
 });
+
+
+test("keeps pre-audit payments visible when an invoice has newer payment audit events",()=>{
+ const result=buildClientActivityTimeline({
+  client,
+  orders:[{
+   _id:"order-with-legacy-payment",
+   clientId:"client-1",
+   orderNumber:"INV-LEGACY-01",
+   createdAt:"2026-03-01T09:00:00.000Z",
+   payments:[
+    {_id:"payment-before-audit",amount:25,method:"Cash",paymentDate:"2026-03-02T09:00:00.000Z"},
+    {_id:"payment-after-audit",amount:40,method:"UPI",amountReference:"TXN-NEW",paymentDate:"2026-03-03T09:00:00.000Z"}
+   ],
+   paymentHistory:[{
+    action:"added",
+    paymentId:"payment-after-audit",
+    effectiveAt:"2026-03-03T09:00:00.000Z",
+    after:{amount:40,method:"UPI",amountReference:"TXN-NEW",paymentDate:"2026-03-03T09:00:00.000Z"}
+   }]
+  }]
+ });
+ const paymentEntries=result.activities.filter(item=>item.source==="payment");
+ assert.equal(paymentEntries.length,2);
+ assert.ok(paymentEntries.some(item=>item.type==="payment_received"&&item.amount===25));
+ assert.ok(paymentEntries.some(item=>item.type==="payment_added"&&item.amount===40));
+ assert.equal(paymentEntries.filter(item=>item.amount===40).length,1,"An audited payment must not be duplicated from the current payment array.");
+});

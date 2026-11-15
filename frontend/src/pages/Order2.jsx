@@ -402,7 +402,7 @@ function Order2() {
         }
         if(record&&field?.dataSource?.resource==="products"){
             next.productId=record._id||null;
-            if(field.key==="orderName")next.orderName=record.productName||next.orderName;
+            next.orderName=record.productName||next.orderName;
             if(record.rate!==undefined)next.unitPrice=record.rate;
             if(record.designNo)next.designNumber=record.designNo;
         }

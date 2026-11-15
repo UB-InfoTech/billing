@@ -26,6 +26,7 @@ const EMPTY={
   taxAmount:0,
   clientId:"",
   orderId:"",
+  supplierId:"",
   date:today(),
   isRecurring:false,
   recurringInterval:"",
@@ -142,6 +143,7 @@ export default function ExpenseForm({onSubmit,onCancel,initialData=EMPTY_INITIAL
         taxAmount:Number(values.taxAmount||0),
         clientId:values.clientId||null,
         orderId:values.orderId||null,
+        supplierId:values.supplierId||null,
         recurringEndDate:values.recurringEndDate||null,
         recurringInterval:values.isRecurring?values.recurringInterval:null,
         customFields:values.customFields||{}

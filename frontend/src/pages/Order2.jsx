@@ -158,6 +158,8 @@ function Order2() {
     const [subOrders, setSubOrders] = useState([
         { designNumber: "", orderName: "", hsnCode: 0, qtyUnit: "", quantity: 0, cut: 0, MTR: 0, unitPrice: 0, shortPcs: 0, customFields: {} }
     ]);
+    const [draggedItemIndex,setDraggedItemIndex]=useState(null);
+    const [dropItemIndex,setDropItemIndex]=useState(null);
 
 
 
@@ -456,6 +458,24 @@ function Order2() {
     const deleteSubOrder = (index) => {
         const updated = subOrders.filter((_, i) => i !== index);
         setSubOrders(updated);
+    };
+
+    const moveSubOrder=(fromIndex,toIndex)=>{
+        if(fromIndex===toIndex||fromIndex<0||toIndex<0||fromIndex>=subOrders.length||toIndex>=subOrders.length)return;
+        const updated=subOrders.slice();
+        const [moved]=updated.splice(fromIndex,1);
+        updated.splice(toIndex,0,moved);
+        setSubOrders(updated);
+        setFormData(previous=>({...previous,subOrders:updated}));
+    };
+
+    const handleSubOrderDrop=(event,targetIndex)=>{
+        event.preventDefault();
+        const raw=event.dataTransfer?.getData("text/plain");
+        const sourceIndex=raw===""||raw===undefined?draggedItemIndex:Number(raw);
+        if(Number.isInteger(sourceIndex))moveSubOrder(sourceIndex,targetIndex);
+        setDraggedItemIndex(null);
+        setDropItemIndex(null);
     };
 
     // Bind '+' key only when modal is open
@@ -2032,9 +2052,12 @@ const styles = {
                                                             </div>
                                                         );
                                                         return (
-                                                            <div key={index} className="order-config-item-row border rounded-3 bg-light p-3 mb-3">
+                                                            <div key={index} className={`order-config-item-row border rounded-3 bg-light p-3 mb-3 ${dropItemIndex===index&&draggedItemIndex!==index?"border-primary shadow-sm":""}`} onDragOver={event=>{if(draggedItemIndex!==null&&draggedItemIndex!==index){event.preventDefault();setDropItemIndex(index);}}} onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDropItemIndex(current=>current===index?null:current);}} onDrop={event=>handleSubOrderDrop(event,index)}>
                                                                 <div className="d-flex align-items-center justify-content-between mb-3">
-                                                                    <span className="fw-semibold">Item {index+1}</span>
+                                                                    <div className="d-flex align-items-center gap-2">
+                                                                        <button type="button" className="btn btn-sm btn-light border" draggable onDragStart={event=>{event.dataTransfer?.setData("text/plain",String(index));if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDraggedItemIndex(index);setDropItemIndex(null);}} onDragEnd={()=>{setDraggedItemIndex(null);setDropItemIndex(null);}} title="Drag to change item order" aria-label={`Drag to move item ${index+1}`}><i className="bi bi-grip-vertical"></i></button>
+                                                                        <span className="fw-semibold">Item {index+1}</span>
+                                                                    </div>
                                                                     {subOrders.length>1&&(
                                                                         <button type="button" className="btn btn-sm btn-light border" onClick={()=>deleteSubOrder(index)} aria-label={`Remove item ${index+1}`}>
                                                                             <i className="bi bi-trash me-1"></i>Remove
@@ -2054,7 +2077,7 @@ const styles = {
                                                     })}
                                                     <div className="small text-secondary">
                                                         <i className="bi bi-lightbulb me-1"></i>
-                                                        Choose a product, enter its quantity, and check the rate. Item amounts and invoice totals update automatically.
+                                                        Choose a product, enter its quantity, and check the rate. Drag the grip beside an item number to change its position. Amounts and invoice totals update automatically.
                                                     </div>
                                                 </div>
                                             </section>

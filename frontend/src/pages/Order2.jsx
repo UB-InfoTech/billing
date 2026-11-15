@@ -75,16 +75,19 @@ function Order2() {
     const [tableCustomizeRequested,setTableCustomizeRequested]=useState(false);
     const [ewayCustomizeRequested,setEwayCustomizeRequested]=useState(false);
     const [searchParams,setSearchParams]=useSearchParams();
+    const [crmPrefillClientId,setCrmPrefillClientId]=useState("");
 
     useEffect(()=>{
         const customize=searchParams.get("customize");
         const action=searchParams.get("action");
+        const clientId=searchParams.get("clientId");
         if(customize==="form")setFormSettingsOpen(true);
         if(customize==="items")setItemSettingsOpen(true);
         if(customize==="payments")setPaymentFormSettingsOpen(true);
         if(customize==="table")setTableCustomizeRequested(true);
         if(customize==="ewaybill")setEwayCustomizeRequested(true);
         if(action==="new"){
+            setCrmPrefillClientId(clientId||"");
             const newSubOrders=[emptyOrderItem()];
             setShowModal(true);
             setEditingOrder(null);
@@ -93,12 +96,36 @@ function Order2() {
             setSubOrders(newSubOrders);
             setFormData({...emptyOrder(),subOrders:newSubOrders});
         }
-        if(customize||action){
+        if(customize||action||clientId){
             searchParams.delete("customize");
             searchParams.delete("action");
+            searchParams.delete("clientId");
             setSearchParams(searchParams,{replace:true});
         }
     },[searchParams,setSearchParams]);
+    useEffect(()=>{
+        if(!crmPrefillClientId||!showModal||!clients.length)return;
+        const client=clients.find(item=>String(item._id)===String(crmPrefillClientId));
+        if(!client){
+            setCrmPrefillClientId("");
+            return;
+        }
+        setFormData(previous=>({
+            ...previous,
+            clientId:client._id||"",
+            companyName:client.companyName||client.name||"",
+            Address:client.address||"",
+            State:client.state||"",
+            City:client.city||"",
+            pinCode:client.pinCode||"",
+            stateCode:client.stateCode||"",
+            gstNumber:client.gstNumber||"",
+            paymentTerms:client.paymentTerms||"30",
+            discountRate:client.discountRate??0
+        }));
+        setCrmPrefillClientId("");
+    },[crmPrefillClientId,showModal,clients]);
+
     const orderFormConfig=useFormConfiguration("orders.form",ORDER_FORM_FIELDS);
     const orderItemConfig=useFormConfiguration("orders.items",ORDER_ITEM_FIELDS);
     const paymentFormConfig=useFormConfiguration("orders.payments",PAYMENT_FORM_FIELDS);

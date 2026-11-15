@@ -472,7 +472,8 @@ export default function CreditNote() {
 
     useEffect(()=>{
         const orderId=searchParams.get("originalOrderId");
-        if(!orderId||openInvoicePrefillRef.current===orderId)return;
+        if(!orderId){openInvoicePrefillRef.current="";return;}
+        if(openInvoicePrefillRef.current===orderId)return;
         openInvoicePrefillRef.current=orderId;
         const params=new URLSearchParams(searchParams);
         params.delete("originalOrderId");

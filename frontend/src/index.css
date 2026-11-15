@@ -6876,3 +6876,48 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
 @media (max-width:575.98px) {
   .ux-dashboard-panels > .ux-dashboard-metric { flex-basis:100%; }
 }
+
+/* Currency fields use a visible INR prefix without changing the stored number. */
+.configured-currency-control {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+}
+
+.configured-currency-prefix {
+  display: flex;
+  flex: 0 0 48px;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: 0 10px;
+  border: 1.5px solid #b9c5d3;
+  border-right: 0;
+  border-radius: 8px 0 0 8px;
+  color: #40536a;
+  background: #f4f7fb;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.configured-currency-control > .position-relative {
+  flex: 1 1 auto;
+  width: 1%;
+  min-width: 0;
+}
+
+.configured-currency-control > .configured-currency-prefix + .position-relative > .form-entry-control {
+  border-top-left-radius: 0 !important;
+  border-bottom-left-radius: 0 !important;
+  border-left-width: 0 !important;
+}
+
+.configured-currency-control:focus-within .configured-currency-prefix {
+  border-color: #2874c8;
+  background: #edf5ff;
+}
+
+.configured-currency-control .form-entry-control:disabled,
+.configured-currency-control .form-entry-control[readonly] {
+  background: #f2f5f8 !important;
+}

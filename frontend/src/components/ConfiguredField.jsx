@@ -305,6 +305,8 @@ export default function ConfiguredField({
     control=(
       <div className="input-group">
         <ArithmeticInput
+          id={controlId}
+          aria-describedby={effectiveHelp?helpId:undefined}
           value={value}
           onValueChange={handleValue}
           className="form-control form-entry-control"
@@ -316,11 +318,35 @@ export default function ConfiguredField({
           readOnly={effectiveReadOnly}
           placeholder={placeholder||label}
         />
-        <span className="input-group-text">%</span>
+        <span className="input-group-text" aria-hidden="true">%</span>
       </div>
     );
-  }else if(field.fieldType==="number"||field.fieldType==="currency"){
+  }else if(field.fieldType==="currency"){
+    control=(
+      <div className="input-group configured-currency-control">
+        <span className="input-group-text configured-currency-prefix" aria-hidden="true">{field.currencySymbol||"₹"}</span>
+        <ArithmeticInput
+          id={controlId}
+          aria-describedby={effectiveHelp?helpId:undefined}
+          aria-label={label}
+          value={value}
+          onValueChange={handleValue}
+          className="form-control form-entry-control"
+          min={field.validation?.min??min}
+          max={field.validation?.max??max}
+          step={step||"0.01"}
+          disabled={effectiveDisabled}
+          required={effectiveRequired}
+          readOnly={effectiveReadOnly}
+          placeholder={placeholder||"Enter amount"}
+        />
+      </div>
+    );
+  }else if(field.fieldType==="number"){
     control=<ArithmeticInput
+      id={controlId}
+      aria-describedby={effectiveHelp?helpId:undefined}
+      aria-label={label}
       value={value}
       onValueChange={handleValue}
       className="form-control form-entry-control"
@@ -330,7 +356,7 @@ export default function ConfiguredField({
       disabled={effectiveDisabled}
       required={effectiveRequired}
       readOnly={effectiveReadOnly}
-      placeholder={placeholder||label}
+      placeholder={placeholder||"Enter "+label.toLowerCase()}
     />;
   }else{
     const htmlType=field.key==="eWayPassword"?"password"

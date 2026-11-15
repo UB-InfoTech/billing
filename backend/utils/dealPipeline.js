@@ -10,7 +10,7 @@ const DEFAULT_DEAL_STAGES=[
 
 function createStageKey(label,index){
  const base=String(label||"stage").toLowerCase().normalize("NFKD")
-  .replace(/[\\u0300-\\u036f]/g,"")
+  .replace(/[\u0300-\u036f]/g,"")
   .replace(/[^a-z0-9]+/g,"-")
   .replace(/^-|-$/g,"")
   .slice(0,32)||"stage";

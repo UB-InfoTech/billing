@@ -15,11 +15,13 @@ const DEFAULT_NAVIGATION=[
   {key:"sales-performance",label:"Sales performance",visible:true,order:5},
   {key:"follow-ups",label:"Follow-ups",visible:true,order:6},
   {key:"products",label:"Products",visible:true,order:7},
-  {key:"expense",label:"Expenses",visible:true,order:8},
-  {key:"calendar",label:"Calendar",visible:true,order:9},
-  {key:"bulk-payment",label:"Payments",visible:true,order:10},
-  {key:"credit-notes",label:"Credit Notes",visible:true,order:11},
-  {key:"settings",label:"Settings",visible:true,order:12}
+  {key:"suppliers",label:"Suppliers",visible:true,order:8},
+  {key:"purchases",label:"Purchases",visible:true,order:9},
+  {key:"expense",label:"Expenses",visible:true,order:10},
+  {key:"calendar",label:"Calendar",visible:true,order:11},
+  {key:"bulk-payment",label:"Payments",visible:true,order:12},
+  {key:"credit-notes",label:"Credit Notes",visible:true,order:13},
+  {key:"settings",label:"Settings",visible:true,order:14}
 ];
 
 const cleanNavigation=input=>{

@@ -7,6 +7,7 @@ const Expense=require("../models/Expense");
 const {applyWorkflows}=require("../utils/workflowEngine");
 const Client=require("../models/Client");
 const Order=require("../models/Order2");
+const Supplier=require("../models/Supplier");
 const auth=require("../middleware/auth");
 const {buildExpenseDateRange}=require("../utils/expenseDateRange");
 const {normalizeExpenseFinancials}=require("../utils/expenseFinancials");
@@ -53,7 +54,7 @@ const EXPENSE_FORM_KEYS=[
   "title","description","amount","category","subCategory","tags","paymentMethod",
   "currency","vendor","gstNo","taxDeductible","taxRate","clientId","orderId",
   "date","isRecurring","recurringInterval","recurringEndDate","notes",
-  "attachments","receipt"
+  "attachments","receipt","supplierId"
 ];
 
 function cleanCustomFields(value,current={}){
@@ -186,7 +187,7 @@ async function validateExpenseReceiptReference(value,createdBy,currentReceipt=""
   return receipt;
 }
 
-async function validateReferenceOwnership({clientId,orderId},createdBy){
+async function validateReferenceOwnership({clientId,orderId,supplierId},createdBy){
   const clientValue=String(clientId||"").trim();
   if(clientValue){
     if(!mongoose.isValidObjectId(clientValue)){
@@ -194,6 +195,13 @@ async function validateReferenceOwnership({clientId,orderId},createdBy){
     }
     const client=await Client.findOne({_id:clientValue,createdBy}).select("_id").lean();
     if(!client)throw referenceError("The selected customer does not belong to this business.");
+  }
+
+  const supplierValue=String(supplierId||"").trim();
+  if(supplierValue){
+    if(!mongoose.isValidObjectId(supplierValue))throw referenceError("Choose a valid supplier for this expense.");
+    const supplier=await Supplier.findOne({_id:supplierValue,createdBy,status:"Active"}).select("_id").lean();
+    if(!supplier)throw referenceError("The selected supplier does not belong to this business or is inactive.");
   }
 
   const orderValue=String(orderId||"").trim();
@@ -272,11 +280,12 @@ router.get("/summary",auth,async(req,res)=>{
 
 router.get("/linked/options",auth,async(req,res)=>{
   try{
-    const [clients,orders]=await Promise.all([
+    const [clients,orders,suppliers]=await Promise.all([
       Client.find({createdBy:owner(req),accountStatus:"Active"}).select("name companyName").sort({companyName:1,name:1}).lean(),
-      Order.find({createdBy:owner(req)}).select("orderNumber companyName orderDate").sort({orderDate:-1}).limit(100).lean()
+      Order.find({createdBy:owner(req)}).select("orderNumber companyName orderDate").sort({orderDate:-1}).limit(100).lean(),
+      Supplier.find({createdBy:owner(req),status:"Active"}).select("name gstin").sort({name:1}).lean()
     ]);
-    res.json({clients,orders});
+    res.json({clients,orders,suppliers});
   }catch(error){res.status(500).json({message:error.message});}
 });
 
@@ -287,7 +296,8 @@ router.get("/",auth,async(req,res)=>{
     const query=applyExpenseFilters({createdBy:owner(req)},req.query);
     if(req.query.clientId&&mongoose.isValidObjectId(req.query.clientId))query.clientId=req.query.clientId;
     if(req.query.orderId&&mongoose.isValidObjectId(req.query.orderId))query.orderId=req.query.orderId;
-    const [expenses,total]=await Promise.all([Expense.find(query).sort({[sortField]:sortDir}).skip((page-1)*limit).limit(limit).populate({path:"clientId",select:"name companyName",match:{createdBy:owner(req)}}).populate({path:"orderId",select:"orderNumber",match:{createdBy:owner(req)}}).lean(),Expense.countDocuments(query)]);
+    if(req.query.supplierId&&mongoose.isValidObjectId(req.query.supplierId))query.supplierId=req.query.supplierId;
+    const [expenses,total]=await Promise.all([Expense.find(query).sort({[sortField]:sortDir}).skip((page-1)*limit).limit(limit).populate({path:"clientId",select:"name companyName",match:{createdBy:owner(req)}}).populate({path:"orderId",select:"orderNumber",match:{createdBy:owner(req)}}).populate({path:"supplierId",select:"name gstin",match:{createdBy:owner(req)}}).lean(),Expense.countDocuments(query)]);
     res.json({expenses,total,page,limit,pages:Math.max(1,Math.ceil(total/limit))});
   }catch(error){res.status(error.status||500).json({message:error.message});}
 });
@@ -330,7 +340,7 @@ router.get("/receipt/:filename",auth,async(req,res)=>{
 });
 
 router.get("/:id",auth,async(req,res)=>{
-  try{if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid expense ID."});const expense=await Expense.findOne({_id:req.params.id,createdBy:owner(req)}).populate({path:"clientId",select:"name companyName",match:{createdBy:owner(req)}}).populate({path:"orderId",select:"orderNumber",match:{createdBy:owner(req)}}).lean();if(!expense)return res.status(404).json({message:"Expense not found."});res.json(expense);}catch(error){res.status(500).json({message:error.message});}
+  try{if(!mongoose.isValidObjectId(req.params.id))return res.status(400).json({message:"Invalid expense ID."});const expense=await Expense.findOne({_id:req.params.id,createdBy:owner(req)}).populate({path:"clientId",select:"name companyName",match:{createdBy:owner(req)}}).populate({path:"orderId",select:"orderNumber",match:{createdBy:owner(req)}}).populate({path:"supplierId",select:"name gstin",match:{createdBy:owner(req)}}).lean();if(!expense)return res.status(404).json({message:"Expense not found."});res.json(expense);}catch(error){res.status(500).json({message:error.message});}
 });
 
 router.post("/",auth,async(req,res)=>{
@@ -355,6 +365,7 @@ router.post("/",auth,async(req,res)=>{
     values.tags=normalizeExpenseTags(values.tags);
     values.clientId=String(values.clientId??"").trim()||null;
     values.orderId=String(values.orderId??"").trim()||null;
+    values.supplierId=String(values.supplierId??"").trim()||null;
     values.recurringInterval=values.isRecurring?values.recurringInterval||null:null;
     values.recurringEndDate=values.isRecurring?values.recurringEndDate||null:null;
 
@@ -391,11 +402,13 @@ router.post("/",auth,async(req,res)=>{
     expense.tags=normalizeExpenseTags(validated.values.tags);
     expense.clientId=String(expense.clientId??"").trim()||null;
     expense.orderId=String(expense.orderId??"").trim()||null;
+    expense.supplierId=String(expense.supplierId??"").trim()||null;
     expense.recurringInterval=expense.isRecurring?expense.recurringInterval||null:null;
     expense.recurringEndDate=expense.isRecurring?expense.recurringEndDate||null:null;
     await validateReferenceOwnership({
       clientId:expense.clientId,
-      orderId:expense.orderId
+      orderId:expense.orderId,
+      supplierId:expense.supplierId
     },owner(req));
     validateRecurringExpense(expense);
 
@@ -439,6 +452,7 @@ router.put("/:id",auth,async(req,res)=>{
     preparedValues.tags=normalizeExpenseTags(preparedValues.tags);
     preparedValues.clientId=String(preparedValues.clientId??"").trim()||null;
     preparedValues.orderId=String(preparedValues.orderId??"").trim()||null;
+    preparedValues.supplierId=String(preparedValues.supplierId??"").trim()||null;
     preparedValues.recurringInterval=preparedValues.isRecurring?preparedValues.recurringInterval||null:null;
     preparedValues.recurringEndDate=preparedValues.isRecurring?preparedValues.recurringEndDate||null:null;
     if(req.body?.receipt!==undefined){
@@ -480,11 +494,13 @@ router.put("/:id",auth,async(req,res)=>{
     expense.tags=normalizeExpenseTags(validated.values.tags);
     expense.clientId=String(expense.clientId??"").trim()||null;
     expense.orderId=String(expense.orderId??"").trim()||null;
+    expense.supplierId=String(expense.supplierId??"").trim()||null;
     expense.recurringInterval=expense.isRecurring?expense.recurringInterval||null:null;
     expense.recurringEndDate=expense.isRecurring?expense.recurringEndDate||null:null;
     await validateReferenceOwnership({
       clientId:expense.clientId,
-      orderId:expense.orderId
+      orderId:expense.orderId,
+      supplierId:expense.supplierId
     },owner(req));
     validateRecurringExpense(expense);
     Object.assign(expense,normalizeExpenseFinancials(expense.amount,expense.taxRate));

@@ -7,7 +7,8 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "migrate:table-custom-values": "node scripts/migrate-table-custom-values.js",
-    "cleanup:no-code-files": "node scripts/cleanup-no-code-files.js"
+    "cleanup:no-code-files": "node scripts/cleanup-no-code-files.js",
+    "migrate:supplier-index": "node scripts/migrate-supplier-index.js"
   },
   "keywords": [],
   "author": "",

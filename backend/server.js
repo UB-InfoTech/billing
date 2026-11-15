@@ -108,6 +108,8 @@ app.use("/api/order",require("./routes/orderRoutes2"));
 app.use("/api/events",require("./routes/calendar"));
 app.use("/api/expenses",require("./routes/expenseRoutes2"));
 app.use("/api/products",require("./routes/productRoute"));
+app.use("/api/suppliers",require("./routes/supplierRoutes"));
+app.use("/api/purchases",require("./routes/purchaseRoutes"));
 app.use("/api/profile",require("./routes/profile"));
 app.use("/api/ewaybill",require("./routes/ewaybillRoutes"));
 app.use("/api/gstdetails",require("./routes/getGstDetailsRoutes"));

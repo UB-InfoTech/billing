@@ -76,6 +76,18 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
           const dealsIndex=next.findIndex(item=>item.key==="deals");
           next.splice(dealsIndex>=0?dealsIndex+1:next.length,0,byKey.get(performanceKey));
         }
+
+        // Add supplier and purchasing workspaces for businesses with older saved menus.
+        const suppliersKey="suppliers";
+        if(!saved.some(item=>item.key===suppliersKey)&&byKey.has(suppliersKey)){
+          const productsIndex=next.findIndex(item=>item.key==="products");
+          next.splice(productsIndex>=0?productsIndex+1:next.length,0,byKey.get(suppliersKey));
+        }
+        const purchasesKey="purchases";
+        if(!saved.some(item=>item.key===purchasesKey)&&byKey.has(purchasesKey)){
+          const suppliersIndex=next.findIndex(item=>item.key==="suppliers");
+          next.splice(suppliersIndex>=0?suppliersIndex+1:next.length,0,byKey.get(purchasesKey));
+        }
         if(next.length)setMenuItems(next);
       }catch{
         if(!cancelled)setMenuItems(MENU_ITEMS);

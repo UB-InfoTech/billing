@@ -16,6 +16,7 @@ const ExpenseSchema=new mongoose.Schema({
   taxAmount:{type:Number,default:0,min:0},
   clientId:{type:mongoose.Schema.Types.ObjectId,ref:"Client",default:null},
   orderId:{type:mongoose.Schema.Types.ObjectId,ref:"Order2",default:null},
+  supplierId:{type:mongoose.Schema.Types.ObjectId,ref:"Supplier",default:null},
   date:{type:Date,default:Date.now,index:true},
   isRecurring:{type:Boolean,default:false},
   recurringInterval:{type:String,enum:["Daily","Weekly","Monthly","Yearly",null],default:null},

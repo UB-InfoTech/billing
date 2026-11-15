@@ -13,6 +13,7 @@ const { recordFinancialRecoveryIssue } = require("../utils/financialRecovery");
 const { createSettlementHistoryEvent, appendSettlementHistoryEvent } = require("../utils/creditNoteSettlementHistory");
 const { prepareCreditNoteCustomFields, plainCustomFields } = require("../utils/creditNoteFormValidation");
 const FormConfiguration=require("../models/FormConfiguration");
+const {recordStockMovement,rollbackStockMovements}=require("../utils/stockMovement");
 const {getConfiguredFieldState}=require("../utils/configuredFormValidation");
 
 
@@ -1017,6 +1018,7 @@ router.post("/", auth, async (req, res) => {
     );
 
     const shouldAffectStock = Boolean(stockAffecting);
+    const creditNoteId = new mongoose.Types.ObjectId();
     let inventoryStatus = "Not Applicable";
     const inventoryMovements = [];
 
@@ -1053,20 +1055,26 @@ router.post("/", auth, async (req, res) => {
         const stockQty = item.qtyUnit === "MTR" ? Number(item.MTR || 0) : Number(item.quantity || 0);
         if (stockQty <= 0) continue;
 
-        const updatedProduct = await Product.findOneAndUpdate(
-          { _id: item.productId, createdBy: userId },
-          { $inc: { quantity: stockQty } },
-          { new: true, session }
-        );
+        const result = await recordStockMovement({
+          createdBy:userId,
+          productId:item.productId,
+          quantityChange:stockQty,
+          unit:item.qtyUnit||"PCS",
+          sourceType:"credit_note",
+          sourceId:creditNoteId,
+          sourceItemId:item.sourceSubOrderId||null,
+          movementType:"credit_note_return",
+          reference:String(requestedNumber||order.orderNumber||"Credit Note"),
+          note:"Stock returned on Sales Return Credit Note",
+          activateTracking:true,
+          session
+        });
 
-        if (!updatedProduct) {
-          throw new Error(`Product not found for ${item.orderName || item.designNumber || "item"}.`);
-        }
-
-        appliedStockChanges.push({ productId: item.productId, quantity: stockQty });
+        appliedStockChanges.push(result.movement);
         inventoryMovements.push({
           productId: item.productId,
-          unit: item.qtyUnit,
+          sourceItemId:item.sourceSubOrderId||null,
+          unit: item.qtyUnit||"PCS",
           quantity: stockQty,
         });
       }
@@ -1137,6 +1145,7 @@ router.post("/", auth, async (req, res) => {
     if (Number.isNaN(effectiveCreditNoteDate.getTime())) throw new Error("Invalid credit note date.");
 
     const noteDoc = new CreditNote({
+      _id:creditNoteId,
       creditNoteNumber: number,
       creditNoteDate: effectiveCreditNoteDate,
       reason,
@@ -1263,14 +1272,7 @@ router.post("/", auth, async (req, res) => {
       }
       if (appliedStockChanges.length) {
         try {
-          const Product = require("../models/Product");
-          for (const movement of appliedStockChanges.reverse()) {
-            await Product.findOneAndUpdate(
-              { _id: movement.productId, createdBy: userId },
-              { $inc: { quantity: -Number(movement.quantity || 0) } },
-              { new: true }
-            );
-          }
+          await rollbackStockMovements(appliedStockChanges,userId);
         } catch (rollbackError) {
           rollbackFailures.push({ step: "restore-stock", entityType: "product", entityId: String(appliedStockChanges[0]?.productId || ""), message: String(rollbackError?.message || rollbackError) });
           console.error("Credit note rollback could not restore stock:", rollbackError);
@@ -1456,7 +1458,7 @@ async function prepareCreditNoteUpdate({
         .lean();
       if (!product) throw new Error(`Product not found for ${item.orderName || item.designNumber || "item"}.`);
 
-      inventoryMovements.push({ productId: item.productId, unit: item.qtyUnit, quantity: stockQty });
+      inventoryMovements.push({ productId: item.productId, sourceItemId:item.sourceSubOrderId||null, unit: item.qtyUnit, quantity: stockQty });
     }
 
     inventoryStatus = "Processed";
@@ -1591,19 +1593,21 @@ router.put("/:id", auth, async (req, res) => {
     if (note.stockAffecting && note.inventoryMovements?.length) {
       const Product = require("../models/Product");
       for (const movement of note.inventoryMovements) {
-        const updated = await Product.findOneAndUpdate(
-          { _id: movement.productId, createdBy: userId },
-          { $inc: { quantity: -Number(movement.quantity || 0) } },
-          { new: true, session }
-        );
-        if (!updated) throw new Error("A stock product no longer exists.");
-        changedStock.push({
-          productId: movement.productId,
-          delta: -Number(movement.quantity || 0),
+        const result = await recordStockMovement({
+          createdBy:userId,
+          productId:movement.productId,
+          quantityChange:-Number(movement.quantity||0),
+          unit:movement.unit||"PCS",
+          sourceType:"credit_note",
+          sourceId:note._id,
+          sourceItemId:movement.sourceItemId||null,
+          movementType:"credit_note_reversal",
+          reference:String(note.creditNoteNumber||"Credit Note"),
+          note:"Previous Credit Note stock return reversed during edit",
+          activateTracking:true,
+          session
         });
-        if (Number(updated.quantity || 0) < -EPSILON) {
-          throw new Error("Editing this Credit Note would make stock negative.");
-        }
+        changedStock.push(result.movement);
       }
     }
 
@@ -1656,16 +1660,21 @@ router.put("/:id", auth, async (req, res) => {
     if (prepared.inventoryMovements.length) {
       const Product = require("../models/Product");
       for (const movement of prepared.inventoryMovements) {
-        const updated = await Product.findOneAndUpdate(
-          { _id: movement.productId, createdBy: userId },
-          { $inc: { quantity: Number(movement.quantity || 0) } },
-          { new: true, session }
-        );
-        if (!updated) throw new Error("A stock product no longer exists.");
-        changedStock.push({
-          productId: movement.productId,
-          delta: Number(movement.quantity || 0),
+        const result = await recordStockMovement({
+          createdBy:userId,
+          productId:movement.productId,
+          quantityChange:Number(movement.quantity||0),
+          unit:movement.unit||"PCS",
+          sourceType:"credit_note",
+          sourceId:note._id,
+          sourceItemId:movement.sourceItemId||null,
+          movementType:"credit_note_return",
+          reference:String(note.creditNoteNumber||"Credit Note"),
+          note:"Stock returned after Sales Return Credit Note edit",
+          activateTracking:true,
+          session
         });
+        changedStock.push(result.movement);
       }
     }
 
@@ -1826,16 +1835,11 @@ router.put("/:id", auth, async (req, res) => {
           console.error("Credit Note edit rollback could not restore invoice balances:", rollbackError);
         }
       }
-      for (const change of changedStock.reverse()) {
-        try {
-          await require("../models/Product").findOneAndUpdate(
-            { _id: change.productId, createdBy: userId },
-            { $inc: { quantity: -Number(change.delta || 0) } },
-            { new: true }
-          );
-        } catch (rollbackError) {
-          rollbackFailures.push({ step: "restore-stock", entityType: "product", entityId: String(change.productId || ""), message: String(rollbackError?.message || rollbackError) });
-          console.error("Credit Note edit rollback could not restore stock:", rollbackError);
+      if(changedStock.length){
+        try{await rollbackStockMovements(changedStock,userId);}
+        catch(rollbackError){
+          rollbackFailures.push({step:"restore-stock",entityType:"product",entityId:String(changedStock[0]?.productId||""),message:String(rollbackError?.message||rollbackError)});
+          console.error("Credit Note edit rollback could not restore stock:",rollbackError);
         }
       }
       for (const change of changedCustomerCredit.reverse()) {
@@ -1928,21 +1932,21 @@ async function cancelCreditNote(req, res) {
       }
 
       for (const movement of note.inventoryMovements) {
-        const updated = await Product.findOneAndUpdate(
-          { _id: movement.productId, createdBy: userId },
-          { $inc: { quantity: -Number(movement.quantity || 0) } },
-          { new: true, session }
-        );
-        if (!updated) throw new Error("A stock product no longer exists.");
-        changedStock.push({
-          productId: movement.productId,
-          delta: -Number(movement.quantity || 0),
+        const result = await recordStockMovement({
+          createdBy:userId,
+          productId:movement.productId,
+          quantityChange:-Number(movement.quantity||0),
+          unit:movement.unit||"PCS",
+          sourceType:"credit_note",
+          sourceId:note._id,
+          sourceItemId:movement.sourceItemId||null,
+          movementType:"credit_note_reversal",
+          reference:String(note.creditNoteNumber||"Credit Note"),
+          note:"Stock return reversed because Credit Note was cancelled",
+          activateTracking:true,
+          session
         });
-        if (Number(updated.quantity || 0) < -EPSILON) {
-          throw new Error(
-            `Cancelling this credit note would make product stock negative for ${movement.productId}.`
-          );
-        }
+        changedStock.push(result.movement);
       }
 
       note.inventoryStatus = "Not Applicable";
@@ -2092,16 +2096,11 @@ async function cancelCreditNote(req, res) {
           console.error("Credit Note cancellation rollback could not restore invoice balances:", rollbackError);
         }
       }
-      for (const change of changedStock.reverse()) {
-        try {
-          await require("../models/Product").findOneAndUpdate(
-            { _id: change.productId, createdBy: userId },
-            { $inc: { quantity: -Number(change.delta || 0) } },
-            { new: true }
-          );
-        } catch (rollbackError) {
-          rollbackFailures.push({ step: "restore-stock", entityType: "product", entityId: String(change.productId || ""), message: String(rollbackError?.message || rollbackError) });
-          console.error("Credit Note cancellation rollback could not restore stock:", rollbackError);
+      if(changedStock.length){
+        try{await rollbackStockMovements(changedStock,userId);}
+        catch(rollbackError){
+          rollbackFailures.push({step:"restore-stock",entityType:"product",entityId:String(changedStock[0]?.productId||""),message:String(rollbackError?.message||rollbackError)});
+          console.error("Credit Note cancellation rollback could not restore stock:",rollbackError);
         }
       }
       for (const change of changedCustomerCredit.reverse()) {

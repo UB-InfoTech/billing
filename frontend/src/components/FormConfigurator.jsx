@@ -36,6 +36,21 @@ const DATA_SOURCES=[
   {value:"orders",label:"Invoice records",fields:[
     ["_id","Invoice ID"],["orderNumber","Invoice No."],["companyName","Client"],["orderDate","Bill Date"],["totalAmount","Total"],["paidAmount","Paid"],["dueAmount","Due"],["status","Status"]
   ]},
+  {value:"suppliers",label:"Supplier records",fields:[
+    ["_id","Supplier ID"],["name","Supplier"],["legalName","Legal name"],["gstin","GSTIN"],
+    ["contact.phone","Phone"],["contact.email","Email"],["city","City"],["state","State"]
+  ]},
+  {value:"stockMovements",label:"Stock movement records",fields:[
+    ["_id","Movement ID"],["productName","Product"],["productCode","Product Code"],
+    ["movementType","Movement Type"],["sourceType","Source"],["reference","Reference"],
+    ["unit","Unit"],["quantityChange","Quantity Change"],["quantityBefore","Stock Before"],
+    ["quantityAfter","Stock After"],["note","Reason"],["createdAt","Date"]
+  ]},
+  {value:"purchases",label:"Purchase records",fields:[
+    ["_id","Purchase ID"],["purchaseNumber","Purchase No."],["supplierName","Supplier"],
+    ["supplierInvoiceNumber","Supplier invoice no."],["purchaseDate","Purchase date"],
+    ["grandTotal","Total"],["paidAmount","Paid"],["dueAmount","Due"],["status","Status"]
+  ]},
   {value:"expenses",label:"Expense records",fields:[
     ["_id","Expense ID"],["title","Title"],["category","Category"],["amount","Amount"],["vendor","Vendor"],["date","Date"]
   ]},

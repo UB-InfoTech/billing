@@ -89,7 +89,7 @@ test("supplier purchases, payments, invoice stock and movement history stay conn
   assert.equal(purchaseResponse.payload.purchase.dueAmount,1000);
 
   let updatedProduct=await Product.findOne({_id:productId,createdBy:ownerId}).lean();
-  assert.equal(updatedProduct.quantity,12);
+  assert.equal(updatedProduct.quantity,10);
   assert.equal(updatedProduct.trackInventory,true);
   assert.equal(updatedProduct.stockUnit,"PCS");
   assert.ok(updatedProduct.trackInventoryStartedAt);

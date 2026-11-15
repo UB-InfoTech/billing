@@ -804,6 +804,15 @@ function Clients() {
                       <button type="button" className="btn btn-light border" onClick={()=>navigate("/deals?clientId="+encodeURIComponent(viewingClient._id))}>
                         <i className="bi bi-kanban"></i><span>New opportunity</span>
                       </button>
+                      <button type="button" className="btn btn-light border" onClick={()=>navigate("/orders?action=new&clientId="+encodeURIComponent(viewingClient._id))}>
+                        <i className="bi bi-receipt"></i><span>New invoice</span>
+                      </button>
+                      <button type="button" className="btn btn-light border" onClick={()=>navigate("/add-expense?clientId="+encodeURIComponent(viewingClient._id))}>
+                        <i className="bi bi-wallet2"></i><span>Add expense</span>
+                      </button>
+                      <button type="button" className="btn btn-light border" onClick={()=>navigate("/calendar?action=new&clientId="+encodeURIComponent(viewingClient._id))}>
+                        <i className="bi bi-calendar-plus"></i><span>Schedule event</span>
+                      </button>
                       <button type="button" className="btn btn-light border" onClick={()=>openCustomerStatement(viewingClient)}>
                         <i className="bi bi-journal-text"></i><span>Statement</span>
                       </button>

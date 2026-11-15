@@ -183,9 +183,9 @@ export default function ClientFollowUps(){
  return (
   <div className="container-fluid py-4 client-followups-page">
    <BusinessPageHeader
-    eyebrow="CUSTOMER REMINDERS"
+    eyebrow="DAILY WORK"
     title="Follow-ups"
-    description="One simple list for customer and sales opportunity reminders."
+    description="One place to see who needs a call, message or next step."
     className="mb-3"
    >
     <button type="button" className="btn btn-primary client-followup-add" onClick={openComposer}>

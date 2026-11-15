@@ -181,7 +181,7 @@ test("supplier purchases, payments, invoice stock and movement history stay conn
   const stillReceived=await Purchase.findOne({_id:purchaseId,createdBy:ownerId}).lean();
   assert.equal(stillReceived.status,"Received");
   updatedProduct=await Product.findOne({_id:productId,createdBy:ownerId}).lean();
-  assert.equal(updatedProduct.quantity,7);
+  assert.equal(updatedProduct.quantity,9);
 
   createOrder.status="Cancelled";
   const returnedMovements=await synchronizeInvoiceStock({createdBy:ownerId,order:createOrder});

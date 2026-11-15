@@ -225,6 +225,10 @@ export default function Purchases(){
  };
 
  const cancelPurchase=async purchase=>{
+  if(Number(purchase.paidAmount||0)>0||(purchase.payments||[]).length>0){
+   setPageFeedback("This purchase has supplier payments recorded. A refund must be handled and reconciled before cancellation.");
+   return;
+  }
   if(!window.confirm("Cancel this purchase? The app will reverse only the stock that is still available. If any of these units have already been sold or used, cancellation will be blocked."))return;
   try{
    setPageFeedback("");
@@ -283,7 +287,7 @@ export default function Purchases(){
      actionColumn={{label:"Actions",locked:true,render:item=><div className="d-flex justify-content-end flex-wrap gap-1">
       <button type="button" className="btn btn-sm btn-light border" onClick={()=>openPurchase(item._id)} title="View purchase"><i className="bi bi-eye"/></button>
       {item.status==="Received"&&Number(item.dueAmount)>0&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>startPayment(item)} title="Record supplier payment"><i className="bi bi-cash-coin"/></button>}
-      {item.status==="Received"&&<button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>cancelPurchase(item)} title="Cancel purchase"><i className="bi bi-x-circle"/></button>}
+      {item.status==="Received"&&<button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>cancelPurchase(item)} disabled={Number(item.paidAmount||0)>0} title={Number(item.paidAmount||0)>0?"Supplier payments must be refunded and reconciled before cancellation":"Cancel purchase"}><i className="bi bi-x-circle"/></button>}
      </div>}}
     />
     {pagination.pages>1&&<div className="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
@@ -377,7 +381,7 @@ export default function Purchases(){
     </div>
     <footer className="purchase-modal-footer">
      {viewingPurchase.purchase.status==="Received"&&Number(viewingPurchase.purchase.dueAmount)>0&&<button type="button" className="btn btn-light border me-auto" onClick={()=>{const item=viewingPurchase.purchase;setViewingPurchase(null);startPayment(item);}}>Record payment</button>}
-     {viewingPurchase.purchase.status==="Received"&&<button type="button" className="btn btn-outline-danger" onClick={()=>{const item=viewingPurchase.purchase;setViewingPurchase(null);cancelPurchase(item);}}>Cancel purchase</button>}
+     {viewingPurchase.purchase.status==="Received"&&<button type="button" className="btn btn-outline-danger" disabled={Number(viewingPurchase.purchase.paidAmount||0)>0} title={Number(viewingPurchase.purchase.paidAmount||0)>0?"Supplier payments must be refunded and reconciled before cancellation":"Cancel purchase"} onClick={()=>{const item=viewingPurchase.purchase;setViewingPurchase(null);cancelPurchase(item);}}>Cancel purchase</button>}
      <button type="button" className="btn btn-light border" onClick={()=>setViewingPurchase(null)}>Close</button>
     </footer>
    </section>}

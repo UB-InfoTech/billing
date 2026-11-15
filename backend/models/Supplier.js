@@ -23,7 +23,7 @@ const supplierSchema=new mongoose.Schema({
 supplierSchema.index({createdBy:1,name:1});
 supplierSchema.index(
   {createdBy:1,gstin:1},
-  {unique:true,partialFilterExpression:{gstin:{$type:"string",$gt:""}},name:"createdBy_1_gstin_1"}
+  {unique:true,partialFilterExpression:{createdBy:{$type:"objectId"},gstin:{$type:"string",$gt:""}},name:"createdBy_1_gstin_1"}
 );
 
 module.exports=mongoose.model("Supplier",supplierSchema);

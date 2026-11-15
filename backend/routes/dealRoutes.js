@@ -158,7 +158,7 @@ router.post("/",auth,async(req,res)=>{
  try{
   const body=req.body||{};
   const title=cleanText(body.title,160,"Opportunity name");
-  if(!title)return res.status(400).json({message:"Give this opportunity a name.");
+  if(!title)return res.status(400).json({message:"Give this opportunity a name."});
   const value=body.value===undefined||body.value===""?0:Number(body.value);
   if(!Number.isFinite(value)||value<0||value>1000000000000)return res.status(400).json({message:"Enter a valid opportunity value."});
   const pipeline=await getPipeline(owner(req));

@@ -9,6 +9,13 @@ const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
 const money=value=>"₹"+Number(value||0).toLocaleString("en-IN",{maximumFractionDigits:0});
 const EMPTY_SUMMARY={openCount:0,pipelineValue:0,weightedValue:0,overdueCount:0,noNextActionCount:0};
 const SOURCE_OPTIONS=["Referral","WhatsApp","Website","Walk-in","Existing customer","Social media","Other"];
+const ACTIVITY_TYPES=[
+ {value:"note",label:"Note"},{value:"call",label:"Call"},{value:"whatsapp",label:"WhatsApp"},
+ {value:"email",label:"Email"},{value:"meeting",label:"Meeting"},{value:"quotation",label:"Quotation shared"},
+ {value:"follow_up",label:"Follow-up reminder"},{value:"task",label:"Task"}
+];
+const activityTypeLabel=type=>ACTIVITY_TYPES.find(item=>item.value===type)?.label||"Activity";
+const formatActivityDate=value=>value?new Date(value).toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"}):"Date not set";
 const STATUS_FILTERS=[
  {key:"open",label:"Open opportunities"},
  {key:"won",label:"Won"},
@@ -74,6 +81,13 @@ export default function Deals(){
  const [lossReason,setLossReason]=useState("");
  const [lossNotes,setLossNotes]=useState("");
  const [conversionSaving,setConversionSaving]=useState(false);
+ const [dealActivities,setDealActivities]=useState([]);
+ const [activitiesLoading,setActivitiesLoading]=useState(false);
+ const [activitySaving,setActivitySaving]=useState(false);
+ const [activityType,setActivityType]=useState("note");
+ const [activitySubject,setActivitySubject]=useState("");
+ const [activityDescription,setActivityDescription]=useState("");
+ const [activityDueAt,setActivityDueAt]=useState("");
 
  const load=useCallback(async()=>{
   setLoading(true);setError("");
@@ -89,6 +103,17 @@ export default function Deals(){
   }catch(loadError){
    setError(loadError.response?.data?.message||"The sales pipeline could not be loaded. Please try again.");
   }finally{setLoading(false);}
+ },[]);
+
+ const loadDealActivities=useCallback(async dealId=>{
+  if(!dealId){setDealActivities([]);return;}
+  setActivitiesLoading(true);
+  try{
+   const response=await axios.get(API+"/api/deals/"+dealId+"/activities",auth());
+   setDealActivities(Array.isArray(response.data?.activities)?response.data.activities:[]);
+  }catch(loadError){
+   setError(loadError.response?.data?.message||"Opportunity activity could not be loaded.");
+  }finally{setActivitiesLoading(false);}
  },[]);
 
  const loadClients=useCallback(async()=>{
@@ -108,6 +133,7 @@ export default function Deals(){
   const firstStage=pipeline.stages.find(stage=>stage.outcome==="open")?.key||"new-enquiry";
   const client=clients.find(item=>String(item._id)===String(clientId));
   setEditingId("");
+  setDealActivities([]);setActivitySubject("");setActivityDescription("");setActivityDueAt("");setActivityType("note");
   setDraft({
    ...emptyDraft(firstStage),
    clientId:client?String(client._id):clientId||"",
@@ -135,7 +161,9 @@ export default function Deals(){
   });
   setComposerOpen(true);
   setError("");
+  setActivitySubject("");setActivityDescription("");setActivityDueAt("");setActivityType("note");
   loadClients();
+  loadDealActivities(String(deal._id));
  };
 
  useEffect(()=>{
@@ -147,6 +175,17 @@ export default function Deals(){
   setSearchParams(params,{replace:true});
   openNewDeal(clientId||"");
  },[searchParams,setSearchParams,openNewDeal]);
+
+ useEffect(()=>{
+  const dealId=searchParams.get("dealId");
+  if(!dealId||loading)return;
+  const deal=deals.find(item=>String(item._id)===dealId);
+  if(!deal)return;
+  const params=new URLSearchParams(searchParams);
+  params.delete("dealId");
+  setSearchParams(params,{replace:true});
+  openEditDeal(deal);
+ },[deals,loading,searchParams,setSearchParams]);
 
  const filteredDeals=useMemo(()=>{
   const needle=search.trim().toLowerCase();
@@ -176,7 +215,10 @@ export default function Deals(){
  },[pipeline.stages,statusFilter]);
 
  const updateDraft=(key,value)=>setDraft(previous=>({...previous,[key]:value}));
- const closeComposer=()=>{setComposerOpen(false);setEditingId("");setError("");};
+ const closeComposer=()=>{
+  setComposerOpen(false);setEditingId("");setError("");
+  setDealActivities([]);setActivitySubject("");setActivityDescription("");setActivityDueAt("");setActivityType("note");
+ };
  const onCustomerChange=value=>{
   const client=clients.find(item=>String(item._id)===value);
   setDraft(previous=>({
@@ -224,6 +266,46 @@ export default function Deals(){
   }catch(saveError){
    setError(saveError.response?.data?.message||"The opportunity could not be saved.");
   }finally{setSaving(false);}
+ };
+
+ const saveDealActivity=async()=>{
+  if(!editingId)return;
+  if(!activitySubject.trim()){setError("Add a short title for this activity.");return;}
+  const isReminder=["task","follow_up"].includes(activityType);
+  setActivitySaving(true);setError("");
+  try{
+   await axios.post(API+"/api/deals/"+editingId+"/activities",{
+    type:activityType,subject:activitySubject.trim(),description:activityDescription.trim(),
+    ...(isReminder&&activityDueAt?{dueAt:new Date(activityDueAt).toISOString()}: {})
+   },auth());
+   setActivitySubject("");setActivityDescription("");setActivityDueAt("");setActivityType("note");
+   await Promise.all([loadDealActivities(editingId),load()]);
+   setMessage(isReminder?"Follow-up added to your reminders.":"Activity added to the opportunity.");
+  }catch(saveError){
+   setError(saveError.response?.data?.message||"The activity could not be saved.");
+  }finally{setActivitySaving(false);}
+ };
+
+ const updateDealActivityStatus=async(activity,status)=>{
+  if(!editingId)return;
+  setError("");
+  try{
+   await axios.patch(API+"/api/deals/"+editingId+"/activities/"+activity._id,{status},auth());
+   await Promise.all([loadDealActivities(editingId),load()]);
+  }catch(updateError){
+   setError(updateError.response?.data?.message||"The reminder could not be updated.");
+  }
+ };
+
+ const deleteDealNote=async activity=>{
+  if(!editingId)return;
+  setError("");
+  try{
+   await axios.delete(API+"/api/deals/"+editingId+"/activities/"+activity._id,auth());
+   await loadDealActivities(editingId);
+  }catch(deleteError){
+   setError(deleteError.response?.data?.message||"The note could not be deleted.");
+  }
  };
 
  const moveDeal=async(deal,stageKey,reason="",notes="")=>{
@@ -452,6 +534,31 @@ export default function Deals(){
           <div className="span-2"><label className="form-label" htmlFor="deal-notes">Extra notes <span className="optional-text">(optional)</span></label><textarea id="deal-notes" className="form-control" rows={3} maxLength={5000} value={draft.notes} onChange={event=>updateDraft("notes",event.target.value)} placeholder="Requirements, quantity, product details or anything important..."/></div>
          </div>
         </div>
+
+        {editingId&&<section className="deals-form-section deals-activity-section">
+         <div className="deals-activity-heading"><div><h3>Activity & follow-ups</h3><p>Keep a record of calls, messages, meetings and the next things to do.</p></div><span>{dealActivities.length} {dealActivities.length===1?"entry":"entries"}</span></div>
+         <div className="deals-activity-composer">
+          <div className="deals-activity-compose-top">
+           <div><label className="form-label" htmlFor="deal-activity-type">What happened?</label><select id="deal-activity-type" className="form-select" value={activityType} onChange={event=>setActivityType(event.target.value)}>{ACTIVITY_TYPES.map(item=><option key={item.value} value={item.value}>{item.label}</option>)}</select></div>
+           {["task","follow_up"].includes(activityType)&&<div><label className="form-label" htmlFor="deal-activity-due">Reminder date</label><input id="deal-activity-due" className="form-control" type="datetime-local" value={activityDueAt} onChange={event=>setActivityDueAt(event.target.value)}/></div>}
+          </div>
+          <div className="mt-2"><label className="form-label" htmlFor="deal-activity-subject">Short title</label><input id="deal-activity-subject" className="form-control" value={activitySubject} onChange={event=>setActivitySubject(event.target.value)} onKeyDown={event=>{if(event.key==="Enter")event.preventDefault();}} maxLength={160} placeholder={activityType==="call"?"Example: Discussed sample requirements":activityType==="whatsapp"?"Example: Shared catalogue on WhatsApp":"Example: Customer asked for revised quotation"}/></div>
+          <div className="mt-2"><label className="form-label" htmlFor="deal-activity-description">Details <span className="optional-text">(optional)</span></label><textarea id="deal-activity-description" className="form-control" rows={2} maxLength={4000} value={activityDescription} onChange={event=>setActivityDescription(event.target.value)} placeholder="Add useful details for the next conversation..."/></div>
+          <div className="deals-activity-submit"><small>{["task","follow_up"].includes(activityType)?"This will also appear in your Follow-ups list.":"Saved in this opportunity's activity history."}</small><button type="button" className="btn btn-primary" onClick={saveDealActivity} disabled={activitySaving||!activitySubject.trim()}>{activitySaving?"Saving...":"Add to history"}</button></div>
+         </div>
+         <div className="deals-activity-list">
+          {activitiesLoading?<div className="deals-activity-empty"><span className="spinner-border spinner-border-sm me-2"/>Loading activity...</div>
+           :!dealActivities.length?<div className="deals-activity-empty">No activity yet. Add the first call, note or follow-up above.</div>
+           :dealActivities.map(activity=><article className={"deals-activity-item "+(["task","follow_up"].includes(activity.type)&&activity.status==="open"&&activity.dueAt&&new Date(activity.dueAt)<new Date()?"is-overdue":"")} key={activity._id}>
+             <span className={"deals-activity-icon activity-"+activity.type}><i className={"bi "+(activity.type==="call"?"bi-telephone":activity.type==="whatsapp"?"bi-whatsapp":activity.type==="email"?"bi-envelope":activity.type==="meeting"?"bi-calendar-event":activity.type==="quotation"?"bi-file-earmark-text":activity.type==="note"?"bi-sticky":"bi-check2-square")}/></span>
+             <div className="deals-activity-copy"><strong>{activity.subject}</strong><span>{activityTypeLabel(activity.type)} · {formatActivityDate(activity.occurredAt)}</span>{activity.description&&<p>{activity.description}</p>}{activity.dueAt&&<small className="deals-activity-due">Due {formatActivityDate(activity.dueAt)}</small>}</div>
+             <div className="deals-activity-actions">
+              {["task","follow_up"].includes(activity.type)&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>updateDealActivityStatus(activity,activity.status==="completed"?"open":"completed")}>{activity.status==="completed"?"Reopen":"Mark done"}</button>}
+              {activity.type==="note"&&<button type="button" className="btn btn-sm btn-light border" aria-label="Delete note" onClick={()=>deleteDealNote(activity)}><i className="bi bi-trash"/></button>}
+             </div>
+            </article>)}
+         </div>
+        </section>}
 
         {draft.stageKey==="lost"&&<div className="deals-form-section deals-lost-fields">
          <h3>Why was this opportunity lost?</h3>

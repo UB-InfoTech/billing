@@ -5,6 +5,8 @@ const Client=require("../models/Client");
 const Order=require("../models/Order2");
 const CreditNote=require("../models/CreditNote");
 const ClientActivity=require("../models/ClientActivity");
+const Deal=require("../models/Deal");
+const DealActivity=require("../models/DealActivity");
 const {buildClientActivityTimeline}=require("../utils/clientActivityTimeline");
 const Expense=require("../models/Expense");
 const CalendarEvent=require("../models/Calendar");
@@ -110,13 +112,20 @@ router.get("/follow-ups",auth,async(req,res)=>{
     const start=todayStart||new Date(now.getFullYear(),now.getMonth(),now.getDate());
     const end=tomorrowStart||new Date(start.getTime()+24*60*60*1000);
     const base={createdBy:ownerId,type:{$in:["task","follow_up"]}};
-    if(status!=="all")base.status=status;
+    const dealBase={createdBy:ownerId,type:{$in:["task","follow_up"]}};
+    if(status!=="all"){
+      base.status=status;
+      dealBase.status=status;
+    }
     if(bucket!=="all"){
       if(status==="completed")return res.status(400).json({message:"Date filters are available for open follow-ups."});
-      if(bucket==="overdue")base.dueAt={$ne:null,$lt:now};
-      if(bucket==="today")base.dueAt={$gte:now,$lt:end};
-      if(bucket==="upcoming")base.dueAt={$gte:end};
-      if(bucket==="no_date")base.dueAt=null;
+      let dueFilter;
+      if(bucket==="overdue")dueFilter={$ne:null,$lt:now};
+      if(bucket==="today")dueFilter={$gte:now,$lt:end};
+      if(bucket==="upcoming")dueFilter={$gte:end};
+      if(bucket==="no_date")dueFilter=null;
+      base.dueAt=dueFilter;
+      dealBase.dueAt=dueFilter;
     }
     const search=String(req.query.search||"").trim().slice(0,100);
     if(search){
@@ -125,44 +134,109 @@ router.get("/follow-ups",auth,async(req,res)=>{
         createdBy:owner(req),
         $or:[{companyName:rx},{name:rx},{phone:rx},{email:rx}]
       }).select("_id").limit(500).lean();
-      const alternatives=[{subject:rx},{description:rx}];
-      if(matchingClients.length)alternatives.push({clientId:{$in:matchingClients.map(client=>client._id)}});
-      base.$or=alternatives;
+      const matchingDeals=await Deal.find({
+        createdBy:owner(req),
+        $or:[
+          {title:rx},{contactName:rx},{contactPhone:rx},{contactEmail:rx},{source:rx},
+          ...(matchingClients.length?[{clientId:{$in:matchingClients.map(client=>client._id)}}]:[])
+        ]
+      }).select("_id").limit(500).lean();
+      const clientMatches=[{subject:rx},{description:rx}];
+      const dealMatches=[{subject:rx},{description:rx}];
+      if(matchingClients.length)clientMatches.push({clientId:{$in:matchingClients.map(client=>client._id)}});
+      if(matchingDeals.length)dealMatches.push({dealId:{$in:matchingDeals.map(deal=>deal._id)}});
+      base.$or=clientMatches;
+      dealBase.$or=dealMatches;
     }
-    const [total,records,openCount,overdueCount,todayCount,upcomingCount,noDateCount,completedCount]=await Promise.all([
+
+    const countSummary=async Model=>{
+      const result=await Model.aggregate([
+        {$match:{createdBy:ownerId,type:{$in:["task","follow_up"]}}},
+        {$facet:{
+          open:[{$match:{status:"open"}},{$count:"count"}],
+          overdue:[{$match:{status:"open",dueAt:{$ne:null,$lt:now}}},{$count:"count"}],
+          dueToday:[{$match:{status:"open",dueAt:{$gte:now,$lt:end}}},{$count:"count"}],
+          upcoming:[{$match:{status:"open",dueAt:{$gte:end}}},{$count:"count"}],
+          noDate:[{$match:{status:"open",dueAt:null}},{$count:"count"}],
+          completed:[{$match:{status:"completed"}},{$count:"count"}]
+        }}
+      ]);
+      const row=result[0]||{};
+      const count=key=>Number(row[key]?.[0]?.count||0);
+      return {open:count("open"),overdue:count("overdue"),dueToday:count("dueToday"),upcoming:count("upcoming"),noDate:count("noDate"),completed:count("completed")};
+    };
+    const [clientTotal,dealTotal,records,clientSummary,dealSummary]=await Promise.all([
       ClientActivity.countDocuments(base),
+      DealActivity.countDocuments(dealBase),
       ClientActivity.aggregate([
         {$match:base},
+        {$project:{
+          _id:1,type:1,subject:1,description:1,occurredAt:1,dueAt:1,status:1,
+          completedAt:1,createdAt:1,updatedAt:1,clientId:1,
+          dealId:{$literal:null},recordType:{$literal:"customer"}
+        }},
+        {$unionWith:{
+          coll:DealActivity.collection.name,
+          pipeline:[
+            {$match:dealBase},
+            {$project:{
+              _id:1,type:1,subject:1,description:1,occurredAt:1,dueAt:1,status:1,
+              completedAt:1,createdAt:1,updatedAt:1,dealId:1,
+              clientId:{$literal:null},recordType:{$literal:"deal"}
+            }}
+          ]
+        }},
         {$addFields:{dueOrder:{$cond:[{$ifNull:["$dueAt",false]},0,1]}}},
-        {$sort:{dueOrder:1,dueAt:1,createdAt:-1}},
+        {$sort:{dueOrder:1,dueAt:1,createdAt:-1,_id:-1}},
         {$skip:(page-1)*limit},
         {$limit:limit},
         {$project:{dueOrder:0}}
       ]),
-      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open"}),
-      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:{$ne:null,$lt:now}}),
-      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:{$gte:now,$lt:end}}),
-      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:{$gte:end}}),
-      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"open",dueAt:null}),
-      ClientActivity.countDocuments({createdBy:ownerId,type:{$in:["task","follow_up"]},status:"completed"})
+      countSummary(ClientActivity),
+      countSummary(DealActivity)
     ]);
-    const linkedClientIds=[...new Set(records.map(item=>String(item.clientId)))];
-    const linkedClients=await Client.find({createdBy:owner(req),_id:{$in:linkedClientIds}})
-      .select("companyName name phone email accountStatus").lean();
+    const clientIds=records.filter(item=>item.recordType==="customer").map(item=>String(item.clientId));
+    const dealIds=records.filter(item=>item.recordType==="deal").map(item=>String(item.dealId));
+    const [linkedClients,linkedDeals]=await Promise.all([
+      Client.find({createdBy:owner(req),_id:{$in:clientIds}})
+        .select("companyName name phone email accountStatus").lean(),
+      Deal.find({createdBy:owner(req),_id:{$in:dealIds}})
+        .select("title contactName contactPhone contactEmail clientId stageKey status")
+        .populate("clientId","companyName name phone email").lean()
+    ]);
     const linkedClientMap=new Map(linkedClients.map(client=>[String(client._id),client]));
-    const activities=records.filter(item=>linkedClientMap.has(String(item.clientId))).map(item=>({
-      ...item,
-      clientId:String(item.clientId),
-      client:linkedClientMap.get(String(item.clientId))
-    }));
+    const linkedDealMap=new Map(linkedDeals.map(deal=>[String(deal._id),deal]));
+    const activities=records.flatMap(item=>{
+      if(item.recordType==="deal"){
+        const deal=linkedDealMap.get(String(item.dealId));
+        if(!deal)return [];
+        const linkedCustomer=deal.clientId&&typeof deal.clientId==="object"?deal.clientId:null;
+        return [{
+          ...item,dealId:String(item.dealId),
+          deal:{
+            _id:String(deal._id),title:deal.title,contactName:deal.contactName,
+            contactPhone:deal.contactPhone,stageKey:deal.stageKey,status:deal.status,
+            client:linkedCustomer
+          }
+        }];
+      }
+      const client=linkedClientMap.get(String(item.clientId));
+      if(!client)return [];
+      return [{...item,clientId:String(item.clientId),client}];
+    });
+    const summary=Object.keys(clientSummary).reduce((result,key)=>{
+      result[key]=clientSummary[key]+dealSummary[key];
+      return result;
+    },{});
+    const total=clientTotal+dealTotal;
     return res.json({
       activities,
       pagination:{page,limit,total,pages:Math.max(1,Math.ceil(total/limit))},
-      summary:{open:openCount,overdue:overdueCount,dueToday:todayCount,upcoming:upcomingCount,noDate:noDateCount,completed:completedCount}
+      summary
     });
   }catch(error){
-    console.error("Client follow-up list error:",error);
-    return res.status(500).json({message:"Unable to load customer follow-ups."});
+    console.error("CRM follow-up list error:",error);
+    return res.status(500).json({message:"Unable to load customer and opportunity follow-ups."});
   }
 });
 

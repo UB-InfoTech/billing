@@ -8,6 +8,7 @@ process.env.JWT_SECRET ||= "sales-deals-integration-tests-only-secret";
 const app=require("../server");
 const Deal=require("../models/Deal");
 const DealActivity=require("../models/DealActivity");
+const ClientActivity=require("../models/ClientActivity");
 const SalesPipeline=require("../models/SalesPipeline");
 const Client=require("../models/Client");
 
@@ -19,7 +20,7 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
  let server,ownerId,otherOwnerId,clientId;
  try{
   await mongoose.connect(mongoUri,{serverSelectionTimeoutMS:10000});
-  await Promise.all([Deal.init(),DealActivity.init(),SalesPipeline.init(),Client.init()]);
+  await Promise.all([Deal.init(),DealActivity.init(),ClientActivity.init(),SalesPipeline.init(),Client.init()]);
   ownerId=new mongoose.Types.ObjectId();
   otherOwnerId=new mongoose.Types.ObjectId();
   const ownerToken=jwt.sign({user:{id:String(ownerId)}},process.env.JWT_SECRET);
@@ -88,6 +89,35 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
   assert.equal(completeReminder.payload.status,"completed");
   const completedFollowUps=await request("/clients/follow-ups?status=completed&bucket=all&page=1&limit=20");
   assert.ok(completedFollowUps.payload.activities.some(item=>item.recordType==="deal"&&String(item._id)===String(reminder.payload._id)));
+
+  const overdueCustomerReminder=await ClientActivity.create({
+   clientId,createdBy:ownerId,type:"follow_up",subject:"Call customer about revised quantity",
+   description:"Customer requested a confirmation.",occurredAt:new Date(),
+   dueAt:new Date(Date.now()-60*60*1000),status:"open"
+  });
+  const todayDealReminder=await request("/deals/"+dealId+"/activities",{
+   method:"POST",body:{type:"follow_up",subject:"Confirm sample delivery",dueAt:new Date(Date.now()+60*60*1000).toISOString()}
+  });
+  assert.equal(todayDealReminder.response.status,201,JSON.stringify(todayDealReminder.payload));
+  const futureDealReminder=await request("/deals/"+dealId+"/activities",{
+   method:"POST",body:{type:"task",subject:"Prepare next month's offer",dueAt:new Date(Date.now()+48*60*60*1000).toISOString()}
+  });
+  assert.equal(futureDealReminder.response.status,201,JSON.stringify(futureDealReminder.payload));
+  const workdayEnd=new Date(Date.now()+2*60*60*1000).toISOString();
+  const myDay=await request("/clients/follow-ups?status=open&bucket=my_day&page=1&limit=20&tomorrowStart="+encodeURIComponent(workdayEnd));
+  assert.equal(myDay.response.status,200,JSON.stringify(myDay.payload));
+  assert.equal(myDay.payload.pagination.total,2);
+  assert.equal(myDay.payload.summary.overdue,1);
+  assert.equal(myDay.payload.summary.dueToday,1);
+  assert.equal(myDay.payload.activities[0].recordType,"customer");
+  assert.equal(String(myDay.payload.activities[0]._id),String(overdueCustomerReminder._id));
+  assert.equal(myDay.payload.activities[1].recordType,"deal");
+  assert.equal(String(myDay.payload.activities[1]._id),String(todayDealReminder.payload._id));
+  assert.ok(!myDay.payload.activities.some(item=>String(item._id)===String(futureDealReminder.payload._id)));
+  const hiddenMyDay=await request("/clients/follow-ups?status=open&bucket=my_day&page=1&limit=20",{token:otherToken});
+  assert.equal(hiddenMyDay.response.status,200);
+  assert.equal(hiddenMyDay.payload.pagination.total,0);
+  assert.equal(hiddenMyDay.payload.summary.open,0);
 
   const linked=await request("/deals",{
    method:"POST",body:{title:"Repeat order",clientId:String(clientId),value:25000}
@@ -171,6 +201,7 @@ test("sales deal APIs keep opportunities separate and enforce business ownership
   if(server)await new Promise(resolve=>server.close(resolve));
   if(ownerId){
    await DealActivity.deleteMany({createdBy:ownerId});
+   await ClientActivity.deleteMany({createdBy:ownerId});
    await Deal.deleteMany({createdBy:ownerId});
    await SalesPipeline.deleteMany({createdBy:ownerId});
    await Client.deleteMany({createdBy:ownerId});

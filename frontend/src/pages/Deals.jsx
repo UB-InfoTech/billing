@@ -104,7 +104,7 @@ export default function Deals(){
 
  useEffect(()=>{load();},[load]);
 
- const openNewDeal=(clientId="")=>{
+ const openNewDeal=useCallback((clientId="")=>{
   const firstStage=pipeline.stages.find(stage=>stage.outcome==="open")?.key||"new-enquiry";
   const client=clients.find(item=>String(item._id)===String(clientId));
   setEditingId("");
@@ -119,7 +119,7 @@ export default function Deals(){
   setError("");
   setMessage("");
   loadClients();
- };
+ },[pipeline,clients,loadClients]);
 
  const openEditDeal=deal=>{
   const clientId=deal.clientId&&typeof deal.clientId==="object"?deal.clientId._id:deal.clientId;
@@ -146,7 +146,7 @@ export default function Deals(){
   params.delete("clientId");params.delete("action");
   setSearchParams(params,{replace:true});
   openNewDeal(clientId||"");
- },[searchParams,setSearchParams]);
+ },[searchParams,setSearchParams,openNewDeal]);
 
  const filteredDeals=useMemo(()=>{
   const needle=search.trim().toLowerCase();
@@ -205,22 +205,18 @@ export default function Deals(){
    source:draft.source.trim(),notes:draft.notes.trim()
   };
   try{
-   let saved;
    if(editingId){
-    const response=await axios.patch(API+"/api/deals/"+editingId,payload,auth());
-    saved=response.data;
+    await axios.patch(API+"/api/deals/"+editingId,payload,auth());
     const existing=deals.find(item=>String(item._id)===editingId);
     const stageChanged=draft.stageKey!==existing?.stageKey;
     const needsLostReason=draft.stageKey==="lost";
     if(stageChanged||needsLostReason){
-     const moved=await axios.patch(API+"/api/deals/"+editingId+"/stage",{
+     await axios.patch(API+"/api/deals/"+editingId+"/stage",{
       stageKey:draft.stageKey,lostReason:draft.lostReason,lostNotes:draft.lostNotes
      },auth());
-     saved=moved.data;
     }
    }else{
-    const response=await axios.post(API+"/api/deals",payload,auth());
-    saved=response.data;
+    await axios.post(API+"/api/deals",payload,auth());
    }
    setComposerOpen(false);setEditingId("");
    setMessage(editingId?"Opportunity updated.":"Opportunity added to the pipeline.");
@@ -306,8 +302,6 @@ export default function Deals(){
   }finally{setConversionSaving(false);}
  };
 
- const openStages=pipeline.stages.filter(stage=>stage.outcome==="open");
- const formatStageValue=stageKey=>filteredDeals.filter(deal=>deal.stageKey===stageKey).reduce((sum,deal)=>sum+Number(deal.value||0),0);
  const now=new Date();
  const selectedDeal=deals.find(deal=>String(deal._id)===editingId);
  const showProspectFields=!draft.clientId;

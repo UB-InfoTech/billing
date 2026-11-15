@@ -779,6 +779,26 @@ test("invoice, payment, customer credit and Credit Note lifecycle stay consisten
     assert.equal(clientAfterPayment.paymentHistory.length, paymentHistoryCountBeforePayment + 1, "Customer payment history must include the new payment.");
     assert.ok(clientAfterPayment.payments.some(id => String(id) === String(orderId)), "Customer invoice links must remain available.");
 
+    // The customer billing tab and activity timeline must expose the exact
+    // payment that was just recorded, including its receipt identity.
+    const customerBillingHistory = await request(`/clients/${clientId}/transactions`);
+    assert.equal(customerBillingHistory.response.status, 200, JSON.stringify(customerBillingHistory.payload));
+    const customerPaymentRow = customerBillingHistory.payload.find(transaction =>
+      transaction.type === "Payment" && String(transaction.paymentId) === String(paymentId)
+    );
+    assert.ok(customerPaymentRow, "Customer billing history must include the recorded payment.");
+    assert.equal(String(customerPaymentRow.orderId), String(orderId));
+    assert.equal(round2(customerPaymentRow.amount), 60);
+
+    const customerActivityTimeline = await request(`/clients/${clientId}/activities`);
+    assert.equal(customerActivityTimeline.response.status, 200, JSON.stringify(customerActivityTimeline.payload));
+    assert.ok(customerActivityTimeline.payload.activities.some(activity =>
+      activity.source === "payment"
+      && String(activity.sourceId) === String(orderId)
+      && activity.type === "payment_added"
+      && round2(activity.amount) === 60
+    ), "The customer timeline must include the payment audit event.");
+
     const paymentReceipt = await request(`/order/${orderId}/payments/${paymentId}/invoice`);
     assert.equal(paymentReceipt.response.status, 200, String(paymentReceipt.payload).slice(0, 500));
     assert.ok(paymentReceipt.payload.includes("60.00"), "Receipt must show the recorded payment amount.");

@@ -16,9 +16,11 @@ export default function ClientBillingPanel({clientId,apiBase}){
  const [filter,setFilter]=useState("all");
  const [loading,setLoading]=useState(true);
  const [error,setError]=useState("");
+ const [receiptError,setReceiptError]=useState("");
+ const [receiptLoadingId,setReceiptLoadingId]=useState("");
  const load=useCallback(async()=>{
   if(!clientId)return;
-  setLoading(true);setError("");
+  setLoading(true);setError("");setReceiptError("");
   try{
    const response=await axios.get(apiBase+"/api/clients/"+clientId+"/transactions",{
     headers:{"x-auth-token":localStorage.getItem("token")||""}
@@ -40,6 +42,42 @@ export default function ClientBillingPanel({clientId,apiBase}){
   else if(item.orderId)navigate("/orders?openInvoice="+encodeURIComponent(item.orderId));
  };
 
+ const printReceipt=async item=>{
+  if(item.type!=="Payment"||!item.orderId||!item.paymentId)return;
+  const receiptKey=String(item.orderId)+":"+String(item.paymentId);
+  if(receiptLoadingId===receiptKey)return;
+  setReceiptError("");
+  // Open the window from the click itself so the browser does not block it
+  // while the authenticated receipt request is in progress.
+  const printWindow=window.open("","_blank");
+  if(!printWindow){
+   setReceiptError("Allow pop-ups to open this payment receipt, then try again.");
+   return;
+  }
+  setReceiptLoadingId(receiptKey);
+  printWindow.document.open();
+  printWindow.document.write("<p style='font-family:Arial,sans-serif;padding:24px'>Preparing payment receipt...</p>");
+  printWindow.document.close();
+  try{
+   const response=await axios.get(
+    apiBase+"/api/order/"+encodeURIComponent(item.orderId)+"/payments/"+encodeURIComponent(item.paymentId)+"/invoice",
+    {
+     headers:{"x-auth-token":localStorage.getItem("token")||""},
+     responseType:"text"
+    }
+   );
+   printWindow.document.open();
+   printWindow.document.write(response.data);
+   printWindow.document.close();
+   printWindow.focus();
+  }catch(receiptLoadError){
+   printWindow.close();
+   setReceiptError(receiptLoadError.response?.data?.message||"The payment receipt could not be opened. Please try again.");
+  }finally{
+   setReceiptLoadingId("");
+  }
+ };
+
  return (
   <section className="client-billing-panel" aria-label="Customer billing history">
    <header className="client-billing-heading">
@@ -52,6 +90,7 @@ export default function ClientBillingPanel({clientId,apiBase}){
     <div><span>Credit notes</span><strong>{credits.length.toLocaleString("en-IN")}</strong></div>
    </div>
    {error&&<div className="alert alert-warning py-2 mx-3 mt-3 mb-0" role="alert">{error}</div>}
+   {receiptError&&<div className="alert alert-warning py-2 mx-3 mt-3 mb-0" role="alert">{receiptError}</div>}
    <div className="client-billing-toolbar">
     <div className="client-billing-filters" role="group" aria-label="Filter billing history">
      {FILTERS.map(item=><button type="button" key={item.key} className={filter===item.key?"is-active":""} onClick={()=>setFilter(item.key)}>{item.label}</button>)}
@@ -71,6 +110,7 @@ export default function ClientBillingPanel({clientId,apiBase}){
          :[item.status,item.orderNumber].filter(Boolean).join(" · ")||"Credit note";
        const amount=Number(item.amount||0);
        const canOpen=Boolean(item.orderId||item.creditNoteId);
+       const receiptKey=String(item.orderId||"")+":"+String(item.paymentId||"");
        return (
         <article className="client-billing-row" key={String(item.type)+"-"+String(item.paymentId||item.creditNoteId||item.orderId||index)+"-"+index}>
          <span className={"client-billing-icon "+(item.type==="Payment"?"is-payment":item.type==="Credit Note"?"is-credit":"")}><i className={"bi "+(item.type==="Payment"?"bi-cash-coin":item.type==="Credit Note"?"bi-file-earmark-minus":"bi-receipt")}></i></span>
@@ -78,7 +118,19 @@ export default function ClientBillingPanel({clientId,apiBase}){
           <div className="client-billing-meta"><span>{item.type}</span><time>{formatDate(date)}</time></div>
           <strong>{reference||item.type}</strong><small>{detail}</small>
          </div>
-         <div className="client-billing-amount"><strong>{money(amount)}</strong>{canOpen&&<button type="button" onClick={()=>openRecord(item)}>Open <i className="bi bi-arrow-up-right"></i></button>}</div>
+         <div className="client-billing-amount">
+          <strong>{money(amount)}</strong>
+          <div className="client-billing-actions">
+           {canOpen&&<button type="button" onClick={()=>openRecord(item)}>Open <i className="bi bi-arrow-up-right"></i></button>}
+           {item.type==="Payment"&&item.orderId&&item.paymentId&&(
+            <button type="button" onClick={()=>printReceipt(item)} disabled={receiptLoadingId===receiptKey} aria-label={"Print receipt for "+(item.orderNumber||"payment")}>
+             {receiptLoadingId===receiptKey
+              ?<><span className="spinner-border spinner-border-sm" aria-hidden="true"></span>Opening</>
+              :<><i className="bi bi-printer" aria-hidden="true"></i>Receipt</>}
+            </button>
+           )}
+          </div>
+         </div>
         </article>
        );
       })}

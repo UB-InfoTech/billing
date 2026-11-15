@@ -27,9 +27,13 @@
 .client-billing-copy small{color:#718197;font-size:11px;overflow-wrap:anywhere}
 .client-billing-amount{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .client-billing-amount>strong{color:#26374c;font-size:13px;font-weight:750;font-variant-numeric:tabular-nums;white-space:nowrap}
+.client-billing-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}
 .client-billing-amount button{display:inline-flex;align-items:center;gap:4px;padding:0;border:0;background:transparent;color:#2463b0;font-size:10px;font-weight:700}
+.client-billing-amount button:hover{color:#174b8b;text-decoration:underline}
+.client-billing-amount button:focus-visible{outline:2px solid #2463b0;outline-offset:3px;border-radius:3px}
 .client-billing-state,.client-billing-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:210px;padding:28px 14px;text-align:center;color:#718197;font-size:12px}
 .client-billing-empty>span{display:grid;place-items:center;width:46px;height:46px;margin-bottom:11px;border-radius:13px;background:#f0f4f9;color:#6c7f96;font-size:19px}
 .client-billing-empty strong{color:#2d4057;font-size:14px}
 .client-billing-empty p{max-width:390px;margin:6px 0 0;color:#7a899a;font-size:12px;line-height:1.55}
-@media(max-width:600px){.client-billing-heading{align-items:flex-start;padding:15px;flex-direction:column}.client-billing-summary>div{padding:11px 10px}.client-billing-summary strong{font-size:13px}.client-billing-toolbar{padding:12px 14px}.client-billing-list{padding:0 14px}.client-billing-row{grid-template-columns:30px minmax(0,1fr);gap:9px}.client-billing-icon{width:30px;height:30px}.client-billing-amount{grid-column:2;align-items:flex-start;flex-direction:row;justify-content:space-between}}
+@media(max-width:600px){.client-billing-heading{align-items:flex-start;padding:15px;flex-direction:column}.client-billing-summary>div{padding:11px 10px}.client-billing-summary strong{font-size:13px}.client-billing-toolbar{padding:12px 14px}.client-billing-list{padding:0 14px}.client-billing-row{grid-template-columns:30px minmax(0,1fr);gap:9px}.client-billing-icon{width:30px;height:30px}.client-billing-amount{grid-column:2;align-items:flex-start;flex-direction:row;justify-content:space-between;gap:8px}
+.client-billing-actions{justify-content:flex-start;gap:12px}}

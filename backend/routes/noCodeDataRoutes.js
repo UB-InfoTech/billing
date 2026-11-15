@@ -7,6 +7,7 @@ const Order=require("../models/Order2");
 const Expense=require("../models/Expense");
 const Supplier=require("../models/Supplier");
 const Purchase=require("../models/Purchase");
+const StockMovement=require("../models/StockMovement");
 const Machine=require("../models/Machine");
 const User=require("../models/User");
 const Deal=require("../models/Deal");
@@ -98,6 +99,17 @@ const SOURCES={
       ["name","Supplier Name"],["legalName","Legal Name"],["gstin","GSTIN"],
       ["contact.person","Contact Person"],["contact.email","Email"],["contact.phone","Phone"],
       ["city","City"],["state","State"],["paymentTerms","Payment Terms"],["status","Status"]
+    ]
+  },
+  stockMovements:{
+    label:"Stock movements",
+    model:StockMovement,
+    searchFields:["productName","productCode","movementType","reference"],
+    fields:[
+      ["productName","Product"],["productCode","Product Code"],["movementType","Movement Type"],
+      ["sourceType","Source"],["reference","Reference"],["unit","Unit"],
+      ["quantityChange","Quantity Change"],["quantityBefore","Stock Before"],
+      ["quantityAfter","Stock After"],["note","Reason"],["createdAt","Date"]
     ]
   },
   purchases:{

@@ -1,14 +1,37 @@
-import React,{useEffect,useState} from "react";
+import React,{useEffect,useMemo,useState} from "react";
 import axios from "axios";
 import {MODULE_CATALOG} from "../config/noCodeCatalog";
-import {NavLink,useNavigate} from "react-router-dom";
+import {NavLink,useLocation,useNavigate} from "react-router-dom";
 
 const MENU_ITEMS=MODULE_CATALOG;
 const LEGACY_DEFAULT_LABELS={orders:"Bills",clients:"Clients"};
 
+const NAV_GROUPS=[
+  {key:"overview",label:"Overview",keys:["dashboard"]},
+  {key:"sales",label:"Sales & customers",keys:["orders","clients","deals","follow-ups","sales-performance"]},
+  {key:"inventory",label:"Products & purchasing",keys:["products","suppliers","purchases"]},
+  {key:"money",label:"Money",keys:["expense","bulk-payment","credit-notes","financial-recovery"]},
+  {key:"insights",label:"Reports & calendar",keys:["analytics","calendar"]},
+  {key:"business",label:"Business setup",keys:["organization-profile","settings"]}
+];
+
+const navGroupFor=key=>NAV_GROUPS.find(group=>group.keys.includes(key))||{key:"other",label:"More",keys:[]};
+
+const CREATE_ACTIONS=[
+  {label:"New invoice",description:"Create a customer bill",icon:"bi-receipt",to:"/orders?action=new"},
+  {label:"Add customer",description:"Save a customer or company",icon:"bi-person-plus",to:"/clients?action=new"},
+  {label:"Add expense",description:"Record a business expense",icon:"bi-wallet2",to:"/add-expense"},
+  {label:"Record purchase",description:"Receive stock from a supplier",icon:"bi-cart-plus",to:"/purchases?action=new"}
+];
+
 export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}){
   const navigate=useNavigate();
+  const location=useLocation();
   const [userName,setUserName]=useState("");
+  const [menuItems,setMenuItems]=useState(MENU_ITEMS);
+  const [pageSearch,setPageSearch]=useState("");
+  const [quickCreateOpen,setQuickCreateOpen]=useState(false);
+  const [expandedGroups,setExpandedGroups]=useState(()=>new Set(["sales"]));
 
   useEffect(()=>{
     try{
@@ -18,8 +41,6 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
       setUserName("");
     }
   },[]);
-
-  const [menuItems,setMenuItems]=useState(MENU_ITEMS);
 
   useEffect(()=>{
     let cancelled=false;
@@ -42,52 +63,22 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
             const isOldDefault=savedLabel&&savedLabel===LEGACY_DEFAULT_LABELS[item.key];
             return {...fallback,label:!savedLabel||isOldDefault?fallback.label:savedLabel};
           });
-        // Older saved navigation preferences predate the recovery queue. Keep
-        // this financial-safety page reachable unless the owner explicitly hid it.
-        const recoveryKey="financial-recovery";
-        const recoveryWasConfigured=saved.some(item=>item.key===recoveryKey);
-        if(!recoveryWasConfigured&&byKey.has(recoveryKey)){
-          next.push(byKey.get(recoveryKey));
-        }
-        const followUpsKey="follow-ups";
-        const followUpsConfigured=saved.some(item=>item.key===followUpsKey);
-        if(!followUpsConfigured&&byKey.has(followUpsKey)){
-          const clientsIndex=next.findIndex(item=>item.key==="clients");
-          next.splice(clientsIndex>=0?clientsIndex+1:next.length,0,byKey.get(followUpsKey));
-        }
 
-        // Add the sales pipeline to older saved menus unless it was explicitly hidden.
-        const dealsKey="deals";
-        const dealsConfigured=saved.some(item=>item.key===dealsKey);
-        if(!dealsConfigured&&byKey.has(dealsKey)){
-          const clientsIndex=next.findIndex(item=>item.key==="clients");
-          next.splice(clientsIndex>=0?clientsIndex+1:next.length,0,byKey.get(dealsKey));
-        }
-        // Existing businesses may have saved their menu before this module
-        // existed. Add it once by default, but respect an explicit hidden choice.
-        const organizationProfileKey="organization-profile";
-        const organizationProfileWasConfigured=saved.some(item=>item.key===organizationProfileKey);
-        if(!organizationProfileWasConfigured&&byKey.has(organizationProfileKey)){
-          next.push(byKey.get(organizationProfileKey));
-        }
-        const performanceKey="sales-performance";
-        const performanceConfigured=saved.some(item=>item.key===performanceKey);
-        if(!performanceConfigured&&byKey.has(performanceKey)){
-          const dealsIndex=next.findIndex(item=>item.key==="deals");
-          next.splice(dealsIndex>=0?dealsIndex+1:next.length,0,byKey.get(performanceKey));
-        }
+        // Keep newer modules available to businesses whose saved menus predate them.
+        const addMissing=(key,position)=>{
+          if(saved.some(item=>item.key===key)||!byKey.has(key))return;
+          const item=byKey.get(key);
+          const insertAt=typeof position==="function"?position():next.length;
+          next.splice(insertAt,0,item);
+        };
+        addMissing("follow-ups",()=>Math.max(0,next.findIndex(item=>item.key==="clients")+1));
+        addMissing("deals",()=>Math.max(0,next.findIndex(item=>item.key==="follow-ups")+1));
+        addMissing("sales-performance",()=>Math.max(0,next.findIndex(item=>item.key==="deals")+1));
+        addMissing("suppliers",()=>Math.max(0,next.findIndex(item=>item.key==="products")+1));
+        addMissing("purchases",()=>Math.max(0,next.findIndex(item=>item.key==="suppliers")+1));
+        addMissing("financial-recovery",()=>next.length);
+        addMissing("organization-profile",()=>next.length);
 
-        // Add supplier and purchasing workspaces for businesses with older saved menus.
-        const suppliersKey="suppliers";
-        if(!saved.some(item=>item.key===suppliersKey)&&byKey.has(suppliersKey)){
-          const productsIndex=next.findIndex(item=>item.key==="products");
-          next.splice(productsIndex>=0?productsIndex+1:next.length,0,byKey.get(suppliersKey));
-        }
-        const purchasesKey="purchases";
-        if(!saved.some(item=>item.key===purchasesKey)&&byKey.has(purchasesKey)){
-          const suppliersIndex=next.findIndex(item=>item.key==="suppliers");
-          next.splice(suppliersIndex>=0?suppliersIndex+1:next.length,0,byKey.get(purchasesKey));
-        }
         if(next.length)setMenuItems(next);
       }catch{
         if(!cancelled)setMenuItems(MENU_ITEMS);
@@ -97,11 +88,62 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
     return()=>{cancelled=true;};
   },[]);
 
-  const closeMobile=()=>setMobileOpen(false);
+  const sections=useMemo(()=>{
+    const sectionMap=new Map();
+    menuItems.forEach((item,index)=>{
+      const group=navGroupFor(item.key);
+      if(!sectionMap.has(group.key)){
+        sectionMap.set(group.key,{...group,firstIndex:index,items:[]});
+      }
+      sectionMap.get(group.key).items.push(item);
+    });
+    return Array.from(sectionMap.values()).sort((a,b)=>a.firstIndex-b.firstIndex);
+  },[menuItems]);
+
+  const activeGroup=useMemo(()=>{
+    if(location.pathname==="/")return "overview";
+    const activeItem=menuItems.find(item=>location.pathname===item.route||location.pathname.startsWith(item.route+"/"));
+    return activeItem?navGroupFor(activeItem.key).key:null;
+  },[location.pathname,menuItems]);
+
+  useEffect(()=>{
+    if(!activeGroup)return;
+    setExpandedGroups(previous=>previous.has(activeGroup)?previous:new Set([...previous,activeGroup]));
+  },[activeGroup]);
+
+  const filteredSections=useMemo(()=>{
+    const query=pageSearch.trim().toLowerCase();
+    return sections.map(section=>({
+      ...section,
+      items:section.items.filter(item=>!query||item.label.toLowerCase().includes(query)||String(item.description||"").toLowerCase().includes(query))
+    })).filter(section=>section.items.length>0);
+  },[sections,pageSearch]);
+
+  const closeMobile=()=>{
+    setMobileOpen(false);
+    setQuickCreateOpen(false);
+  };
+
+  const toggleGroup=key=>{
+    setExpandedGroups(previous=>{
+      const next=new Set(previous);
+      if(next.has(key))next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   const handleLogout=()=>{
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     navigate("/login");
+    closeMobile();
+  };
+
+  const compactNavigation=collapsed&&!mobileOpen;
+  const openCreateAction=to=>{
+    navigate(to);
+    setQuickCreateOpen(false);
     closeMobile();
   };
 
@@ -125,7 +167,7 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
         />
       )}
 
-      <aside className={`app-sidebar ${collapsed?"is-collapsed":""} ${mobileOpen?"is-mobile-open":""}`}>
+      <aside className={"app-sidebar "+(collapsed?"is-collapsed ":"")+(mobileOpen?"is-mobile-open":"")}>
         <div className="sidebar-brand">
           <div className="sidebar-brand-mark"><i className="bi bi-grid-1x2-fill"></i></div>
           <div className="sidebar-brand-text">
@@ -135,39 +177,118 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
           <button
             type="button"
             className="sidebar-collapse-btn"
-            onClick={()=>setCollapsed(prev=>!prev)}
+            onClick={()=>setCollapsed(previous=>!previous)}
             title={collapsed?"Expand sidebar":"Collapse sidebar"}
             aria-label={collapsed?"Expand sidebar":"Collapse sidebar"}
           >
-            <i className={`bi ${collapsed?"bi-layout-sidebar-inset":"bi-layout-sidebar"}`}></i>
+            <i className={"bi "+(collapsed?"bi-layout-sidebar-inset":"bi-layout-sidebar")}></i>
           </button>
           <button type="button" className="sidebar-mobile-close btn btn-sm" onClick={closeMobile} aria-label="Close navigation">
             <i className="bi bi-x-lg"></i>
           </button>
         </div>
 
-        <div className="sidebar-quick-create-wrap">
-          <button type="button" className="sidebar-quick-create" onClick={()=>{navigate("/orders?action=new");closeMobile();}} title="Create a new invoice">
-            <i className="bi bi-plus-lg"></i><span>New invoice</span>
+        <div className="sidebar-quick-create-wrap ux-sidebar-create-wrap">
+          <button
+            type="button"
+            className="sidebar-quick-create"
+            onClick={()=>setQuickCreateOpen(previous=>!previous)}
+            title="Create a new record"
+            aria-haspopup="menu"
+            aria-expanded={quickCreateOpen}
+            aria-controls="ux-create-menu"
+          >
+            <i className="bi bi-plus-lg"></i>
+            <span>New</span>
+            <i className="bi bi-chevron-down ux-create-chevron"></i>
           </button>
+          {quickCreateOpen&&(
+            <div className="ux-create-menu" id="ux-create-menu" role="menu" aria-label="Create new">
+              {CREATE_ACTIONS.map(action=>(
+                <button type="button" role="menuitem" key={action.to} onClick={()=>openCreateAction(action.to)}>
+                  <span className="ux-create-menu-icon"><i className={"bi "+action.icon}></i></span>
+                  <span className="ux-create-menu-copy"><strong>{action.label}</strong><small>{action.description}</small></span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="sidebar-scroll">
-          <div className="sidebar-section-label">Workspace</div>
-          <nav className="nav flex-column gap-1" aria-label="Main navigation">
-            {menuItems.map(item=>(
-
-              <NavLink
-                key={item.key}
-                to={item.route}
-                onClick={closeMobile}
-                className={({isActive})=>`sidebar-nav-link ${isActive?"active":""}`}
-              >
-                <span className="sidebar-nav-icon"><i className={`bi ${item.icon}`}></i></span>
-                <span className="sidebar-nav-label">{item.label}</span>
-              </NavLink>
-            ))}
-          </nav>
+          {compactNavigation?(
+            <nav className="nav flex-column gap-1" aria-label="Main navigation">
+              {menuItems.map(item=>(
+                <NavLink
+                  key={item.key}
+                  to={item.route}
+                  end={item.key==="dashboard"}
+                  onClick={closeMobile}
+                  title={item.label}
+                  aria-label={item.label}
+                  className={({isActive})=>"sidebar-nav-link "+(isActive?"active":"")}
+                >
+                  <span className="sidebar-nav-icon"><i className={"bi "+item.icon}></i></span>
+                  <span className="sidebar-nav-label">{item.label}</span>
+                </NavLink>
+              ))}
+            </nav>
+          ):(
+            <>
+              <label className="ux-sidebar-search" htmlFor="ux-sidebar-page-search">
+                <i className="bi bi-search" aria-hidden="true"></i>
+                <input
+                  id="ux-sidebar-page-search"
+                  type="search"
+                  value={pageSearch}
+                  onChange={event=>setPageSearch(event.target.value)}
+                  placeholder="Find a page"
+                  autoComplete="off"
+                />
+                {pageSearch&&<button type="button" onClick={()=>setPageSearch("")} aria-label="Clear page search"><i className="bi bi-x"></i></button>}
+              </label>
+              <nav className="nav flex-column" aria-label="Main navigation">
+                {filteredSections.map(section=>{
+                  const isOpen=pageSearch.trim()!==""||expandedGroups.has(section.key);
+                  return(
+                    <section className="ux-sidebar-section" key={section.key}>
+                      <button
+                        type="button"
+                        className="ux-sidebar-section-toggle"
+                        onClick={()=>toggleGroup(section.key)}
+                        aria-expanded={isOpen}
+                      >
+                        <span>{section.label}</span>
+                        <i className={"bi "+(isOpen?"bi-chevron-up":"bi-chevron-down")} aria-hidden="true"></i>
+                      </button>
+                      {isOpen&&(
+                        <div className="ux-sidebar-section-links">
+                          {section.items.map(item=>(
+                            <NavLink
+                              key={item.key}
+                              to={item.route}
+                              end={item.key==="dashboard"}
+                              onClick={()=>{setPageSearch("");closeMobile();}}
+                              title={item.label}
+                              className={({isActive})=>"sidebar-nav-link "+(isActive?"active":"")}
+                            >
+                              <span className="sidebar-nav-icon"><i className={"bi "+item.icon}></i></span>
+                              <span className="sidebar-nav-label">{item.label}</span>
+                            </NavLink>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  );
+                })}
+                {!filteredSections.length&&(
+                  <div className="ux-sidebar-no-results">
+                    No pages match “{pageSearch}”.
+                    <button type="button" onClick={()=>setPageSearch("")}>Clear search</button>
+                  </div>
+                )}
+              </nav>
+            </>
+          )}
         </div>
 
         <div className="sidebar-footer">

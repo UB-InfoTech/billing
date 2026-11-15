@@ -8,6 +8,7 @@ const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,
 const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
 const EMPTY_SUMMARY={open:0,overdue:0,dueToday:0,upcoming:0,noDate:0,completed:0};
 const FILTERS=[
+ {key:"my_day",label:"My day",status:"open",bucket:"my_day"},
  {key:"all",label:"All open",status:"open",bucket:"all"},
  {key:"overdue",label:"Overdue",status:"open",bucket:"overdue"},
  {key:"today",label:"Due today",status:"open",bucket:"today"},
@@ -34,10 +35,16 @@ const formatDue=value=>{
  const date=new Date(value);
  return Number.isNaN(date.getTime())?"Date not set":date.toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"});
 };
+const contactNumbers=phone=>{
+ const digits=String(phone||"").replace(/\\D/g,"");
+ if(!digits)return null;
+ const whatsapp=digits.length===10?"91"+digits:digits.startsWith("0")?digits.slice(1):digits;
+ return {telephone:String(phone).trim().replace(/[^\\d+]/g,""),whatsapp};
+};
 
 export default function ClientFollowUps(){
  const navigate=useNavigate();
- const [filter,setFilter]=useState("all");
+ const [filter,setFilter]=useState("my_day");
  const [search,setSearch]=useState("");
  const [page,setPage]=useState(1);
  const [items,setItems]=useState([]);
@@ -135,6 +142,42 @@ export default function ClientFollowUps(){
  const clearSearch=()=>{setSearch("");setPage(1);};
  const showingRange=pagination.total===0?"No follow-ups":"Showing "+((pagination.page-1)*pagination.limit+1)+"–"+Math.min(pagination.page*pagination.limit,pagination.total)+" of "+pagination.total;
  const filteredItems=items;
+ const renderFollowUpItem=item=>{
+  const state=dueState(item);
+  const isDeal=item.recordType==="deal";
+  const deal=item.deal||{};
+  const customer=deal.client||item.client||{};
+  const relatedName=isDeal?(deal.title||"Sales opportunity"):(customer.companyName||customer.name||"Customer");
+  const relatedDetail=isDeal?(deal.contactName||customer.companyName||customer.name||"Prospect"):(customer.phone||"");
+  const phone=contactNumbers((isDeal?deal.contactPhone:"")||customer.phone||"");
+  return (
+   <article className={"client-followup-row "+(state==="overdue"?"is-overdue":"")} key={item.recordType+":"+item._id}>
+    <div className={"client-followup-marker "+state}><i className={item.type==="task"?"bi bi-check2-square":"bi bi-bell"}></i></div>
+    <div className="client-followup-copy">
+     <strong>{item.subject}</strong>
+     <button type="button" className="client-followup-customer" onClick={()=>navigate(isDeal?"/deals?dealId="+item.dealId:"/clients?openClient="+item.clientId)}>
+      <span>{isDeal?"Opportunity · ":"Customer · "}{relatedName}{relatedDetail?" · "+relatedDetail:""}</span><i className="bi bi-arrow-up-right"></i>
+     </button>
+     {item.description&&<p>{item.description}</p>}
+     <div className="client-followup-row-meta">
+      <span className={"client-followup-due "+state}><i className="bi bi-calendar3"></i>{state==="overdue"?"Overdue · ":state==="today"?"Due today · ":state==="completed"?"Completed · ":""}{formatDue(item.dueAt)}</span>
+      <span>Added {item.createdAt?new Date(item.createdAt).toLocaleDateString("en-IN"):"—"}</span>
+     </div>
+    </div>
+    <div className="client-followup-actions">
+     {phone&&<a className="btn btn-sm btn-light border client-followup-contact" href={"tel:"+phone.telephone} aria-label={"Call "+relatedName} title="Call"><i className="bi bi-telephone"></i></a>}
+     {phone&&<a className="btn btn-sm btn-light border client-followup-contact" href={"https://wa.me/"+phone.whatsapp} target="_blank" rel="noopener noreferrer" aria-label={"Message "+relatedName+" on WhatsApp"} title="WhatsApp"><i className="bi bi-whatsapp"></i></a>}
+     {item.status==="completed"
+      ?<button type="button" className="btn btn-sm btn-light border" disabled={savingId===String(item._id)} onClick={()=>updateStatus(item,"open")}>Reopen</button>
+      :<button type="button" className="btn btn-sm btn-outline-success" disabled={savingId===String(item._id)} onClick={()=>updateStatus(item,"completed")}>{savingId===String(item._id)?"Saving...":"Mark done"}</button>}
+    </div>
+   </article>
+  );
+ };
+ const myDayGroups=[
+  {key:"overdue",label:"Overdue",items:filteredItems.filter(item=>dueState(item)==="overdue")},
+  {key:"today",label:"Due today",items:filteredItems.filter(item=>dueState(item)==="today")}
+ ].filter(group=>group.items.length);
 
  return (
   <div className="container-fluid py-4 client-followups-page">
@@ -152,11 +195,23 @@ export default function ClientFollowUps(){
    {message&&<div className="alert alert-success py-2" role="status">{message}</div>}
    {error&&!composerOpen&&<div className="alert alert-warning py-2 d-flex align-items-center justify-content-between gap-2" role="alert"><span>{error}</span><button type="button" className="btn btn-sm btn-light border" onClick={load}>Try again</button></div>}
 
+   <section className="client-followup-day-summary" aria-label="Today's follow-up summary">
+    <div className="client-followup-day-copy">
+     <span className="client-followup-day-eyebrow">YOUR DAILY WORK · {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"short"})}</span>
+     <h2>Today's focus</h2>
+     <p>Clear overdue reminders first, then work through the calls and tasks due today.</p>
+    </div>
+    <div className="client-followup-day-stats">
+     <div className="is-overdue"><span>Overdue</span><strong>{summary.overdue}</strong></div>
+     <div><span>Due today</span><strong>{summary.dueToday}</strong></div>
+    </div>
+   </section>
+
    <section className="client-followup-workspace">
     <div className="client-followup-toolbar">
      <div className="client-followup-tabs" role="group" aria-label="Filter follow-ups">
       {FILTERS.map(item=>{
-       const count=item.key==="all"?summary.open:item.key==="overdue"?summary.overdue:item.key==="today"?summary.dueToday:item.key==="upcoming"?summary.upcoming:item.key==="no_date"?summary.noDate:summary.completed;
+       const count=item.key==="my_day"?summary.overdue+summary.dueToday:item.key==="all"?summary.open:item.key==="overdue"?summary.overdue:item.key==="today"?summary.dueToday:item.key==="upcoming"?summary.upcoming:item.key==="no_date"?summary.noDate:summary.completed;
        return <button type="button" key={item.key} className={filter===item.key?"is-active":""} onClick={()=>{setFilter(item.key);setPage(1);}}>
         {item.label}<span className="client-followup-tab-count">{count}</span>
        </button>;
@@ -172,40 +227,17 @@ export default function ClientFollowUps(){
     {loading?<div className="client-followup-loading"><span className="spinner-border spinner-border-sm me-2"/>Loading reminders...</div>
      :!filteredItems.length?<div className="client-followup-empty">
        <span><i className="bi bi-check2-circle"></i></span>
-       <strong>{filter==="overdue"?"You're all caught up":filter==="completed"?"No completed reminders yet":"Nothing to do here"}</strong>
-       <p>{filter==="overdue"?"There are no overdue customer follow-ups.":filter==="completed"?"Completed reminders will appear here.":"Add a reminder when a customer needs a call, message or next step."}</p>
+       <strong>{filter==="my_day"||filter==="overdue"?"You're all caught up":filter==="completed"?"No completed reminders yet":"Nothing to do here"}</strong>
+       <p>{filter==="my_day"?"There are no overdue or due-today reminders. Your day is clear.":filter==="overdue"?"There are no overdue customer or sales follow-ups.":filter==="completed"?"Completed reminders will appear here.":"Add a reminder when a customer needs a call, message or next step."}</p>
        {filter!=="completed"&&<button type="button" className="btn btn-primary" onClick={openComposer}><i className="bi bi-plus-lg me-1"></i>Add follow-up</button>}
       </div>
      :<div className="client-followup-list">
-      {filteredItems.map(item=>{
-       const state=dueState(item);
-       const isDeal=item.recordType==="deal";
-       const deal=item.deal||{};
-       const customer=deal.client||item.client||{};
-       const relatedName=isDeal?(deal.title||"Sales opportunity"):(customer.companyName||customer.name||"Customer");
-       const relatedDetail=isDeal?(deal.contactName||customer.companyName||customer.name||"Prospect"):(customer.phone||"");
-       return (
-        <article className="client-followup-row" key={item._id}>
-         <div className={"client-followup-marker "+state}><i className={item.type==="task"?"bi bi-check2-square":"bi bi-bell"}></i></div>
-         <div className="client-followup-copy">
-          <strong>{item.subject}</strong>
-          <button type="button" className="client-followup-customer" onClick={()=>navigate(isDeal?"/deals?dealId="+item.dealId:"/clients?openClient="+item.clientId)}>
-           <span>{isDeal?"Opportunity · ":"Customer · "}{relatedName}{relatedDetail?" · "+relatedDetail:""}</span><i className="bi bi-arrow-up-right"></i>
-          </button>
-          {item.description&&<p>{item.description}</p>}
-          <div className="client-followup-row-meta">
-           <span className={"client-followup-due "+state}><i className="bi bi-calendar3"></i>{state==="overdue"?"Overdue · ":state==="today"?"Due today · ":state==="completed"?"Completed · ":""}{formatDue(item.dueAt)}</span>
-           <span>Added {item.createdAt?new Date(item.createdAt).toLocaleDateString("en-IN"):"—"}</span>
-          </div>
-         </div>
-         <div className="client-followup-actions">
-          {item.status==="completed"
-           ?<button type="button" className="btn btn-sm btn-light border" disabled={savingId===String(item._id)} onClick={()=>updateStatus(item,"open")}>Reopen</button>
-           :<button type="button" className="btn btn-sm btn-outline-success" disabled={savingId===String(item._id)} onClick={()=>updateStatus(item,"completed")}>{savingId===String(item._id)?"Saving...":"Mark done"}</button>}
-         </div>
-        </article>
-       );
-      })}
+      {filter==="my_day"
+       ?myDayGroups.map(group=><section className={"client-followup-group group-"+group.key} key={group.key}>
+         <h2><span>{group.label}</span><b>{group.items.length}</b></h2>
+         {group.items.map(renderFollowUpItem)}
+        </section>)
+       :filteredItems.map(renderFollowUpItem)}
      </div>}
 
     {!loading&&pagination.pages>1&&<div className="client-followup-pagination">

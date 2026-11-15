@@ -1,6 +1,6 @@
 import BusinessPageHeader from "../components/BusinessPageHeader";
 import React, { useEffect, useState, useMemo, useRef } from 'react';
-import {useSearchParams} from "react-router-dom";
+import {useNavigate,useSearchParams} from "react-router-dom";
 import {CLIENT_FORM_FIELDS} from "../config/noCodeCatalog";
 import axios from 'axios';
 import DynamicTable from '../components/DynamicTable';
@@ -25,6 +25,7 @@ const indianStates=[
 
 function Clients() {
   const [searchParams,setSearchParams]=useSearchParams();
+  const navigate=useNavigate();
 
   const linkone = (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
   
@@ -799,6 +800,9 @@ function Clients() {
                       {viewingClient.phone&&<a className="btn btn-light border" href={"tel:"+viewingClient.phone}><i className="bi bi-telephone"></i><span>Call</span></a>}
                       {viewingClient.phone&&<a className="btn btn-light border" href={"https://wa.me/"+(String(viewingClient.phone).replace(/\D/g,"").length===10?"91":"")+String(viewingClient.phone).replace(/\D/g,"")} target="_blank" rel="noreferrer"><i className="bi bi-whatsapp"></i><span>WhatsApp</span></a>}
                       {viewingClient.email&&<a className="btn btn-light border" href={"mailto:"+viewingClient.email}><i className="bi bi-envelope"></i><span>Email</span></a>}
+                      <button type="button" className="btn btn-light border" onClick={()=>navigate("/deals?clientId="+encodeURIComponent(viewingClient._id))}>
+                        <i className="bi bi-kanban"></i><span>New opportunity</span>
+                      </button>
                       <button type="button" className="btn btn-light border" onClick={()=>openCustomerStatement(viewingClient)}>
                         <i className="bi bi-journal-text"></i><span>Statement</span>
                       </button>

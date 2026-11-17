@@ -165,6 +165,13 @@ function Order2() {
     const [invoiceDetailPaymentsError,setInvoiceDetailPaymentsError]=useState("");
     const [invoiceActivityRefreshKey,setInvoiceActivityRefreshKey]=useState(0);
     const invoiceDetailPaymentsRequestRef=useRef(0);
+    const [invoiceCommunicationFeedback,setInvoiceCommunicationFeedback]=useState(null);
+    const [invoiceFollowUpOpen,setInvoiceFollowUpOpen]=useState(false);
+    const [invoiceFollowUpDate,setInvoiceFollowUpDate]=useState(()=>formatDateInput(new Date(Date.now()+24*60*60*1000)));
+    const [invoiceFollowUpNote,setInvoiceFollowUpNote]=useState("");
+    const [invoiceFollowUpSaving,setInvoiceFollowUpSaving]=useState(false);
+    const [invoiceFollowUpFeedback,setInvoiceFollowUpFeedback]=useState(null);
+
 
 
     const [payments, setPayments] = useState([]);
@@ -1019,6 +1026,15 @@ function Order2() {
         return ()=>{invoiceDetailPaymentsRequestRef.current+=1;};
     },[viewingOrder?._id,showPaymentModal,loadInvoiceDetailPayments]);
 
+    useEffect(()=>{
+        if(!viewingOrder?._id)return;
+        setInvoiceCommunicationFeedback(null);
+        setInvoiceFollowUpFeedback(null);
+        setInvoiceFollowUpOpen(false);
+        setInvoiceFollowUpNote("");
+        setInvoiceFollowUpDate(formatDateInput(new Date(Date.now()+24*60*60*1000)));
+    },[viewingOrder?._id]);
+
     const updatePaymentField=(setter,field,value,record=null)=>{
         setter(previous=>{
             let next={
@@ -1675,6 +1691,81 @@ const styles = {
             ?date.toLocaleDateString("en-IN",{dateStyle:"medium"})
             :"Date not available";
     };
+    const viewingClientName=viewingClient?.companyName||viewingClient?.name||viewingOrder?.companyName||"Customer";
+    const viewingPhoneDigits=String(viewingClient?.phone||"").replace(/\D/g,"");
+    const viewingWhatsAppNumber=viewingPhoneDigits.length===10
+        ?"91"+viewingPhoneDigits
+        :viewingPhoneDigits.length===11&&viewingPhoneDigits.startsWith("0")
+            ?"91"+viewingPhoneDigits.slice(1)
+            :viewingPhoneDigits.length>=8&&viewingPhoneDigits.length<=15
+                ?viewingPhoneDigits
+                :"";
+    const canSendInvoiceReminder=Boolean(viewingClientId&&viewingInvoiceDue>0&&viewingOrder?.status!=="Cancelled");
+    const viewingReminderMessage="Dear "+viewingClientName+", this is a gentle reminder regarding invoice "+(viewingOrder?.orderNumber||"")+". The outstanding amount is "+formatInvoiceWorkspaceMoney(viewingInvoiceDue)+". Kindly arrange payment at your convenience. Please ignore this message if payment has already been made. Thank you.";
+    const viewingReminderEmailSubject="Payment reminder — Invoice "+(viewingOrder?.orderNumber||"");
+    const viewingReminderEmailBody="Dear "+viewingClientName+",\n\nThis is a gentle reminder regarding invoice "+(viewingOrder?.orderNumber||"")+", dated "+formatInvoiceWorkspaceDate(viewingOrder?.orderDate)+". The outstanding amount is "+formatInvoiceWorkspaceMoney(viewingInvoiceDue)+".\n\nKindly arrange payment at your convenience. Please ignore this email if payment has already been made.\n\nThank you.";
+    const recordInvoiceContactActivity=async(type,subject,description)=>{
+        if(!viewingClientId)return;
+        try{
+            await axios.post(
+                linkone+"/api/clients/"+encodeURIComponent(viewingClientId)+"/activities",
+                {type,subject,description},
+                authConfig()
+            );
+            setInvoiceActivityRefreshKey(current=>current+1);
+            setInvoiceCommunicationFeedback({
+                type:"success",
+                message:"The "+(type==="whatsapp"?"WhatsApp":"email")+" draft was opened and this action was added to the customer timeline. It has not been marked as sent."
+            });
+        }catch(error){
+            setInvoiceCommunicationFeedback({
+                type:"warning",
+                message:error.response?.data?.message||"The draft opened, but this contact action could not be added to the customer timeline."
+            });
+        }
+    };
+    const createInvoicePaymentFollowUp=async event=>{
+        event.preventDefault();
+        if(!viewingClientId||!canSendInvoiceReminder)return;
+        if(!invoiceFollowUpDate){
+            setInvoiceFollowUpFeedback({type:"danger",message:"Choose a date for the payment follow-up."});
+            return;
+        }
+        const dueDate=new Date(invoiceFollowUpDate+"T10:00:00");
+        if(Number.isNaN(dueDate.getTime())){
+            setInvoiceFollowUpFeedback({type:"danger",message:"Choose a valid follow-up date."});
+            return;
+        }
+        setInvoiceFollowUpSaving(true);
+        setInvoiceFollowUpFeedback(null);
+        try{
+            await axios.post(
+                linkone+"/api/clients/"+encodeURIComponent(viewingClientId)+"/activities",
+                {
+                    type:"follow_up",
+                    subject:"Follow up on payment — Invoice "+(viewingOrder.orderNumber||""),
+                    description:[
+                        "Outstanding amount: "+formatInvoiceWorkspaceMoney(viewingInvoiceDue),
+                        "Invoice date: "+formatInvoiceWorkspaceDate(viewingOrder.orderDate),
+                        invoiceFollowUpNote.trim()
+                    ].filter(Boolean).join("\n"),
+                    dueAt:dueDate.toISOString()
+                },
+                authConfig()
+            );
+            setInvoiceActivityRefreshKey(current=>current+1);
+            setInvoiceFollowUpOpen(false);
+            setInvoiceFollowUpNote("");
+            setInvoiceFollowUpFeedback({type:"success",message:"Payment follow-up scheduled and added to the customer timeline."});
+        }catch(error){
+            setInvoiceFollowUpFeedback({
+                type:"danger",
+                message:error.response?.data?.message||"The payment follow-up could not be saved. Please try again."
+            });
+        }finally{
+            setInvoiceFollowUpSaving(false);
+        }
+    };
 
     return (
         <div className="container-fluid invoice-page py-4">
@@ -2128,6 +2219,94 @@ const styles = {
                                                 </button>
                                                 {viewingOrder.status==="Cancelled"&&<small className="d-block text-secondary mt-2">Cancelled invoices cannot receive payments.</small>}
                                                 {viewingInvoiceDue<=0&&viewingOrder.status!=="Cancelled"&&<small className="d-block text-secondary mt-2">This invoice has no outstanding amount.</small>}
+                                            </section>
+
+                                            <section className="invoice-workspace-card invoice-workspace-reminders" aria-labelledby="invoice-workspace-reminder-title">
+                                                <div className="invoice-workspace-card-heading">
+                                                    <div>
+                                                        <h6 id="invoice-workspace-reminder-title">Customer reminders</h6>
+                                                        <p>Contact the customer or schedule your next collection follow-up.</p>
+                                                    </div>
+                                                </div>
+                                                {canSendInvoiceReminder?(
+                                                    <>
+                                                        <div className="invoice-workspace-contact-actions">
+                                                            {viewingWhatsAppNumber&&(
+                                                                <a
+                                                                    className="btn btn-outline-success"
+                                                                    href={"https://wa.me/"+viewingWhatsAppNumber+"?text="+encodeURIComponent(viewingReminderMessage)}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    onClick={()=>recordInvoiceContactActivity("whatsapp","WhatsApp payment reminder opened","Prepared a payment reminder for invoice "+(viewingOrder.orderNumber||"")+" with an outstanding amount of "+formatInvoiceWorkspaceMoney(viewingInvoiceDue)+". The message was opened in WhatsApp and is not confirmed as sent.")}
+                                                                >
+                                                                    <i className="bi bi-whatsapp me-1" aria-hidden="true"></i>WhatsApp reminder
+                                                                </a>
+                                                            )}
+                                                            {viewingClient?.email&&(
+                                                                <a
+                                                                    className="btn btn-light border"
+                                                                    href={"mailto:"+viewingClient.email+"?subject="+encodeURIComponent(viewingReminderEmailSubject)+"&body="+encodeURIComponent(viewingReminderEmailBody)}
+                                                                    onClick={()=>recordInvoiceContactActivity("email","Payment reminder email draft opened","Prepared an email reminder for invoice "+(viewingOrder.orderNumber||"")+" with an outstanding amount of "+formatInvoiceWorkspaceMoney(viewingInvoiceDue)+". The email draft was opened and is not confirmed as sent.")}
+                                                                >
+                                                                    <i className="bi bi-envelope me-1" aria-hidden="true"></i>Email reminder
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                        {!viewingWhatsAppNumber&&!viewingClient?.email&&(
+                                                            <p className="invoice-workspace-contact-empty">Add a valid mobile number or email address to this customer's profile to send a reminder.</p>
+                                                        )}
+                                                        <button
+                                                            type="button"
+                                                            className="btn btn-light border w-100 mt-3"
+                                                            onClick={()=>{setInvoiceFollowUpOpen(value=>!value);setInvoiceFollowUpFeedback(null);}}
+                                                        >
+                                                            <i className="bi bi-calendar2-check me-2" aria-hidden="true"></i>
+                                                            {invoiceFollowUpOpen?"Close follow-up":"Schedule payment follow-up"}
+                                                        </button>
+                                                        {invoiceFollowUpOpen&&(
+                                                            <form className="invoice-workspace-followup-form" onSubmit={createInvoicePaymentFollowUp}>
+                                                                <label htmlFor="invoice-payment-followup-date" className="form-label">Remind me on</label>
+                                                                <input
+                                                                    id="invoice-payment-followup-date"
+                                                                    type="date"
+                                                                    className="form-control"
+                                                                    value={invoiceFollowUpDate}
+                                                                    min={formatDateInput(new Date())}
+                                                                    onChange={event=>setInvoiceFollowUpDate(event.target.value)}
+                                                                    required
+                                                                />
+                                                                <label htmlFor="invoice-payment-followup-note" className="form-label mt-3">Note <span className="text-secondary fw-normal">(optional)</span></label>
+                                                                <textarea
+                                                                    id="invoice-payment-followup-note"
+                                                                    className="form-control"
+                                                                    rows={2}
+                                                                    maxLength={1000}
+                                                                    value={invoiceFollowUpNote}
+                                                                    onChange={event=>setInvoiceFollowUpNote(event.target.value)}
+                                                                    placeholder="Add a note for your next conversation..."
+                                                                />
+                                                                <button type="submit" className="btn btn-primary w-100 mt-3" disabled={invoiceFollowUpSaving}>
+                                                                    {invoiceFollowUpSaving?<><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Saving follow-up…</>:<><i className="bi bi-check2 me-1" aria-hidden="true"></i>Save follow-up</>}
+                                                                </button>
+                                                            </form>
+                                                        )}
+                                                        {invoiceFollowUpFeedback&&(
+                                                            <div className={"alert alert-"+invoiceFollowUpFeedback.type+" py-2 mt-3 mb-0"} role="status">
+                                                                {invoiceFollowUpFeedback.message}
+                                                            </div>
+                                                        )}
+                                                        {invoiceCommunicationFeedback&&(
+                                                            <div className={"alert alert-"+invoiceCommunicationFeedback.type+" py-2 mt-3 mb-0"} role="status">
+                                                                {invoiceCommunicationFeedback.message}
+                                                            </div>
+                                                        )}
+                                                        <p className="invoice-workspace-reminder-note">Messages open in your own WhatsApp or email app. Nothing is sent automatically.</p>
+                                                    </>
+                                                ):viewingOrder.status==="Cancelled"?(
+                                                    <p className="invoice-workspace-contact-empty mb-0">This invoice is cancelled. Review its status before contacting the customer about payment.</p>
+                                                ):(
+                                                    <p className="invoice-workspace-contact-empty mb-0">No payment is outstanding on this invoice. You can still add a note or activity in the customer timeline below.</p>
+                                                )}
                                             </section>
                                         </aside>
                                     </div>

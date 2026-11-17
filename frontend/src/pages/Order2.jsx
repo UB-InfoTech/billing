@@ -2074,19 +2074,36 @@ const styles = {
                     <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable invoice-view-dialog">
                         <div className="modal-content invoice-view-modal border-0">
                             <div className="modal-header invoice-view-toolbar">
-                                <div>
-                                    <div className="small text-primary text-uppercase fw-semibold mb-1">INVOICE RECORD</div>
-                                    <h5 className="modal-title fw-bold mb-1">Invoice {viewingOrder.orderNumber||"Details"}</h5>
-                                    <div className="small text-secondary">{viewingOrder.companyName||clients.find(client=>client._id===viewingOrder.clientId)?.companyName||"Customer not linked"} · {viewingOrder.orderDate?new Date(viewingOrder.orderDate).toLocaleDateString("en-IN"):"No date"}</div>
+                                <div className="invoice-view-heading">
+                                    <div className="invoice-view-heading-top">
+                                        <span>INVOICE WORKSPACE</span>
+                                        <span className={"invoice-view-heading-status "+(viewingOrder.status==="Cancelled"?"is-cancelled":viewingOrder.status==="Completed"?"is-complete":"")}>{viewingOrder.status||"Pending"}</span>
+                                    </div>
+                                    <h5 className="modal-title">Invoice {viewingOrder.orderNumber||"Details"}</h5>
+                                    <div className="invoice-view-heading-meta">
+                                        <span>{viewingClient?.companyName||viewingClient?.name||viewingOrder.companyName||"Customer not linked"}</span>
+                                        <span><i className="bi bi-calendar3" aria-hidden="true"></i>{viewingOrder.orderDate?formatInvoiceWorkspaceDate(viewingOrder.orderDate):"Date not available"}</span>
+                                    </div>
                                 </div>
-                                <div className="d-flex align-items-center gap-2 flex-wrap">
-                                    {viewingClientId&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(viewingClientId))}><i className="bi bi-person me-1"></i>Customer</button>}
-                                    <button type="button" className="btn btn-sm btn-primary" onClick={()=>handlePaymentEdit(viewingOrder)} disabled={viewingOrder.status==="Cancelled"||viewingInvoiceDue<=0}><i className="bi bi-cash-stack me-1"></i>Record payment</button>
-                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/credit-notes?originalOrderId="+encodeURIComponent(viewingOrder._id))}><i className="bi bi-arrow-return-left me-1"></i>Credit Note</button>
-                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/add-expense?"+new URLSearchParams({orderId:String(viewingOrder._id),...(viewingClientId?{clientId:String(viewingClientId)}:{})}).toString())}><i className="bi bi-wallet2 me-1"></i>Add expense</button>
-                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>printInvoice(viewingOrder)}><i className="bi bi-printer me-1"></i>Print invoice</button>
-                                    <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>{handleEdit(viewingOrder);setViewingOrder(null);}}><i className="bi bi-pencil me-1"></i>Edit</button>
-                                    <button type="button" className="btn-close" aria-label="Close invoice details" onClick={()=>setViewingOrder(null)} />
+                                <div className="invoice-view-toolbar-actions">
+                                    <button type="button" className="btn btn-primary" onClick={()=>handlePaymentEdit(viewingOrder)} disabled={viewingOrder.status==="Cancelled"||viewingInvoiceDue<=0}>
+                                        <i className="bi bi-cash-stack me-1" aria-hidden="true"></i>Record payment
+                                    </button>
+                                    <button type="button" className="btn btn-light border" onClick={()=>printInvoice(viewingOrder)}>
+                                        <i className="bi bi-printer me-1" aria-hidden="true"></i>Print
+                                    </button>
+                                    <details className="invoice-view-more-actions">
+                                        <summary className="btn btn-light border"><i className="bi bi-three-dots me-1" aria-hidden="true"></i>More</summary>
+                                        <div className="invoice-view-more-menu">
+                                            {viewingClientId&&<button type="button" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(viewingClientId))}><i className="bi bi-person me-2" aria-hidden="true"></i>Open customer</button>}
+                                            <button type="button" onClick={()=>navigate("/credit-notes?originalOrderId="+encodeURIComponent(viewingOrder._id))}><i className="bi bi-arrow-return-left me-2" aria-hidden="true"></i>Create Credit Note</button>
+                                            <button type="button" onClick={()=>navigate("/add-expense?"+new URLSearchParams({orderId:String(viewingOrder._id),...(viewingClientId?{clientId:String(viewingClientId)}:{})}).toString())}><i className="bi bi-wallet2 me-2" aria-hidden="true"></i>Add expense</button>
+                                            <button type="button" onClick={()=>{handleEdit(viewingOrder);setViewingOrder(null);}}><i className="bi bi-pencil me-2" aria-hidden="true"></i>Edit invoice</button>
+                                        </div>
+                                    </details>
+                                    <button type="button" className="invoice-view-close" aria-label="Close invoice details" onClick={()=>setViewingOrder(null)}>
+                                        <i className="bi bi-x-lg" aria-hidden="true"></i>
+                                    </button>
                                 </div>
                             </div>
                             <div className="modal-body invoice-view-body invoice-workspace-body">
@@ -2111,13 +2128,12 @@ const styles = {
 
                                     <div className="invoice-workspace-grid">
                                         <article className="invoice-view-sheet invoice-workspace-invoice">
-                                            <div className="invoice-view-paper-heading">
+                                            <div className="invoice-view-paper-heading invoice-workspace-document-heading">
                                                 <div>
-                                                    <div className="small text-secondary text-uppercase fw-semibold">Invoice</div>
-                                                    <h2>{viewingOrder.orderNumber||"Invoice details"}</h2>
-                                                    <div className="small text-secondary">Issued {viewingOrder.orderDate?formatInvoiceWorkspaceDate(viewingOrder.orderDate):"Date not available"}</div>
+                                                    <div className="small text-secondary text-uppercase fw-semibold">BILLING INFORMATION</div>
+                                                    <h2>Invoice details</h2>
+                                                    <div className="small text-secondary">Customer, billing address and items</div>
                                                 </div>
-                                                <div className="invoice-view-status">{viewingOrder.status||"Pending"}</div>
                                             </div>
 
                                             <section className="invoice-workspace-customer" aria-label="Customer details">
@@ -2390,7 +2406,12 @@ const styles = {
                                                         {invoiceLedger.warnings.map((warning,index)=><p key={index}>{warning}</p>)}
                                                     </div>
                                                 )}
-                                                <div className="invoice-workspace-ledger-list">
+                                                <div className="invoice-workspace-ledger-table">
+                                                    <div className="invoice-workspace-ledger-columns" aria-hidden="true">
+                                                        <span>Activity</span>
+                                                        <div><span>Increase</span><span>Decrease</span><span>Balance</span></div>
+                                                    </div>
+                                                    <div className="invoice-workspace-ledger-list">
                                                     {(invoiceLedger?.transactions||[]).map((transaction,index)=>{
                                                         const titles={
                                                             Invoice:"Invoice created",
@@ -2409,12 +2430,12 @@ const styles = {
                                                                     {transaction.reconstructed&&<small>Earlier value reconstructed from saved records</small>}
                                                                 </div>
                                                                 <div className="invoice-workspace-ledger-values">
-                                                                    <div>
-                                                                        <span>Added</span>
+                                                                    <div className="is-increase">
+                                                                        <span>Increase</span>
                                                                         <strong>{Number(transaction.debit||0)>0?formatInvoiceWorkspaceMoney(transaction.debit):"—"}</strong>
                                                                     </div>
-                                                                    <div>
-                                                                        <span>Reduced</span>
+                                                                    <div className="is-decrease">
+                                                                        <span>Decrease</span>
                                                                         <strong>{Number(transaction.credit||0)>0?formatInvoiceWorkspaceMoney(transaction.credit):"—"}</strong>
                                                                     </div>
                                                                     <div className="is-balance">
@@ -2425,6 +2446,7 @@ const styles = {
                                                             </article>
                                                         );
                                                     })}
+                                                    </div>
                                                 </div>
                                                 {!invoiceLedger?.transactions?.length&&(
                                                     <div className="invoice-workspace-ledger-empty">No financial events are available for this invoice yet.</div>

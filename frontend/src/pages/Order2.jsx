@@ -1143,7 +1143,15 @@ function Order2() {
 
     const deletePayment = async (paymentId) => {
         if (!editingOrder?._id || !paymentId) return;
-        if (!window.confirm("Delete this payment? The invoice balance will be recalculated.")) return;
+        const paymentToDelete=payments.find(payment=>String(payment._id)===String(paymentId));
+        const paymentDate=paymentToDelete?.paymentDate||paymentToDelete?.createdAt;
+        const paymentDateLabel=paymentDate&&!Number.isNaN(new Date(paymentDate).getTime())
+            ? new Date(paymentDate).toLocaleDateString("en-IN")
+            : "an earlier date";
+        const paymentDescription=paymentToDelete
+            ? `₹${Number(paymentToDelete.amount||0).toFixed(2)} received on ${paymentDateLabel}`
+            : "this payment";
+        if (!window.confirm(`Delete ${paymentDescription}? The invoice's received and due amounts will be recalculated. This action cannot be undone.`)) return;
 
         setPaymentSubmitting(true);
         setPaymentFeedback(null);
@@ -2298,21 +2306,44 @@ const styles = {
                         <div className="modal-dialog orders-fullscreen-dialog">
                             <div className="modal-content orders-fullscreen-content">
                                 <div className="modal-header">
-                                    <h5 id="payment-modal-title" className="modal-title">Manage Payments — {editingOrder?.companyName || "Customer"}</h5>
+                                    <div>
+                                        <h5 id="payment-modal-title" className="modal-title mb-0">Payments</h5>
+                                        <div className="small text-secondary">
+                                            {editingOrder?.companyName || "Customer"}
+                                            {editingOrder?.orderNumber ? ` · Invoice ${editingOrder.orderNumber}` : ""}
+                                        </div>
+                                    </div>
                                     <button type="button" className="btn-close" onClick={() => {if(!paymentSubmitting){setShowPaymentModal(false);setPaymentFeedback(null);}}} aria-label="Close payment manager" disabled={paymentSubmitting}></button>
                                 </div>
                                 <div className="modal-body orders-fullscreen-body">
 
+                                    <section className="mb-4" aria-label="Invoice payment summary" aria-live="polite">
+                                        <div className="row g-3">
+                                            <div className="col-12 col-sm-4">
+                                                <div className="h-100 rounded-3 border bg-light p-3">
+                                                    <div className="small text-secondary">Invoice total</div>
+                                                    <div className="fs-5 fw-semibold text-dark">₹{getInvoiceTotal(editingOrder).toFixed(2)}</div>
+                                                </div>
+                                            </div>
+                                            <div className="col-12 col-sm-4">
+                                                <div className="h-100 rounded-3 border bg-light p-3">
+                                                    <div className="small text-secondary">Received so far</div>
+                                                    <div className="fs-5 fw-semibold text-success">₹{Number(editingOrder?.paidAmount || 0).toFixed(2)}</div>
+                                                </div>
+                                            </div>
+                                            <div className="col-12 col-sm-4">
+                                                <div className="h-100 rounded-3 border bg-light p-3">
+                                                    <div className="small text-secondary">Remaining due</div>
+                                                    <div className={`fs-5 fw-semibold ${Number(editingOrder?.dueAmount || 0)>0?"text-danger":"text-success"}`}>₹{Number(editingOrder?.dueAmount || 0).toFixed(2)}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </section>
+
                                     <section className="payment-entry-panel mb-4" aria-labelledby="payment-entry-title">
-                                        <div className="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
-                                            <div>
-                                                <h6 id="payment-entry-title" className="mb-1">Record a payment</h6>
-                                                <p className="small text-secondary mb-0">Enter the amount received and how it was paid.</p>
-                                            </div>
-                                            <div className="payment-due-summary" aria-live="polite">
-                                                <span>Amount still due</span>
-                                                <strong>₹{Number(editingOrder?.dueAmount || 0).toFixed(2)}</strong>
-                                            </div>
+                                        <div className="mb-3">
+                                            <h6 id="payment-entry-title" className="mb-1">Record a payment</h6>
+                                            <p className="small text-secondary mb-0">Enter the amount received and how it was paid.</p>
                                         </div>
                                         <div className="row g-3 orders-payment-entry-row">
                                             <div className="col-12 col-md-4">
@@ -2417,10 +2448,16 @@ const styles = {
                                             label:"Actions",
                                             locked:true,
                                             render:p=>(
-                                                <div className="d-flex gap-1 justify-content-end">
-                                                    <button type="button" className="btn btn-warning btn-sm" onClick={()=>{setPaymentFeedback(null);setEditPayment(preparedPaymentValues(hydrateConfiguredValues(p,paymentFormConfig.fields)));}} title="Edit payment" aria-label="Edit payment" disabled={paymentSubmitting}><img src={editSVG} alt="" /></button>
-                                                    <button type="button" className="btn btn-danger btn-sm" onClick={()=>deletePayment(p._id)} title="Delete payment" aria-label="Delete payment" disabled={paymentSubmitting}><img src={deleteSVG} alt="" /></button>
-                                                    <button type="button" className="btn btn-info btn-sm" onClick={()=>printReceipt(p._id)} title="Print receipt" aria-label="Print receipt" disabled={paymentSubmitting}><img src={receiptSVG} alt="" /></button>
+                                                <div className="d-flex flex-wrap gap-1 justify-content-end">
+                                                    <button type="button" className="btn btn-outline-primary btn-sm" onClick={()=>{setPaymentFeedback(null);setEditPayment(preparedPaymentValues(hydrateConfiguredValues(p,paymentFormConfig.fields)));}} title="Edit payment" disabled={paymentSubmitting}>
+                                                        <i className="bi bi-pencil me-1" aria-hidden="true"></i>Edit
+                                                    </button>
+                                                    <button type="button" className="btn btn-outline-danger btn-sm" onClick={()=>deletePayment(p._id)} title="Delete payment" disabled={paymentSubmitting}>
+                                                        <i className="bi bi-trash me-1" aria-hidden="true"></i>Delete
+                                                    </button>
+                                                    <button type="button" className="btn btn-outline-secondary btn-sm" onClick={()=>printReceipt(p._id)} title="Print receipt" disabled={paymentSubmitting}>
+                                                        <i className="bi bi-printer me-1" aria-hidden="true"></i>Receipt
+                                                    </button>
                                                 </div>
                                             )
                                         }}

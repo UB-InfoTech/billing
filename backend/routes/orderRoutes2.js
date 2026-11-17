@@ -25,6 +25,7 @@ const {numberToWords}=require("../utils/numberToWords");
 const {getPublicOrganizationLogoUrl}=require("../utils/organizationLogo");
 const {appendStatusTransition}=require("../utils/statusHistory");
 const {hasInvoiceSensitiveChanges,wouldReduceTotalBelowApplied}=require("../utils/orderEditPolicy");
+const {buildInvoiceLedger}=require("../utils/customerStatement");
 function buildInvoiceFinancialSnapshot(order={},invoiceTotal) {
   const total=invoiceTotal===undefined
     ?(order.roundOffFinalRevenue??order.totalAmount??order.finalRevenue??0)
@@ -794,6 +795,40 @@ router.get("/orders/:id/payments",auth,async(req,res)=>{
     res.json(order.payments||[]);
   }catch(error){
     res.status(500).json({message:error.message});
+  }
+});
+
+
+router.get("/orders/:id/ledger",auth,async(req,res)=>{
+  try{
+    if(!mongoose.isValidObjectId(req.params.id)){
+      return res.status(400).json({success:false,message:"Invalid invoice ID."});
+    }
+    const order=await Order.findOne({
+      _id:req.params.id,
+      createdBy:userId(req)
+    }).select(
+      "orderNumber orderDate createdAt status clientId roundOffFinalRevenue totalAmount finalRevenue paidAmount dueAmount creditAppliedAmount payments paymentHistory financialHistory"
+    ).lean();
+    if(!order)return res.status(404).json({success:false,message:"Invoice not found."});
+
+    const creditNotes=await CreditNote.find({
+      originalOrderId:order._id,
+      createdBy:userId(req)
+    }).select(
+      "creditNoteNumber status settlement settlementHistory creditNoteDate createdAt updatedAt cancelledAt totals"
+    ).sort({creditNoteDate:1,createdAt:1}).lean();
+
+    return res.json({
+      success:true,
+      ledger:buildInvoiceLedger({order,creditNotes})
+    });
+  }catch(error){
+    console.error("Invoice financial history error:",error);
+    return res.status(500).json({
+      success:false,
+      message:error.message||"Unable to load this invoice's financial history."
+    });
   }
 });
 

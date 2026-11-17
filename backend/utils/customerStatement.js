@@ -68,7 +68,7 @@ function normalizeInvoiceSnapshot(snapshot = {}) {
   };
 }
 
-function getInvoiceLedgerEvents(order = {}, customerId, sequence = { value: 0 }) {
+function getInvoiceLedgerEvents(order = {}, customerId, sequence = { value: 0 }, { includeAllCustomers = false } = {}) {
   const history = Array.isArray(order.financialHistory) ? order.financialHistory : [];
   const ordered = history.map((event, index) => ({
     ...event, effectiveAt: validDate(event.effectiveAt), recordedAt: validDate(event.recordedAt), _index: index
@@ -80,7 +80,7 @@ function getInvoiceLedgerEvents(order = {}, customerId, sequence = { value: 0 })
   let reconstructed = false;
   const targetId = String(customerId || "");
   const addLine = ({ date, type, reference, description, debit = 0, credit = 0, snapshot }) => {
-    if (!date || !snapshot || snapshot.clientId !== targetId) return;
+    if (!date || !snapshot || (!includeAllCustomers && snapshot.clientId !== targetId)) return;
     if (Math.abs(debit) < 0.005 && Math.abs(credit) < 0.005) return;
     output.push({
       date, type, reference: reference || snapshot.orderNumber || String(order._id || ""),
@@ -124,7 +124,7 @@ function getInvoiceLedgerEvents(order = {}, customerId, sequence = { value: 0 })
         description: "Invoice total revised from " + previous.invoiceTotal.toFixed(2) + " to " + next.invoiceTotal.toFixed(2),
         debit: Math.max(0, delta), credit: Math.max(0, -delta), snapshot: next
       });
-    } else {
+    } else if (!includeAllCustomers) {
       addLine({
         date, type: "Invoice adjustment", reference,
         description: "Invoice transferred to another customer", credit: previous.invoiceTotal, snapshot: previous
@@ -221,6 +221,163 @@ function getPaymentLedgerEvents(order = {}, sequence = { value: 0 }) {
     });
   }
   return { events: output, reconstructed };
+}
+
+
+/**
+ * Build the dated financial history for one invoice. This deliberately reuses
+ * the statement event reconstruction so payments and Credit Note settlements
+ * have the same accounting treatment in both views.
+ */
+function buildInvoiceLedger({ order = {}, creditNotes = [] } = {}) {
+  const sequence = { value: 0 };
+  const invoiceLedger = getInvoiceLedgerEvents(
+    order,
+    order.clientId,
+    sequence,
+    { includeAllCustomers: true }
+  );
+  const paymentLedger = getPaymentLedgerEvents(order, sequence);
+  const events = [...invoiceLedger.events, ...paymentLedger.events];
+  let reconstructedCreditNotes = 0;
+
+  for (const note of Array.isArray(creditNotes) ? creditNotes : []) {
+    const noteEvents = getCreditNoteEvents(note);
+    if (noteEvents.some(event => event.reconstructed)) reconstructedCreditNotes += 1;
+    const reference = String(note.creditNoteNumber || note._id || "Credit Note");
+
+    for (const event of noteEvents) {
+      const adjustmentDelta = round2(event.adjustmentDelta);
+      const customerCreditDelta = round2(event.customerCreditDelta);
+      const refundDelta = round2(event.refundDelta);
+      if (
+        Math.abs(adjustmentDelta) < 0.005
+        && Math.abs(customerCreditDelta) < 0.005
+        && Math.abs(refundDelta) < 0.005
+        && event.eventType !== "cancelled"
+      ) continue;
+
+      const details = [];
+      if (Math.abs(adjustmentDelta) >= 0.005) {
+        details.push(
+          adjustmentDelta > 0
+            ? "Invoice balance reduced by ₹" + Math.abs(adjustmentDelta).toFixed(2)
+            : "Invoice balance increased by ₹" + Math.abs(adjustmentDelta).toFixed(2)
+        );
+      }
+      if (Math.abs(refundDelta) >= 0.005) {
+        details.push(
+          refundDelta > 0
+            ? "Refund recorded ₹" + Math.abs(refundDelta).toFixed(2)
+            : "Refund reversed ₹" + Math.abs(refundDelta).toFixed(2)
+        );
+      }
+      if (Math.abs(customerCreditDelta) >= 0.005) {
+        details.push(
+          customerCreditDelta > 0
+            ? "Customer credit added ₹" + Math.abs(customerCreditDelta).toFixed(2)
+            : "Customer credit reversed ₹" + Math.abs(customerCreditDelta).toFixed(2)
+        );
+      }
+
+      const action = event.eventType === "cancelled"
+        ? "Credit Note cancelled"
+        : event.eventType === "edited"
+          ? "Credit Note settlement changed"
+          : "Credit Note issued";
+      events.push({
+        date: event.effectiveAt,
+        type: "Credit Note",
+        reference,
+        description: [action, ...details].join(" · ") || action,
+        debit: Math.max(0, round2(-adjustmentDelta)),
+        credit: Math.max(0, adjustmentDelta),
+        orderId: order._id,
+        creditNoteId: note._id,
+        status: event.status || note.status || "",
+        reconstructed: Boolean(event.reconstructed),
+        sequence: sequence.value++
+      });
+    }
+  }
+
+  sortTransactions(events);
+  const transactions = calculateRunningBalance(events, 0, "debit", "credit")
+    .map(row => ({ ...row, date: row.date.toISOString() }));
+  const ledgerBalance = transactions.length
+    ? round2(transactions[transactions.length - 1].balanceAfter)
+    : 0;
+  const invoiceHistory = Array.isArray(order.financialHistory) ? order.financialHistory : [];
+  const paymentHistory = Array.isArray(order.paymentHistory) ? order.paymentHistory : [];
+  const auditedPaymentIds = new Set(paymentHistory.map(event => String(event.paymentId || "")));
+  const unauditedActivePayments = (Array.isArray(order.payments) ? order.payments : [])
+    .filter(payment => payment?._id && !auditedPaymentIds.has(String(payment._id))).length;
+  const notesWithoutSettlementHistory = (Array.isArray(creditNotes) ? creditNotes : [])
+    .filter(note => note.status !== "Draft" && (!Array.isArray(note.settlementHistory) || note.settlementHistory.length === 0))
+    .length;
+  const warnings = [];
+
+  if (!invoiceHistory.length) {
+    warnings.push(
+      "This invoice has no detailed total-change history. Its saved total is shown as the starting amount; earlier edits cannot be reconstructed."
+    );
+  } else if (invoiceLedger.reconstructed) {
+    warnings.push(
+      "The invoice's earliest saved total-change record is an edit, not its creation. The saved pre-edit amount is used as the starting point."
+    );
+  }
+  if (paymentLedger.reconstructed) {
+    warnings.push(
+      "Some payment history starts with an edit or removal. The earliest saved payment value is used to reconstruct the opening balance."
+    );
+  }
+  if (unauditedActivePayments > 0) {
+    warnings.push(
+      unauditedActivePayments + " existing payment(s) have no detailed change history. Their current saved amounts are shown; earlier edits may not be available."
+    );
+  }
+  if (notesWithoutSettlementHistory > 0) {
+    warnings.push(
+      notesWithoutSettlementHistory + " older Credit Note(s) have no detailed settlement history. Their saved settlement values are shown; earlier edits may not be available."
+    );
+  } else if (reconstructedCreditNotes > 0) {
+    warnings.push(
+      reconstructedCreditNotes + " Credit Note(s) contain reconstructed settlement events. Review their original records before relying on older changes."
+    );
+  }
+
+  const invoiceTotal = round2(getInvoiceRevenue(order));
+  const paidAmount = round2(order.paidAmount);
+  const creditAppliedAmount = round2(order.creditAppliedAmount);
+  const savedDueAmount = round2(order.dueAmount);
+  const balanceDifference = round2(ledgerBalance - savedDueAmount);
+  const reconcilesWithSavedDue = Math.abs(balanceDifference) < 0.01;
+
+  if (!reconcilesWithSavedDue) {
+    warnings.push(
+      "The history balance differs from the invoice's saved outstanding amount by ₹"
+        + Math.abs(balanceDifference).toFixed(2)
+        + ". Review older invoice, payment or Credit Note records."
+    );
+  }
+
+  return {
+    summary: {
+      invoiceTotal,
+      paidAmount,
+      creditAppliedAmount,
+      savedDueAmount,
+      ledgerBalance,
+      balanceDifference,
+      reconcilesWithSavedDue
+    },
+    transactions,
+    warnings,
+    limitations: [
+      "Payments and Credit Note adjustments change this invoice balance. Refunds and credit added to the customer's account are listed in the event details but do not reduce this invoice's outstanding amount.",
+      "Changes made before detailed audit history was introduced cannot be recovered unless an earlier saved value was preserved."
+    ]
+  };
 }
 
 /**
@@ -390,5 +547,5 @@ function buildCustomerStatement({ client = {}, orders = [], creditNotes = [], fr
   };
 }
 module.exports = {
-  buildCustomerStatement, getCreditNoteEvents, getInvoiceLedgerEvents, getPaymentLedgerEvents
+  buildCustomerStatement, buildInvoiceLedger, getCreditNoteEvents, getInvoiceLedgerEvents, getPaymentLedgerEvents
 };

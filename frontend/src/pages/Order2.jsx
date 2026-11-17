@@ -163,8 +163,14 @@ function Order2() {
     const [invoiceDetailPayments,setInvoiceDetailPayments]=useState([]);
     const [invoiceDetailPaymentsLoading,setInvoiceDetailPaymentsLoading]=useState(false);
     const [invoiceDetailPaymentsError,setInvoiceDetailPaymentsError]=useState("");
+    const [invoiceLedger,setInvoiceLedger]=useState(null);
+    const [invoiceLedgerLoading,setInvoiceLedgerLoading]=useState(false);
+    const [invoiceLedgerError,setInvoiceLedgerError]=useState("");
+    const [invoiceFinancialRefreshKey,setInvoiceFinancialRefreshKey]=useState(0);
     const [invoiceActivityRefreshKey,setInvoiceActivityRefreshKey]=useState(0);
     const invoiceDetailPaymentsRequestRef=useRef(0);
+
+    const invoiceLedgerRequestRef=useRef(0);
     const [invoiceCommunicationFeedback,setInvoiceCommunicationFeedback]=useState(null);
     const [invoiceFollowUpOpen,setInvoiceFollowUpOpen]=useState(false);
     const [invoiceFollowUpDate,setInvoiceFollowUpDate]=useState(()=>formatDateInput(new Date(Date.now()+24*60*60*1000)));
@@ -1026,6 +1032,38 @@ function Order2() {
         return ()=>{invoiceDetailPaymentsRequestRef.current+=1;};
     },[viewingOrder?._id,showPaymentModal,loadInvoiceDetailPayments]);
 
+
+    const loadInvoiceLedger=useCallback(async invoiceId=>{
+        if(!invoiceId)return false;
+        const requestId=++invoiceLedgerRequestRef.current;
+        setInvoiceLedgerLoading(true);
+        setInvoiceLedgerError("");
+        setInvoiceLedger(null);
+        try{
+            const response=await axios.get(
+                linkone+"/api/order/orders/"+encodeURIComponent(invoiceId)+"/ledger",
+                {headers:{"x-auth-token":localStorage.getItem("token")||""}}
+            );
+            if(requestId!==invoiceLedgerRequestRef.current)return false;
+            setInvoiceLedger(response.data?.ledger||null);
+            return true;
+        }catch(error){
+            if(requestId===invoiceLedgerRequestRef.current){
+                setInvoiceLedgerError(error.response?.data?.message||"Financial history could not be loaded. Please try again.");
+                setInvoiceLedger(null);
+            }
+            return false;
+        }finally{
+            if(requestId===invoiceLedgerRequestRef.current)setInvoiceLedgerLoading(false);
+        }
+    },[linkone]);
+
+    useEffect(()=>{
+        if(!viewingOrder?._id||showPaymentModal)return;
+        loadInvoiceLedger(viewingOrder._id);
+        return ()=>{invoiceLedgerRequestRef.current+=1;};
+    },[viewingOrder?._id,showPaymentModal,invoiceFinancialRefreshKey,loadInvoiceLedger]);
+
     useEffect(()=>{
         if(!viewingOrder?._id)return;
         setInvoiceCommunicationFeedback(null);
@@ -1141,6 +1179,7 @@ function Order2() {
             const updatedOrder=response.data?.order||editingOrder;
             setEditingOrder(updatedOrder);
             if(viewingOrder&&String(viewingOrder._id)===String(updatedOrder?._id))setViewingOrder(updatedOrder);
+            setInvoiceFinancialRefreshKey(current=>current+1);
             setInvoiceActivityRefreshKey(current=>current+1);
             setNewPayment(emptyPaymentRecord());
             await fetchOrders();
@@ -1186,6 +1225,7 @@ function Order2() {
             const updatedOrder=response.data?.order||editingOrder;
             setEditingOrder(updatedOrder);
             if(viewingOrder&&String(viewingOrder._id)===String(updatedOrder?._id))setViewingOrder(updatedOrder);
+            setInvoiceFinancialRefreshKey(current=>current+1);
             setInvoiceActivityRefreshKey(current=>current+1);
             setEditPayment(null);
             await fetchOrders();
@@ -1222,6 +1262,7 @@ function Order2() {
             const updatedOrder=response.data?.order||editingOrder;
             setEditingOrder(updatedOrder);
             if(viewingOrder&&String(viewingOrder._id)===String(updatedOrder?._id))setViewingOrder(updatedOrder);
+            setInvoiceFinancialRefreshKey(current=>current+1);
             setInvoiceActivityRefreshKey(current=>current+1);
             await fetchOrders();
             setPaymentFeedback(historyLoaded
@@ -1684,6 +1725,13 @@ const styles = {
     const formatInvoiceWorkspaceMoney=value=>{
         const amount=Number(value||0);
         return "₹"+(Number.isFinite(amount)?amount:0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+    };
+
+    const formatInvoiceWorkspaceDateTime=value=>{
+        const date=value?new Date(value):null;
+        return date&&!Number.isNaN(date.getTime())
+            ?date.toLocaleString("en-IN",{dateStyle:"medium",timeStyle:"short"})
+            :"Date not available";
     };
     const formatInvoiceWorkspaceDate=value=>{
         const date=value?new Date(value):null;
@@ -2310,6 +2358,89 @@ const styles = {
                                             </section>
                                         </aside>
                                     </div>
+
+
+                                    <section className="invoice-workspace-financial-history" aria-labelledby="invoice-financial-history-title">
+                                        <div className="invoice-workspace-ledger-heading">
+                                            <div>
+                                                <h6 id="invoice-financial-history-title">Financial history</h6>
+                                                <p>See when the bill changed, payments were updated, and Credit Notes affected the balance.</p>
+                                            </div>
+                                            <div className="invoice-workspace-ledger-balance">
+                                                <span>Balance from history</span>
+                                                <strong>{invoiceLedger?.summary?formatInvoiceWorkspaceMoney(invoiceLedger.summary.ledgerBalance):"—"}</strong>
+                                            </div>
+                                        </div>
+
+                                        {invoiceLedgerLoading?(
+                                            <div className="invoice-workspace-ledger-state">
+                                                <span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                                                Loading financial history…
+                                            </div>
+                                        ):invoiceLedgerError?(
+                                            <div className="alert alert-warning py-2 mb-0" role="alert">
+                                                <div>{invoiceLedgerError}</div>
+                                                <button type="button" className="btn btn-sm btn-outline-secondary mt-2" onClick={()=>loadInvoiceLedger(viewingOrder._id)}>Try again</button>
+                                            </div>
+                                        ):(
+                                            <>
+                                                {invoiceLedger?.warnings?.length>0&&(
+                                                    <div className="invoice-workspace-ledger-warnings" role="note">
+                                                        <strong>History notes</strong>
+                                                        {invoiceLedger.warnings.map((warning,index)=><p key={index}>{warning}</p>)}
+                                                    </div>
+                                                )}
+                                                <div className="invoice-workspace-ledger-list">
+                                                    {(invoiceLedger?.transactions||[]).map((transaction,index)=>{
+                                                        const titles={
+                                                            Invoice:"Invoice created",
+                                                            "Invoice adjustment":"Invoice amount changed",
+                                                            Payment:"Payment received",
+                                                            "Payment adjustment":"Payment changed",
+                                                            "Payment reversal":"Payment removed",
+                                                            "Credit Note":"Credit Note activity"
+                                                        };
+                                                        return (
+                                                            <article className="invoice-workspace-ledger-row" key={transaction.sequence??index}>
+                                                                <div className="invoice-workspace-ledger-main">
+                                                                    <time>{formatInvoiceWorkspaceDateTime(transaction.date)}</time>
+                                                                    <strong>{titles[transaction.type]||transaction.type}</strong>
+                                                                    <span>{transaction.description||"Financial record updated"}{transaction.reference?" · "+transaction.reference:""}</span>
+                                                                    {transaction.reconstructed&&<small>Earlier value reconstructed from saved records</small>}
+                                                                </div>
+                                                                <div className="invoice-workspace-ledger-values">
+                                                                    <div>
+                                                                        <span>Added</span>
+                                                                        <strong>{Number(transaction.debit||0)>0?formatInvoiceWorkspaceMoney(transaction.debit):"—"}</strong>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span>Reduced</span>
+                                                                        <strong>{Number(transaction.credit||0)>0?formatInvoiceWorkspaceMoney(transaction.credit):"—"}</strong>
+                                                                    </div>
+                                                                    <div className="is-balance">
+                                                                        <span>Balance</span>
+                                                                        <strong>{formatInvoiceWorkspaceMoney(transaction.balanceAfter)}</strong>
+                                                                    </div>
+                                                                </div>
+                                                            </article>
+                                                        );
+                                                    })}
+                                                </div>
+                                                {!invoiceLedger?.transactions?.length&&(
+                                                    <div className="invoice-workspace-ledger-empty">No financial events are available for this invoice yet.</div>
+                                                )}
+                                                {invoiceLedger?.summary&&(
+                                                    <div className="invoice-workspace-ledger-summary">
+                                                        <span>Current saved outstanding: <strong>{formatInvoiceWorkspaceMoney(invoiceLedger.summary.savedDueAmount)}</strong></span>
+                                                        <span className={invoiceLedger.summary.reconcilesWithSavedDue?"is-reconciled":"is-unreconciled"}>
+                                                            {invoiceLedger.summary.reconcilesWithSavedDue?"History matches the saved balance":"History and saved balance differ"}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <p className="invoice-workspace-ledger-footnote">“Added” increases the amount due. “Reduced” decreases it. Refunds and customer-account credit are described in the Credit Note entry but do not reduce this invoice's balance.</p>
+                                            </>
+                                        )}
+                                    </section>
 
                                     <section className="invoice-workspace-activity" aria-label="Customer activity">
                                         {viewingClientId

@@ -11,6 +11,7 @@ import invoiceSVG from '../assets/invoice.svg';
 import receiptSVG from '../assets/receipt.svg';
 import 'bootstrap/dist/css/bootstrap.min.css'; // Ensure Bootstrap CSS is imported
 import EWayBillForm from "../components/EWayBillForm";
+import ClientActivityPanel from "../components/ClientActivityPanel";
 import DynamicTable from "../components/DynamicTable";
 import FormConfigurator from "../components/FormConfigurator";
 import ConfiguredField from "../components/ConfiguredField";
@@ -159,6 +160,11 @@ function Order2() {
     const {records:linkedRecords,searchRecords:searchLinkedRecords}=useNoCodeDataSources(linkedOrderSources);
     const [editingOrder, setEditingOrder] = useState(null);
     const [viewingOrder,setViewingOrder]=useState(null);
+    const [invoiceDetailPayments,setInvoiceDetailPayments]=useState([]);
+    const [invoiceDetailPaymentsLoading,setInvoiceDetailPaymentsLoading]=useState(false);
+    const [invoiceDetailPaymentsError,setInvoiceDetailPaymentsError]=useState("");
+    const [invoiceActivityRefreshKey,setInvoiceActivityRefreshKey]=useState(0);
+    const invoiceDetailPaymentsRequestRef=useRef(0);
 
 
     const [payments, setPayments] = useState([]);
@@ -983,6 +989,36 @@ function Order2() {
         }
     };
 
+    const loadInvoiceDetailPayments=useCallback(async invoiceId=>{
+        if(!invoiceId)return false;
+        const requestId=++invoiceDetailPaymentsRequestRef.current;
+        setInvoiceDetailPaymentsLoading(true);
+        setInvoiceDetailPaymentsError("");
+        try{
+            const response=await axios.get(
+                linkone+"/api/order/orders/"+encodeURIComponent(invoiceId)+"/payments",
+                {headers:{"x-auth-token":localStorage.getItem("token")||""}}
+            );
+            if(requestId!==invoiceDetailPaymentsRequestRef.current)return false;
+            setInvoiceDetailPayments(Array.isArray(response.data)?response.data:[]);
+            return true;
+        }catch(error){
+            if(requestId===invoiceDetailPaymentsRequestRef.current){
+                setInvoiceDetailPaymentsError(error.response?.data?.message||"Payment history could not be loaded. Please try again.");
+                setInvoiceDetailPayments([]);
+            }
+            return false;
+        }finally{
+            if(requestId===invoiceDetailPaymentsRequestRef.current)setInvoiceDetailPaymentsLoading(false);
+        }
+    },[linkone]);
+
+    useEffect(()=>{
+        if(!viewingOrder?._id||showPaymentModal)return;
+        loadInvoiceDetailPayments(viewingOrder._id);
+        return ()=>{invoiceDetailPaymentsRequestRef.current+=1;};
+    },[viewingOrder?._id,showPaymentModal,loadInvoiceDetailPayments]);
+
     const updatePaymentField=(setter,field,value,record=null)=>{
         setter(previous=>{
             let next={
@@ -1086,7 +1122,10 @@ function Order2() {
                 authConfig()
             );
             const historyLoaded = await fetchPayments();
-            setEditingOrder(response.data?.order || editingOrder);
+            const updatedOrder=response.data?.order||editingOrder;
+            setEditingOrder(updatedOrder);
+            if(viewingOrder&&String(viewingOrder._id)===String(updatedOrder?._id))setViewingOrder(updatedOrder);
+            setInvoiceActivityRefreshKey(current=>current+1);
             setNewPayment(emptyPaymentRecord());
             await fetchOrders();
             setPaymentFeedback(historyLoaded
@@ -1128,7 +1167,10 @@ function Order2() {
                 authConfig()
             );
             const historyLoaded = await fetchPayments();
-            setEditingOrder(response.data?.order || editingOrder);
+            const updatedOrder=response.data?.order||editingOrder;
+            setEditingOrder(updatedOrder);
+            if(viewingOrder&&String(viewingOrder._id)===String(updatedOrder?._id))setViewingOrder(updatedOrder);
+            setInvoiceActivityRefreshKey(current=>current+1);
             setEditPayment(null);
             await fetchOrders();
             setPaymentFeedback(historyLoaded
@@ -1161,7 +1203,10 @@ function Order2() {
                 authConfig()
             );
             const historyLoaded = await fetchPayments();
-            setEditingOrder(response.data?.order || editingOrder);
+            const updatedOrder=response.data?.order||editingOrder;
+            setEditingOrder(updatedOrder);
+            if(viewingOrder&&String(viewingOrder._id)===String(updatedOrder?._id))setViewingOrder(updatedOrder);
+            setInvoiceActivityRefreshKey(current=>current+1);
             await fetchOrders();
             setPaymentFeedback(historyLoaded
                 ? {type:"success",message:"Payment deleted and invoice balances recalculated."}
@@ -1313,8 +1358,8 @@ function Order2() {
         }
     };
 
-    const printReceipt = async (paymentId) => {
-        if (!editingOrder?._id || !paymentId) return;
+    const printReceipt = async (paymentId, invoiceId = editingOrder?._id) => {
+        if (!invoiceId || !paymentId) return;
 
         const printWindow = window.open("", "_blank");
         if (!printWindow) {
@@ -1328,7 +1373,7 @@ function Order2() {
 
         try {
             const response = await axios.get(
-                `${linkone}/api/order/${editingOrder._id}/payments/${paymentId}/invoice`,
+                `${linkone}/api/order/${invoiceId}/payments/${paymentId}/invoice`,
                 { ...authConfig(), responseType: "text" }
             );
             printWindow.document.open();
@@ -1608,6 +1653,29 @@ const styles = {
         setCurrentPage(1);
     };
 
+    const viewingClientId=viewingOrder?.clientId?._id||viewingOrder?.clientId||"";
+    const viewingClient=clients.find(client=>String(client._id)===String(viewingClientId));
+    const viewingInvoiceTotal=Math.max(0,getInvoiceTotal(viewingOrder||{}));
+    const paidAmountValue=Number(viewingOrder?.paidAmount||0);
+    const viewingInvoicePaid=Number.isFinite(paidAmountValue)?Math.max(0,paidAmountValue):0;
+    const dueAmountValue=Number(viewingOrder?.dueAmount||0);
+    const viewingInvoiceDue=Number.isFinite(dueAmountValue)?dueAmountValue:0;
+    const viewingPaymentProgress=viewingInvoiceTotal>0
+        ?Math.min(100,Math.max(0,(viewingInvoicePaid/viewingInvoiceTotal)*100))
+        :0;
+    const viewingPaymentStatus=viewingOrder?.paymentStatus
+        ||(viewingInvoiceDue<=0?"Paid":viewingInvoicePaid>0?"Partly paid":"Unpaid");
+    const formatInvoiceWorkspaceMoney=value=>{
+        const amount=Number(value||0);
+        return "₹"+(Number.isFinite(amount)?amount:0).toLocaleString("en-IN",{minimumFractionDigits:2,maximumFractionDigits:2});
+    };
+    const formatInvoiceWorkspaceDate=value=>{
+        const date=value?new Date(value):null;
+        return date&&!Number.isNaN(date.getTime())
+            ?date.toLocaleDateString("en-IN",{dateStyle:"medium"})
+            :"Date not available";
+    };
+
     return (
         <div className="container-fluid invoice-page py-4">
 
@@ -1873,104 +1941,212 @@ const styles = {
                                     <div className="small text-secondary">{viewingOrder.companyName||clients.find(client=>client._id===viewingOrder.clientId)?.companyName||"Customer not linked"} · {viewingOrder.orderDate?new Date(viewingOrder.orderDate).toLocaleDateString("en-IN"):"No date"}</div>
                                 </div>
                                 <div className="d-flex align-items-center gap-2 flex-wrap">
-                                    {(viewingOrder.clientId?._id||viewingOrder.clientId)&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(viewingOrder.clientId?._id||viewingOrder.clientId))}><i className="bi bi-person me-1"></i>Customer</button>}
+                                    {viewingClientId&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/clients?openClient="+encodeURIComponent(viewingClientId))}><i className="bi bi-person me-1"></i>Customer</button>}
+                                    <button type="button" className="btn btn-sm btn-primary" onClick={()=>handlePaymentEdit(viewingOrder)} disabled={viewingOrder.status==="Cancelled"||viewingInvoiceDue<=0}><i className="bi bi-cash-stack me-1"></i>Record payment</button>
                                     <button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/credit-notes?originalOrderId="+encodeURIComponent(viewingOrder._id))}><i className="bi bi-arrow-return-left me-1"></i>Credit Note</button>
-                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/add-expense?"+new URLSearchParams({orderId:String(viewingOrder._id),...(viewingOrder.clientId?{clientId:String(viewingOrder.clientId?._id||viewingOrder.clientId)}:{})}).toString())}><i className="bi bi-wallet2 me-1"></i>Add expense</button>
+                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/add-expense?"+new URLSearchParams({orderId:String(viewingOrder._id),...(viewingClientId?{clientId:String(viewingClientId)}:{})}).toString())}><i className="bi bi-wallet2 me-1"></i>Add expense</button>
+                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>printInvoice(viewingOrder)}><i className="bi bi-printer me-1"></i>Print invoice</button>
                                     <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>{handleEdit(viewingOrder);setViewingOrder(null);}}><i className="bi bi-pencil me-1"></i>Edit</button>
                                     <button type="button" className="btn-close" aria-label="Close invoice details" onClick={()=>setViewingOrder(null)} />
                                 </div>
                             </div>
-                            <div className="modal-body invoice-view-body">
-                                <article className="invoice-view-sheet">
-                                    <div className="invoice-view-paper-heading">
-                                        <div>
-                                            <div className="small text-secondary text-uppercase fw-semibold">Invoice</div>
-                                            <h2>{viewingOrder.orderNumber||"Invoice details"}</h2>
-                                            <div className="small text-secondary">Issued {viewingOrder.orderDate?new Date(viewingOrder.orderDate).toLocaleDateString("en-IN"):"—"}</div>
+                            <div className="modal-body invoice-view-body invoice-workspace-body">
+                                <div className="invoice-workspace">
+                                    <section className="invoice-workspace-metrics" aria-label="Invoice payment summary" aria-live="polite">
+                                        <div className="invoice-workspace-metric">
+                                            <span>Invoice total</span>
+                                            <strong>{formatInvoiceWorkspaceMoney(viewingInvoiceTotal)}</strong>
+                                            <small>{viewingOrder.orderDate?"Issued "+formatInvoiceWorkspaceDate(viewingOrder.orderDate):"Invoice date not available"}</small>
                                         </div>
-                                        <div className="invoice-view-status">{viewingOrder.status||"Pending"}</div>
-                                    </div>
-                                    {orderFormSections.map(section=>{
-                                        const fields=section.fields.filter(field=>getFieldState(field,{...viewingOrder,...(viewingOrder.customFields||{})}).visible);
-                                        if(!fields.length)return null;
-                                        return (
-                                            <section className="invoice-view-section" key={section.key}>
-                                                <h6>{section.label}</h6>
-                                                <div className="row g-3">
-                                                    {fields.map(field=>{
-                                                        const value=field.custom
-                                                            ?viewingOrder.customFields?.[field.key]??viewingOrder[field.key]
-                                                            :viewingOrder[field.key];
-                                                        const displayValue=Array.isArray(value)
-                                                            ?value.join(", ")
-                                                            :field.key==="orderDate"&&value
-                                                                ?new Date(value).toLocaleDateString("en-IN")
-                                                                :field.key==="paymentTerms"&&value&&value!=="Advance"
-                                                                    ?String(value)+" days"
-                                                                    :field.key==="discountRate"&&value!==undefined&&value!==null
-                                                                        ?String(value)+"%"
-                                                                        :value===null||value===undefined||value===""
-                                                                            ?"—"
-                                                                            :String(value);
-                                                        return <div className={`col-12 col-sm-${field.width||6}`} key={field.key}>
-                                                            <div className="invoice-view-field">
-                                                                <div className="invoice-view-field-label">{field.label}</div>
-                                                                <div className="invoice-view-field-value">{displayValue}</div>
-                                                            </div>
-                                                        </div>;
-                                                    })}
+                                        <div className="invoice-workspace-metric is-received">
+                                            <span>Received so far</span>
+                                            <strong>{formatInvoiceWorkspaceMoney(viewingInvoicePaid)}</strong>
+                                            <small>{viewingPaymentProgress.toFixed(0)+"% of the invoice total"}</small>
+                                        </div>
+                                        <div className="invoice-workspace-metric is-outstanding">
+                                            <span>Outstanding amount</span>
+                                            <strong>{formatInvoiceWorkspaceMoney(viewingInvoiceDue)}</strong>
+                                            <small><span className="invoice-workspace-payment-status">{viewingPaymentStatus}</span></small>
+                                        </div>
+                                    </section>
+
+                                    <div className="invoice-workspace-grid">
+                                        <article className="invoice-view-sheet invoice-workspace-invoice">
+                                            <div className="invoice-view-paper-heading">
+                                                <div>
+                                                    <div className="small text-secondary text-uppercase fw-semibold">Invoice</div>
+                                                    <h2>{viewingOrder.orderNumber||"Invoice details"}</h2>
+                                                    <div className="small text-secondary">Issued {viewingOrder.orderDate?formatInvoiceWorkspaceDate(viewingOrder.orderDate):"Date not available"}</div>
+                                                </div>
+                                                <div className="invoice-view-status">{viewingOrder.status||"Pending"}</div>
+                                            </div>
+
+                                            <section className="invoice-workspace-customer" aria-label="Customer details">
+                                                <div>
+                                                    <span>Bill to</span>
+                                                    <strong>{viewingClient?.companyName||viewingClient?.name||viewingOrder.companyName||"Customer not linked"}</strong>
+                                                    <small>{viewingClient?.phone||"Phone not available"}</small>
+                                                    <small>{viewingClient?.email||"Email not available"}</small>
+                                                </div>
+                                                <div>
+                                                    <span>Billing address</span>
+                                                    <strong>{[viewingOrder.Address,viewingOrder.City,viewingOrder.State,viewingOrder.pinCode].filter(Boolean).join(", ")||viewingClient?.address||"Address not available"}</strong>
+                                                    <small>{(viewingOrder.gstNumber||viewingClient?.gstNumber)?"GSTIN: "+(viewingOrder.gstNumber||viewingClient?.gstNumber):"GSTIN not available"}</small>
                                                 </div>
                                             </section>
-                                        );
-                                    })}
-                                    <section className="invoice-view-section">
-                                        <h6>Items on this invoice</h6>
-                                        {(viewingOrder.subOrders||[]).length===0
-                                            ?<div className="text-secondary small">No items recorded.</div>
-                                            :(viewingOrder.subOrders||[]).map((item,index)=>{
-                                                const fields=orderItemConfig.fields.filter(field=>getFieldState(field,{...item,...(item.customFields||{})}).visible).sort((a,b)=>a.order-b.order);
-                                                const itemViewSections=groupFieldsBySection(fields);
+
+                                            {orderFormSections.map(section=>{
+                                                const fields=section.fields.filter(field=>getFieldState(field,{...viewingOrder,...(viewingOrder.customFields||{})}).visible);
+                                                if(!fields.length)return null;
                                                 return (
-                                                    <div className="invoice-view-item" key={item._id||index}>
-                                                        <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
-                                                            <div className="invoice-view-item-title">Item {index+1}: {item.orderName||item.productName||"Item"}</div>
-                                                            {item.productId&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/products?openProduct="+encodeURIComponent(item.productId?._id||item.productId))}><i className="bi bi-box-seam me-1"></i>Open product</button>}
+                                                    <section className="invoice-view-section" key={section.key}>
+                                                        <h6>{section.label}</h6>
+                                                        <div className="row g-3">
+                                                            {fields.map(field=>{
+                                                                const value=field.custom
+                                                                    ?viewingOrder.customFields?.[field.key]??viewingOrder[field.key]
+                                                                    :viewingOrder[field.key];
+                                                                const displayValue=Array.isArray(value)
+                                                                    ?value.join(", ")
+                                                                    :field.key==="orderDate"&&value
+                                                                        ?formatInvoiceWorkspaceDate(value)
+                                                                        :field.key==="paymentTerms"&&value&&value!=="Advance"
+                                                                            ?String(value)+" days"
+                                                                            :field.key==="discountRate"&&value!==undefined&&value!==null
+                                                                                ?String(value)+"%"
+                                                                                :value===null||value===undefined||value===""
+                                                                                    ?"—"
+                                                                                    :String(value);
+                                                                return <div className={"col-12 col-sm-"+(field.width||6)} key={field.key}>
+                                                                    <div className="invoice-view-field">
+                                                                        <div className="invoice-view-field-label">{field.label}</div>
+                                                                        <div className="invoice-view-field-value">{displayValue}</div>
+                                                                    </div>
+                                                                </div>;
+                                                            })}
                                                         </div>
-                                                        {itemViewSections.map(section=>(
-                                                            <section className="invoice-view-item-section" key={section.key}>
-                                                                <div className="invoice-view-field-label">{section.label}</div>
-                                                                <div className="row g-2">
-                                                                    {section.fields.map(field=>{
-                                                                        const value=field.custom
-                                                                            ?item.customFields?.[field.key]??item[field.key]
-                                                                            :item[field.key];
-                                                                        if(value===undefined||value===null||value==="")return null;
-                                                                        const displayValue=Array.isArray(value)?value.join(", "):String(value);
-                                                                        return <div className={`col-12 col-md-${field.width||4}`} key={field.key}>
-                                                                            <div className="invoice-view-field invoice-view-item-field">
-                                                                                <div className="invoice-view-field-label">{field.label}</div>
-                                                                                <div className="invoice-view-field-value">{displayValue}</div>
-                                                                            </div>
-                                                                        </div>;
-                                                                    })}
+                                                    </section>
+                                                );
+                                            })}
+
+                                            <section className="invoice-view-section">
+                                                <h6>Items on this invoice</h6>
+                                                {(viewingOrder.subOrders||[]).length===0
+                                                    ?<div className="text-secondary small">No items recorded.</div>
+                                                    :(viewingOrder.subOrders||[]).map((item,index)=>{
+                                                        const fields=orderItemConfig.fields.filter(field=>getFieldState(field,{...item,...(item.customFields||{})}).visible).sort((a,b)=>a.order-b.order);
+                                                        const itemViewSections=groupFieldsBySection(fields);
+                                                        return (
+                                                            <div className="invoice-view-item" key={item._id||index}>
+                                                                <div className="d-flex align-items-center justify-content-between gap-2 flex-wrap mb-2">
+                                                                    <div className="invoice-view-item-title">Item {index+1}: {item.orderName||item.productName||"Item"}</div>
+                                                                    {item.productId&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>navigate("/products?openProduct="+encodeURIComponent(item.productId?._id||item.productId))}><i className="bi bi-box-seam me-1"></i>Open product</button>}
                                                                 </div>
-                                                            </section>
+                                                                {itemViewSections.map(section=>(
+                                                                    <section className="invoice-view-item-section" key={section.key}>
+                                                                        <div className="invoice-view-field-label">{section.label}</div>
+                                                                        <div className="row g-2">
+                                                                            {section.fields.map(field=>{
+                                                                                const value=field.custom
+                                                                                    ?item.customFields?.[field.key]??item[field.key]
+                                                                                    :item[field.key];
+                                                                                if(value===undefined||value===null||value==="")return null;
+                                                                                const displayValue=Array.isArray(value)?value.join(", "):String(value);
+                                                                                return <div className={"col-12 col-md-"+(field.width||4)} key={field.key}>
+                                                                                    <div className="invoice-view-field invoice-view-item-field">
+                                                                                        <div className="invoice-view-field-label">{field.label}</div>
+                                                                                        <div className="invoice-view-field-value">{displayValue}</div>
+                                                                                    </div>
+                                                                                </div>;
+                                                                            })}
+                                                                        </div>
+                                                                    </section>
+                                                                ))}
+                                                            </div>
+                                                        );
+                                                    })
+                                                }
+                                            </section>
+                                        </article>
+
+                                        <aside className="invoice-workspace-sidebar">
+                                            <section className="invoice-workspace-card invoice-workspace-payments" aria-labelledby="invoice-workspace-payment-title">
+                                                <div className="invoice-workspace-card-heading">
+                                                    <div>
+                                                        <h6 id="invoice-workspace-payment-title">Payment history</h6>
+                                                        <p>All payments received against this invoice.</p>
+                                                    </div>
+                                                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>loadInvoiceDetailPayments(viewingOrder._id)} disabled={invoiceDetailPaymentsLoading} aria-label="Refresh payment history">
+                                                        <i className={"bi "+(invoiceDetailPaymentsLoading?"bi-arrow-repeat":"bi-arrow-clockwise")}></i>
+                                                    </button>
+                                                </div>
+                                                <div className="invoice-workspace-progress">
+                                                    <div className="invoice-workspace-progress-label">
+                                                        <span>Paid amount</span>
+                                                        <strong>{viewingPaymentProgress.toFixed(0)+"% paid"}</strong>
+                                                    </div>
+                                                    <div className="invoice-workspace-progress-track" role="progressbar" aria-label="Invoice payment progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(viewingPaymentProgress)}>
+                                                        <span style={{width:viewingPaymentProgress+"%"}}></span>
+                                                    </div>
+                                                </div>
+                                                {invoiceDetailPaymentsError&&(
+                                                    <div className="alert alert-warning py-2 mb-2" role="alert">
+                                                        <div>{invoiceDetailPaymentsError}</div>
+                                                        <button type="button" className="btn btn-sm btn-outline-secondary mt-2" onClick={()=>loadInvoiceDetailPayments(viewingOrder._id)}>Try again</button>
+                                                    </div>
+                                                )}
+                                                {invoiceDetailPaymentsLoading?(
+                                                    <div className="invoice-workspace-payment-state"><span className="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>Loading payments…</div>
+                                                ):invoiceDetailPaymentsError?null:!invoiceDetailPayments.length?(
+                                                    <div className="invoice-workspace-payment-empty">
+                                                        <i className="bi bi-cash-coin" aria-hidden="true"></i>
+                                                        <strong>No payments recorded yet</strong>
+                                                        <span>New payments for this invoice will appear here.</span>
+                                                    </div>
+                                                ):(
+                                                    <div className="invoice-workspace-payment-list">
+                                                        {invoiceDetailPayments.map((payment,index)=>(
+                                                            <article className="invoice-workspace-payment-row" key={payment._id||index}>
+                                                                <div>
+                                                                    <strong>{formatInvoiceWorkspaceMoney(payment.amount)}</strong>
+                                                                    <span>{[payment.method,payment.amountReference].filter(Boolean).join(" · ")||"Payment received"}</span>
+                                                                    <time>{formatInvoiceWorkspaceDate(payment.paymentDate||payment.createdAt)}</time>
+                                                                </div>
+                                                                <button type="button" className="btn btn-sm btn-light border" onClick={()=>printReceipt(payment._id,viewingOrder._id)} disabled={!payment._id} title="Print receipt">
+                                                                    <i className="bi bi-printer me-1" aria-hidden="true"></i>Receipt
+                                                                </button>
+                                                            </article>
                                                         ))}
                                                     </div>
-                                                );
-                                            })
+                                                )}
+                                                <div className="invoice-workspace-payment-total">
+                                                    <span>Total in payment history</span>
+                                                    <strong>{formatInvoiceWorkspaceMoney(invoiceDetailPayments.reduce((sum,payment)=>sum+Number(payment.amount||0),0))}</strong>
+                                                </div>
+                                                <button type="button" className="btn btn-primary w-100 mt-3" onClick={()=>handlePaymentEdit(viewingOrder)} disabled={viewingOrder.status==="Cancelled"||viewingInvoiceDue<=0}>
+                                                    <i className="bi bi-plus-lg me-2"></i>Record a payment
+                                                </button>
+                                                {viewingOrder.status==="Cancelled"&&<small className="d-block text-secondary mt-2">Cancelled invoices cannot receive payments.</small>}
+                                                {viewingInvoiceDue<=0&&viewingOrder.status!=="Cancelled"&&<small className="d-block text-secondary mt-2">This invoice has no outstanding amount.</small>}
+                                            </section>
+                                        </aside>
+                                    </div>
+
+                                    <section className="invoice-workspace-activity" aria-label="Customer activity">
+                                        {viewingClientId
+                                            ?<ClientActivityPanel key={String(viewingClientId)+":"+String(viewingOrder._id)+":"+invoiceActivityRefreshKey} clientId={viewingClientId} apiBase={linkone}/>
+                                            :<div className="invoice-workspace-card invoice-workspace-no-customer">
+                                                <strong>Customer activity is unavailable</strong>
+                                                <span>This invoice is not linked to a customer record yet.</span>
+                                            </div>
                                         }
                                     </section>
-                                    <section className="invoice-view-summary">
-                                        <div><span>Invoice total</span><strong>₹{getInvoiceTotal(viewingOrder).toFixed(2)}</strong></div>
-                                        <div><span>Paid</span><strong>₹{Number(viewingOrder.paidAmount??0).toFixed(2)}</strong></div>
-                                        <div><span>Due</span><strong>₹{Number(viewingOrder.dueAmount??0).toFixed(2)}</strong></div>
-                                    </section>
-                                </article>
+                                </div>
                             </div>
                             <div className="modal-footer invoice-view-footer">
+                                <span className="small text-secondary">Amounts shown are the saved invoice and payment records.</span>
                                 <button type="button" className="btn btn-light border" onClick={()=>setViewingOrder(null)}>Close</button>
-                                <button type="button" className="btn btn-primary" onClick={()=>window.print()}><i className="bi bi-printer me-2"></i>Print details</button>
+                                <button type="button" className="btn btn-primary" onClick={()=>printInvoice(viewingOrder)}><i className="bi bi-printer me-2"></i>Print invoice</button>
                             </div>
                         </div>
                     </div>

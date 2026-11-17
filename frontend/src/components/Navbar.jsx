@@ -156,6 +156,23 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
     setQuickCreateOpen(false);
   },[location.pathname]);
 
+  useEffect(()=>{
+    if(!mobileOpen)return undefined;
+    const previousOverflow=document.body.style.overflow;
+    document.body.style.overflow="hidden";
+    const handleKeyDown=event=>{
+      if(event.key==="Escape"){
+        setMobileOpen(false);
+        setQuickCreateOpen(false);
+      }
+    };
+    window.addEventListener("keydown",handleKeyDown);
+    return()=>{
+      document.body.style.overflow=previousOverflow;
+      window.removeEventListener("keydown",handleKeyDown);
+    };
+  },[mobileOpen,setMobileOpen]);
+
   const compactNavigation=collapsed&&!mobileOpen;
   const openCreateAction=to=>{
     navigate(to);
@@ -170,6 +187,8 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
         className="sidebar-mobile-toggle btn btn-primary shadow-sm"
         onClick={()=>setMobileOpen(true)}
         aria-label="Open navigation"
+        aria-expanded={mobileOpen}
+        aria-controls="main-sidebar"
       >
         <i className="bi bi-list"></i>
       </button>
@@ -183,7 +202,7 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
         />
       )}
 
-      <aside className={"app-sidebar "+(collapsed?"is-collapsed ":"")+(mobileOpen?"is-mobile-open":"")}>
+      <aside id="main-sidebar" className={"app-sidebar "+(collapsed?"is-collapsed ":"")+(mobileOpen?"is-mobile-open":"")}>
         <div className="sidebar-brand">
           <div className="sidebar-brand-mark"><i className="bi bi-grid-1x2-fill"></i></div>
           <div className="sidebar-brand-text">
@@ -308,6 +327,10 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
         </div>
 
         <div className="sidebar-footer">
+          <NavLink to="/settings?section=navigation" className="sidebar-customize-link" onClick={closeMobile} title="Customize your menu">
+            <i className="bi bi-sliders2" aria-hidden="true"></i>
+            <span>Customize menu</span>
+          </NavLink>
           <div className="sidebar-user">
             <div className="sidebar-user-avatar"><i className="bi bi-person"></i></div>
             <div className="sidebar-user-copy">

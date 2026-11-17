@@ -143,6 +143,8 @@ export default function FormConfigurator({
   const [search,setSearch]=useState("");
   const [dragKey,setDragKey]=useState(null);
   const [dropTargetKey,setDropTargetKey]=useState(null);
+  const [recentlyMovedKey,setRecentlyMovedKey]=useState(null);
+  const fieldPointerDragRef=React.useRef(null);
   const [expandedKey,setExpandedKey]=useState(null);
   const [showAddField,setShowAddField]=useState(false);
   const [showAdvanced,setShowAdvanced]=useState(false);
@@ -161,6 +163,11 @@ export default function FormConfigurator({
   const [sourceCatalog,setSourceCatalog]=useState(DATA_SOURCES);
 
   const incomingFieldsSignature=JSON.stringify(fields.map(clone));
+  useEffect(()=>{
+    if(!recentlyMovedKey)return undefined;
+    const timer=window.setTimeout(()=>setRecentlyMovedKey(null),600);
+    return()=>window.clearTimeout(timer);
+  },[recentlyMovedKey]);
   const draftRef=React.useRef(draft);
   const savedDraftSignatureRef=React.useRef(savedDraftSignature);
   const wasOpenRef=React.useRef(false);
@@ -260,6 +267,49 @@ export default function FormConfigurator({
       next.splice(Math.max(0,insertionIndex),0,{...moved,section:targetSection});
       return next.map((field,index)=>({...field,order:index}));
     });
+    setRecentlyMovedKey(sourceKey);
+  };
+
+  const startFieldPointerDrag=(event,key)=>{
+    if(event.pointerType==="mouse"||event.button!==0)return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    fieldPointerDragRef.current={pointerId:event.pointerId,sourceKey:key};
+    setDragKey(key);
+    setDropTargetKey(null);
+  };
+
+  const updateFieldPointerDrag=event=>{
+    const active=fieldPointerDragRef.current;
+    if(!active||active.pointerId!==event.pointerId)return;
+    const target=document.elementFromPoint(event.clientX,event.clientY)?.closest("[data-form-field-key]");
+    const targetKey=target?.getAttribute("data-form-field-key")||"";
+    setDropTargetKey(targetKey&&targetKey!==active.sourceKey?targetKey:null);
+  };
+
+  const finishFieldPointerDrag=event=>{
+    const active=fieldPointerDragRef.current;
+    if(!active||active.pointerId!==event.pointerId)return;
+    const target=document.elementFromPoint(event.clientX,event.clientY)?.closest("[data-form-field-key]");
+    const targetKey=target?.getAttribute("data-form-field-key")||"";
+    if(targetKey&&targetKey!==active.sourceKey)reorder(active.sourceKey,targetKey);
+    fieldPointerDragRef.current=null;
+    setDragKey(null);
+    setDropTargetKey(null);
+  };
+
+  const cancelFieldPointerDrag=event=>{
+    if(fieldPointerDragRef.current?.pointerId!==event.pointerId)return;
+    fieldPointerDragRef.current=null;
+    setDragKey(null);
+    setDropTargetKey(null);
+  };
+
+  const moveFieldBy=(key,direction)=>{
+    const sourceIndex=draft.findIndex(field=>field.key===key);
+    const targetIndex=sourceIndex+direction;
+    if(sourceIndex<0||targetIndex<0||targetIndex>=draft.length)return;
+    reorder(key,draft[targetIndex].key);
   };
 
   const addPaletteField=(fieldType,targetKey=null,appendToEnd=false)=>{
@@ -521,7 +571,7 @@ export default function FormConfigurator({
       <section className="form-builder" role="dialog" aria-modal="true" aria-label={title}>
         <header className="form-builder-header">
           <div className="min-w-0">
-            <div className="form-builder-kicker"><i className="bi bi-sliders2 me-1"></i>Customize</div>
+            <div className="form-builder-kicker"><i className="bi bi-sliders2 me-1"></i>VISUAL FORM DESIGNER</div>
             <h4 className="mb-1">{title}</h4>
             <p className="mb-0">{subtitle||"Start with the basics. Drag fields, rename them and choose how people use them. More options stay hidden until you need them."}</p>
           </div>
@@ -582,7 +632,7 @@ export default function FormConfigurator({
 
           <section className="form-builder-palette">
             <div className="form-builder-palette-heading">Add fields</div>
-            <div className="small text-secondary mb-3">Drag one onto the paper, or select a type to add it.</div>
+            <div className="small text-secondary mb-3">On a computer, drag a field onto the preview. On a phone, tap + to add it.</div>
             <div className="form-builder-palette-items">
               {FIELD_TYPES.map(type=>(
                 <button type="button" key={type.value} className="form-builder-palette-item" draggable onDragStart={event=>{event.dataTransfer?.setData("text/plain",`new-field:${type.value}`);if(event.dataTransfer)event.dataTransfer.effectAllowed="copy";setDragKey(null);}} onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}} onClick={()=>addPaletteField(type.value,expandedKey)}>
@@ -614,7 +664,7 @@ export default function FormConfigurator({
                       {section.fields.map(field=>(
                         <div
                           key={field.key}
-                          className={`col-12 col-md-${field.width||6} form-builder-canvas-field ${dragKey===field.key?"is-dragging ":""}${dropTargetKey===field.key&&dragKey!==field.key?"is-drop-target ":""}${expandedKey===field.key?"is-selected":""}`}
+                          className={`col-12 col-md-${field.width||6} form-builder-canvas-field ${dragKey===field.key?"is-dragging ":""}${dropTargetKey===field.key&&dragKey!==field.key?"is-drop-target ":""}${expandedKey===field.key?"is-selected ":""}${recentlyMovedKey===field.key?"is-recently-moved":""}`}
                           draggable
                           onDragStart={event=>{event.dataTransfer?.setData("text/plain",field.key);if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDragKey(field.key);setDropTargetKey(null);}}
                           onDragOver={event=>{if((dragKey&&dragKey!==field.key)||(!dragKey&&Array.from(event.dataTransfer?.types||[]).includes("text/plain"))){event.preventDefault();setDropTargetKey(field.key);}}}
@@ -666,21 +716,37 @@ export default function FormConfigurator({
               <span className="input-group-text bg-white"><i className="bi bi-search"></i></span>
               <input className="form-control" value={search} onChange={event=>setSearch(event.target.value)} placeholder="Find a field"/>
             </div>
-            <div className="small text-secondary">Drag the handle to move a field.</div>
+            <div className="small text-secondary">Drag to reorder, or use the move buttons on touchscreens.</div>
           </div>
 
           <div className="form-builder-list">
             {filtered.map(field=>(
               <article
                 key={field.key}
-                className={`form-builder-item ${field.visible===false?"is-hidden ":""}${expandedKey===field.key?"is-open ":""}${dragKey===field.key?"is-dragging ":""}${dropTargetKey===field.key&&dragKey!==field.key?"is-drop-target":""}`}
+                data-form-field-key={field.key}
+                className={`form-builder-item ${field.visible===false?"is-hidden ":""}${expandedKey===field.key?"is-open ":""}${dragKey===field.key?"is-dragging ":""}${dropTargetKey===field.key&&dragKey!==field.key?"is-drop-target ":""}${recentlyMovedKey===field.key?"is-recently-moved":""}`}
                 onDragOver={event=>{if((dragKey&&dragKey!==field.key)||(!dragKey&&Array.from(event.dataTransfer?.types||[]).includes("text/plain"))){event.preventDefault();setDropTargetKey(field.key);}}}
                 onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setDropTargetKey(current=>current===field.key?null:current);}}
                 onDrop={event=>handleDrop(event,field.key)}
                 onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}}
               >
                 <div className="form-builder-item-head">
-                  <span className="form-builder-handle" title="Drag this handle to move the field" draggable onDragStart={event=>{event.dataTransfer?.setData("text/plain",field.key);if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDragKey(field.key);setDropTargetKey(null);}} onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}} aria-label={`Move ${field.label}`}><i className="bi bi-grip-vertical"></i></span>
+                  <span
+                    className="form-builder-handle"
+                    title="Drag this handle to move the field"
+                    draggable
+                    onDragStart={event=>{event.dataTransfer?.setData("text/plain",field.key);if(event.dataTransfer)event.dataTransfer.effectAllowed="move";setDragKey(field.key);setDropTargetKey(null);}}
+                    onDragEnd={()=>{setDragKey(null);setDropTargetKey(null);}}
+                    onPointerDown={event=>startFieldPointerDrag(event,field.key)}
+                    onPointerMove={updateFieldPointerDrag}
+                    onPointerUp={finishFieldPointerDrag}
+                    onPointerCancel={cancelFieldPointerDrag}
+                    aria-label={`Move ${field.label}`}
+                  ><i className="bi bi-grip-vertical"></i></span>
+                  <div className="form-builder-order-controls" aria-label={`Reorder ${field.label}`}>
+                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>moveFieldBy(field.key,-1)} disabled={draft.findIndex(item=>item.key===field.key)===0} aria-label={`Move ${field.label} up`} title="Move up"><i className="bi bi-chevron-up"></i></button>
+                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>moveFieldBy(field.key,1)} disabled={draft.findIndex(item=>item.key===field.key)===draft.length-1} aria-label={`Move ${field.label} down`} title="Move down"><i className="bi bi-chevron-down"></i></button>
+                  </div>
                   <div className="form-builder-type-icon"><i className={`bi ${FIELD_TYPES.find(type=>type.value===field.fieldType)?.icon||"bi-fonts"}`}></i></div>
                   <div className="flex-grow-1 min-w-0">
                     <div className="d-flex flex-wrap align-items-center gap-2">

@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useState} from "react";
-import {useNavigate} from "react-router-dom";
+import {useNavigate,useSearchParams} from "react-router-dom";
 import axios from "axios";
 import {
   MODULE_CATALOG,
@@ -123,6 +123,7 @@ const FINANCIAL_INPUT_GROUPS=[
 
 export default function Settings(){
   const navigate=useNavigate();
+  const [searchParams]=useSearchParams();
   const {
     configuration,
     loading,
@@ -136,6 +137,9 @@ export default function Settings(){
   const [section,setSection]=useState("home");
   const [navigationDraft,setNavigationDraft]=useState([]);
   const [dragKey,setDragKey]=useState(null);
+  const [navigationDropTarget,setNavigationDropTarget]=useState(null);
+  const [recentlyMovedNavigationKey,setRecentlyMovedNavigationKey]=useState(null);
+  const navigationPointerDragRef=React.useRef(null);
   const [workflows,setWorkflows]=useState([]);
   const [workflow,setWorkflow]=useState(defaultWorkflow);
   const [workflowSaving,setWorkflowSaving]=useState(false);
@@ -159,6 +163,16 @@ export default function Settings(){
   const [dashboardSaving,setDashboardSaving]=useState(false);
   const [dashboardError,setDashboardError]=useState("");
   const [dashboardDragKey,setDashboardDragKey]=useState(null);
+
+  useEffect(()=>{
+    if(!recentlyMovedNavigationKey)return undefined;
+    const timer=window.setTimeout(()=>setRecentlyMovedNavigationKey(null),600);
+    return()=>window.clearTimeout(timer);
+  },[recentlyMovedNavigationKey]);
+
+  useEffect(()=>{
+    if(searchParams.get("section")==="navigation")setSection("navigation");
+  },[searchParams]);
 
   useEffect(()=>{
     if(configuration?.navigation){
@@ -393,6 +407,49 @@ export default function Settings(){
       next.splice(targetIndex,0,moved);
       return next.map((item,index)=>({...item,order:index}));
     });
+    setRecentlyMovedNavigationKey(source);
+  };
+
+  const startNavigationPointerDrag=(event,key)=>{
+    if(event.pointerType==="mouse"||event.button!==0)return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    navigationPointerDragRef.current={pointerId:event.pointerId,sourceKey:key};
+    setDragKey(key);
+    setNavigationDropTarget(null);
+  };
+
+  const updateNavigationPointerDrag=event=>{
+    const active=navigationPointerDragRef.current;
+    if(!active||active.pointerId!==event.pointerId)return;
+    const target=document.elementFromPoint(event.clientX,event.clientY)?.closest("[data-navigation-key]");
+    const targetKey=target?.getAttribute("data-navigation-key")||"";
+    setNavigationDropTarget(targetKey&&targetKey!==active.sourceKey?targetKey:null);
+  };
+
+  const finishNavigationPointerDrag=event=>{
+    const active=navigationPointerDragRef.current;
+    if(!active||active.pointerId!==event.pointerId)return;
+    const target=document.elementFromPoint(event.clientX,event.clientY)?.closest("[data-navigation-key]");
+    const targetKey=target?.getAttribute("data-navigation-key")||"";
+    if(targetKey&&targetKey!==active.sourceKey)moveNavigation(active.sourceKey,targetKey);
+    navigationPointerDragRef.current=null;
+    setDragKey(null);
+    setNavigationDropTarget(null);
+  };
+
+  const cancelNavigationPointerDrag=event=>{
+    if(navigationPointerDragRef.current?.pointerId!==event.pointerId)return;
+    navigationPointerDragRef.current=null;
+    setDragKey(null);
+    setNavigationDropTarget(null);
+  };
+
+  const moveNavigationBy=(key,direction)=>{
+    const sourceIndex=navigationDraft.findIndex(item=>item.key===key);
+    const targetIndex=sourceIndex+direction;
+    if(sourceIndex<0||targetIndex<0||targetIndex>=navigationDraft.length)return;
+    moveNavigation(key,navigationDraft[targetIndex].key);
   };
 
   const updateNavigation=(key,patch)=>{
@@ -664,29 +721,60 @@ export default function Settings(){
                   <button type="button" className="btn btn-primary" onClick={saveNavigation} disabled={saving}>{saving?"Saving...":"Save menu"}</button>
                 </div>
 
-                <div className="settings-builder-tip">Drag using the handle. Rename a page for your team. The software keeps the real page safely connected underneath.</div>
+                <div className="settings-builder-tip">
+                  <strong>Arrange your menu</strong>
+                  <span>Drag a screen on a computer, or use the move buttons on a phone. Rename or hide screens without losing their saved records.</span>
+                </div>
 
                 <div className="settings-drag-list">
-                  {navigationDraft.map(item=>{
+                  {navigationDraft.map((item,index)=>{
                     const module=currentModuleMap.get(item.key);
                     if(!module)return null;
                     return(
                       <div
                         key={item.key}
-                        className={`settings-drag-row ${item.visible?"":"is-hidden"} ${dragKey===item.key?"is-dragging":""}`}
+                        data-navigation-key={item.key}
+                        className={`settings-drag-row ${item.visible?"":"is-hidden"} ${dragKey===item.key?"is-dragging":""} ${navigationDropTarget===item.key&&dragKey!==item.key?"is-drop-target ":""}${recentlyMovedNavigationKey===item.key?"is-recently-moved":""}`}
                         draggable
-                        onDragStart={()=>setDragKey(item.key)}
-                        onDragOver={event=>event.preventDefault()}
-                        onDrop={()=>{moveNavigation(dragKey,item.key);setDragKey(null);}}
-                        onDragEnd={()=>setDragKey(null)}
+                        onDragStart={event=>{
+                          event.dataTransfer?.setData("text/plain",item.key);
+                          if(event.dataTransfer)event.dataTransfer.effectAllowed="move";
+                          setDragKey(item.key);
+                          setNavigationDropTarget(null);
+                        }}
+                        onDragOver={event=>{event.preventDefault();setNavigationDropTarget(item.key);}}
+                        onDragLeave={event=>{if(!event.currentTarget.contains(event.relatedTarget))setNavigationDropTarget(current=>current===item.key?null:current);}}
+                        onDrop={event=>{
+                          event.preventDefault();
+                          const source=event.dataTransfer?.getData("text/plain")||dragKey;
+                          if(source)moveNavigation(source,item.key);
+                          setDragKey(null);
+                          setNavigationDropTarget(null);
+                        }}
+                        onDragEnd={()=>{setDragKey(null);setNavigationDropTarget(null);}}
                       >
-                        <span className="settings-drag-handle" title="Drag to move"><i className="bi bi-grip-vertical"></i></span>
+                        <span
+                          className="settings-drag-handle"
+                          title="Drag to move"
+                          aria-hidden="true"
+                          onPointerDown={event=>startNavigationPointerDrag(event,item.key)}
+                          onPointerMove={updateNavigationPointerDrag}
+                          onPointerUp={finishNavigationPointerDrag}
+                          onPointerCancel={cancelNavigationPointerDrag}
+                        ><i className="bi bi-grip-vertical"></i></span>
                         <span className="settings-row-icon"><i className={`bi ${module.icon}`}></i></span>
-                        <div className="flex-grow-1">
-                          <input className="form-control" value={item.label} onChange={event=>updateNavigation(item.key,{label:event.target.value})}/>
+                        <div className="flex-grow-1 settings-navigation-copy">
+                          <label className="visually-hidden" htmlFor={`navigation-label-${item.key}`}>Name shown for {module.label}</label>
+                          <input id={`navigation-label-${item.key}`} className="form-control" value={item.label} onChange={event=>updateNavigation(item.key,{label:event.target.value})}/>
                           <small>{module.description}</small>
                         </div>
-                        <button type="button" className={`btn btn-sm ${item.visible?"btn-outline-primary":"btn-outline-secondary"}`} onClick={()=>updateNavigation(item.key,{visible:!item.visible})}>{item.visible?"Shown":"Hidden"}</button>
+                        <div className="settings-drag-actions">
+                          <div className="settings-drag-order-controls" aria-label={`Reorder ${module.label}`}>
+                            <button type="button" className="btn btn-sm btn-light border" onClick={()=>moveNavigationBy(item.key,-1)} disabled={index===0} aria-label={`Move ${module.label} up`} title="Move up"><i className="bi bi-chevron-up"></i></button>
+                            <button type="button" className="btn btn-sm btn-light border" onClick={()=>moveNavigationBy(item.key,1)} disabled={index===navigationDraft.length-1} aria-label={`Move ${module.label} down`} title="Move down"><i className="bi bi-chevron-down"></i></button>
+                          </div>
+                          <button type="button" className={`btn btn-sm ${item.visible?"btn-outline-primary":"btn-outline-secondary"}`} onClick={()=>updateNavigation(item.key,{visible:!item.visible})}>{item.visible?"Shown":"Hidden"}</button>
+                        </div>
                       </div>
                     );
                   })}

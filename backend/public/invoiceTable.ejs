@@ -136,7 +136,7 @@
           <% if(profileLogoUrl){ %><img src="<%= profileLogoUrl %>" alt="Business logo" style="width:100%;height:100%;object-fit:contain"><% } %>
         <% }else if(block.type==="field"){ %>
           <% const displayValue=designValues[block.fieldKey]??""; %>
-          <% if(block.label){ %><span class="field-label"><%= block.label %>: </span><% } %><%= displayValue %>
+          <% if(block.label&&block.showLabel!==false){ %><span class="field-label"><%= block.label %>: </span><% } %><%= displayValue %>
         <% }else if(block.type==="items_table"){ %>
           <div class="design-items">
             <table>

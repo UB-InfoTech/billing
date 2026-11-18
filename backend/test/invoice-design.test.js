@@ -152,6 +152,22 @@ test("OCR finds a separate value line beside its label but avoids another labell
   assert.equal(noCoordinates[0].valueBox,null);
 });
 
+test("changing an OCR field match recalculates its placement instead of reusing the old field position",async()=>{
+  const {inferOcrValueBox}=await import("../../frontend/src/utils/invoiceOcrMapping.js");
+  const line={
+    id:"ocr-invoice-number",fieldKey:"invoice_no",selectedField:"invoice_no",
+    confidence:94,box:{x:10,y:10,w:30,h:2},
+    words:[
+      {text:"Invoice",confidence:94,box:{x:10,y:10.25,w:8,h:1.5}},
+      {text:"No:",confidence:92,box:{x:18.5,y:10.25,w:4,h:1.5}},
+      {text:"INV-101",confidence:95,box:{x:23.5,y:10.25,w:9.5,h:1.5}}
+    ]
+  };
+  assert.ok(inferOcrValueBox(line,[line]));
+  assert.equal(inferOcrValueBox({...line,selectedField:"grand_total"},[line]),null);
+  assert.equal(inferOcrValueBox({...line,selectedField:""},[line]),null);
+});
+
 test("new invoice design keeps the existing print layout active until the owner selects a new design",()=>{
   const design=createDefaultInvoiceDesign();
   assert.equal(design.enabled,false);
@@ -169,7 +185,7 @@ test("invoice design sanitization allows safe editable blocks and owner-owned PD
       id:"imported",name:"Imported invoice",templateKey:"imported",
       background:{url,type:"pdf",locked:true},
       blocks:[
-        {id:"invoice-number",type:"field",fieldKey:"invoice_no",x:12,y:14,w:30,h:5,fontSize:13,bold:true,color:"#123456"},
+        {id:"invoice-number",type:"field",fieldKey:"invoice_no",x:12,y:14,w:30,h:5,fontSize:13,bold:true,color:"#123456",showLabel:false},
         {id:"note",type:"text",text:"Thank you",x:8,y:90,w:40,h:5},
         {id:"unsafe",type:"field",fieldKey:"javascript:alert(1)",x:0,y:0,w:100,h:100},
         {id:"not-a-block",type:"html",text:"<script>alert(1)</script>"}
@@ -182,6 +198,25 @@ test("invoice design sanitization allows safe editable blocks and owner-owned PD
   assert.equal(design.templates[0].background.type,"pdf");
   assert.deepEqual(design.templates[0].blocks.map(block=>block.type),["field","text"]);
   assert.equal(design.templates[0].blocks[0].color,"#123456");
+  assert.equal(design.templates[0].blocks[0].showLabel,false);
+  assert.equal(design.templates[0].blocks[1].showLabel,false);
+});
+
+test("older imported designs hide duplicated field labels while clean designs keep them",()=>{
+  const owner="64b000000000000000000001";
+  const importedUrl="/uploads/invoice-designs/"+owner+"-0123456789abcdef01234567.pdf";
+  const imported=sanitizeInvoiceDesign({
+    templates:[{id:"imported",background:{url:importedUrl,type:"pdf"},blocks:[
+      {id:"invoice-number",type:"field",fieldKey:"invoice_no",label:"Invoice number",x:10,y:10,w:30,h:5}
+    ]}]
+  },owner);
+  const clean=sanitizeInvoiceDesign({
+    templates:[{id:"clean",background:{url:""},blocks:[
+      {id:"invoice-number",type:"field",fieldKey:"invoice_no",label:"Invoice number",x:10,y:10,w:30,h:5}
+    ]}]
+  },owner);
+  assert.equal(imported.templates[0].blocks[0].showLabel,false);
+  assert.equal(clean.templates[0].blocks[0].showLabel,true);
 });
 
 test("invoice design rejects another owner's background and bounds layout values",()=>{
@@ -200,6 +235,7 @@ test("invoice design rejects another owner's background and bounds layout values
   assert.equal(template.blocks[0].h,2);
   assert.equal(template.blocks[0].fontSize,48);
   assert.equal(template.blocks[0].color,"#172335");
+  assert.equal(template.blocks[0].showLabel,true);
 });
 
 test("invoice backgrounds must match their declared file signatures",()=>{
@@ -269,7 +305,7 @@ test("actual print template renders the in-session design and saved invoice rows
   const template={
     id:"in-session-preview",name:"Preview design",pageSize:"A4",orientation:"portrait",
     blocks:[
-      {id:"invoice-no",type:"field",fieldKey:"invoice_no",label:"Invoice number",x:8,y:10,w:45,h:6,fontSize:12,bold:true,align:"left",color:"#172335",visible:true},
+      {id:"invoice-no",type:"field",fieldKey:"invoice_no",label:"Invoice number",showLabel:false,x:8,y:10,w:45,h:6,fontSize:12,bold:true,align:"left",color:"#172335",visible:true},
       {id:"items",type:"items_table",x:6,y:24,w:88,h:42,fontSize:8,visible:true},
       {id:"totals",type:"totals",x:62,y:72,w:32,h:20,fontSize:9,visible:true}
     ]
@@ -297,6 +333,7 @@ test("actual print template renders the in-session design and saved invoice rows
     paymentStatus:"Unpaid",dueAmount:1180,creditAppliedAmount:0,payments:[]
   });
   assert.match(html,/INV-PREVIEW-001/);
+  assert.doesNotMatch(html,/Invoice number:/);
   assert.match(html,/Cotton fabric/);
   assert.match(html,/1000\.00/);
   assert.match(html,/left:8%;top:10%;width:45%;height:6%/);

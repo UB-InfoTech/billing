@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useRef,useState} from "react";
 import axios from "axios";
 import "./InvoicePrintBuilder.css";
 import {buildInvoiceSmartLayout,scanImportedInvoiceLayout} from "../utils/invoiceLayoutScanner.js";
+import {inferOcrValueBox} from "../utils/invoiceOcrMapping.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
@@ -108,6 +109,9 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [ocrLoading,setOcrLoading]=useState(false);
   const [ocrProgress,setOcrProgress]=useState({stage:"",progress:0});
   const [ocrError,setOcrError]=useState("");
+  const [ocrView,setOcrView]=useState("suggested");
+  const [highlightedOcrLineId,setHighlightedOcrLineId]=useState("");
+  const [fieldSearch,setFieldSearch]=useState("");
   const [previewRecords,setPreviewRecords]=useState([]);
   const [previewRecordId,setPreviewRecordId]=useState("");
   const [previewInvoice,setPreviewInvoice]=useState(null);
@@ -124,6 +128,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const historyRef=useRef(history);
   const draggingRef=useRef(null);
   const previewRequestRef=useRef(0);
+  const starterTemplateSnapshotRef=useRef(null);
 
   useEffect(()=>{
     let active=true;
@@ -236,7 +241,23 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     ()=>localDesign.templates.find(template=>template.id===localDesign.activeTemplateId)||localDesign.templates[0]||makeTemplate("clean-default","Clean","clean"),
     [localDesign]
   );
+  if(!starterTemplateSnapshotRef.current){
+    starterTemplateSnapshotRef.current={id:activeTemplate.id,blocks:JSON.stringify(activeTemplate.blocks)};
+  }
   const selectedBlock=activeTemplate.blocks.find(block=>block.id===selectedBlockId)||null;
+  const visibleOcrLines=useMemo(()=>{
+    if(!ocrScan)return [];
+    const source=ocrView==="suggested"?ocrScan.lines.filter(line=>line.selectedField):ocrScan.lines;
+    return source.slice(0,30);
+  },[ocrScan,ocrView]);
+  const suggestedOcrCount=ocrScan?.lines.filter(line=>line.selectedField).length||0;
+  const filteredFieldGroups=useMemo(()=>{
+    const query=fieldSearch.trim().toLowerCase();
+    return FIELD_GROUPS.map(group=>({...group,items:group.items.filter(([key,label])=>!query||label.toLowerCase().includes(query)||key.replace(/_/g," ").includes(query))})).filter(group=>group.items.length);
+  },[fieldSearch]);
+  const highlightedOcrLine=ocrScan?.lines.find(line=>line.id===highlightedOcrLineId)||null;
+  const referenceReady=Boolean(activeTemplate.background?.url);
+  const liveFieldCount=activeTemplate.blocks.filter(block=>block.visible!==false&&["field","items_table","totals","logo"].includes(block.type)).length;
   const applyDesign=next=>{
     currentDesignRef.current=next;
     setLocalDesign(next);
@@ -300,12 +321,38 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const height=dimensions.h??(type==="items_table"?18:type==="totals"?16:type==="logo"?12:5);
     const x=clamp(position?.x??34,0,100-width);
     const y=clamp(position?.y??40,0,100-height);
-    const newBlock=makeBlock(id,type,fieldKey,label,x,y,width,height);
+    const newBlock=makeBlock(id,type,fieldKey,label,x,y,width,height,{showLabel:type==="field"?!activeTemplate.background?.url:false});
     if(type==="text")newBlock.text="Your text";
     if(type==="items_table")newBlock.fontSize=8;
     updateActive({blocks:[...activeTemplate.blocks,newBlock]});
     setSelectedBlockId(id);
   };
+  const findOpenPalettePosition=(width,height)=>{
+    const occupied=activeTemplate.blocks.filter(block=>block.visible!==false);
+    const candidates=[];
+    const rowGap=Math.max(7,height+2);
+    const columnGap=Math.max(8,width+3);
+    for(let y=6;y<=94-height;y+=rowGap){
+      for(let x=6;x<=94-width;x+=columnGap){
+        let overlap=0;
+        occupied.forEach(block=>{
+          const intersectionWidth=Math.max(0,Math.min(x+width,block.x+block.w)-Math.max(x,block.x));
+          const intersectionHeight=Math.max(0,Math.min(y+height,block.y+block.h)-Math.max(y,block.y));
+          overlap+=intersectionWidth*intersectionHeight;
+        });
+        candidates.push({x,y,score:overlap*100+Math.abs(x-35)+Math.abs(y-38)*0.45});
+      }
+    }
+    candidates.sort((a,b)=>a.score-b.score);
+    return candidates[0]?{x:candidates[0].x,y:candidates[0].y}:{x:6,y:6};
+  };
+
+  const addPaletteField=(fieldKey)=>{
+    const type=fieldKey==="items"?"items_table":fieldKey==="totals"?"totals":fieldKey==="logo"?"logo":"field";
+    const dimensions=type==="items_table"?{w:88,h:22}:type==="totals"?{w:32,h:15}:type==="logo"?{w:15,h:12}:{w:30,h:5};
+    addBlock(type,fieldKey,findOpenPalettePosition(dimensions.w,dimensions.h),dimensions);
+  };
+
   const applySmartLayout=()=>{
     if(!layoutScan)return;
     const plan=buildInvoiceSmartLayout(layoutScan);
@@ -324,12 +371,13 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       const patch={
         x:suggestion.x,y:suggestion.y,w:suggestion.w,h:suggestion.h,
         visible:true,
+        ...(suggestion.type==="field"?{showLabel:false}:{}),
         ...(suggestion.fontSize?{fontSize:suggestion.fontSize}:{}),
         ...(suggestion.bold!==undefined?{bold:suggestion.bold}:{}),
         ...(suggestion.align?{align:suggestion.align}:{})
       };
       if(existingIndex>=0){
-        blocks[existingIndex]={...blocks[existingIndex],...patch};
+        blocks[existingIndex]={...blocks[existingIndex],visible:true,...(suggestion.type==="field"?{showLabel:false}:{})};
         if(suggestion.type==="items_table")tableBlockId=blocks[existingIndex].id;
       }else{
         const id=createId("auto");
@@ -342,33 +390,10 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     updateActive({blocks});
     if(tableBlockId)setSelectedBlockId(tableBlockId);
     setMessage(plan.tableDetected
-      ?"Smart layout applied. The item-table area was detected and common invoice fields were arranged around it. Review the positions before saving."
-      :"Smart layout applied using a standard invoice layout because clear table boundaries were not found. Please check the item-table position and adjust it to match your reference.");
+      ?"Suggested fields were added around the detected table. Any fields you had already positioned were kept in place."
+      :"A standard starting layout was added because no clear table grid was found. Existing field positions were kept; please check the table area.");
   };
 
-  const addSuggestedFields=()=>{
-    const suggested=[
-      ["company_name","Business name"],["logo","Business logo"],["company_address","Business address"],
-      ["invoice_no","Invoice number"],["customer_name","Customer name"],["customer_address","Customer address"],
-      ["items","Invoice items"],["totals","Invoice totals"],["terms","Terms and conditions"],["signature","Authorised signatory"]
-    ];
-    const existing=new Set(activeTemplate.blocks.map(block=>block.type==="items_table"?"items":block.type==="totals"?"totals":block.type==="logo"?"logo":block.fieldKey||block.type));
-    const blocks=activeTemplate.blocks.slice();
-    suggested.forEach(([key,label])=>{
-      const type=key==="items"?"items_table":key==="totals"?"totals":key==="logo"?"logo":"field";
-      if(existing.has(key)||existing.has(type))return;
-      const id=createId("suggested");
-      const offset=blocks.length%5;
-      blocks.push(makeBlock(id,type,type==="field"?key:key,label,7+(offset%2)*46,40+Math.floor(blocks.length/2)*7,type==="items_table"?86:type==="totals"?34:40,type==="items_table"?22:type==="totals"?13:5,{fontSize:type==="items_table"?8:9}));
-      existing.add(key);
-    });
-    if(blocks.length===activeTemplate.blocks.length){
-      setMessage("Your starter fields are already on this design. Use guided placement below to add another field or place a replacement over the imported reference.");
-      return;
-    }
-    updateActive({blocks});
-    setMessage("Suggested invoice fields added. Move and resize them to match your imported design.");
-  };
   const placeFieldOnCanvas=event=>{
     if(!placingField||!placementField||!canvasRef.current)return;
     const rect=canvasRef.current.getBoundingClientRect();
@@ -385,9 +410,15 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       :{w:38,h:5};
     const x=clamp(clickX-dimensions.w/2,0,100-dimensions.w);
     const y=clamp(clickY-dimensions.h/2,0,100-dimensions.h);
-    addBlock(type,placementField,{x,y},dimensions);
+    const existing=type==="field"
+      ?activeTemplate.blocks.find(block=>block.type==="field"&&block.fieldKey===placementField)
+      :activeTemplate.blocks.find(block=>block.type===type);
+    if(existing){
+      updateBlock(existing.id,{x,y,...dimensions,visible:true,...(type==="field"&&activeTemplate.background?.url?{showLabel:false}:{})});
+      setSelectedBlockId(existing.id);
+    }else addBlock(type,placementField,{x,y},dimensions);
     setPlacingField(false);
-    setMessage((FIELD_LABELS[placementField]||"Invoice element")+" added. Resize and style it to fit the imported design.");
+    setMessage((FIELD_LABELS[placementField]||"Invoice element")+" positioned. You can drag or resize it on the page.");
   };
   const chooseTemplate=key=>{
     const name=key==="classic"?"Traditional":key==="modern"?"Modern":"Clean";
@@ -411,6 +442,12 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   };
   const handleUpload=async file=>{
     if(!file)return;
+    const fileName=String(file.name||"").toLowerCase();
+    const fileType=String(file.type||"").toLowerCase();
+    const supportedExtension=[".pdf",".jpg",".jpeg",".png",".webp"].some(extension=>fileName.endsWith(extension));
+    const acceptedType=fileType==="application/pdf"||["image/jpeg","image/png","image/webp"].includes(fileType)||supportedExtension;
+    if(!acceptedType){setError("Choose a PDF, JPG, PNG or WebP invoice design.");if(importRef.current)importRef.current.value="";return;}
+    if(Number(file.size)>12*1024*1024){setError("This file is larger than 12 MB. Please choose a smaller invoice design.");if(importRef.current)importRef.current.value="";return;}
     setError("");
     setMessage("");
     setLayoutScan(null);
@@ -427,8 +464,23 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       const response=await axios.post(API+"/api/invoice-config/background",data,auth());
       const background=response.data||{};
       setImportedFile(file);
-      updateActive({templateKey:"imported",background:{url:background.url||"",type:background.type||"image",locked:true,visible:true}});
-      setMessage("Design imported as a locked reference. Scanning its layout…");
+      setOcrView("suggested");
+      setHighlightedOcrLineId("");
+      const isUntouchedStarter=!activeTemplate.background?.url
+        &&activeTemplate.id===starterTemplateSnapshotRef.current?.id
+        &&JSON.stringify(activeTemplate.blocks)===starterTemplateSnapshotRef.current?.blocks;
+      const importedBlocks=isUntouchedStarter?[]:activeTemplate.blocks.map(block=>
+        block.type==="field"?{...block,showLabel:false}:block
+      );
+      updateActive({
+        templateKey:"imported",
+        ...(isUntouchedStarter?{name:file.name.replace(/\.[^.]+$/,"").slice(0,60)||"Imported invoice"}:{}),
+        blocks:importedBlocks,
+        background:{url:background.url||"",type:background.type||"image",locked:true,visible:true}
+      });
+      setMessage(isUntouchedStarter
+        ?"Your design is imported safely. The page is ready for editable fields; the original stays locked."
+        :"Your new reference is imported. Existing fields were kept in place and their extra labels hidden; review their positions.");
       setLayoutScanLoading(true);
       try{
         const scan=await scanImportedInvoiceLayout(file);
@@ -461,6 +513,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       const {scanImportedInvoiceText}=await import("../utils/invoiceOcrScanner.js");
       const result=await scanImportedInvoiceText(importedFile,setOcrProgress);
       setOcrScan({...result,lines:result.lines.map(line=>({...line,selectedField:line.fieldKey||""}))});
+      setOcrView("suggested");
+      setHighlightedOcrLineId("");
       setMessage(result.lines.length
         ?"Text recognition complete. Use Place at detected area where a value position was found, or choose manual placement to click the page."
         :"No readable text was found on the first page. You can still use smart layout scanning and guided placement.");
@@ -474,7 +528,9 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const updateOcrMapping=(lineId,fieldKey)=>{
     setOcrScan(previous=>previous?{
       ...previous,
-      lines:previous.lines.map(line=>line.id===lineId?{...line,selectedField:fieldKey}:line)
+      lines:previous.lines.map(line=>line.id===lineId
+        ?{...line,selectedField:fieldKey,valueBox:inferOcrValueBox({...line,selectedField:fieldKey},previous.lines)}
+        :line)
     }:previous);
   };
 
@@ -486,8 +542,9 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     }
     const label=FIELD_LABELS[fieldKey]||"invoice field";
     setPlacementField(fieldKey);
+    setHighlightedOcrLineId(line.id);
     setPlacingField(true);
-    setMessage("OCR matched “"+line.text+"” to "+label+". Click the value position on the reference page to place the live field.");
+    setMessage("Click the value position for "+label+". The highlighted area shows what OCR matched.");
   };
 
   const placeOcrMappingAtDetectedArea=line=>{
@@ -497,23 +554,25 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       setOcrError("A clear printed value area was not found. Use manual placement for this line.");
       return;
     }
-    const width=clamp(box.w,10,48);
-    const height=clamp(box.h,3,10);
+    const width=clamp(box.w,3,48);
+    const height=clamp(box.h,2,10);
     const position={
       x:clamp(box.x,0,100-width),
       y:clamp(box.y,0,100-height)
     };
     const existing=activeTemplate.blocks.find(block=>block.type==="field"&&block.fieldKey===fieldKey);
     if(existing){
-      updateBlock(existing.id,{...position,w:width,h:height,visible:true});
+      updateBlock(existing.id,{...position,w:width,h:height,visible:true,showLabel:false});
       setSelectedBlockId(existing.id);
     }else{
       addBlock("field",fieldKey,position,{w:width,h:height});
     }
     setPlacementField(fieldKey);
     setPlacingField(false);
+    setHighlightedOcrLineId(line.id);
     setOcrError("");
-    setMessage((FIELD_LABELS[fieldKey]||"Invoice field")+" placed over the detected printed value. Check the preview and adjust its size or position if needed.");
+    const placementDescription=box.kind==="estimated"?"in the suggested space":"over the detected value";
+    setMessage((FIELD_LABELS[fieldKey]||"Invoice field")+" placed "+placementDescription+". Check the preview and adjust its size or position if needed.");
   };
 
   const startBlockDrag=(event,block)=>{
@@ -648,7 +707,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       </div>;
     }
     const value=previewInvoice?(previewFields[block.fieldKey]||"—"):(SAMPLE_VALUES[block.fieldKey]||block.label||"Invoice field");
-    return <span>{block.label&&<small className="invoice-builder-field-label">{block.label}: </small>}{value}</span>;
+    return <span>{block.label&&block.showLabel!==false&&<small className="invoice-builder-field-label">{block.label}: </small>}{value}</span>;
   };
 
   return (
@@ -657,7 +716,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         <header className="invoice-builder-topbar">
           <div className="invoice-builder-brand">
             <button type="button" className="btn btn-light border" onClick={onClose}><i className="bi bi-arrow-left me-1"></i>Back</button>
-            <div><strong>Invoice design builder</strong><small>Design how your invoices look when printed</small></div>
+            <div><strong>Invoice design builder</strong><small>Import a design, position invoice details, then check the print preview</small></div>
           </div>
           <div className="invoice-builder-top-actions">
             <span className="invoice-builder-save-status">{localDesign.enabled?"Custom design active":"Current print design unchanged"}</span>
@@ -665,6 +724,11 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
             <button type="button" className="btn btn-primary" disabled={saving||uploading} onClick={()=>onSave?.({...localDesign,enabled:true})}>{saving?<><span className="spinner-border spinner-border-sm me-2"/>Saving</>:"Save design"}</button>
           </div>
         </header>
+        <nav className="invoice-builder-steps" aria-label="Invoice design steps">
+          <div className={referenceReady?"is-complete":"is-current"}><span>{referenceReady?<i className="bi bi-check-lg"/>:"1"}</span><div><strong>Choose a design</strong><small>{referenceReady?"Reference imported safely":"Pick a starter or import PDF / image"}</small></div></div>
+          <div className={liveFieldCount>0?"is-complete":referenceReady?"is-current":""}><span>{liveFieldCount>0?<i className="bi bi-check-lg"/>:"2"}</span><div><strong>Place invoice details</strong><small>{liveFieldCount>0?liveFieldCount+" editable elements":"Add the fields your invoice needs"}</small></div></div>
+          <div className={printPreviewHtml?"is-complete":liveFieldCount>0?"is-current":""}><span>{printPreviewHtml?<i className="bi bi-check-lg"/>:"3"}</span><div><strong>Check and save</strong><small>{printPreviewHtml?"Print preview checked":"Preview the real invoice before saving"}</small></div></div>
+        </nav>
         {error&&<div className="alert alert-danger m-3 mb-0">{error}</div>}
         {previewError&&<div className="alert alert-warning m-3 mb-0">{previewError} You can continue with sample data.</div>}
         {printPreviewError&&<div className="alert alert-warning m-3 mb-0">{printPreviewError}<button type="button" className="btn-close float-end" aria-label="Dismiss" onClick={()=>setPrintPreviewError("")}/></div>}
@@ -672,18 +736,20 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         <div className="invoice-builder-workspace">
           <aside className="invoice-builder-sidebar invoice-builder-fields">
             <div className="invoice-builder-panel-heading"><strong>Add to invoice</strong><small>Drag a field onto the page or tap to add it</small></div>
-            {FIELD_GROUPS.map(group=>(
+            <div className="invoice-builder-field-search"><i className="bi bi-search"/><input type="search" className="form-control form-control-sm" value={fieldSearch} onChange={event=>setFieldSearch(event.target.value)} placeholder="Find an invoice field…" aria-label="Find an invoice field"/>{fieldSearch&&<button type="button" onClick={()=>setFieldSearch("")} aria-label="Clear field search"><i className="bi bi-x-lg"/></button>}</div>
+            {filteredFieldGroups.map(group=>(
               <section className="invoice-builder-field-group" key={group.title}>
                 <h3>{group.title}</h3>
                 <div className="invoice-builder-palette">
                   {group.items.map(([key,label])=>(
-                    <button type="button" key={key} draggable onDragStart={event=>{event.dataTransfer.setData("application/x-invoice-field",key);event.dataTransfer.effectAllowed="copy";}} onClick={()=>addBlock(key==="logo"?"logo":"field",key,{x:34,y:42})}>
+                    <button type="button" key={key} draggable onDragStart={event=>{event.dataTransfer.setData("application/x-invoice-field",key);event.dataTransfer.effectAllowed="copy";}} onClick={()=>addPaletteField(key)}>
                       <span><i className={"bi "+(key==="logo"?"bi-image":key==="items"?"bi-table":"bi-plus-square")}></i></span>{label}<i className="bi bi-plus"/>
                     </button>
                   ))}
                 </div>
               </section>
             ))}
+            {!filteredFieldGroups.length&&<div className="invoice-builder-field-no-results">No fields match “{fieldSearch}”. Try another name.</div>}
             <div className="invoice-builder-extra-tools">
               <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("items_table","items")}> <i className="bi bi-table me-1"/>Add item table</button>
               <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("totals","totals")}> <i className="bi bi-calculator me-1"/>Add totals</button>
@@ -704,8 +770,9 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 <button type="button" className="btn btn-sm btn-light border" onClick={duplicateTemplate} disabled={localDesign.templates.length>=12} title="Duplicate this design"><i className="bi bi-copy"/></button>
               </div>
               <div className="invoice-builder-toolbar-actions">
-                <label className="btn btn-sm btn-light border mb-0" htmlFor="invoice-design-import"><i className="bi bi-upload me-1"/>{uploading?"Importing...":"Import design"}</label>
+                <label className="btn btn-sm btn-light border mb-0" htmlFor="invoice-design-import"><i className="bi bi-upload me-1"/>{uploading?"Importing…":"Import PDF or image"}</label>
                 <input ref={importRef} id="invoice-design-import" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" hidden onChange={event=>handleUpload(event.target.files?.[0])}/>
+                <small className="invoice-builder-import-hint">PDF, JPG, PNG or WebP · up to 12 MB</small>
                 <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>updateDesign({...localDesign,enabled:!localDesign.enabled})}>{localDesign.enabled?"Using custom design":"Use this design"}</button>
               </div>
             </div>
@@ -723,6 +790,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   {printPreviewLoading?<span className="spinner-border spinner-border-sm me-1"/>:<i className="bi bi-file-earmark-pdf me-1"/>}
                   {printPreviewLoading?"Preparing…":"Actual print"}
                 </button>
+                {!previewRecordId&&<small className="invoice-builder-preview-help">Sample values are shown. Create an invoice to check the real print output.</small>}
               </div>
               <div className="invoice-builder-page-settings">
                 <label>Paper</label><select value={activeTemplate.pageSize} onChange={event=>setPageSize(event.target.value)}><option value="A4">A4</option><option value="A5">A5</option><option value="Letter">Letter</option></select>
@@ -733,6 +801,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
             <div className="invoice-builder-canvas-scroll">
               <div className={"invoice-builder-page "+(activeTemplate.orientation==="landscape"?"is-landscape":"")} style={{aspectRatio:activeTemplate.orientation==="landscape"?"1.414 / 1":String(canvasRatio).replace("/"," / ")}}>
                 <div className="invoice-builder-canvas" ref={canvasRef} onDragOver={event=>event.preventDefault()} onDrop={handlePaletteDrop} onPointerMove={moveBlock} onPointerUp={finishBlockDrag} onPointerCancel={finishBlockDrag}>
+                  {highlightedOcrLine?.box&&<div className="invoice-builder-ocr-highlight is-label" style={{left:highlightedOcrLine.box.x+"%",top:highlightedOcrLine.box.y+"%",width:highlightedOcrLine.box.w+"%",height:Math.max(2,highlightedOcrLine.box.h)+"%"}}><span>Matched text</span></div>}
+                  {highlightedOcrLine?.valueBox&&<div className={"invoice-builder-ocr-highlight is-target "+(highlightedOcrLine.valueBox.kind==="estimated"?"is-estimated":"")} style={{left:highlightedOcrLine.valueBox.x+"%",top:highlightedOcrLine.valueBox.y+"%",width:highlightedOcrLine.valueBox.w+"%",height:highlightedOcrLine.valueBox.h+"%"}}><span>{highlightedOcrLine.valueBox.kind==="estimated"?"Suggested space":"Live field position"}</span></div>}
                   {activeTemplate.background?.url&&activeTemplate.background.visible!==false&&(
                     activeTemplate.background.type==="pdf"
                       ? <iframe className="invoice-builder-background" title="Imported PDF invoice reference" src={backgroundUrl+"#toolbar=0&navpanes=0&scrollbar=0"} tabIndex="-1"/>
@@ -765,12 +835,11 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
             <div className="invoice-builder-panel-heading"><strong>Design settings</strong><small>Make this invoice your own</small></div>
             {activeTemplate.background?.url&&(
               <section className="invoice-builder-property-card">
-                <h3>Imported design</h3>
-                <p>The original file is kept as a locked reference. It will not move while you position the editable fields.</p>
+                <h3>Your imported design</h3>
+                <p>The original file is kept as a locked reference. Editable invoice details sit above it and will not move the original.</p>
+                <div className="invoice-builder-import-file"><i className={"bi "+(activeTemplate.background.type==="pdf"?"bi-file-earmark-pdf":"bi-image")}/><div><strong>{importedFile?.name||"Imported reference file"}</strong><small>{activeTemplate.background.type.toUpperCase()} reference · {importedFile?Math.max(1,Math.round(importedFile.size/1024))+" KB · ":""}Original kept safe</small></div><span className="badge text-bg-light border">Locked</span></div>
                 <div className="d-flex flex-wrap gap-2">
-                  <button type="button" className="btn btn-sm btn-light border" onClick={addSuggestedFields}><i className="bi bi-magic me-1"/>Add suggested fields</button>
-                  <span className="badge text-bg-light border">Locked reference layer</span>
-                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>{setPlacingField(false);setLayoutScan(null);setLayoutScanError("");setImportedFile(null);setOcrScan(null);setOcrError("");updateActive({background:{url:"",type:"none",locked:true,visible:true}});}}>Remove</button>
+                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>{setPlacingField(false);setLayoutScan(null);setLayoutScanError("");setImportedFile(null);setOcrScan(null);setOcrError("");setHighlightedOcrLineId("");updateActive({templateKey:"clean",background:{url:"",type:"none",locked:true,visible:true},blocks:activeTemplate.blocks.map(block=>block.type==="field"?{...block,showLabel:true}:block)});}}>Remove</button>
                 </div>
                 <div className="invoice-builder-smart-scan mt-3">
                   <strong><i className="bi bi-magic me-1"/>Smart layout scan</strong>
@@ -801,13 +870,19 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   {ocrError&&<div className="small text-warning mt-2">{ocrError}</div>}
                   {ocrScan&&<div className="invoice-builder-ocr-results mt-3">
                     <div className="invoice-builder-ocr-results-heading">
-                      <strong>{ocrScan.lines.length} text lines found</strong>
-                      <small>Page 1 of {ocrScan.pageCount} · English</small>
+                      <strong>{suggestedOcrCount} suggested fields · {ocrScan.lines.length} text lines</strong>
+                      <small>Page 1 · English</small>
                     </div>
-                    <p>Choose the matching field. When a printed value is detected, place the live field over it automatically; otherwise use manual placement.</p>
+                    <div className="invoice-builder-ocr-view-switch" role="group" aria-label="Which detected text to show">
+                      <button type="button" className={ocrView==="suggested"?"is-active":""} onClick={()=>setOcrView("suggested")}>Suggested fields</button>
+                      <button type="button" className={ocrView==="all"?"is-active":""} onClick={()=>setOcrView("all")}>All detected text</button>
+                    </div>
+                    <p>Review each match. Preview its area on the page, then place the live field or choose a position yourself.</p>
                     {ocrScan.lines.length===0
                       ?<div className="small text-secondary">No readable text was found. Try a clearer scan or use guided placement.</div>
-                      :ocrScan.lines.slice(0,30).map(line=>(
+                      :visibleOcrLines.length===0
+                        ?<div className="invoice-builder-ocr-empty">No field labels were confidently matched. Open <strong>All detected text</strong> to choose a field manually.</div>
+                        :visibleOcrLines.map(line=>(
                         <div className="invoice-builder-ocr-row" key={line.id}>
                           <div className="invoice-builder-ocr-line">
                             <span>{line.text}</span>
@@ -823,6 +898,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                               ))}
                             </select>
                             <div className="invoice-builder-ocr-map-actions">
+                              <button type="button" className={"btn btn-sm "+(highlightedOcrLineId===line.id?"btn-outline-primary":"btn-light border")} onClick={()=>setHighlightedOcrLineId(highlightedOcrLineId===line.id?"":line.id)}><i className="bi bi-eye me-1"/>{highlightedOcrLineId===line.id?"Hide area":"Show area"}</button>
                               {line.valueBox&&<button type="button" className="btn btn-sm btn-primary" disabled={!line.selectedField} onClick={()=>placeOcrMappingAtDetectedArea(line)}>{line.valueBox.kind==="estimated"?"Place in suggested space":"Place over detected value"}</button>}
                               <button type="button" className="btn btn-sm btn-light border" disabled={!line.selectedField} onClick={()=>placeOcrMapping(line)}>{line.valueBox?"Choose position":"Place"}</button>
                             </div>
@@ -830,7 +906,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                           </div>
                         </div>
                       ))}
-                    {ocrScan.lines.length>30&&<div className="small text-secondary mt-2">Showing the first 30 detected lines. Use guided placement for additional fields.</div>}
+                    {(ocrView==="suggested"?ocrScan.lines.filter(line=>line.selectedField):ocrScan.lines).length>30&&<div className="small text-secondary mt-2">Showing the first 30. Use field search or guided placement for other details.</div>}
                   </div>}
                   <div className="small text-secondary mt-2">Recognition runs in your browser. The English OCR engine and language file are downloaded on first use and cached; your document is not sent to an external OCR service.</div>
                 </div>
@@ -861,6 +937,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   <><label className="form-label">What should it show?</label><select className="form-select form-select-sm mb-3" value={selectedBlock.fieldKey} onChange={event=>updateBlock(selectedBlock.id,{fieldKey:event.target.value,label:FIELD_LABELS[event.target.value]||selectedBlock.label})}>{Object.entries(FIELD_LABELS).filter(([key])=>key!=="logo").map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></>
                 )}
                 {selectedBlock.type==="text"&&<><label className="form-label">Text</label><textarea className="form-control form-control-sm mb-3" rows={3} value={selectedBlock.text} onChange={event=>updateBlock(selectedBlock.id,{text:event.target.value})}/></>}
+                {selectedBlock.type==="field"&&<div className="form-check form-switch mb-3"><input id="invoice-block-show-label" className="form-check-input" type="checkbox" checked={selectedBlock.showLabel!==false} onChange={event=>updateBlock(selectedBlock.id,{showLabel:event.target.checked})}/><label className="form-check-label" htmlFor="invoice-block-show-label">Show field label before the value</label><small className="d-block text-secondary">Turn this off when the imported design already prints the label.</small></div>}
                 <h4>Position and size</h4>
                 <div className="invoice-builder-number-grid">
                   {[[ "Left", "x"],["Top","y"],["Width","w"],["Height","h"]].map(([label,key])=><div key={key}><label className="form-label">{label} (%)</label><input type="number" min={0} max={100} className="form-control form-control-sm" value={selectedBlock[key]} onChange={event=>updateBlock(selectedBlock.id,{[key]:clamp(event.target.value,0,100)})}/></div>)}

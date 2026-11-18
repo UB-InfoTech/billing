@@ -36,7 +36,7 @@ function defaultTemplate(id="clean-default",name="Clean"){
   };
 }
 
-function sanitizeBlock(block,index){
+function sanitizeBlock(block,index,hasBackground=false){
   if(!block||typeof block!=="object"||!BLOCK_TYPES.has(block.type))return null;
   const id=safeId(block.id)||"block-"+(index+1);
   const fieldKey=block.type==="field"&&FIELD_KEYS.has(String(block.fieldKey||""))?String(block.fieldKey):"";
@@ -54,6 +54,7 @@ function sanitizeBlock(block,index){
     bold:block.bold===true,
     align:["left","center","right"].includes(block.align)?block.align:"left",
     color:safeColor(block.color),
+    showLabel:block.type==="field"?(block.showLabel===undefined?!hasBackground:block.showLabel!==false):false,
     visible:block.visible!==false
   };
 }
@@ -78,7 +79,7 @@ function sanitizeTemplate(template,index,ownerId){
       locked:rawBackground.locked!==false,
       visible:rawBackground.visible!==false
     },
-    blocks:(Array.isArray(template.blocks)?template.blocks:DEFAULT_BLOCKS).slice(0,80).map(sanitizeBlock).filter(Boolean)
+    blocks:(Array.isArray(template.blocks)?template.blocks:DEFAULT_BLOCKS).slice(0,80).map((block,blockIndex)=>sanitizeBlock(block,blockIndex,Boolean(safeBackground))).filter(Boolean)
   };
 }
 

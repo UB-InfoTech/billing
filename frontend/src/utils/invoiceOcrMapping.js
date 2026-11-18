@@ -143,15 +143,15 @@ function inferEstimatedBlankBox(line,allLines,fieldKey){
     ?nextText.box.x-x-0.65
     :96-x;
   const w=Math.min(defaultWidth,availableWidth);
-  if(w<8)return null;
+  if(w<10)return null;
   const h=Math.min(9,Math.max(3.2,line.box.h+1.2));
   const y=Math.max(0,Math.min(100-h,center-h/2));
   return {x,y,w,h,kind:"estimated"};
 }
 
 function inferOcrValueBox(line,allLines=[]){
-  const fieldKey=line?.fieldKey||line?.selectedField||"";
-  if(!fieldKey||fieldKey==="invoice_title"||!line?.box||Number(line.confidence||0)<35)return null;
+  const fieldKey=line?.selectedField!==undefined?line.selectedField:(line?.fieldKey||"");
+  if(!fieldKey||fieldKey==="invoice_title"||!line?.box||!line.fieldKey||line.fieldKey!==fieldKey||Number(line.confidence||0)<35)return null;
   const words=(line.words||[]).filter(word=>String(word?.text||"").trim());
   for(let prefixLength=1;prefixLength<words.length;prefixLength+=1){
     const prefix=words.slice(0,prefixLength).map(word=>word.text).join(" ");

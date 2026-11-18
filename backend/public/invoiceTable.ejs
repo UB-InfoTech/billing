@@ -77,7 +77,7 @@
 <body>
 <% if(useCustomDesign){ 
   const activeBlocks=(activeDesignTemplate.blocks||[]).filter(block=>block.visible!==false);
-  const designPages=Array.isArray(invoicePages)&&invoicePages.length?invoicePages:[{pageNumber:1,totalPages:1,blocks:activeBlocks,rows:(subOrders||[]).map((item,index)=>({item,itemNumber:index+1}))}];
+  const designPages=typeof invoicePages!=="undefined"&&Array.isArray(invoicePages)&&invoicePages.length?invoicePages:[{pageNumber:1,totalPages:1,blocks:activeBlocks,rows:(subOrders||[]).map((item,index)=>({item,itemNumber:index+1}))}];
   const designColumns=(invoiceConfig.itemColumns||[]).slice().sort((a,b)=>(a.order||0)-(b.order||0)).filter(column=>column.visible!==false);
   const designValues={
     company_name:profileCompanyName,company_address:profileCompanyAddress,company_gstin:profileGstNumber,

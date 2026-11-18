@@ -1,5 +1,8 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
+const fs=require("node:fs");
+const path=require("node:path");
+const ejs=require("ejs");
 const {createDefaultInvoiceDesign,sanitizeInvoiceDesign}=require("../utils/invoiceDesign");
 const {hasInvoiceBackgroundSignature}=require("../utils/invoiceBackground");
 const {buildInvoiceDesignPages,getInvoiceRowsPerPage}=require("../utils/invoiceDesignPagination");
@@ -110,4 +113,9 @@ test("single-page and empty-item invoices retain all visible design blocks",()=>
   assert.equal(empty.length,1);
   assert.equal(empty[0].rows.length,0);
   assert.deepEqual(empty[0].blocks.map(block=>block.id),["header","items","totals"]);
+});
+
+test("custom and legacy invoice print template compiles as valid EJS",()=>{
+  const templatePath=path.join(__dirname,"../public/invoiceTable.ejs");
+  assert.doesNotThrow(()=>ejs.compile(fs.readFileSync(templatePath,"utf8")));
 });

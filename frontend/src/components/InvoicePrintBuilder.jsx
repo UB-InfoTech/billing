@@ -478,7 +478,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     }:previous);
   };
 
-  const useOcrMapping=line=>{
+  const placeOcrMapping=line=>{
     const fieldKey=line.selectedField||line.fieldKey;
     if(!fieldKey){
       setOcrError("Choose what this detected text represents before placing a field.");
@@ -796,7 +796,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                                 </optgroup>
                               ))}
                             </select>
-                            <button type="button" className="btn btn-sm btn-light border" disabled={!line.selectedField} onClick={()=>useOcrMapping(line)}>Place</button>
+                            <button type="button" className="btn btn-sm btn-light border" disabled={!line.selectedField} onClick={()=>placeOcrMapping(line)}>Place</button>
                           </div>
                         </div>
                       ))}

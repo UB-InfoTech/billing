@@ -49,7 +49,7 @@ function suggestInvoiceField(text,{top=50}={}){
       ?{fieldKey:"company_address",label:"Business address"}
       :{fieldKey:"customer_address",label:"Customer address"};
   }
-  if(/^\s*(date|dated)\s*[:\-]?$/i.test(value)){
+  if(/^\s*(date|dated)\s*[:-]?$/i.test(value)){
     return {fieldKey:"invoice_date",label:"Invoice date"};
   }
   return null;

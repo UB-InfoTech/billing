@@ -60,7 +60,7 @@ function safeStyleAttribute(value){
     if(separator<1)return "";
     const property=declaration.slice(0,separator).trim().toLowerCase();
     const cssValue=declaration.slice(separator+1).trim();
-    if(!allowed.has(property)||!cssValue||/url\\s*\\(|expression|javascript:|@import|behavior/i.test(cssValue))return "";
+    if(!allowed.has(property)||!cssValue||/url\s*\(|expression|javascript:|@import|behavior/i.test(cssValue))return "";
     return property+":"+cssValue;
   }).filter(Boolean);
   return parsed.join(";");

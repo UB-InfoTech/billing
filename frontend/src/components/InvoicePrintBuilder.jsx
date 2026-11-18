@@ -281,7 +281,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               </div>
             </div>
             <div className="invoice-builder-canvas-footer">
-              <span><i className="bi bi-arrows-move me-1"/>Drag fields to position them. Select an element to edit its appearance.</span>
+              <span><i className="bi bi-arrows-move me-1"/>Drag fields to position them. Select an element to edit its appearance.</span><span className="invoice-builder-pagination-hint">Long invoices continue automatically. Headings repeat and totals move to the final page.</span>
               {activeTemplate.background?.url&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>updateActive({background:{...activeTemplate.background,visible:activeTemplate.background.visible===false}})}>{activeTemplate.background.visible===false?"Show reference":"Hide reference"}</button>}
             </div>
           </main>

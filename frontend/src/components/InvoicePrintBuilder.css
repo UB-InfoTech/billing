@@ -100,3 +100,6 @@
  .invoice-builder-footer>div:last-child{width:100%;justify-content:flex-end}
 }
 @media(prefers-reduced-motion:reduce){.invoice-builder-block,.invoice-builder-palette button{transition:none!important}}
+
+.invoice-builder-pagination-hint{color:#61748a;font-size:10px;text-align:right}
+@media(max-width:760px){.invoice-builder-pagination-hint{width:100%;text-align:left}}

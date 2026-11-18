@@ -14,6 +14,7 @@ const StockMovement=require("../models/StockMovement");
 const {synchronizeInvoiceStock,rollbackStockMovements}=require("../utils/stockMovement");
 const InvoiceConfiguration=require("../models/InvoiceConfiguration");
 const {sanitizeInvoiceDesign}=require("../utils/invoiceDesign");
+const {buildInvoiceDesignPages}=require("../utils/invoiceDesignPagination");
 const PaymentLog=require("../models/PaymentLog2");
 const auth=require("../middleware/auth");
 const {syncClientDataSafely,getInvoiceRevenue}=require("../utils/syncClientData");
@@ -1439,6 +1440,10 @@ async function renderInvoice(order,res,request){
     :"";
   const logoPath=getPublicOrganizationLogoUrl(profile.logoUrl,order.createdBy);
   const profileLogoUrl=logoPath&&publicUploadBaseUrl?publicUploadBaseUrl+logoPath:logoPath;
+  const activeDesign=invoiceConfig.design?.templates?.find(item=>item.id===invoiceConfig.design.activeTemplateId);
+  const invoicePages=invoiceConfig.design?.enabled&&activeDesign
+    ?buildInvoiceDesignPages(activeDesign,order.subOrders||[])
+    :[];
   const client=order.clientId?await Client.findOne({_id:order.clientId,createdBy:String(order.createdBy)}).lean():null;
   const dueDate=new Date(order.orderDate||new Date());
   const terms=Number(order.paymentTerms);
@@ -1452,6 +1457,7 @@ async function renderInvoice(order,res,request){
   try{
     const html=await ejs.renderFile(path.join(__dirname,"../public/invoiceTable.ejs"),{
       invoiceConfig,
+      invoicePages,
       profileLogoUrl,
       publicUploadBaseUrl,
       profileHeaderTitle:profile.headerTitle||"Invoice",profileCompanyName:profile.companyName||"Company",profileCompanyAddress:profileAddress,profileEmailAddress:profile.emailAddress||"",profileWebsite:profile.website||"",profilePhoneNumber1:profile.phoneNumber1||"",profilePhoneNumber2:profile.phoneNumber2||"",profileGstNumber:profile.gstin||"",profilePanNumber:profile.pan||"",profileBankName:profile.bankName||"",profileAccountNo:profile.accountNo||"",profileBranchName:profile.branchName||"",profileIfsc:profile.ifsc||"",

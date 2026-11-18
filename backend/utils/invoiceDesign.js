@@ -30,7 +30,7 @@ const clamp=(value,min,max,fallback)=>Number.isFinite(Number(value))?Math.min(ma
 const safeId=value=>/^[a-z0-9_-]{1,48}$/i.test(String(value||""))?String(value):"";
 const safeColor=value=>/^#[0-9a-f]{6}$/i.test(String(value||""))?String(value):"#172335";
 const safeBackground=value=>String(value||"")==="transparent"?"transparent":/^#[0-9a-f]{6}$/i.test(String(value||""))?String(value):"transparent";
-const safeImage=value=>/^data:image\\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]{1,250000}$/i.test(String(value||""))?String(value):"";
+const safeImage=value=>/^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]{1,250000}$/i.test(String(value||""))?String(value):"";
 
 function defaultTemplate(id="clean-default",name="Clean"){
   return {

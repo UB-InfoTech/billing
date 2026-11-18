@@ -33,13 +33,13 @@ const CSP="<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'n
 
 function sanitizeCss(css){
   return String(css||"")
-    .replace(/@import\\b[^;]*;?/gi,"")
-    .replace(/@font-face\\s*\\{[^}]*\\}/gi,"")
-    .replace(/url\\s*\\([^)]*\\)/gi,"none")
-    .replace(/expression\\s*\\([^)]*\\)/gi,"")
-    .replace(/behavior\\s*:[^;]+;?/gi,"")
-    .replace(/-moz-binding\\s*:[^;]+;?/gi,"")
-    .replace(/javascript\\s*:/gi,"")
+    .replace(/@import\b[^;]*;?/gi,"")
+    .replace(/@font-face\s*\{[^}]*\}/gi,"")
+    .replace(/url\s*\([^)]*\)/gi,"none")
+    .replace(/expression\s*\([^)]*\)/gi,"")
+    .replace(/behavior\s*:[^;]+;?/gi,"")
+    .replace(/-moz-binding\s*:[^;]+;?/gi,"")
+    .replace(/javascript\s*:/gi,"")
     .slice(0,80000);
 }
 
@@ -89,7 +89,7 @@ function sanitizeInvoiceHtmlSource(source){
       }else if(name==="src"){
         const value=attribute.value.trim();
         const safeImage=element.tagName==="IMG"
-          &&/^data:image\\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(value)
+          &&/^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]+$/i.test(value)
           &&value.length<=MAX_DATA_IMAGE_LENGTH;
         if(!safeImage)element.removeAttribute("src");
       }
@@ -103,9 +103,9 @@ function sanitizeInvoiceHtmlSource(source){
 function colorToHex(value,fallback="#172335"){
   const input=String(value||"").trim();
   if(/^#[0-9a-f]{6}$/i.test(input))return input;
-  const rgba=input.match(/^rgba\\(\\s*\\d+\\s*,\\s*\\d+\\s*,\\s*\\d+\\s*,\\s*([\\d.]+)/i);
+  const rgba=input.match(/^rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)/i);
   if(rgba&&Number(rgba[1])===0)return fallback;
-  const rgb=input.match(/^rgba?\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)/i);
+  const rgb=input.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
   if(!rgb)return fallback;
   return "#"+rgb.slice(1,4).map(part=>Math.max(0,Math.min(255,Number(part))).toString(16).padStart(2,"0")).join("");
 }
@@ -147,7 +147,7 @@ function getDirectTextNodes(element){
 }
 
 function findValueOffset(text,fieldKey){
-  const matches=[...String(text||"").matchAll(/\\S+/g)];
+  const matches=[...String(text||"").matchAll(/\S+/g)];
   for(let count=1;count<matches.length;count+=1){
     const last=matches[count-1];
     const prefix=String(text).slice(0,last.index+last[0].length).trim();
@@ -187,7 +187,7 @@ function siblingValueRect(labelNode,labelElement,doc){
   for(const sibling of nodes.slice(index+1)){
     if(sibling.nodeType===3&&String(sibling.nodeValue||"").trim()){
       const raw=String(sibling.nodeValue||"");
-      const start=raw.search(/\\S/);
+      const start=raw.search(/\S/);
       return rectForTextRange(doc,sibling,start,raw.length);
     }
     if(sibling.nodeType===1&&String(sibling.textContent||"").trim()){
@@ -270,7 +270,7 @@ async function convertInvoiceHtml(file){
     images.forEach((image,index)=>{
       const rect=normalizeRect(image.getBoundingClientRect(),pageRect);
       const src=String(image.getAttribute("src")||"");
-      if(rect&&/^data:image\\/(?:png|jpeg|webp|gif);base64,/i.test(src)&&src.length<=MAX_DATA_IMAGE_LENGTH&&totalImageCharacters+src.length<=MAX_TOTAL_IMAGE_LENGTH){
+      if(rect&&/^data:image\/(?:png|jpeg|webp|gif);base64,/i.test(src)&&src.length<=MAX_DATA_IMAGE_LENGTH&&totalImageCharacters+src.length<=MAX_TOTAL_IMAGE_LENGTH){
         const candidate=makeBlock("html-image-"+index,"image","",image.alt||"Imported image",rect,toComputedStyle(image,view),{imageUrl:src});
         add(candidate);imageCount+=1;totalImageCharacters+=src.length;
       }else omittedImages+=1;
@@ -284,7 +284,7 @@ async function convertInvoiceHtml(file){
       const style=toComputedStyle(element,view);
       textNodes.forEach((textNode,nodeIndex)=>{
         if(blocks.length>=MAX_BLOCKS||consumedElements.has(element))return;
-        const raw=String(textNode.nodeValue||"").replace(/\\s+/g," ").trim();
+        const raw=String(textNode.nodeValue||"").replace(/\s+/g," ").trim();
         if(raw.length<2)return;
         const match=suggestInvoiceField(raw);
         if(match){
@@ -292,7 +292,7 @@ async function convertInvoiceHtml(file){
           let targetRect=null;
           if(valueOffset!==null){
             const original=String(textNode.nodeValue||"");
-            const leading=original.search(/\\S/);
+            const leading=original.search(/\S/);
             const valueStart=leading+valueOffset;
             targetRect=rectForTextRange(doc,textNode,valueStart,original.length);
           }
@@ -339,7 +339,7 @@ async function convertInvoiceHtml(file){
     return {
       blocks,
       pageSize:"A4",
-      name:file.name.replace(/\\.(html?|HTML?)$/i,"").slice(0,60)||"Imported HTML design",
+      name:file.name.replace(/\.(html?|HTML?)$/i,"").slice(0,60)||"Imported HTML design",
       matchedFieldCount,staticTextCount,imageCount,
       warning:warnings.join(" ")
     };

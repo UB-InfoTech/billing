@@ -188,7 +188,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         {...auth(),responseType:"text"}
       );
       const html=typeof response.data==="string"?response.data:"";
-      if(!/^\\s*<!doctype html/i.test(html)&&!/^\\s*<html/i.test(html)){
+      const normalizedHtmlStart=html.trimStart().toLowerCase();
+      if(!normalizedHtmlStart.startsWith("<!doctype html")&&!normalizedHtmlStart.startsWith("<html")){
         throw new Error("The invoice renderer did not return a printable preview.");
       }
       setPrintPreviewHtml(html);

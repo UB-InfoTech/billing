@@ -823,10 +823,10 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                               ))}
                             </select>
                             <div className="invoice-builder-ocr-map-actions">
-                              {line.valueBox&&<button type="button" className="btn btn-sm btn-primary" disabled={!line.selectedField} onClick={()=>placeOcrMappingAtDetectedArea(line)}>Place at detected area</button>}
+                              {line.valueBox&&<button type="button" className="btn btn-sm btn-primary" disabled={!line.selectedField} onClick={()=>placeOcrMappingAtDetectedArea(line)}>{line.valueBox.kind==="estimated"?"Place in suggested space":"Place over detected value"}</button>}
                               <button type="button" className="btn btn-sm btn-light border" disabled={!line.selectedField} onClick={()=>placeOcrMapping(line)}>{line.valueBox?"Choose position":"Place"}</button>
                             </div>
-                            {line.valueBox&&<small className="invoice-builder-ocr-value-found">Printed value area found · review after placing</small>}
+                            {line.valueBox&&<small className="invoice-builder-ocr-value-found">{line.valueBox.kind==="estimated"?"Space estimated from the label and nearby text":"Printed value area found"} · review after placing</small>}
                           </div>
                         </div>
                       ))}

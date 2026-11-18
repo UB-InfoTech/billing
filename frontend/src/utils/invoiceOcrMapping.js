@@ -105,9 +105,53 @@ function buildValuePlacementBox(sourceBox,fieldKey){
   return {x,y,w,h};
 }
 
+const FIELD_VALUE_WIDTHS={
+  invoice_no:22,challan_no:22,eway_bill:25,invoice_date:18,due_date:18,
+  customer_name:30,company_name:30,customer_address:42,company_address:42,
+  customer_phone:20,company_phone:20,customer_gstin:24,company_gstin:24,
+  discount:20,taxable_value:20,cgst:18,sgst:18,igst:18,subtotal:20,
+  grand_total:22,amount_paid:20,balance_due:20,bank_details:40,terms:44,signature:30
+};
+
+function inferEstimatedBlankBox(line,allLines,fieldKey){
+  if(fieldKey==="invoice_title")return null;
+  const labelWords=(line.words||[]).map(word=>String(word?.text||"").trim())
+    .filter(word=>/[\p{L}\p{N}]/u.test(word));
+  if(!labelWords.length)return null;
+  let labelOnly=false;
+  for(let count=1;count<=labelWords.length;count+=1){
+    const prefix=labelWords.slice(0,count).join(" ");
+    if(suggestInvoiceField(prefix,{top:line.box.y})?.fieldKey===fieldKey){
+      labelOnly=count===labelWords.length;
+      break;
+    }
+  }
+  if(!labelOnly)return null;
+
+  const right=line.box.x+line.box.w;
+  const center=line.box.y+line.box.h/2;
+  const nextText=(allLines||[]).filter(candidate=>{
+    if(!candidate||candidate.id===line.id||!candidate.box)return false;
+    if(candidate.box.x<=right+0.2)return false;
+    const candidateCenter=candidate.box.y+candidate.box.h/2;
+    const tolerance=Math.max(1.4,Math.max(line.box.h,candidate.box.h)*1.6);
+    return Math.abs(candidateCenter-center)<=tolerance;
+  }).sort((a,b)=>a.box.x-b.box.x)[0];
+  const x=Math.min(99,right+0.65);
+  const defaultWidth=FIELD_VALUE_WIDTHS[fieldKey]||22;
+  const availableWidth=nextText
+    ?nextText.box.x-x-0.65
+    :96-x;
+  const w=Math.min(defaultWidth,availableWidth);
+  if(w<8)return null;
+  const h=Math.min(9,Math.max(3.2,line.box.h+1.2));
+  const y=Math.max(0,Math.min(100-h,center-h/2));
+  return {x,y,w,h,kind:"estimated"};
+}
+
 function inferOcrValueBox(line,allLines=[]){
   const fieldKey=line?.fieldKey||line?.selectedField||"";
-  if(!fieldKey||!line?.box||Number(line.confidence||0)<35)return null;
+  if(!fieldKey||fieldKey==="invoice_title"||!line?.box||Number(line.confidence||0)<35)return null;
   const words=(line.words||[]).filter(word=>String(word?.text||"").trim());
   for(let prefixLength=1;prefixLength<words.length;prefixLength+=1){
     const prefix=words.slice(0,prefixLength).map(word=>word.text).join(" ");
@@ -117,7 +161,7 @@ function inferOcrValueBox(line,allLines=[]){
       word.box&&Number(word.confidence||0)>=35&&/[\p{L}\p{N}]/u.test(String(word.text||""))
     );
     const valueBox=boxFromNormalizedWords(valueWords);
-    if(valueBox)return buildValuePlacementBox(valueBox,fieldKey);
+    if(valueBox)return {...buildValuePlacementBox(valueBox,fieldKey),kind:"printed"};
     break;
   }
 
@@ -137,9 +181,9 @@ function inferOcrValueBox(line,allLines=[]){
   const adjacent=nearby[0];
   if(adjacent){
     const box={...adjacent.box};
-    return buildValuePlacementBox(box,fieldKey);
+    return {...buildValuePlacementBox(box,fieldKey),kind:"printed"};
   }
-  return null;
+  return inferEstimatedBlankBox(line,allLines,fieldKey);
 }
 
 function extractOcrLines(data,width,height){

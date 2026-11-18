@@ -124,11 +124,24 @@ test("OCR finds a separate value line beside its label but avoids another labell
           {text:"Invoice",confidence:92,bbox:{x0:500,y0:205,x1:560,y1:235}},
           {text:"Date:",confidence:92,bbox:{x0:565,y0:205,x1:650,y1:235}}
         ]
+      },
+      {
+        text:"Due Date:",
+        bbox:{x0:800,y0:200,x1:950,y1:240},
+        words:[
+          {text:"Due",confidence:92,bbox:{x0:800,y0:205,x1:850,y1:235}},
+          {text:"Date:",confidence:92,bbox:{x0:855,y0:205,x1:950,y1:235}}
+        ]
       }
     ]}]}]
   },1000,2000);
-  assert.ok(lines.find(line=>line.fieldKey==="invoice_no").valueBox);
-  assert.equal(lines.find(line=>line.fieldKey==="invoice_date").valueBox,null);
+  const invoiceNumber=lines.find(line=>line.fieldKey==="invoice_no");
+  assert.ok(invoiceNumber.valueBox);
+  assert.equal(invoiceNumber.valueBox.kind,"printed");
+  const invoiceDate=lines.find(line=>line.fieldKey==="invoice_date");
+  const dueDate=lines.find(line=>line.fieldKey==="due_date");
+  assert.equal(invoiceDate.valueBox.kind,"estimated");
+  assert.ok(invoiceDate.valueBox.x+invoiceDate.valueBox.w<dueDate.box.x);
   const noCoordinates=extractOcrLines({
     blocks:[{paragraphs:[{lines:[{
       text:"Invoice No: INV-101",

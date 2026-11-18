@@ -99,11 +99,75 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [message,setMessage]=useState("");
   const [placementField,setPlacementField]=useState("company_name");
   const [placingField,setPlacingField]=useState(false);
+  const [previewRecords,setPreviewRecords]=useState([]);
+  const [previewRecordId,setPreviewRecordId]=useState("");
+  const [previewInvoice,setPreviewInvoice]=useState(null);
+  const [previewLoading,setPreviewLoading]=useState(false);
+  const [previewError,setPreviewError]=useState("");
   const canvasRef=useRef(null);
   const importRef=useRef(null);
   const currentDesignRef=useRef(localDesign);
   const historyRef=useRef(history);
   const draggingRef=useRef(null);
+  const previewRequestRef=useRef(0);
+
+  useEffect(()=>{
+    let active=true;
+    const loadLatestPreview=async()=>{
+      setPreviewLoading(true);
+      setPreviewError("");
+      try{
+        const listResponse=await axios.get(API+"/api/invoice-config/preview-records",auth());
+        const records=Array.isArray(listResponse.data?.records)?listResponse.data.records:[];
+        if(!active)return;
+        setPreviewRecords(records);
+        if(!records.length){
+          setPreviewRecordId("");
+          setPreviewInvoice(null);
+          return;
+        }
+        setPreviewRecordId(records[0].id);
+        const requestId=++previewRequestRef.current;
+        const detailResponse=await axios.get(API+"/api/invoice-config/preview/"+encodeURIComponent(records[0].id),auth());
+        if(active&&requestId===previewRequestRef.current){
+          setPreviewInvoice(detailResponse.data?.preview||null);
+        }
+      }catch(previewLoadError){
+        if(active)setPreviewError(previewLoadError.response?.data?.message||"Saved invoice data could not be loaded. Sample data is available.");
+      }finally{
+        if(active)setPreviewLoading(false);
+      }
+    };
+    loadLatestPreview();
+    return ()=>{
+      active=false;
+      previewRequestRef.current+=1;
+    };
+  },[]);
+
+  const handlePreviewRecordChange=async event=>{
+    const id=event.target.value;
+    setPreviewRecordId(id);
+    setPreviewError("");
+    const requestId=++previewRequestRef.current;
+    if(!id){
+      setPreviewInvoice(null);
+      setPreviewLoading(false);
+      return;
+    }
+    setPreviewLoading(true);
+    try{
+      const response=await axios.get(API+"/api/invoice-config/preview/"+encodeURIComponent(id),auth());
+      if(requestId===previewRequestRef.current)setPreviewInvoice(response.data?.preview||null);
+    }catch(previewLoadError){
+      if(requestId===previewRequestRef.current){
+        setPreviewInvoice(null);
+        setPreviewError(previewLoadError.response?.data?.message||"This invoice preview could not be loaded.");
+      }
+    }finally{
+      if(requestId===previewRequestRef.current)setPreviewLoading(false);
+    }
+  };
 
   useEffect(()=>{
     if(design&&Array.isArray(design.templates)&&design.templates.length&&design!==currentDesignRef.current){
@@ -349,18 +413,59 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     ?(activeTemplate.pageSize==="Letter"?1.294:1.414)
     :(activeTemplate.pageSize==="Letter"?0.773:0.707);
   const backgroundUrl=activeTemplate.background?.url?API+activeTemplate.background.url:"";
+  const previewFields=previewInvoice?.fields||SAMPLE_VALUES;
+  const previewColumns=previewInvoice?.itemColumns?.length
+    ?previewInvoice.itemColumns
+    :[
+      {key:"sr",label:"#"},
+      {key:"description",label:"Description"},
+      {key:"quantity",label:"Qty"},
+      {key:"unitPrice",label:"Rate"},
+      {key:"amount",label:"Amount"}
+    ];
+  const previewItems=previewInvoice?.items||[
+    {sr:"1",description:"Sample product",quantity:"2",unitPrice:"500.00",amount:"1000.00",qtyUnit:"PCS"},
+    {sr:"2",description:"Another product",quantity:"1",unitPrice:"750.00",amount:"750.00",qtyUnit:"PCS"}
+  ];
 
   const renderBlockContent=block=>{
     if(block.type==="text")return <span>{block.text||block.label}</span>;
     if(block.type==="divider")return <div className="invoice-builder-divider-line"/>;
-    if(block.type==="logo")return <div className="invoice-builder-logo-placeholder"><i className="bi bi-image"></i><small>Business logo</small></div>;
-    if(block.type==="items_table")return (
-      <div className="invoice-builder-sample-table">
-        <table><thead><tr><th>#</th><th>Description</th><th>Qty</th><th>Rate</th><th>Amount</th></tr></thead><tbody><tr><td>1</td><td>Sample product</td><td>2</td><td>500</td><td>1,000</td></tr><tr><td>2</td><td>Another product</td><td>1</td><td>750</td><td>750</td></tr></tbody></table>
-      </div>
-    );
-    if(block.type==="totals")return <div className="invoice-builder-totals"><span>Subtotal <b>₹ 1,750.00</b></span><span>Tax <b>₹ 315.00</b></span><span className="invoice-builder-total">Invoice total <b>₹ 2,065.00</b></span></div>;
-    const value=SAMPLE_VALUES[block.fieldKey]||block.label||"Invoice field";
+    if(block.type==="logo"){
+      const logo=previewInvoice?.logoUrl?(previewInvoice.logoUrl.startsWith("http")?previewInvoice.logoUrl:API+previewInvoice.logoUrl):"";
+      return logo
+        ?<img className="invoice-builder-live-logo" src={logo} alt="Business logo"/>
+        :<div className="invoice-builder-logo-placeholder"><i className="bi bi-image"></i><small>{previewInvoice?"No business logo saved":"Business logo"}</small></div>;
+    }
+    if(block.type==="items_table"){
+      const columns=previewColumns.slice(0,7);
+      const rows=previewItems.slice(0,4);
+      return (
+        <div className="invoice-builder-sample-table">
+          <table>
+            <thead><tr>{columns.map(column=><th key={column.key}>{column.label}</th>)}</tr></thead>
+            <tbody>{rows.map((item,index)=><tr key={item.sr||index}>{columns.map(column=><td key={column.key}>{item[column.key]??""}</td>)}</tr>)}</tbody>
+          </table>
+          {previewItems.length>rows.length&&<small className="invoice-builder-more-items">+ {previewItems.length-rows.length} more saved items</small>}
+        </div>
+      );
+    }
+    if(block.type==="totals"){
+      const totals=previewInvoice?.totals||{
+        subtotal:SAMPLE_VALUES.subtotal,discount:SAMPLE_VALUES.discount,
+        taxableValue:SAMPLE_VALUES.taxable_value,tax:"₹ 1,710.00",
+        grandTotal:SAMPLE_VALUES.grand_total,paid:SAMPLE_VALUES.amount_paid,due:SAMPLE_VALUES.balance_due
+      };
+      return <div className="invoice-builder-totals">
+        <span>Subtotal <b>{totals.subtotal}</b></span>
+        <span>Discount <b>{totals.discount}</b></span>
+        <span>Tax <b>{totals.tax}</b></span>
+        <span className="invoice-builder-total">Invoice total <b>{totals.grandTotal}</b></span>
+        <span>Paid <b>{totals.paid}</b></span>
+        <span>Due <b>{totals.due}</b></span>
+      </div>;
+    }
+    const value=previewInvoice?(previewFields[block.fieldKey]||"—"):(SAMPLE_VALUES[block.fieldKey]||block.label||"Invoice field");
     return <span>{block.label&&<small className="invoice-builder-field-label">{block.label}: </small>}{value}</span>;
   };
 
@@ -379,6 +484,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
           </div>
         </header>
         {error&&<div className="alert alert-danger m-3 mb-0">{error}</div>}
+        {previewError&&<div className="alert alert-warning m-3 mb-0">{previewError} You can continue with sample data.</div>}
         {message&&<div className="alert alert-info m-3 mb-0">{message}<button type="button" className="btn-close float-end" aria-label="Dismiss" onClick={()=>setMessage("")}/></div>}
         <div className="invoice-builder-workspace">
           <aside className="invoice-builder-sidebar invoice-builder-fields">
@@ -423,6 +529,14 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
 
             <div className="invoice-builder-designbar">
               <div className="invoice-builder-name"><label htmlFor="invoice-design-name">Design name</label><input id="invoice-design-name" value={activeTemplate.name} maxLength={60} onChange={event=>renameTemplate(event.target.value)}/></div>
+              <div className="invoice-builder-preview-select">
+                <label htmlFor="invoice-real-preview">Preview with</label>
+                <select id="invoice-real-preview" className="form-select form-select-sm" value={previewRecordId} onChange={handlePreviewRecordChange} disabled={previewLoading&&!previewRecords.length}>
+                  <option value="">Sample data</option>
+                  {previewRecords.map(record=><option value={record.id} key={record.id}>{record.orderNumber} · {record.companyName}</option>)}
+                </select>
+                <span className={previewInvoice?"is-real":"is-sample"}>{previewLoading?"Loading preview…":previewInvoice?"Saved invoice data":"Sample data"}</span>
+              </div>
               <div className="invoice-builder-page-settings">
                 <label>Paper</label><select value={activeTemplate.pageSize} onChange={event=>setPageSize(event.target.value)}><option value="A4">A4</option><option value="A5">A5</option><option value="Letter">Letter</option></select>
                 <select aria-label="Page orientation" value={activeTemplate.orientation} onChange={event=>updateActive({orientation:event.target.value})}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>

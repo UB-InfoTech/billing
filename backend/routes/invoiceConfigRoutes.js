@@ -5,6 +5,10 @@ const fs=require("fs");
 const path=require("path");
 const crypto=require("crypto");
 const InvoiceConfiguration=require("../models/InvoiceConfiguration");
+const Order=require("../models/Order2");
+const Profile=require("../models/Profile");
+const Client=require("../models/Client");
+const {buildInvoicePrintPreview}=require("../utils/invoicePrintPreview");
 const auth=require("../middleware/auth");
 const {getSafeUploadExtension}=require("../utils/uploadFileTypes");
 const {hasInvoiceBackgroundSignature}=require("../utils/invoiceBackground");
@@ -118,6 +122,48 @@ router.post("/background",auth,receiveBackground,async(req,res)=>{
     type,
     name:clean(req.file.originalname,120)||"Imported invoice design"
   });
+});
+
+router.get("/preview-records",auth,async(req,res)=>{
+  try{
+    const orders=await Order.find({createdBy:owner(req)})
+      .select("_id orderNumber companyName orderDate roundOffFinalRevenue totalAmount finalRevenue")
+      .sort({orderDate:-1})
+      .limit(40)
+      .lean();
+    return res.json({records:orders.map(order=>({
+      id:String(order._id),
+      orderNumber:String(order.orderNumber||"Invoice"),
+      companyName:String(order.companyName||"Customer"),
+      orderDate:order.orderDate?new Date(order.orderDate).toLocaleDateString("en-IN"):"",
+      total:"₹ "+Number(order.roundOffFinalRevenue||order.totalAmount||order.finalRevenue||0).toFixed(2)
+    }))});
+  }catch(error){return res.status(500).json({message:"Unable to load invoice preview records."});}
+});
+
+router.get("/preview/:orderId",auth,async(req,res)=>{
+  try{
+    if(!mongoose.isValidObjectId(req.params.orderId)){
+      return res.status(400).json({message:"Choose a valid invoice to preview."});
+    }
+    const order=await Order.findOne({_id:req.params.orderId,createdBy:owner(req)}).lean();
+    if(!order)return res.status(404).json({message:"This invoice was not found in your business."});
+    const [profile,client,invoiceConfig]=await Promise.all([
+      Profile.findOne({createdBy:owner(req)}).lean(),
+      order.clientId?Client.findOne({_id:order.clientId,createdBy:owner(req)}).lean():null,
+      InvoiceConfiguration.findOne({createdBy:owner(req)}).lean()
+    ]);
+    const preview=buildInvoicePrintPreview({
+      order,
+      profile:profile||{},
+      client,
+      invoiceConfig:invoiceConfig||{},
+      ownerId:owner(req)
+    });
+    return res.json({preview});
+  }catch(error){
+    return res.status(500).json({message:"Unable to prepare this invoice preview."});
+  }
 });
 
 router.get("/",auth,async(req,res)=>{

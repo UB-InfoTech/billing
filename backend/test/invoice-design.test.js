@@ -6,6 +6,7 @@ const ejs=require("ejs");
 const {createDefaultInvoiceDesign,sanitizeInvoiceDesign}=require("../utils/invoiceDesign");
 const {hasInvoiceBackgroundSignature}=require("../utils/invoiceBackground");
 const {buildInvoiceDesignPages,getInvoiceRowsPerPage}=require("../utils/invoiceDesignPagination");
+const {buildInvoicePrintPreview}=require("../utils/invoicePrintPreview");
 
 test("new invoice design keeps the existing print layout active until the owner selects a new design",()=>{
   const design=createDefaultInvoiceDesign();
@@ -118,4 +119,79 @@ test("single-page and empty-item invoices retain all visible design blocks",()=>
 test("custom and legacy invoice print template compiles as valid EJS",()=>{
   const templatePath=path.join(__dirname,"../public/invoiceTable.ejs");
   assert.doesNotThrow(()=>ejs.compile(fs.readFileSync(templatePath,"utf8")));
+});
+
+test("real invoice preview maps saved business, customer, item and financial data without changing the invoice",()=>{
+  const order={
+    _id:"64b000000000000000000010",
+    orderNumber:"INV-2026-018",
+    orderDate:"2026-11-18T10:00:00.000Z",
+    paymentTerms:"30",
+    companyName:"Sample Customer Pvt Ltd",
+    Address:"Ring Road, Surat",
+    State:"Gujarat",
+    stateCode:"24",
+    gstNumber:"24ABCDE1234F1Z5",
+    challanNumber:"CH-018",
+    discountRate:10,
+    discountAmount:100,
+    totalCost:900,
+    taxPercentage:18,
+    taxAmount:162,
+    finalRevenue:1062,
+    roundOffFinalRevenue:1062,
+    totalAmount:1062,
+    paidAmount:400,
+    dueAmount:662,
+    subOrders:[{
+      orderName:"Cotton Fabric",designNumber:"CF-18",hsnCode:5208,
+      quantity:10,qtyUnit:"PCS",unitPrice:100,shortPcs:0
+    }]
+  };
+  const before=JSON.stringify(order);
+  const preview=buildInvoicePrintPreview({
+    order,
+    profile:{
+      companyName:"Bhanderi Textiles",companyAddress:"Market Yard",
+      city:"Surat",state:"Gujarat",pinCode:395002,country:"India",
+      gstin:"24ABCDE1234F1Z5",stateCode:24,phoneNumber1:"9876543210",
+      emailAddress:"sales@example.com",bankName:"Sample Bank",accountNo:"123456",
+      branchName:"Surat",ifsc:"BANK0001"
+    },
+    client:{name:"Customer Contact",phone:"9876500000",address:"Client Address",state:"Gujarat"},
+    invoiceConfig:{invoiceTitle:"TAX INVOICE",itemColumns:[
+      {key:"sr",label:"#",visible:true,order:0,width:5},
+      {key:"description",label:"Product",visible:true,order:1,width:30},
+      {key:"amount",label:"Amount",visible:true,order:2,width:15}
+    ]},
+    ownerId:"64b000000000000000000001"
+  });
+  assert.equal(preview.fields.company_name,"Bhanderi Textiles");
+  assert.equal(preview.fields.customer_name,"Sample Customer Pvt Ltd");
+  assert.equal(preview.fields.invoice_no,"INV-2026-018");
+  assert.equal(preview.fields.customer_phone,"9876500000");
+  assert.equal(preview.fields.subtotal,"₹ 1000.00");
+  assert.equal(preview.fields.cgst,"₹ 81.00");
+  assert.equal(preview.fields.sgst,"₹ 81.00");
+  assert.equal(preview.fields.grand_total,"₹ 1062.00");
+  assert.equal(preview.fields.amount_paid,"₹ 400.00");
+  assert.equal(preview.fields.balance_due,"₹ 662.00");
+  assert.equal(preview.items[0].description,"Cotton Fabric");
+  assert.equal(preview.items[0].amount,"1000.00");
+  assert.deepEqual(preview.itemColumns.map(column=>column.key),["sr","description","amount"]);
+  assert.equal(JSON.stringify(order),before);
+});
+
+test("real invoice preview calculates interstate tax consistently with the invoice print route",()=>{
+  const preview=buildInvoicePrintPreview({
+    order:{orderDate:"2026-11-18",stateCode:"24",paymentTerms:"Advance",taxAmount:180,totalCost:1000,discountAmount:0,finalRevenue:1180,totalAmount:1180,roundOffFinalRevenue:1180,dueAmount:1180,subOrders:[]},
+    profile:{companyName:"Business",stateCode:27,bankName:"Bank"},
+    invoiceConfig:{invoiceTitle:"TAX INVOICE"},
+    ownerId:"64b000000000000000000001"
+  });
+  assert.equal(preview.fields.cgst,"₹ 0.00");
+  assert.equal(preview.fields.sgst,"₹ 0.00");
+  assert.equal(preview.fields.igst,"₹ 180.00");
+  assert.equal(preview.fields.payment_terms,"Advance");
+  assert.equal(preview.fields.balance_due,"₹ 1180.00");
 });

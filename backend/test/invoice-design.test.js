@@ -202,6 +202,34 @@ test("invoice design sanitization allows safe editable blocks and owner-owned PD
   assert.equal(design.templates[0].blocks[1].showLabel,false);
 });
 
+test("invoice item table supports per-design columns and safely clamps its visual settings",()=>{
+  const {sanitizeBlock}=require("../utils/invoiceDesign");
+  const block=sanitizeBlock({
+    id:"table-layout",type:"items_table",x:4,y:40,w:92,h:24,
+    columns:[
+      {key:"description",label:"Item / Description",width:36,visible:true},
+      {key:"shortPcs",label:"Short pieces",width:9,visible:true},
+      {key:"unsafeKey",label:"Injected",width:90,visible:true},
+      {key:"amount",label:"Line total",width:18,visible:false}
+    ],
+    tableHeaderBackground:"#123456",tableHeaderColor:"#ffffff",
+    tableRowBackground:"#ffffff",tableAlternateRowBackground:"#f1f5f9",
+    tableBorderColor:"#334455",tableBorderWidth:8,tableCellPadding:24,
+    alternateRows:false
+  });
+  assert.deepEqual(block.columns.map(column=>column.key),["description","shortPcs","amount"]);
+  assert.equal(block.columns[0].label,"Item / Description");
+  assert.equal(block.columns[0].width,36);
+  assert.equal(block.columns[2].visible,false);
+  assert.equal(block.tableHeaderBackground,"#123456");
+  assert.equal(block.tableHeaderColor,"#ffffff");
+  assert.equal(block.tableBorderWidth,3);
+  assert.equal(block.tableCellPadding,10);
+  assert.equal(block.alternateRows,false);
+  const unsafe=sanitizeBlock({id:"bad-table",type:"items_table",columns:[{key:"description"}],tableHeaderBackground:"url(javascript:alert(1))"});
+  assert.equal(unsafe.tableHeaderBackground,"transparent");
+});
+
 test("older imported designs hide duplicated field labels while clean designs keep them",()=>{
   const owner="64b000000000000000000001";
   const importedUrl="/uploads/invoice-designs/"+owner+"-0123456789abcdef01234567.pdf";

@@ -311,3 +311,28 @@
  .invoice-builder-template-category{align-self:flex-start}
 }
 @media(max-width:400px){.invoice-builder-template-grid{grid-template-columns:1fr 1fr}}
+
+
+/* Precise layout tools and per-design item-table editor */
+.invoice-builder-grid-overlay{position:absolute;inset:0;z-index:1;display:none;pointer-events:none;background-image:linear-gradient(to right,rgba(58,91,130,.12) 1px,transparent 1px),linear-gradient(to bottom,rgba(58,91,130,.12) 1px,transparent 1px);background-size:2% 2%}
+.invoice-builder-grid-overlay.is-visible{display:block}
+.invoice-builder-table-editor{margin:12px 0 15px;padding:12px;border:1px solid #e1e8f0;border-radius:9px;background:#f9fbfd}
+.invoice-builder-table-editor>p{margin:0 0 10px;color:#728197;font-size:10px;line-height:1.45}
+.invoice-builder-table-columns{display:flex;flex-direction:column;gap:6px;max-height:300px;overflow:auto}
+.invoice-builder-table-column{display:flex;align-items:center;gap:6px;min-width:0;padding:7px;border:1px solid #e1e7ee;border-radius:7px;background:#fff;cursor:grab}
+.invoice-builder-table-column:active{cursor:grabbing}
+.invoice-builder-table-column.is-hidden{background:#f2f4f7;opacity:.72}
+.invoice-builder-column-grip{display:grid;place-items:center;flex:0 0 18px;color:#8795a6;cursor:grab}
+.invoice-builder-column-fields{display:flex;flex:1;flex-direction:column;gap:5px;min-width:0}
+.invoice-builder-column-fields input:first-child{min-width:0;font-size:11px}
+.invoice-builder-column-width{width:64px!important;min-width:64px;padding:3px 5px!important}
+.invoice-builder-column-visibility{display:grid;place-items:center;flex:0 0 30px;width:30px;height:30px;border:1px solid #e0e6ed;border-radius:6px;background:#fff;color:#60758c}
+.invoice-builder-column-visibility:disabled{opacity:.35;cursor:not-allowed}
+.invoice-builder-table-add{display:flex;gap:7px;margin-top:9px}
+.invoice-builder-table-add select{min-width:0;flex:1}
+.invoice-builder-column-border-width{display:flex;align-items:center;gap:6px}
+.invoice-builder-column-border-width input{width:58px}
+.invoice-builder-table-editor .form-check-input{margin-top:.16em}
+.invoice-builder-table-editor h4{margin-top:15px}
+.invoice-builder-sample-table th,.invoice-builder-sample-table td{border-style:solid}
+@media(max-width:760px){.invoice-builder-table-column{padding:6px}.invoice-builder-table-editor{padding:10px}}

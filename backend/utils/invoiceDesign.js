@@ -9,6 +9,12 @@ const FIELD_KEYS=new Set([
   "subtotal","discount","taxable_value","cgst","sgst","igst","round_off","grand_total",
   "amount_paid","balance_due","amount_words","bank_details","terms","signature"
 ]);
+const TABLE_COLUMN_LABELS={
+  sr:"#",description:"Description",designNumber:"Design No.",hsnCode:"HSN",quantity:"Qty",
+  qtyUnit:"Unit",cut:"Cut",MTR:"MTR",shortPcs:"Short Pcs",unitPrice:"Rate",
+  amount:"Amount",discount:"Disc. %",taxable:"Taxable"
+};
+const TABLE_COLUMN_KEYS=new Set(Object.keys(TABLE_COLUMN_LABELS));
 const DEFAULT_BLOCKS=[
   {id:"company-name",type:"field",fieldKey:"company_name",label:"Business name",x:6,y:4,w:58,h:6,fontSize:17,bold:true,align:"left",color:"#172335"},
   {id:"company-address",type:"field",fieldKey:"company_address",label:"Business address",x:6,y:11,w:58,h:7,fontSize:8,bold:false,align:"left",color:"#46566b"},
@@ -40,6 +46,23 @@ function defaultTemplate(id="clean-default",name="Clean"){
   };
 }
 
+function sanitizeTableColumns(columns){
+  if(!Array.isArray(columns))return undefined;
+  const safe=columns.slice(0,14).map((column,index)=>{
+    const key=String(column?.key||"");
+    if(!TABLE_COLUMN_KEYS.has(key))return null;
+    return {
+      key,
+      label:cleanString(column.label,40,TABLE_COLUMN_LABELS[key])||TABLE_COLUMN_LABELS[key],
+      width:clamp(column.width,3,70,8),
+      order:index,
+      visible:column.visible!==false
+    };
+  }).filter(Boolean);
+  if(safe.length&&!safe.some(column=>column.visible))safe[0].visible=true;
+  return safe;
+}
+
 function sanitizeBlock(block,index,hasBackground=false){
   if(!block||typeof block!=="object"||!BLOCK_TYPES.has(block.type))return null;
   const id=safeId(block.id)||"block-"+(index+1);
@@ -56,6 +79,15 @@ function sanitizeBlock(block,index,hasBackground=false){
     text:block.type==="text"?cleanString(block.text,500):"",
     imageUrl:block.type==="image"?safeImage(block.imageUrl):"",
     imageFit:block.type==="image"&&["contain","cover","fill"].includes(block.imageFit)?block.imageFit:"contain",
+    ...(block.type==="items_table"&&Array.isArray(block.columns)?{columns:sanitizeTableColumns(block.columns)}:{}),
+    tableHeaderBackground:safeBackground(block.tableHeaderBackground||"#edf2f7"),
+    tableHeaderColor:safeColor(block.tableHeaderColor||"#172335"),
+    tableRowBackground:safeBackground(block.tableRowBackground||"#ffffff"),
+    tableAlternateRowBackground:safeBackground(block.tableAlternateRowBackground||"#f7f9fc"),
+    tableBorderColor:safeColor(block.tableBorderColor||"#b8c4d1"),
+    tableBorderWidth:clamp(block.tableBorderWidth,0,3,1),
+    tableCellPadding:clamp(block.tableCellPadding,1,10,4),
+    alternateRows:block.alternateRows!==false,
     x,y,w,h,
     fontSize:clamp(block.fontSize,6,48,10),
     bold:block.bold===true,

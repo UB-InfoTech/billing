@@ -22,6 +22,22 @@ const FIELD_GROUPS=[
   ]}
 ];
 const FIELD_LABELS=Object.fromEntries(FIELD_GROUPS.flatMap(group=>group.items));
+const DEFAULT_ITEM_COLUMNS=[
+  {key:"sr",label:"#",width:5,order:0,visible:true},
+  {key:"description",label:"Description",width:24,order:1,visible:true},
+  {key:"designNumber",label:"Design No.",width:12,order:2,visible:true},
+  {key:"hsnCode",label:"HSN",width:8,order:3,visible:true},
+  {key:"quantity",label:"Qty",width:8,order:4,visible:true},
+  {key:"qtyUnit",label:"Unit",width:6,order:5,visible:true},
+  {key:"cut",label:"Cut",width:6,order:6,visible:true},
+  {key:"MTR",label:"MTR",width:7,order:7,visible:true},
+  {key:"shortPcs",label:"Short Pcs",width:8,order:8,visible:true},
+  {key:"unitPrice",label:"Rate",width:9,order:9,visible:true},
+  {key:"amount",label:"Amount",width:10,order:10,visible:true},
+  {key:"discount",label:"Disc. %",width:7,order:11,visible:true},
+  {key:"taxable",label:"Taxable",width:12,order:12,visible:true}
+];
+const ITEM_TABLE_COLUMN_OPTIONS=DEFAULT_ITEM_COLUMNS.map(({key,label})=>({key,label}));
 const SAMPLE_VALUES={
   company_name:"Your Business Name",company_address:"Business address · City · PIN",company_gstin:"GSTIN: 24ABCDE1234F1Z5",company_phone:"+91 98765 43210",company_email:"hello@yourbusiness.com",
   customer_name:"Customer / Company name",customer_address:"Customer billing address",customer_phone:"+91 98765 43210",customer_gstin:"Customer GSTIN",customer_state:"Gujarat",
@@ -76,6 +92,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [dragging,setDragging]=useState(null);
   const [history,setHistory]=useState({past:[],future:[]});
   const [alignmentGuides,setAlignmentGuides]=useState({vertical:[],horizontal:[]});
+  const [showGrid,setShowGrid]=useState(false);
+  const [snapToGrid,setSnapToGrid]=useState(false);
   const [uploading,setUploading]=useState(false);
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
@@ -283,21 +301,35 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   };
   useEffect(()=>{
     const handleShortcut=event=>{
-      if(!(event.ctrlKey||event.metaKey)||!event.target?.closest?.(".invoice-builder-overlay"))return;
+      if(!event.target?.closest?.(".invoice-builder-overlay"))return;
       if(event.target.closest("input,textarea,select,[contenteditable=true]"))return;
       const key=String(event.key||"").toLowerCase();
-      if(key==="z"){
-        event.preventDefault();
-        if(event.shiftKey)redo();
-        else undo();
-      }else if(key==="y"){
-        event.preventDefault();
-        redo();
+      if(event.ctrlKey||event.metaKey){
+        if(key==="z"){
+          event.preventDefault();
+          if(event.shiftKey)redo();
+          else undo();
+        }else if(key==="y"){
+          event.preventDefault();
+          redo();
+        }
+        return;
       }
+      if(!selectedBlockId||!["arrowleft","arrowright","arrowup","arrowdown"].includes(key))return;
+      const block=activeTemplate.blocks.find(item=>item.id===selectedBlockId);
+      if(!block)return;
+      event.preventDefault();
+      const step=snapToGrid?2:(event.shiftKey?1:0.25);
+      const patch={};
+      if(key==="arrowleft")patch.x=clamp(block.x-step,0,100-block.w);
+      if(key==="arrowright")patch.x=clamp(block.x+step,0,100-block.w);
+      if(key==="arrowup")patch.y=clamp(block.y-step,0,100-block.h);
+      if(key==="arrowdown")patch.y=clamp(block.y+step,0,100-block.h);
+      updateBlock(block.id,patch);
     };
     window.addEventListener("keydown",handleShortcut);
     return ()=>window.removeEventListener("keydown",handleShortcut);
-  },[history]);
+  },[history,selectedBlockId,activeTemplate,snapToGrid]);
   const updateActive=(patch,options={})=>{
     updateDesign({...localDesign,templates:localDesign.templates.map(template=>template.id===activeTemplate.id?{...template,...patch}:template)},options);
   };
@@ -681,7 +713,9 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       if(!block)return;
       const proposedX=clamp(current.x+dx,0,100-current.w);
       const proposedY=clamp(current.y+dy,0,100-current.h);
-      const snapped=getSnappedPosition(block,proposedX,proposedY,activeTemplate.blocks);
+      const snapped=snapToGrid
+        ?{x:Math.round(proposedX/2)*2,y:Math.round(proposedY/2)*2,guides:{vertical:[],horizontal:[]}}
+        :getSnappedPosition(block,proposedX,proposedY,activeTemplate.blocks);
       patch={x:clamp(snapped.x,0,100-current.w),y:clamp(snapped.y,0,100-current.h)};
       setAlignmentGuides(snapped.guides);
     }
@@ -718,17 +752,32 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const previewFields=previewInvoice?.fields||SAMPLE_VALUES;
   const previewColumns=previewInvoice?.itemColumns?.length
     ?previewInvoice.itemColumns
-    :[
-      {key:"sr",label:"#"},
-      {key:"description",label:"Description"},
-      {key:"quantity",label:"Qty"},
-      {key:"unitPrice",label:"Rate"},
-      {key:"amount",label:"Amount"}
-    ];
+    :DEFAULT_ITEM_COLUMNS;
   const previewItems=previewInvoice?.items||[
     {sr:"1",description:"Sample product",quantity:"2",unitPrice:"500.00",amount:"1000.00",qtyUnit:"PCS"},
     {sr:"2",description:"Another product",quantity:"1",unitPrice:"750.00",amount:"750.00",qtyUnit:"PCS"}
   ];
+  const selectedTableColumns=selectedBlock?.type==="items_table"
+    ?(Array.isArray(selectedBlock.columns)?selectedBlock.columns:previewColumns).map((column,index)=>({...column,order:index,visible:column.visible!==false}))
+    :[];
+  const updateSelectedTableColumns=columns=>updateBlock(selectedBlock.id,{columns:columns.map((column,index)=>({...column,order:index}))});
+  const updateSelectedTableColumn=(index,patch)=>{
+    const next=selectedTableColumns.map((column,columnIndex)=>columnIndex===index?{...column,...patch}:column);
+    updateSelectedTableColumns(next);
+  };
+  const reorderSelectedTableColumn=(fromIndex,toIndex)=>{
+    if(toIndex<0||toIndex>=selectedTableColumns.length||fromIndex===toIndex)return;
+    const next=selectedTableColumns.slice();
+    const [moved]=next.splice(fromIndex,1);
+    next.splice(toIndex,0,moved);
+    updateSelectedTableColumns(next);
+  };
+  const addSelectedTableColumn=key=>{
+    if(!key||selectedTableColumns.some(column=>column.key===key)||selectedTableColumns.length>=14)return;
+    const option=DEFAULT_ITEM_COLUMNS.find(column=>column.key===key);
+    if(!option)return;
+    updateSelectedTableColumns([...selectedTableColumns,{...option,order:selectedTableColumns.length}]);
+  };
 
   const renderBlockContent=block=>{
     if(block.type==="shape")return null;
@@ -742,13 +791,15 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         :<div className="invoice-builder-logo-placeholder"><i className="bi bi-image"></i><small>{previewInvoice?"No business logo saved":"Business logo"}</small></div>;
     }
     if(block.type==="items_table"){
-      const columns=previewColumns.slice(0,7);
+      const columns=(Array.isArray(block.columns)?block.columns:previewColumns).filter(column=>column.visible!==false).slice(0,14);
       const rows=previewItems.slice(0,4);
+      const borderColor=block.tableBorderColor||"#b8c4d1";
+      const cellPadding=Number(block.tableCellPadding??4);
       return (
-        <div className="invoice-builder-sample-table">
+        <div className="invoice-builder-sample-table" style={{color:block.color}}>
           <table>
-            <thead><tr>{columns.map(column=><th key={column.key}>{column.label}</th>)}</tr></thead>
-            <tbody>{rows.map((item,index)=><tr key={item.sr||index}>{columns.map(column=><td key={column.key}>{item[column.key]??""}</td>)}</tr>)}</tbody>
+            <thead><tr>{columns.map(column=><th key={column.key} style={{backgroundColor:block.tableHeaderBackground||"#edf2f7",color:block.tableHeaderColor||"#172335",borderColor,borderWidth:(block.tableBorderWidth??1)+"px",padding:cellPadding+"px"}}>{column.label}</th>)}</tr></thead>
+            <tbody>{rows.map((item,index)=><tr key={item.sr||index}>{columns.map(column=><td key={column.key} style={{backgroundColor:block.alternateRows!==false&&index%2===1?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#ffffff"),borderColor,borderWidth:(block.tableBorderWidth??1)+"px",padding:cellPadding+"px"}}>{item[column.key]??""}</td>)}</tr>)}</tbody>
           </table>
           {previewItems.length>rows.length&&<small className="invoice-builder-more-items">+ {previewItems.length-rows.length} more saved items</small>}
         </div>
@@ -865,6 +916,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               <div className="invoice-builder-page-settings">
                 <label>Paper</label><select value={activeTemplate.pageSize} onChange={event=>setPageSize(event.target.value)}><option value="A4">A4</option><option value="A5">A5</option><option value="Letter">Letter</option></select>
                 <select aria-label="Page orientation" value={activeTemplate.orientation} onChange={event=>updateActive({orientation:event.target.value})}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>
+                <button type="button" className={"btn btn-sm "+(showGrid?"btn-primary":"btn-light border")} onClick={()=>setShowGrid(value=>!value)} aria-pressed={showGrid} title="Show a 2% alignment grid"><i className="bi bi-grid-3x3 me-1"/>Grid</button>
+                <button type="button" className={"btn btn-sm "+(snapToGrid?"btn-primary":"btn-light border")} onClick={()=>setSnapToGrid(value=>!value)} aria-pressed={snapToGrid} title="Snap moved elements to the 2% grid"><i className="bi bi-magnet me-1"/>Snap</button>
               </div>
             </div>
 
@@ -878,6 +931,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                       ? <iframe className="invoice-builder-background" title="Imported PDF invoice reference" src={backgroundUrl+"#toolbar=0&navpanes=0&scrollbar=0"} tabIndex="-1"/>
                       : <img className="invoice-builder-background" src={backgroundUrl} alt="Imported invoice reference background" draggable="false"/>
                   )}
+                  <div className={"invoice-builder-grid-overlay"+(showGrid?" is-visible":"")} aria-hidden="true"/>
                   {placingField&&<button type="button" className="invoice-builder-placement-layer" onClick={placeFieldOnCanvas} aria-label={"Place "+(FIELD_LABELS[placementField]||"invoice element")+" at the selected position"}><span>Click on the page to place {FIELD_LABELS[placementField]||"the selected element"}</span></button>}
                   <div className="invoice-builder-alignment-guides" aria-hidden="true">
                     {alignmentGuides.vertical.map((position,index)=><span key={"v-"+index} className="invoice-builder-alignment-guide vertical" style={{left:position+"%"}}/>)}
@@ -896,7 +950,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               </div>
             </div>
             <div className="invoice-builder-canvas-footer">
-              <span><i className="bi bi-arrows-move me-1"/>Drag fields to position them. Select an element to edit its appearance.</span><span className="invoice-builder-pagination-hint">Long invoices continue automatically. Headings repeat and totals move to the final page.</span>
+              <span><i className="bi bi-arrows-move me-1"/>Drag to position · Arrow keys nudge (Shift for larger steps) · Select to edit.</span><span className="invoice-builder-pagination-hint">Long invoices continue automatically. Headings repeat and totals move to the final page.</span>
               {activeTemplate.background?.url&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>updateActive({background:{...activeTemplate.background,visible:activeTemplate.background.visible===false}})}>{activeTemplate.background.visible===false?"Show reference":"Hide reference"}</button>}
             </div>
           </main>
@@ -1007,6 +1061,48 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   <><label className="form-label">What should it show?</label><select className="form-select form-select-sm mb-3" value={selectedBlock.fieldKey} onChange={event=>updateBlock(selectedBlock.id,{fieldKey:event.target.value,label:FIELD_LABELS[event.target.value]||selectedBlock.label})}>{Object.entries(FIELD_LABELS).filter(([key])=>key!=="logo").map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></>
                 )}
                 {selectedBlock.type==="text"&&<><label className="form-label">Text</label><textarea className="form-control form-control-sm mb-3" rows={3} value={selectedBlock.text} onChange={event=>updateBlock(selectedBlock.id,{text:event.target.value})}/></>}
+                {selectedBlock.type==="items_table"&&(
+                  <div className="invoice-builder-table-editor">
+                    <h4>Columns in this table</h4>
+                    <p>Rename, resize, hide or drag columns into the order you want. These changes apply only to this design.</p>
+                    <div className="invoice-builder-table-columns">
+                      {selectedTableColumns.map((column,index)=>(
+                        <div className={"invoice-builder-table-column"+(column.visible===false?" is-hidden":"")} key={column.key} draggable onDragStart={event=>{event.dataTransfer.setData("application/x-invoice-table-column",String(index));event.dataTransfer.effectAllowed="move";}} onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();const from=Number(event.dataTransfer.getData("application/x-invoice-table-column"));if(Number.isInteger(from))reorderSelectedTableColumn(from,index);}}>
+                          <span className="invoice-builder-column-grip" title="Drag to reorder"><i className="bi bi-grip-vertical"/></span>
+                          <div className="invoice-builder-column-fields">
+                            <input className="form-control form-control-sm" aria-label={"Column "+(index+1)+" heading"} value={column.label} maxLength={40} onChange={event=>updateSelectedTableColumn(index,{label:event.target.value})}/>
+                            <div className="d-flex align-items-center gap-2">
+                              <label className="small text-secondary mb-0">Width</label>
+                              <input type="number" min="3" max="70" className="form-control form-control-sm invoice-builder-column-width" aria-label={column.label+" column width"} value={column.width??8} onChange={event=>updateSelectedTableColumn(index,{width:clamp(event.target.value,3,70)})}/>
+                              <span className="small text-secondary">%</span>
+                            </div>
+                          </div>
+                          <button type="button" className="invoice-builder-column-visibility" onClick={()=>updateSelectedTableColumn(index,{visible:column.visible===false})} aria-label={(column.visible===false?"Show ":"Hide ")+column.label} title={column.visible===false?"Show column":"Hide column"} disabled={column.visible!==false&&selectedTableColumns.filter(item=>item.visible!==false).length===1}><i className={"bi "+(column.visible===false?"bi-eye-slash":"bi-eye")}/></button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="invoice-builder-table-add">
+                      <select className="form-select form-select-sm" value="" aria-label="Add an item table column" onChange={event=>addSelectedTableColumn(event.target.value)}>
+                        <option value="">Add a column…</option>
+                        {ITEM_TABLE_COLUMN_OPTIONS.filter(option=>!selectedTableColumns.some(column=>column.key===option.key)).map(option=><option value={option.key} key={option.key}>{option.label}</option>)}
+                      </select>
+                      <button type="button" className="btn btn-sm btn-light border" onClick={()=>updateBlock(selectedBlock.id,{columns:undefined})} title="Use the saved invoice column settings">Reset</button>
+                    </div>
+                    <h4>Table appearance</h4>
+                    <div className="invoice-builder-number-grid">
+                      <div><label className="form-label">Header background</label><input type="color" className="form-control form-control-color w-100" value={selectedBlock.tableHeaderBackground||"#edf2f7"} onChange={event=>updateBlock(selectedBlock.id,{tableHeaderBackground:event.target.value})}/></div>
+                      <div><label className="form-label">Header text</label><input type="color" className="form-control form-control-color w-100" value={selectedBlock.tableHeaderColor||"#172335"} onChange={event=>updateBlock(selectedBlock.id,{tableHeaderColor:event.target.value})}/></div>
+                      <div><label className="form-label">Row background</label><input type="color" className="form-control form-control-color w-100" value={selectedBlock.tableRowBackground||"#ffffff"} onChange={event=>updateBlock(selectedBlock.id,{tableRowBackground:event.target.value})}/></div>
+                      <div><label className="form-label">Alternate row</label><input type="color" className="form-control form-control-color w-100" value={selectedBlock.tableAlternateRowBackground||"#f7f9fc"} onChange={event=>updateBlock(selectedBlock.id,{tableAlternateRowBackground:event.target.value})}/></div>
+                      <div><label className="form-label">Border colour</label><input type="color" className="form-control form-control-color w-100" value={selectedBlock.tableBorderColor||"#b8c4d1"} onChange={event=>updateBlock(selectedBlock.id,{tableBorderColor:event.target.value})}/></div>
+                      <div><label className="form-label">Cell spacing (px)</label><input type="number" min="1" max="10" className="form-control form-control-sm" value={selectedBlock.tableCellPadding??4} onChange={event=>updateBlock(selectedBlock.id,{tableCellPadding:clamp(event.target.value,1,10)})}/></div>
+                    </div>
+                    <div className="d-flex justify-content-between align-items-center gap-2 mt-3">
+                      <div className="form-check form-switch"><input id="invoice-table-alternate-rows" type="checkbox" className="form-check-input" checked={selectedBlock.alternateRows!==false} onChange={event=>updateBlock(selectedBlock.id,{alternateRows:event.target.checked})}/><label className="form-check-label small" htmlFor="invoice-table-alternate-rows">Alternate row shading</label></div>
+                      <div className="invoice-builder-column-border-width"><label className="small text-secondary">Border</label><input type="number" min="0" max="3" className="form-control form-control-sm" value={selectedBlock.tableBorderWidth??1} onChange={event=>updateBlock(selectedBlock.id,{tableBorderWidth:clamp(event.target.value,0,3)})}/></div>
+                    </div>
+                  </div>
+                )}
                 {selectedBlock.type==="field"&&<div className="form-check form-switch mb-3"><input id="invoice-block-show-label" className="form-check-input" type="checkbox" checked={selectedBlock.showLabel!==false} onChange={event=>updateBlock(selectedBlock.id,{showLabel:event.target.checked})}/><label className="form-check-label" htmlFor="invoice-block-show-label">Show field label before the value</label><small className="d-block text-secondary">Turn this off when the imported design already prints the label.</small></div>}
                 <div className="invoice-builder-selected-actions"><button type="button" className="btn btn-sm btn-light border" onClick={duplicateSelectedBlock}><i className="bi bi-copy me-1"/>Duplicate element</button><button type="button" className="btn btn-sm btn-light border" onClick={()=>moveSelectedLayer(1)} title="Bring forward"><i className="bi bi-front"/></button><button type="button" className="btn btn-sm btn-light border" onClick={()=>moveSelectedLayer(-1)} title="Send backward"><i className="bi bi-back"/></button></div>
                 <h4>Position and size</h4>

@@ -36,6 +36,7 @@ const invoiceConfigurationSchema=new mongoose.Schema({
     showEwayBill:{type:Boolean,default:true}
   },
   itemColumns:{type:[itemColumnSchema],default:[]},
+  design:{type:mongoose.Schema.Types.Mixed,default:null},
   summary:{
     showDiscount:{type:Boolean,default:true},
     showTax:{type:Boolean,default:true},

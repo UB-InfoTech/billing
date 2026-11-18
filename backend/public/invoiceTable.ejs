@@ -4,8 +4,22 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><%= invoiceConfig.invoiceTitle %> - <%= orderNumber %></title>
+  <%
+    const activeDesignTemplate=invoiceConfig.design?.templates?.find(item=>item.id===invoiceConfig.design.activeTemplateId)||invoiceConfig.design?.templates?.[0];
+    const useCustomDesign=Boolean(invoiceConfig.design?.enabled&&activeDesignTemplate);
+    const designPageSize=activeDesignTemplate?.pageSize||invoiceConfig.pageSize;
+    const designOrientation=activeDesignTemplate?.orientation||"portrait";
+    const pageDimensions={
+      A4:{portrait:["210mm","297mm"],landscape:["297mm","210mm"]},
+      A5:{portrait:["148mm","210mm"],landscape:["210mm","148mm"]},
+      Letter:{portrait:["215.9mm","279.4mm"],landscape:["279.4mm","215.9mm"]}
+    };
+    const designDimensions=pageDimensions[designPageSize]?.[designOrientation]||pageDimensions.A4.portrait;
+    const designWidth=designDimensions[0];
+    const designHeight=designDimensions[1];
+  %>
   <style>
-    @page { size: <%= invoiceConfig.pageSize %>; margin: 8mm; }
+    @page { size: <%= useCustomDesign ? designPageSize+" "+designOrientation : invoiceConfig.pageSize %>; margin: <%= useCustomDesign ? "0" : "8mm" %>; }
     *{box-sizing:border-box}
     html,body{margin:0;padding:0}
     body{width:100%;font-family:Arial,Helvetica,sans-serif;color:#111827;background:#fff;font-size:11px;line-height:1.35}
@@ -38,10 +52,116 @@
     .grand{font-size:14px;font-weight:900}
     .web-credit{padding:4px 6px;font-size:8px;color:#6b7280}
     .nowrap{white-space:nowrap}
-    @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.invoice{max-width:none}}
+    .design-sheet{position:relative;width:<%= designWidth %>;height:<%= designHeight %>;margin:0 auto;overflow:hidden;background:#fff;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+    .design-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;border:0;object-fit:fill}
+    .design-background-frame{position:absolute;inset:0;z-index:0;width:100%;height:100%;border:0;pointer-events:none;background:#fff}
+    .design-block{position:absolute;z-index:1;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.25}
+    .design-block .field-label{font-size:.8em;color:#64748b;font-weight:600}
+    .design-items{width:100%;height:100%;overflow:visible}
+    .design-items table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8px}
+    .design-items th,.design-items td{border:1px solid #9aa8b8;padding:4px;vertical-align:top}
+    .design-items th{background:#edf2f7;text-align:center;font-weight:800}
+    .design-items thead{display:table-header-group}
+    .design-items tr{break-inside:avoid;page-break-inside:avoid}
+    .design-totals{width:100%;font-size:9px}
+    .design-totals div{display:flex;justify-content:space-between;gap:8px;padding:3px 1px;border-bottom:1px solid #e5eaf0}
+    .design-totals .grand{font-size:12px;font-weight:900;border-top:1.5px solid #475569}
+    @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.invoice{max-width:none}.design-sheet{margin:0;break-after:auto}}
+    @media screen{.design-sheet{box-shadow:0 0 0 1px #d8e0e9}}
+
   </style>
 </head>
 <body>
+<% if(useCustomDesign){ 
+  const activeBlocks=(activeDesignTemplate.blocks||[]).filter(block=>block.visible!==false);
+  const designColumns=(invoiceConfig.itemColumns||[]).slice().sort((a,b)=>(a.order||0)-(b.order||0)).filter(column=>column.visible!==false);
+  const designValues={
+    company_name:profileCompanyName,company_address:profileCompanyAddress,company_gstin:profileGstNumber,
+    company_phone:[profilePhoneNumber1,profilePhoneNumber2].filter(Boolean).join(" / "),company_email:profileEmailAddress,
+    customer_name:clientCompanyName,customer_address:clientAddress,customer_phone:clientPhoneNumber,customer_gstin:clientGstNumber,customer_state:clientState,
+    invoice_title:invoiceConfig.invoiceTitle,invoice_no:orderNumber,invoice_date:createdAt,due_date:dueDate,challan_no:clientChallanNumber,
+    payment_terms:paymentTerm?("Net "+paymentTerm+" days"):"",eway_bill:ewayBillNo,
+    subtotal:orderSubTotal,discount:orderDiscountAmount,taxable_value:orderTotalCost,cgst:orderTaxAmount,
+    sgst:orderTaxAmount,igst:orderIgstTaxAmount,round_off:orderFinalRevenueRoundOff,
+    grand_total:orderFinalRevenueAfterRoundOff,amount_paid:orderPaidAmount,balance_due:dueAmount,
+    amount_words:orderFinalRevenueInWords,
+    bank_details:[profileBankName,profileAccountNo,profileBranchName,profileIfsc].filter(Boolean).join(" · "),
+    terms:"Goods once sold will not be taken back or replaced. Any complaint should be made within 7 days. Subject to Surat jurisdiction.",
+    signature:"For, "+profileCompanyName+" · Authorised Signatory"
+  };
+  const itemValue=(item,column)=>{
+    const unit=item.qtyUnit||"PCS";
+    const enteredQty=unit==="MTR"?Number(item.MTR||0):Number(item.quantity||0);
+    const shortQty=Math.max(0,Number(item.shortPcs||0));
+    const qty=Math.max(0,enteredQty-shortQty);
+    const amount=qty*Number(item.unitPrice||0);
+    const taxable=amount*(1-Number(orderDisRate||0)/100);
+    switch(column.key){
+      case "sr":return item._index;
+      case "description":return item.orderName||"";
+      case "designNumber":return item.designNumber||"";
+      case "hsnCode":return item.hsnCode||"";
+      case "quantity":return unit==="MTR"?(item.quantity||0):qty;
+      case "qtyUnit":return unit;
+      case "cut":return item.cut||0;
+      case "MTR":return unit==="MTR"?qty:(item.MTR||0);
+      case "unitPrice":return Number(item.unitPrice||0).toFixed(2);
+      case "amount":return Number(amount||0).toFixed(2);
+      case "discount":return Number(orderDisRate||0).toFixed(2)+"%";
+      case "taxable":return Number(taxable||0).toFixed(2);
+      default:return item[column.key]??"";
+    }
+  };
+%>
+  <div class="design-sheet">
+    <% if(activeDesignTemplate.background?.url&&activeDesignTemplate.background.visible!==false){
+      const backgroundUrl=activeDesignTemplate.background.url.startsWith("http")?activeDesignTemplate.background.url:(publicUploadBaseUrl||"")+activeDesignTemplate.background.url;
+    %>
+      <% if(activeDesignTemplate.background.type==="pdf"){ %>
+        <iframe class="design-background-frame" src="<%= backgroundUrl %>#toolbar=0&navpanes=0&scrollbar=0" title="Imported invoice background"></iframe>
+      <% }else{ %>
+        <img class="design-background" src="<%= backgroundUrl %>" alt="Imported invoice background">
+      <% } %>
+    <% } %>
+    <% activeBlocks.forEach(block=>{ %>
+      <div class="design-block" style="left:<%= block.x %>%;top:<%= block.y %>%;width:<%= block.w %>%;height:<%= block.h %>%;overflow:<%= block.type==="items_table"||block.type==="totals"?"visible":"hidden" %>;font-size:<%= block.fontSize %>px;font-weight:<%= block.bold?700:400 %>;text-align:<%= block.align %>;color:<%= block.color %>">
+        <% if(block.type==="text"){ %><%= block.text||block.label %>
+        <% }else if(block.type==="divider"){ %><div style="width:100%;border-top:1px solid currentColor;margin-top:3px"></div>
+        <% }else if(block.type==="logo"){ %>
+          <% if(profileLogoUrl){ %><img src="<%= profileLogoUrl %>" alt="Business logo" style="width:100%;height:100%;object-fit:contain"><% } %>
+        <% }else if(block.type==="field"){ %>
+          <% const displayValue=designValues[block.fieldKey]??""; %>
+          <% if(block.label){ %><span class="field-label"><%= block.label %>: </span><% } %><%= displayValue %>
+        <% }else if(block.type==="items_table"){ %>
+          <div class="design-items">
+            <table>
+              <thead><tr><% designColumns.forEach(column=>{ %><th style="width:<%= Number(column.width||8) %>%"><%= column.label %></th><% }) %></tr></thead>
+              <tbody>
+                <% (subOrders||[]).forEach((item,index)=>{ const row={...item,_index:index+1}; %>
+                  <tr><% designColumns.forEach(column=>{ %><td><%= itemValue(row,column) %></td><% }) %></tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% }else if(block.type==="totals"){ %>
+          <div class="design-totals">
+            <div><span>Subtotal</span><b>₹ <%= Number(orderSubTotal||0).toFixed(2) %></b></div>
+            <div><span>Discount</span><b>− ₹ <%= Number(orderDiscountAmount||0).toFixed(2) %></b></div>
+            <div><span>Taxable value</span><b>₹ <%= Number(orderTotalCost||0).toFixed(2) %></b></div>
+            <% if(Number(orderIgstTax||0)>0){ %><div><span>IGST</span><b>₹ <%= Number(orderIgstTaxAmount||0).toFixed(2) %></b></div><% }else{ %>
+              <div><span>CGST</span><b>₹ <%= Number(orderTaxAmount||0).toFixed(2) %></b></div>
+              <div><span>SGST</span><b>₹ <%= Number(orderTaxAmount||0).toFixed(2) %></b></div>
+            <% } %>
+            <div><span>Round off</span><b>₹ <%= Number(orderFinalRevenueRoundOff||0).toFixed(2) %></b></div>
+            <div class="grand"><span>Invoice total</span><b>₹ <%= Number(orderFinalRevenueAfterRoundOff||0).toFixed(2) %></b></div>
+            <div><span>Paid</span><b>₹ <%= Number(orderPaidAmount||0).toFixed(2) %></b></div>
+            <div><span>Due</span><b>₹ <%= Number(dueAmount||0).toFixed(2) %></b></div>
+          </div>
+        <% } %>
+      </div>
+    <% }) %>
+  </div>
+<% }else{ %>
 <%
   const defaults=[
     {key:"sr",label:"Sr",visible:true,order:0,width:5},
@@ -221,5 +341,6 @@
 
   <% if(invoiceConfig.summary.showWebCredit){ %><div class="web-credit">Web-Application by Bhanderi Info Tech (+91-91091-95695)</div><% } %>
 </div>
+<% } %>
 </body>
 </html>

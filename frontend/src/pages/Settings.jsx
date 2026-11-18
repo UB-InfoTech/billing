@@ -13,6 +13,7 @@ import {
   workflowActionFieldsFor
 } from "../config/noCodeCatalog";
 import {useSoftwareConfiguration} from "../hooks/useSoftwareConfiguration";
+import InvoicePrintBuilder from "../components/InvoicePrintBuilder";
 
 const apiBase=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
@@ -152,6 +153,7 @@ export default function Settings(){
   const [invoiceLoading,setInvoiceLoading]=useState(true);
   const [invoiceSaving,setInvoiceSaving]=useState(false);
   const [invoiceError,setInvoiceError]=useState("");
+  const [invoiceBuilderOpen,setInvoiceBuilderOpen]=useState(false);
   const [invoiceDragKey,setInvoiceDragKey]=useState(null);
   const [reportConfig,setReportConfig]=useState(null);
   const [reportLoading,setReportLoading]=useState(true);
@@ -362,8 +364,10 @@ export default function Settings(){
       setInvoiceError("");
       const response=await axios.put(apiBase+"/api/invoice-config",invoiceConfig,auth());
       setInvoiceConfig(response.data||invoiceConfig);
+      return true;
     }catch(saveError){
       setInvoiceError(saveError.response?.data?.message||"Unable to save invoice settings.");
+      return false;
     }finally{setInvoiceSaving(false);}
   };
 
@@ -937,9 +941,10 @@ export default function Settings(){
               <section className="settings-section">
                 <div className="settings-section-heading">
                   <div><h2>Invoice & print</h2><p>Change what appears on printed invoices without editing templates or code.</p></div>
-                  <div className="d-flex gap-2">
+                  <div className="d-flex flex-wrap gap-2">
+                    <button type="button" className="btn btn-light border" onClick={()=>setInvoiceBuilderOpen(true)} disabled={invoiceLoading||!invoiceConfig}><i className="bi bi-layout-wtf me-1"></i>Open visual builder</button>
                     <button type="button" className="btn btn-light border" onClick={resetInvoiceConfig} disabled={invoiceSaving}>Reset</button>
-                    <button type="button" className="btn btn-primary" onClick={saveInvoiceConfig} disabled={invoiceSaving||invoiceLoading}>{invoiceSaving?"Saving...":"Save invoice design"}</button>
+                    <button type="button" className="btn btn-primary" onClick={saveInvoiceConfig} disabled={invoiceSaving||invoiceLoading}>{invoiceSaving?"Saving...":"Save invoice settings"}</button>
                   </div>
                 </div>
                 {invoiceError&&<div className="alert alert-danger">{invoiceError}</div>}
@@ -1220,6 +1225,26 @@ export default function Settings(){
           </main>
         </div>
       </div>
+      {invoiceBuilderOpen&&invoiceConfig&&(
+        <InvoicePrintBuilder
+          design={invoiceConfig.design}
+          saving={invoiceSaving}
+          onChange={design=>setInvoiceConfig(previous=>({...previous,design}))}
+          onSave={async design=>{
+            try{
+              setInvoiceSaving(true);
+              setInvoiceError("");
+              const nextConfig={...invoiceConfig,design:{...design,enabled:true}};
+              const response=await axios.put(apiBase+"/api/invoice-config",nextConfig,auth());
+              setInvoiceConfig(response.data||nextConfig);
+              setInvoiceBuilderOpen(false);
+            }catch(saveError){
+              setInvoiceError(saveError.response?.data?.message||"Unable to save the invoice design.");
+            }finally{setInvoiceSaving(false);}
+          }}
+          onClose={()=>setInvoiceBuilderOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -13,6 +13,7 @@ const CreditNote=require("../models/CreditNote");
 const StockMovement=require("../models/StockMovement");
 const {synchronizeInvoiceStock,rollbackStockMovements}=require("../utils/stockMovement");
 const InvoiceConfiguration=require("../models/InvoiceConfiguration");
+const {sanitizeInvoiceDesign}=require("../utils/invoiceDesign");
 const PaymentLog=require("../models/PaymentLog2");
 const auth=require("../middleware/auth");
 const {syncClientDataSafely,getInvoiceRevenue}=require("../utils/syncClientData");
@@ -1426,9 +1427,18 @@ const defaultInvoiceConfiguration=()=>({
   summary:{showDiscount:true,showTax:true,showRoundOff:true,showBankDetails:true,showTerms:true,showWebCredit:true}
 });
 
-async function renderInvoice(order,res){
+async function renderInvoice(order,res,request){
   const profile=await Profile.findOne({createdBy:String(order.createdBy)}).lean()||{};
-  const invoiceConfig=await InvoiceConfiguration.findOne({createdBy:String(order.createdBy)}).lean()||defaultInvoiceConfiguration();
+  const storedInvoiceConfig=await InvoiceConfiguration.findOne({createdBy:String(order.createdBy)}).lean()||defaultInvoiceConfiguration();
+  const invoiceConfig={
+    ...storedInvoiceConfig,
+    design:sanitizeInvoiceDesign(storedInvoiceConfig.design,String(order.createdBy))
+  };
+  const publicUploadBaseUrl=request?.protocol&&request?.get?.("host")
+    ?request.protocol+"://"+request.get("host")
+    :"";
+  const logoPath=getPublicOrganizationLogoUrl(profile.logoUrl,order.createdBy);
+  const profileLogoUrl=logoPath&&publicUploadBaseUrl?publicUploadBaseUrl+logoPath:logoPath;
   const client=order.clientId?await Client.findOne({_id:order.clientId,createdBy:String(order.createdBy)}).lean():null;
   const dueDate=new Date(order.orderDate||new Date());
   const terms=Number(order.paymentTerms);
@@ -1442,10 +1452,11 @@ async function renderInvoice(order,res){
   try{
     const html=await ejs.renderFile(path.join(__dirname,"../public/invoiceTable.ejs"),{
       invoiceConfig,
-      profileLogoUrl:getPublicOrganizationLogoUrl(profile.logoUrl,order.createdBy),
+      profileLogoUrl,
+      publicUploadBaseUrl,
       profileHeaderTitle:profile.headerTitle||"Invoice",profileCompanyName:profile.companyName||"Company",profileCompanyAddress:profileAddress,profileEmailAddress:profile.emailAddress||"",profileWebsite:profile.website||"",profilePhoneNumber1:profile.phoneNumber1||"",profilePhoneNumber2:profile.phoneNumber2||"",profileGstNumber:profile.gstin||"",profilePanNumber:profile.pan||"",profileBankName:profile.bankName||"",profileAccountNo:profile.accountNo||"",profileBranchName:profile.branchName||"",profileIfsc:profile.ifsc||"",
       clientChallanNumber:order.challanNumber||"",clientCompanyName:order.companyName||"",clientAddress:order.Address||"",clientPhoneNumber:client?.phone||"",clientGstNumber:order.gstNumber||"",clientState:client?.state||order.State||"",
-      orderNumber:order.orderNumber||"",createdAt:new Date(order.orderDate).toLocaleDateString("en-IN"),dueDate:dueDate.toLocaleDateString("en-IN"),paymentTerm:order.paymentTerms||"",ewayBillNo:order.ewbDetails?.ewbNo||"N/A",subOrders:order.subOrders||[],orderTotalCost:order.totalCost||0,orderSubTotal:round2(Number(order.totalCost||0)+Number(order.discountAmount||0)),orderDisRate:order.discountRate||0,orderDiscountAmount:order.discountAmount||0,orderTax:round2(Number(order.taxPercentage||0)/2),orderTaxAmount:round2(Number(order.taxAmount||0)/2),orderIgstTax:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxPercentage||0):0,orderIgstTaxAmount:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxAmount||0):0,orderFinalRevenue:order.finalRevenue||0,orderFinalRevenueRoundOff:round2(getInvoiceRevenue(order)-Number(order.finalRevenue||0)),orderFinalRevenueAfterRoundOff:getInvoiceRevenue(order),orderFinalRevenueInWords:numberToWords(getInvoiceRevenue(order)),paymentStatus:order.paymentStatus,dueAmount:order.dueAmount||0,creditAppliedAmount:order.creditAppliedAmount||0,payments:order.payments||[]
+      orderNumber:order.orderNumber||"",createdAt:new Date(order.orderDate).toLocaleDateString("en-IN"),dueDate:dueDate.toLocaleDateString("en-IN"),paymentTerm:order.paymentTerms||"",ewayBillNo:order.ewbDetails?.ewbNo||"N/A",subOrders:order.subOrders||[],orderPaidAmount:Number(order.paidAmount??(order.payments||[]).reduce((sum,payment)=>sum+Number(payment.amount||0),0)),orderTotalCost:order.totalCost||0,orderSubTotal:round2(Number(order.totalCost||0)+Number(order.discountAmount||0)),orderDisRate:order.discountRate||0,orderDiscountAmount:order.discountAmount||0,orderTax:round2(Number(order.taxPercentage||0)/2),orderTaxAmount:round2(Number(order.taxAmount||0)/2),orderIgstTax:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxPercentage||0):0,orderIgstTaxAmount:Number(order.stateCode)!==Number(profile.stateCode)?Number(order.taxAmount||0):0,orderFinalRevenue:order.finalRevenue||0,orderFinalRevenueRoundOff:round2(getInvoiceRevenue(order)-Number(order.finalRevenue||0)),orderFinalRevenueAfterRoundOff:getInvoiceRevenue(order),orderFinalRevenueInWords:numberToWords(getInvoiceRevenue(order)),paymentStatus:order.paymentStatus,dueAmount:order.dueAmount||0,creditAppliedAmount:order.creditAppliedAmount||0,payments:order.payments||[]
     });
     return res.type("html").send(html);
   }catch(error){
@@ -1459,7 +1470,7 @@ router.get("/:orderId/invoice",auth,async(req,res)=>{
     if(!mongoose.isValidObjectId(req.params.orderId))return res.status(400).json({message:"Invalid invoice ID."});
     const order=await Order.findOne({_id:req.params.orderId,createdBy:userId(req)}).lean();
     if(!order)return res.status(404).json({message:"Order not found"});
-    await renderInvoice(order,res);
+    await renderInvoice(order,res,req);
   }catch(error){res.status(500).json({message:"Error generating invoice",error:error.message});}
 });
 router.get("/:orderId/KachuBill",auth,async(req,res)=>{

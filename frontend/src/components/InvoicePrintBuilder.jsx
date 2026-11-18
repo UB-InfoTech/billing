@@ -184,7 +184,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     try{
       const response=await axios.post(
         API+"/api/order/"+encodeURIComponent(previewRecordId)+"/invoice-preview",
-        {design:localDesign},
+        {design:{...localDesign,enabled:true}},
         {...auth(),responseType:"text"}
       );
       const html=typeof response.data==="string"?response.data:"";

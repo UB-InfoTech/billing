@@ -462,7 +462,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       const result=await scanImportedInvoiceText(importedFile,setOcrProgress);
       setOcrScan({...result,lines:result.lines.map(line=>({...line,selectedField:line.fieldKey||""}))});
       setMessage(result.lines.length
-        ?"Text recognition complete. Review the suggested field matches, then click Place to position each live field."
+        ?"Text recognition complete. Use Place at detected area where a value position was found, or choose manual placement to click the page."
         :"No readable text was found on the first page. You can still use smart layout scanning and guided placement.");
     }catch(ocrScanError){
       setOcrError(ocrScanError.message||"Text recognition could not read this file. Guided field placement is still available.");
@@ -487,7 +487,33 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const label=FIELD_LABELS[fieldKey]||"invoice field";
     setPlacementField(fieldKey);
     setPlacingField(true);
-    setMessage("OCR found “"+line.text+"” and matched it to "+label+". Click the blank value area on the reference page to place the live field.");
+    setMessage("OCR matched “"+line.text+"” to "+label+". Click the value position on the reference page to place the live field.");
+  };
+
+  const placeOcrMappingAtDetectedArea=line=>{
+    const fieldKey=line.selectedField||line.fieldKey;
+    const box=line.valueBox;
+    if(!fieldKey||!box){
+      setOcrError("A clear printed value area was not found. Use manual placement for this line.");
+      return;
+    }
+    const width=clamp(box.w,10,48);
+    const height=clamp(box.h,3,10);
+    const position={
+      x:clamp(box.x,0,100-width),
+      y:clamp(box.y,0,100-height)
+    };
+    const existing=activeTemplate.blocks.find(block=>block.type==="field"&&block.fieldKey===fieldKey);
+    if(existing){
+      updateBlock(existing.id,{...position,w:width,h:height,visible:true});
+      setSelectedBlockId(existing.id);
+    }else{
+      addBlock("field",fieldKey,position,{w:width,h:height});
+    }
+    setPlacementField(fieldKey);
+    setPlacingField(false);
+    setOcrError("");
+    setMessage((FIELD_LABELS[fieldKey]||"Invoice field")+" placed over the detected printed value. Check the preview and adjust its size or position if needed.");
   };
 
   const startBlockDrag=(event,block)=>{
@@ -778,7 +804,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                       <strong>{ocrScan.lines.length} text lines found</strong>
                       <small>Page 1 of {ocrScan.pageCount} · English</small>
                     </div>
-                    <p>Choose the matching field for each line, then use Place to click the empty value position on the page.</p>
+                    <p>Choose the matching field. When a printed value is detected, place the live field over it automatically; otherwise use manual placement.</p>
                     {ocrScan.lines.length===0
                       ?<div className="small text-secondary">No readable text was found. Try a clearer scan or use guided placement.</div>
                       :ocrScan.lines.slice(0,30).map(line=>(
@@ -796,7 +822,11 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                                 </optgroup>
                               ))}
                             </select>
-                            <button type="button" className="btn btn-sm btn-light border" disabled={!line.selectedField} onClick={()=>placeOcrMapping(line)}>Place</button>
+                            <div className="invoice-builder-ocr-map-actions">
+                              {line.valueBox&&<button type="button" className="btn btn-sm btn-primary" disabled={!line.selectedField} onClick={()=>placeOcrMappingAtDetectedArea(line)}>Place at detected area</button>}
+                              <button type="button" className="btn btn-sm btn-light border" disabled={!line.selectedField} onClick={()=>placeOcrMapping(line)}>{line.valueBox?"Choose position":"Place"}</button>
+                            </div>
+                            {line.valueBox&&<small className="invoice-builder-ocr-value-found">Printed value area found · review after placing</small>}
                           </div>
                         </div>
                       ))}

@@ -79,6 +79,66 @@ test("OCR text matcher suggests common invoice field mappings without forcing a 
   assert.equal(lines[0].box.h,2);
 });
 
+test("OCR detects the printed value area after an invoice label using word coordinates",async()=>{
+  const {extractOcrLines}=await import("../../frontend/src/utils/invoiceOcrMapping.js");
+  const lines=extractOcrLines({
+    blocks:[{paragraphs:[{lines:[{
+      text:"Invoice No: INV-101",
+      bbox:{x0:100,y0:200,x1:400,y1:240},
+      words:[
+        {text:"Invoice",confidence:94,bbox:{x0:100,y0:205,x1:180,y1:235}},
+        {text:"No:",confidence:91,bbox:{x0:185,y0:205,x1:225,y1:235}},
+        {text:"INV-101",confidence:95,bbox:{x0:235,y0:205,x1:330,y1:235}}
+      ]
+    }]}]}]
+  },1000,2000);
+  assert.equal(lines[0].fieldKey,"invoice_no");
+  assert.equal(lines[0].words.length,3);
+  assert.ok(lines[0].valueBox);
+  assert.ok(lines[0].valueBox.x<23.5);
+  assert.ok(lines[0].valueBox.w>=14);
+  assert.ok(lines[0].valueBox.h>=3.2);
+});
+
+test("OCR finds a separate value line beside its label but avoids another labelled field",async()=>{
+  const {extractOcrLines}=await import("../../frontend/src/utils/invoiceOcrMapping.js");
+  const lines=extractOcrLines({
+    blocks:[{paragraphs:[{lines:[
+      {
+        text:"Invoice No:",
+        bbox:{x0:100,y0:200,x1:200,y1:240},
+        words:[
+          {text:"Invoice",confidence:92,bbox:{x0:100,y0:205,x1:145,y1:235}},
+          {text:"No:",confidence:92,bbox:{x0:150,y0:205,x1:200,y1:235}}
+        ]
+      },
+      {
+        text:"INV-2026-001",
+        bbox:{x0:220,y0:200,x1:350,y1:240},
+        words:[{text:"INV-2026-001",confidence:93,bbox:{x0:220,y0:205,x1:350,y1:235}}]
+      },
+      {
+        text:"Invoice Date:",
+        bbox:{x0:500,y0:200,x1:650,y1:240},
+        words:[
+          {text:"Invoice",confidence:92,bbox:{x0:500,y0:205,x1:560,y1:235}},
+          {text:"Date:",confidence:92,bbox:{x0:565,y0:205,x1:650,y1:235}}
+        ]
+      }
+    ]}]}]
+  },1000,2000);
+  assert.ok(lines.find(line=>line.fieldKey==="invoice_no").valueBox);
+  assert.equal(lines.find(line=>line.fieldKey==="invoice_date").valueBox,null);
+  const noCoordinates=extractOcrLines({
+    blocks:[{paragraphs:[{lines:[{
+      text:"Invoice No: INV-101",
+      bbox:{x0:100,y0:200,x1:400,y1:240},
+      words:[{text:"Invoice",confidence:90},{text:"No:",confidence:90},{text:"INV-101",confidence:90}]
+    }]}]}]
+  },1000,2000);
+  assert.equal(noCoordinates[0].valueBox,null);
+});
+
 test("new invoice design keeps the existing print layout active until the owner selects a new design",()=>{
   const design=createDefaultInvoiceDesign();
   assert.equal(design.enabled,false);

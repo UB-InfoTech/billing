@@ -151,3 +151,10 @@
  .invoice-builder-print-preview-footer{align-items:flex-start;flex-direction:column}
  .invoice-builder-print-preview-footer>div{width:100%;justify-content:flex-end}
 }
+
+
+.invoice-builder-smart-scan{padding:11px;border:1px solid #cfe1f3;border-radius:8px;background:#f5f9fe}
+.invoice-builder-smart-scan>strong{display:block;margin-bottom:5px;color:#294562;font-size:12px}
+.invoice-builder-smart-scan p{margin:0 0 9px;color:#63778e;font-size:10px;line-height:1.5}
+.invoice-builder-scan-result{display:flex;align-items:flex-start;gap:4px;color:#28764c;font-size:10px;line-height:1.4}
+.invoice-builder-scan-result i{flex:0 0 auto}

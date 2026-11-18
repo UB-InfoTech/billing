@@ -8,6 +8,51 @@ const {hasInvoiceBackgroundSignature}=require("../utils/invoiceBackground");
 const {buildInvoiceDesignPages,getInvoiceRowsPerPage}=require("../utils/invoiceDesignPagination");
 const {buildInvoicePrintPreview}=require("../utils/invoicePrintPreview");
 
+test("smart invoice layout scan finds a repeated table grid and builds editable field suggestions",async()=>{
+  const {findTableRegion,buildInvoiceSmartLayout}=await import("../../frontend/src/utils/invoiceLayoutScanner.js");
+  const table=findTableRegion([39,44,49,54,59,64,69],[5,35,65,95]);
+  assert.ok(table);
+  assert.equal(table.y,39);
+  assert.equal(table.rows,7);
+  assert.equal(table.x,5);
+  assert.equal(table.w,90);
+  const layout=buildInvoiceSmartLayout({table});
+  assert.equal(layout.tableDetected,true);
+  assert.equal(layout.blocks.find(block=>block.type==="items_table").y,39);
+  assert.equal(layout.blocks.find(block=>block.fieldKey==="company_name").type,"field");
+  assert.equal(layout.blocks.some(block=>block.fieldKey==="customer_name"),true);
+  assert.equal(layout.blocks.some(block=>block.type==="totals"),true);
+});
+
+test("image layout scan detects a ruled invoice table from pixels without OCR",async()=>{
+  const {analyzeInvoicePixels}=await import("../../frontend/src/utils/invoiceLayoutScanner.js");
+  const width=100,height=100;
+  const data=new Uint8ClampedArray(width*height*4);
+  for(let index=0;index<data.length;index+=4){
+    data[index]=255;data[index+1]=255;data[index+2]=255;data[index+3]=255;
+  }
+  const drawHorizontal=y=>{
+    for(let x=5;x<96;x+=1){
+      const offset=(y*width+x)*4;
+      data[offset]=20;data[offset+1]=20;data[offset+2]=20;
+    }
+  };
+  const drawVertical=x=>{
+    for(let y=39;y<=70;y+=1){
+      const offset=(y*width+x)*4;
+      data[offset]=20;data[offset+1]=20;data[offset+2]=20;
+    }
+  };
+  [39,44,49,54,59,64,69].forEach(drawHorizontal);
+  [5,35,65,95].forEach(drawVertical);
+  const result=analyzeInvoicePixels({width,height,data});
+  assert.ok(result.table);
+  assert.equal(result.table.y,39);
+  assert.equal(result.table.rows,7);
+  assert.equal(result.table.x,5);
+  assert.equal(result.table.w,90);
+});
+
 test("new invoice design keeps the existing print layout active until the owner selects a new design",()=>{
   const design=createDefaultInvoiceDesign();
   assert.equal(design.enabled,false);

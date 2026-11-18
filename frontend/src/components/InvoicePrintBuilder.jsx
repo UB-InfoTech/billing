@@ -1,6 +1,7 @@
 import React,{useEffect,useMemo,useRef,useState} from "react";
 import axios from "axios";
 import "./InvoicePrintBuilder.css";
+import {buildInvoiceSmartLayout,scanImportedInvoiceLayout} from "../utils/invoiceLayoutScanner.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
@@ -99,6 +100,9 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [message,setMessage]=useState("");
   const [placementField,setPlacementField]=useState("company_name");
   const [placingField,setPlacingField]=useState(false);
+  const [layoutScan,setLayoutScan]=useState(null);
+  const [layoutScanLoading,setLayoutScanLoading]=useState(false);
+  const [layoutScanError,setLayoutScanError]=useState("");
   const [previewRecords,setPreviewRecords]=useState([]);
   const [previewRecordId,setPreviewRecordId]=useState("");
   const [previewInvoice,setPreviewInvoice]=useState(null);
@@ -297,6 +301,46 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     updateActive({blocks:[...activeTemplate.blocks,newBlock]});
     setSelectedBlockId(id);
   };
+  const applySmartLayout=()=>{
+    if(!layoutScan)return;
+    const plan=buildInvoiceSmartLayout(layoutScan);
+    const blocks=activeTemplate.blocks.map(block=>({...block}));
+    let tableBlockId="";
+    plan.blocks.forEach(suggestion=>{
+      const existingIndex=blocks.findIndex(block=>
+        suggestion.type==="items_table"
+          ?block.type==="items_table"
+          :suggestion.type==="totals"
+            ?block.type==="totals"
+            :suggestion.type==="logo"
+              ?block.type==="logo"
+              :block.type==="field"&&block.fieldKey===suggestion.fieldKey
+      );
+      const patch={
+        x:suggestion.x,y:suggestion.y,w:suggestion.w,h:suggestion.h,
+        visible:true,
+        ...(suggestion.fontSize?{fontSize:suggestion.fontSize}:{}),
+        ...(suggestion.bold!==undefined?{bold:suggestion.bold}:{}),
+        ...(suggestion.align?{align:suggestion.align}:{})
+      };
+      if(existingIndex>=0){
+        blocks[existingIndex]={...blocks[existingIndex],...patch};
+        if(suggestion.type==="items_table")tableBlockId=blocks[existingIndex].id;
+      }else{
+        const id=createId("auto");
+        const created=makeBlock(id,suggestion.type,suggestion.fieldKey,suggestion.label,
+          suggestion.x,suggestion.y,suggestion.w,suggestion.h,patch);
+        blocks.push(created);
+        if(suggestion.type==="items_table")tableBlockId=id;
+      }
+    });
+    updateActive({blocks});
+    if(tableBlockId)setSelectedBlockId(tableBlockId);
+    setMessage(plan.tableDetected
+      ?"Smart layout applied. The item-table area was detected and common invoice fields were arranged around it. Review the positions before saving."
+      :"Smart layout applied using a standard invoice layout because clear table boundaries were not found. Please check the item-table position and adjust it to match your reference.");
+  };
+
   const addSuggestedFields=()=>{
     const suggested=[
       ["company_name","Business name"],["logo","Business logo"],["company_address","Business address"],
@@ -364,6 +408,9 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     if(!file)return;
     setError("");
     setMessage("");
+    setLayoutScan(null);
+    setLayoutScanError("");
+    setLayoutScanLoading(false);
     setUploading(true);
     try{
       const data=new FormData();
@@ -371,7 +418,19 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       const response=await axios.post(API+"/api/invoice-config/background",data,auth());
       const background=response.data||{};
       updateActive({templateKey:"imported",background:{url:background.url||"",type:background.type||"image",locked:true,visible:true}});
-      setMessage("Design imported as a locked reference. Add suggested fields to rebuild it with editable invoice information.");
+      setMessage("Design imported as a locked reference. Scanning its layout…");
+      setLayoutScanLoading(true);
+      try{
+        const scan=await scanImportedInvoiceLayout(file);
+        setLayoutScan(scan);
+        setMessage(scan.table
+          ?"Scan complete. A likely invoice item-table area was found. Apply the suggested layout and review the editable fields."
+          :"Scan complete. No clear item-table grid was found, so the assistant will use a standard layout as a starting point.");
+      }catch(scanError){
+        setLayoutScanError(scanError.message||"This file could not be scanned automatically. Guided field placement is still available.");
+      }finally{
+        setLayoutScanLoading(false);
+      }
     }catch(uploadError){
       setError(uploadError.response?.data?.message||"Unable to import this design. Use a PDF, JPG, PNG or WebP file up to 12 MB.");
     }finally{
@@ -633,7 +692,22 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 <div className="d-flex flex-wrap gap-2">
                   <button type="button" className="btn btn-sm btn-light border" onClick={addSuggestedFields}><i className="bi bi-magic me-1"/>Add suggested fields</button>
                   <span className="badge text-bg-light border">Locked reference layer</span>
-                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>{setPlacingField(false);updateActive({background:{url:"",type:"none",locked:true,visible:true}});}}>Remove</button>
+                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>{setPlacingField(false);setLayoutScan(null);setLayoutScanError("");updateActive({background:{url:"",type:"none",locked:true,visible:true}});}}>Remove</button>
+                </div>
+                <div className="invoice-builder-smart-scan mt-3">
+                  <strong><i className="bi bi-magic me-1"/>Smart layout scan</strong>
+                  <p>Checks image rules or PDF drawing lines to find a likely item-table area, then arranges common invoice fields around it. It does not read or recognize printed words.</p>
+                  {layoutScanLoading&&<div className="small text-primary mb-2"><span className="spinner-border spinner-border-sm me-1"/>Scanning imported design…</div>}
+                  {layoutScan&&<div className="invoice-builder-scan-result mb-2">
+                    <i className="bi bi-check-circle me-1"/>
+                    {layoutScan.table
+                      ?"Likely item table found · "+layoutScan.table.rows+" horizontal rules"
+                      :"Page scanned · item table needs manual positioning"}
+                  </div>}
+                  {layoutScanError&&<div className="small text-warning mb-2">{layoutScanError}</div>}
+                  <button type="button" className="btn btn-sm btn-primary w-100" onClick={applySmartLayout} disabled={!layoutScan||layoutScanLoading}>
+                    <i className="bi bi-stars me-1"/>Apply suggested layout
+                  </button>
                 </div>
                 <div className="invoice-builder-mapping-guide mt-3">
                   <strong>Guided field placement</strong>

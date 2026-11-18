@@ -103,6 +103,11 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [layoutScan,setLayoutScan]=useState(null);
   const [layoutScanLoading,setLayoutScanLoading]=useState(false);
   const [layoutScanError,setLayoutScanError]=useState("");
+  const [importedFile,setImportedFile]=useState(null);
+  const [ocrScan,setOcrScan]=useState(null);
+  const [ocrLoading,setOcrLoading]=useState(false);
+  const [ocrProgress,setOcrProgress]=useState({stage:"",progress:0});
+  const [ocrError,setOcrError]=useState("");
   const [previewRecords,setPreviewRecords]=useState([]);
   const [previewRecordId,setPreviewRecordId]=useState("");
   const [previewInvoice,setPreviewInvoice]=useState(null);
@@ -411,12 +416,17 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setLayoutScan(null);
     setLayoutScanError("");
     setLayoutScanLoading(false);
+    setImportedFile(null);
+    setOcrScan(null);
+    setOcrError("");
+    setOcrProgress({stage:"",progress:0});
     setUploading(true);
     try{
       const data=new FormData();
       data.append("background",file);
       const response=await axios.post(API+"/api/invoice-config/background",data,auth());
       const background=response.data||{};
+      setImportedFile(file);
       updateActive({templateKey:"imported",background:{url:background.url||"",type:background.type||"image",locked:true,visible:true}});
       setMessage("Design imported as a locked reference. Scanning its layout…");
       setLayoutScanLoading(true);
@@ -438,6 +448,48 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       if(importRef.current)importRef.current.value="";
     }
   };
+  const runOcrScan=async()=>{
+    if(!importedFile){
+      setOcrError("Re-import this PDF or image to run text recognition on it.");
+      return;
+    }
+    setOcrLoading(true);
+    setOcrError("");
+    setOcrScan(null);
+    setOcrProgress({stage:"Preparing first page",progress:0});
+    try{
+      const {scanImportedInvoiceText}=await import("../utils/invoiceOcrScanner.js");
+      const result=await scanImportedInvoiceText(importedFile,setOcrProgress);
+      setOcrScan({...result,lines:result.lines.map(line=>({...line,selectedField:line.fieldKey||""}))});
+      setMessage(result.lines.length
+        ?"Text recognition complete. Review the suggested field matches, then click Place to position each live field."
+        :"No readable text was found on the first page. You can still use smart layout scanning and guided placement.");
+    }catch(ocrScanError){
+      setOcrError(ocrScanError.message||"Text recognition could not read this file. Guided field placement is still available.");
+    }finally{
+      setOcrLoading(false);
+    }
+  };
+
+  const updateOcrMapping=(lineId,fieldKey)=>{
+    setOcrScan(previous=>previous?{
+      ...previous,
+      lines:previous.lines.map(line=>line.id===lineId?{...line,selectedField:fieldKey}:line)
+    }:previous);
+  };
+
+  const useOcrMapping=line=>{
+    const fieldKey=line.selectedField||line.fieldKey;
+    if(!fieldKey){
+      setOcrError("Choose what this detected text represents before placing a field.");
+      return;
+    }
+    const label=FIELD_LABELS[fieldKey]||"invoice field";
+    setPlacementField(fieldKey);
+    setPlacingField(true);
+    setMessage("OCR found “"+line.text+"” and matched it to "+label+". Click the blank value area on the reference page to place the live field.");
+  };
+
   const startBlockDrag=(event,block)=>{
     if(event.target.closest("[data-resize-handle]"))return;
     const nestedButton=event.target.closest("button");
@@ -692,7 +744,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 <div className="d-flex flex-wrap gap-2">
                   <button type="button" className="btn btn-sm btn-light border" onClick={addSuggestedFields}><i className="bi bi-magic me-1"/>Add suggested fields</button>
                   <span className="badge text-bg-light border">Locked reference layer</span>
-                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>{setPlacingField(false);setLayoutScan(null);setLayoutScanError("");updateActive({background:{url:"",type:"none",locked:true,visible:true}});}}>Remove</button>
+                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>{setPlacingField(false);setLayoutScan(null);setLayoutScanError("");setImportedFile(null);setOcrScan(null);setOcrError("");updateActive({background:{url:"",type:"none",locked:true,visible:true}});}}>Remove</button>
                 </div>
                 <div className="invoice-builder-smart-scan mt-3">
                   <strong><i className="bi bi-magic me-1"/>Smart layout scan</strong>
@@ -708,6 +760,49 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   <button type="button" className="btn btn-sm btn-primary w-100" onClick={applySmartLayout} disabled={!layoutScan||layoutScanLoading}>
                     <i className="bi bi-stars me-1"/>Apply suggested layout
                   </button>
+                </div>
+                <div className="invoice-builder-ocr-card mt-3">
+                  <strong><i className="bi bi-text-paragraph me-1"/>Recognise printed text</strong>
+                  <p>Reads the first page and suggests which invoice fields each line may represent. You review every match and choose where its live value belongs.</p>
+                  <button type="button" className="btn btn-sm btn-outline-primary w-100" onClick={runOcrScan} disabled={!importedFile||ocrLoading}>
+                    {ocrLoading?<><span className="spinner-border spinner-border-sm me-1"/>Reading text…</>:<><i className="bi bi-search me-1"/>Read text and suggest fields</>}
+                  </button>
+                  {!importedFile&&<div className="small text-secondary mt-2">Re-import this reference file to run OCR.</div>}
+                  {ocrLoading&&<div className="invoice-builder-ocr-progress mt-2">
+                    <div className="d-flex justify-content-between gap-2"><span>{ocrProgress.stage||"Preparing"}</span><span>{Math.round((ocrProgress.progress||0)*100)}%</span></div>
+                    <div className="progress mt-1" role="progressbar" aria-label="Text recognition progress" aria-valuenow={Math.round((ocrProgress.progress||0)*100)} aria-valuemin="0" aria-valuemax="100"><div className="progress-bar" style={{width:Math.round((ocrProgress.progress||0)*100)+"%"}}/></div>
+                  </div>}
+                  {ocrError&&<div className="small text-warning mt-2">{ocrError}</div>}
+                  {ocrScan&&<div className="invoice-builder-ocr-results mt-3">
+                    <div className="invoice-builder-ocr-results-heading">
+                      <strong>{ocrScan.lines.length} text lines found</strong>
+                      <small>Page 1 of {ocrScan.pageCount} · English</small>
+                    </div>
+                    <p>Choose the matching field for each line, then use Place to click the empty value position on the page.</p>
+                    {ocrScan.lines.length===0
+                      ?<div className="small text-secondary">No readable text was found. Try a clearer scan or use guided placement.</div>
+                      :ocrScan.lines.slice(0,30).map(line=>(
+                        <div className="invoice-builder-ocr-row" key={line.id}>
+                          <div className="invoice-builder-ocr-line">
+                            <span>{line.text}</span>
+                            <small>{line.confidence>0?Math.round(line.confidence)+"% confidence":"Text found"}</small>
+                          </div>
+                          <div className="invoice-builder-ocr-map">
+                            <select className="form-select form-select-sm" aria-label={"Map detected text: "+line.text} value={line.selectedField||""} onChange={event=>updateOcrMapping(line.id,event.target.value)}>
+                              <option value="">Choose field…</option>
+                              {FIELD_GROUPS.map(group=>(
+                                <optgroup label={group.title} key={group.title}>
+                                  {group.items.filter(([key])=>key!=="logo").map(([key,label])=><option value={key} key={key}>{label}</option>)}
+                                </optgroup>
+                              ))}
+                            </select>
+                            <button type="button" className="btn btn-sm btn-light border" disabled={!line.selectedField} onClick={()=>useOcrMapping(line)}>Place</button>
+                          </div>
+                        </div>
+                      ))}
+                    {ocrScan.lines.length>30&&<div className="small text-secondary mt-2">Showing the first 30 detected lines. Use guided placement for additional fields.</div>}
+                  </div>}
+                  <div className="small text-secondary mt-2">Recognition runs in your browser. The English OCR engine and language file are downloaded on first use and cached; your document is not sent to an external OCR service.</div>
                 </div>
                 <div className="invoice-builder-mapping-guide mt-3">
                   <strong>Guided field placement</strong>

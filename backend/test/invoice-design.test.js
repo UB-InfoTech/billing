@@ -53,6 +53,30 @@ test("image layout scan detects a ruled invoice table from pixels without OCR",a
   assert.equal(result.table.w,90);
 });
 
+test("OCR text matcher suggests common invoice field mappings without forcing a placement",async()=>{
+  const {suggestInvoiceField,extractOcrLines}=await import("../../frontend/src/utils/invoiceOcrMapping.js");
+  assert.equal(suggestInvoiceField("Invoice No: INV-101").fieldKey,"invoice_no");
+  assert.equal(suggestInvoiceField("Due Date").fieldKey,"due_date");
+  assert.equal(suggestInvoiceField("Bill To").fieldKey,"customer_name");
+  assert.equal(suggestInvoiceField("Supplier GSTIN",{top:10}).fieldKey,"company_gstin");
+  assert.equal(suggestInvoiceField("GSTIN",{top:35}).fieldKey,"customer_gstin");
+  assert.equal(suggestInvoiceField("Amount paid").fieldKey,"amount_paid");
+  assert.equal(suggestInvoiceField("random words"),null);
+  const lines=extractOcrLines({
+    blocks:[{paragraphs:[{lines:[{
+      text:"Invoice No: INV-101",
+      bbox:{x0:100,y0:200,x1:400,y1:240},
+      words:[{confidence:92},{confidence:88}]
+    }]}]}]
+  },1000,2000);
+  assert.equal(lines[0].fieldKey,"invoice_no");
+  assert.equal(lines[0].confidence,90);
+  assert.equal(lines[0].box.x,10);
+  assert.equal(lines[0].box.y,10);
+  assert.equal(lines[0].box.w,30);
+  assert.equal(lines[0].box.h,2);
+});
+
 test("new invoice design keeps the existing print layout active until the owner selects a new design",()=>{
   const design=createDefaultInvoiceDesign();
   assert.equal(design.enabled,false);

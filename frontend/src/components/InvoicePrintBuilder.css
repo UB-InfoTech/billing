@@ -158,3 +158,20 @@
 .invoice-builder-smart-scan p{margin:0 0 9px;color:#63778e;font-size:10px;line-height:1.5}
 .invoice-builder-scan-result{display:flex;align-items:flex-start;gap:4px;color:#28764c;font-size:10px;line-height:1.4}
 .invoice-builder-scan-result i{flex:0 0 auto}
+
+
+.invoice-builder-ocr-card{padding:11px;border:1px solid #d9e4ef;border-radius:8px;background:#fbfcfe}
+.invoice-builder-ocr-card>strong{display:block;margin-bottom:5px;color:#294562;font-size:12px}
+.invoice-builder-ocr-card>p,.invoice-builder-ocr-results>p{margin:0 0 9px;color:#63778e;font-size:10px;line-height:1.5}
+.invoice-builder-ocr-progress{font-size:10px;color:#63778e}
+.invoice-builder-ocr-results{padding-top:10px;border-top:1px solid #e5ebf2}
+.invoice-builder-ocr-results-heading{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:5px}
+.invoice-builder-ocr-results-heading strong{font-size:11px;color:#294562}
+.invoice-builder-ocr-results-heading small{font-size:9px;color:#77879a}
+.invoice-builder-ocr-row{padding:8px 0;border-top:1px solid #edf1f5}
+.invoice-builder-ocr-line{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:5px}
+.invoice-builder-ocr-line>span{min-width:0;color:#31455b;font-size:11px;overflow-wrap:anywhere}
+.invoice-builder-ocr-line>small{flex:0 0 auto;color:#8493a5;font-size:9px}
+.invoice-builder-ocr-map{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;align-items:center}
+.invoice-builder-ocr-map .form-select{min-width:0;font-size:10px}
+.invoice-builder-ocr-map .btn{font-size:10px}

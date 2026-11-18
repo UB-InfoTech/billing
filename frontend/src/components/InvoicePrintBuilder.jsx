@@ -51,19 +51,65 @@ const makeTemplate=(id,name,key)=>{
 const makeInitialDesign=()=>({enabled:false,activeTemplateId:"clean-default",templates:[makeTemplate("clean-default","Clean","clean")]});
 const createId=prefix=>prefix+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7);
 const clamp=(value,min,max)=>Math.min(max,Math.max(min,Number(value)||min));
+const snapAxis=(origin,size,lines)=>{
+  let bestPosition=origin;
+  let bestGuide=null;
+  let bestDistance=1.25;
+  [0,size/2,size].forEach(offset=>{
+    lines.forEach(line=>{
+      const candidate=line-offset;
+      if(candidate<0||candidate>100-size)return;
+      const distance=Math.abs(candidate-origin);
+      if(distance<=bestDistance){
+        bestDistance=distance;
+        bestPosition=candidate;
+        bestGuide=line;
+      }
+    });
+  });
+  return {position:bestPosition,guide:bestGuide};
+};
+const getSnappedPosition=(block,x,y,blocks)=>{
+  const vertical=[5,50,95];
+  const horizontal=[5,50,95];
+  (blocks||[]).filter(item=>item.id!==block.id&&item.visible!==false).forEach(item=>{
+    vertical.push(item.x,item.x+item.w/2,item.x+item.w);
+    horizontal.push(item.y,item.y+item.h/2,item.y+item.h);
+  });
+  const snappedX=snapAxis(x,block.w,vertical);
+  const snappedY=snapAxis(y,block.h,horizontal);
+  return {
+    x:snappedX.position,
+    y:snappedY.position,
+    guides:{
+      vertical:snappedX.guide===null?[]:[snappedX.guide],
+      horizontal:snappedY.guide===null?[]:[snappedY.guide]
+    }
+  };
+};
 
 export default function InvoicePrintBuilder({design,onChange,onSave,onClose,saving=false}){
   const [localDesign,setLocalDesign]=useState(()=>design&&Array.isArray(design.templates)&&design.templates.length?design:makeInitialDesign());
   const [selectedBlockId,setSelectedBlockId]=useState("business-name");
   const [dragging,setDragging]=useState(null);
+  const [history,setHistory]=useState({past:[],future:[]});
+  const [alignmentGuides,setAlignmentGuides]=useState({vertical:[],horizontal:[]});
   const [uploading,setUploading]=useState(false);
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
   const canvasRef=useRef(null);
   const importRef=useRef(null);
+  const currentDesignRef=useRef(localDesign);
+  const historyRef=useRef(history);
+  const draggingRef=useRef(null);
 
   useEffect(()=>{
-    if(design&&Array.isArray(design.templates)&&design.templates.length)setLocalDesign(design);
+    if(design&&Array.isArray(design.templates)&&design.templates.length&&design!==currentDesignRef.current){
+      currentDesignRef.current=design;
+      setLocalDesign(design);
+      historyRef.current={past:[],future:[]};
+      setHistory(historyRef.current);
+    }
   },[design]);
 
   const activeTemplate=useMemo(
@@ -71,15 +117,61 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     [localDesign]
   );
   const selectedBlock=activeTemplate.blocks.find(block=>block.id===selectedBlockId)||null;
-  const updateDesign=next=>{
+  const applyDesign=next=>{
+    currentDesignRef.current=next;
     setLocalDesign(next);
     onChange?.(next);
   };
-  const updateActive=patch=>{
-    updateDesign({...localDesign,templates:localDesign.templates.map(template=>template.id===activeTemplate.id?{...template,...patch}:template)});
+  const pushHistory=snapshot=>{
+    const current=historyRef.current;
+    const next={past:[...current.past.slice(-49),snapshot],future:[]};
+    historyRef.current=next;
+    setHistory(next);
   };
-  const updateBlock=(blockId,patch)=>{
-    updateActive({blocks:activeTemplate.blocks.map(block=>block.id===blockId?{...block,...patch}:block)});
+  const updateDesign=(next,options={})=>{
+    if(options.recordHistory!==false&&currentDesignRef.current!==next)pushHistory(currentDesignRef.current);
+    applyDesign(next);
+  };
+  const undo=()=>{
+    const current=historyRef.current;
+    if(!current.past.length)return;
+    const previous=current.past[current.past.length-1];
+    const next={past:current.past.slice(0,-1),future:[currentDesignRef.current,...current.future].slice(0,50)};
+    historyRef.current=next;
+    setHistory(next);
+    applyDesign(previous);
+  };
+  const redo=()=>{
+    const current=historyRef.current;
+    if(!current.future.length)return;
+    const nextDesign=current.future[0];
+    const next={past:[...current.past,currentDesignRef.current].slice(-50),future:current.future.slice(1)};
+    historyRef.current=next;
+    setHistory(next);
+    applyDesign(nextDesign);
+  };
+  useEffect(()=>{
+    const handleShortcut=event=>{
+      if(!(event.ctrlKey||event.metaKey)||!event.target?.closest?.(".invoice-builder-overlay"))return;
+      if(event.target.closest("input,textarea,select,[contenteditable=true]"))return;
+      const key=String(event.key||"").toLowerCase();
+      if(key==="z"){
+        event.preventDefault();
+        if(event.shiftKey)redo();
+        else undo();
+      }else if(key==="y"){
+        event.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown",handleShortcut);
+    return ()=>window.removeEventListener("keydown",handleShortcut);
+  },[history]);
+  const updateActive=(patch,options={})=>{
+    updateDesign({...localDesign,templates:localDesign.templates.map(template=>template.id===activeTemplate.id?{...template,...patch}:template)},options);
+  };
+  const updateBlock=(blockId,patch,options={})=>{
+    updateActive({blocks:activeTemplate.blocks.map(block=>block.id===blockId?{...block,...patch}:block)},options);
   };
   const addBlock=(type,fieldKey,position)=>{
     const label=type==="field"?(FIELD_LABELS[fieldKey]||"Invoice field"):type==="items_table"?"Invoice items":type==="totals"?"Invoice totals":type==="text"?"Text":type==="divider"?"Divider":"Business logo";
@@ -150,20 +242,65 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     }
   };
   const startBlockDrag=(event,block)=>{
-    if(event.target.closest("button"))return;
+    if(event.target.closest("[data-resize-handle]"))return;
+    const nestedButton=event.target.closest("button");
+    if(nestedButton&&nestedButton!==event.currentTarget)return;
     event.preventDefault();
     event.currentTarget.setPointerCapture?.(event.pointerId);
     setSelectedBlockId(block.id);
-    setDragging({id:block.id,startX:event.clientX,startY:event.clientY,x:block.x,y:block.y});
+    const next={id:block.id,mode:"move",startX:event.clientX,startY:event.clientY,x:block.x,y:block.y,w:block.w,h:block.h,initialDesign:currentDesignRef.current,didMove:false};
+    draggingRef.current=next;
+    setDragging(next);
+  };
+  const startBlockResize=(event,block)=>{
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    const next={id:block.id,mode:"resize",startX:event.clientX,startY:event.clientY,x:block.x,y:block.y,w:block.w,h:block.h,initialDesign:currentDesignRef.current,didMove:false};
+    draggingRef.current=next;
+    setSelectedBlockId(block.id);
+    setDragging(next);
+    setAlignmentGuides({vertical:[],horizontal:[]});
+  };
+  const finishBlockDrag=()=>{
+    draggingRef.current=null;
+    setDragging(null);
+    setAlignmentGuides({vertical:[],horizontal:[]});
   };
   const moveBlock=event=>{
-    if(!dragging||!canvasRef.current)return;
+    const current=draggingRef.current;
+    if(!current||!canvasRef.current)return;
     const rect=canvasRef.current.getBoundingClientRect();
-    const dx=(event.clientX-dragging.startX)/rect.width*100;
-    const dy=(event.clientY-dragging.startY)/rect.height*100;
-    const block=activeTemplate.blocks.find(item=>item.id===dragging.id);
-    if(!block)return;
-    updateBlock(dragging.id,{x:clamp(dragging.x+dx,0,100-block.w),y:clamp(dragging.y+dy,0,100-block.h)});
+    if(!rect.width||!rect.height)return;
+    const dx=(event.clientX-current.startX)/rect.width*100;
+    const dy=(event.clientY-current.startY)/rect.height*100;
+    let patch;
+    if(current.mode==="resize"){
+      patch={
+        w:clamp(current.w+dx,3,100-current.x),
+        h:clamp(current.h+dy,2,100-current.y)
+      };
+      setAlignmentGuides({vertical:[],horizontal:[]});
+    }else{
+      const block=activeTemplate.blocks.find(item=>item.id===current.id);
+      if(!block)return;
+      const proposedX=clamp(current.x+dx,0,100-current.w);
+      const proposedY=clamp(current.y+dy,0,100-current.h);
+      const snapped=getSnappedPosition(block,proposedX,proposedY,activeTemplate.blocks);
+      patch={x:clamp(snapped.x,0,100-current.w),y:clamp(snapped.y,0,100-current.h)};
+      setAlignmentGuides(snapped.guides);
+    }
+    const liveBlock=activeTemplate.blocks.find(item=>item.id===current.id);
+    if(!liveBlock)return;
+    const changed=Object.entries(patch).some(([key,value])=>Math.abs(Number(liveBlock[key])-value)>0.01);
+    if(!changed)return;
+    if(!current.didMove){
+      pushHistory(current.initialDesign);
+      const next={...current,didMove:true};
+      draggingRef.current=next;
+      setDragging(next);
+    }
+    updateBlock(current.id,patch,{recordHistory:false});
   };
   const handlePaletteDrop=event=>{
     event.preventDefault();
@@ -244,6 +381,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 <select id="invoice-design-template" className="form-select form-select-sm" value={activeTemplate.id} onChange={event=>updateDesign({...localDesign,activeTemplateId:event.target.value})}>
                   {localDesign.templates.map(template=><option value={template.id} key={template.id}>{template.name}</option>)}
                 </select>
+                <button type="button" className="btn btn-sm btn-light border" onClick={undo} disabled={!history.past.length} title="Undo (Ctrl+Z)"><i className="bi bi-arrow-counterclockwise me-1"/>Undo</button>
+                <button type="button" className="btn btn-sm btn-light border" onClick={redo} disabled={!history.future.length} title="Redo (Ctrl+Y)"><i className="bi bi-arrow-clockwise me-1"/>Redo</button>
                 <button type="button" className="btn btn-sm btn-light border" onClick={duplicateTemplate} disabled={localDesign.templates.length>=12} title="Duplicate this design"><i className="bi bi-copy"/></button>
               </div>
               <div className="invoice-builder-toolbar-actions">
@@ -263,16 +402,21 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
 
             <div className="invoice-builder-canvas-scroll">
               <div className={"invoice-builder-page "+(activeTemplate.orientation==="landscape"?"is-landscape":"")} style={{aspectRatio:activeTemplate.orientation==="landscape"?"1.414 / 1":String(canvasRatio).replace("/"," / ")}}>
-                <div className="invoice-builder-canvas" ref={canvasRef} onDragOver={event=>event.preventDefault()} onDrop={handlePaletteDrop} onPointerMove={moveBlock} onPointerUp={()=>setDragging(null)} onPointerCancel={()=>setDragging(null)}>
+                <div className="invoice-builder-canvas" ref={canvasRef} onDragOver={event=>event.preventDefault()} onDrop={handlePaletteDrop} onPointerMove={moveBlock} onPointerUp={finishBlockDrag} onPointerCancel={finishBlockDrag}>
                   {activeTemplate.background?.url&&activeTemplate.background.visible!==false&&(
                     activeTemplate.background.type==="pdf"
                       ? <iframe className="invoice-builder-background" title="Imported PDF invoice reference" src={backgroundUrl+"#toolbar=0&navpanes=0&scrollbar=0"} tabIndex="-1"/>
                       : <img className="invoice-builder-background" src={backgroundUrl} alt="Imported invoice reference background" draggable="false"/>
                   )}
+                  <div className="invoice-builder-alignment-guides" aria-hidden="true">
+                    {alignmentGuides.vertical.map((position,index)=><span key={"v-"+index} className="invoice-builder-alignment-guide vertical" style={{left:position+"%"}}/>)}
+                    {alignmentGuides.horizontal.map((position,index)=><span key={"h-"+index} className="invoice-builder-alignment-guide horizontal" style={{top:position+"%"}}/>)}
+                  </div>
                   <div className="invoice-builder-block-layer">
                     {activeTemplate.blocks.filter(block=>block.visible!==false).map(block=>(
-                      <button type="button" key={block.id} className={"invoice-builder-block "+(selectedBlockId===block.id?"is-selected":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,textAlign:block.align,color:block.color}} onClick={()=>setSelectedBlockId(block.id)} onPointerDown={event=>startBlockDrag(event,block)} aria-label={"Move "+(block.label||"invoice element")}>
+                      <button type="button" key={block.id} className={"invoice-builder-block "+(selectedBlockId===block.id?"is-selected":"")+(dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,textAlign:block.align,color:block.color}} onClick={()=>setSelectedBlockId(block.id)} onPointerDown={event=>startBlockDrag(event,block)} aria-label={"Move "+(block.label||"invoice element")}>
                         {renderBlockContent(block)}
+                        {selectedBlockId===block.id&&<span className="invoice-builder-resize-handle" data-resize-handle="true" onPointerDown={event=>startBlockResize(event,block)} aria-hidden="true"/>}
                       </button>
                     ))}
                   </div>

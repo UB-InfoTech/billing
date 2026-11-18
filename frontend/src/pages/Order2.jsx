@@ -2575,7 +2575,7 @@ const styles = {
                                                                 : configuredOrderValue(field);
                                                             const customerPicker=field.key==="companyName"&&!field.custom;
                                                             if(customerPicker){
-                                                                return <div key={field.key} className={\`col-12 col-md-\${field.width||6}\`}>
+                                                                return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
                                                                     <InvoiceCustomerPicker
                                                                         field={field}
                                                                         clients={clients}

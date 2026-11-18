@@ -1428,12 +1428,12 @@ const defaultInvoiceConfiguration=()=>({
   summary:{showDiscount:true,showTax:true,showRoundOff:true,showBankDetails:true,showTerms:true,showWebCredit:true}
 });
 
-async function renderInvoice(order,res,request){
+async function renderInvoice(order,res,request,designOverride){
   const profile=await Profile.findOne({createdBy:String(order.createdBy)}).lean()||{};
   const storedInvoiceConfig=await InvoiceConfiguration.findOne({createdBy:String(order.createdBy)}).lean()||defaultInvoiceConfiguration();
   const invoiceConfig={
     ...storedInvoiceConfig,
-    design:sanitizeInvoiceDesign(storedInvoiceConfig.design,String(order.createdBy))
+    design:sanitizeInvoiceDesign(designOverride===undefined?storedInvoiceConfig.design:designOverride,String(order.createdBy))
   };
   const publicUploadBaseUrl=request?.protocol&&request?.get?.("host")
     ?request.protocol+"://"+request.get("host")
@@ -1470,6 +1470,22 @@ async function renderInvoice(order,res,request){
     return res.type("html").send(renderSimpleInvoiceHtml({order,profile,client}));
   }
 }
+
+router.post("/:orderId/invoice-preview",auth,async(req,res)=>{
+  try{
+    if(!mongoose.isValidObjectId(req.params.orderId))return res.status(400).json({message:"Invalid invoice ID."});
+    if(!req.body?.design||typeof req.body.design!=="object"||Array.isArray(req.body.design)){
+      return res.status(400).json({message:"Choose a valid invoice design to preview."});
+    }
+    const order=await Order.findOne({_id:req.params.orderId,createdBy:userId(req)}).lean();
+    if(!order)return res.status(404).json({message:"Order not found"});
+    // renderInvoice sanitizes the supplied design for this owner and never saves it.
+    await renderInvoice(order,res,req,req.body.design);
+  }catch(error){
+    console.error("Invoice design preview failed:",error);
+    return res.status(500).json({message:"Unable to render this invoice preview."});
+  }
+});
 
 router.get("/:orderId/invoice",auth,async(req,res)=>{
   try{

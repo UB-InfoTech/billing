@@ -104,7 +104,12 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [previewInvoice,setPreviewInvoice]=useState(null);
   const [previewLoading,setPreviewLoading]=useState(false);
   const [previewError,setPreviewError]=useState("");
+  const [printPreviewOpen,setPrintPreviewOpen]=useState(false);
+  const [printPreviewHtml,setPrintPreviewHtml]=useState("");
+  const [printPreviewLoading,setPrintPreviewLoading]=useState(false);
+  const [printPreviewError,setPrintPreviewError]=useState("");
   const canvasRef=useRef(null);
+  const printPreviewFrameRef=useRef(null);
   const importRef=useRef(null);
   const currentDesignRef=useRef(localDesign);
   const historyRef=useRef(history);
@@ -167,6 +172,45 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     }finally{
       if(requestId===previewRequestRef.current)setPreviewLoading(false);
     }
+  };
+
+  const openActualPrintPreview=async()=>{
+    if(!previewRecordId){
+      setPrintPreviewError("Choose a saved invoice before opening the print preview.");
+      return;
+    }
+    setPrintPreviewLoading(true);
+    setPrintPreviewError("");
+    try{
+      const response=await axios.post(
+        API+"/api/order/"+encodeURIComponent(previewRecordId)+"/invoice-preview",
+        {design:localDesign},
+        {...auth(),responseType:"text"}
+      );
+      const html=typeof response.data==="string"?response.data:"";
+      if(!/^\\s*<!doctype html/i.test(html)&&!/^\\s*<html/i.test(html)){
+        throw new Error("The invoice renderer did not return a printable preview.");
+      }
+      setPrintPreviewHtml(html);
+      setPrintPreviewOpen(true);
+    }catch(previewRenderError){
+      const responseMessage=previewRenderError.response?.data;
+      setPrintPreviewError(
+        (typeof responseMessage==="string"&&responseMessage)
+        ||responseMessage?.message
+        ||previewRenderError.message
+        ||"Unable to open the actual invoice preview."
+      );
+    }finally{
+      setPrintPreviewLoading(false);
+    }
+  };
+
+  const printActualInvoice=()=>{
+    const frameWindow=printPreviewFrameRef.current?.contentWindow;
+    if(!frameWindow)return;
+    frameWindow.focus();
+    frameWindow.print();
   };
 
   useEffect(()=>{
@@ -485,6 +529,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         </header>
         {error&&<div className="alert alert-danger m-3 mb-0">{error}</div>}
         {previewError&&<div className="alert alert-warning m-3 mb-0">{previewError} You can continue with sample data.</div>}
+        {printPreviewError&&<div className="alert alert-warning m-3 mb-0">{printPreviewError}<button type="button" className="btn-close float-end" aria-label="Dismiss" onClick={()=>setPrintPreviewError("")}/></div>}
         {message&&<div className="alert alert-info m-3 mb-0">{message}<button type="button" className="btn-close float-end" aria-label="Dismiss" onClick={()=>setMessage("")}/></div>}
         <div className="invoice-builder-workspace">
           <aside className="invoice-builder-sidebar invoice-builder-fields">
@@ -536,6 +581,10 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   {previewRecords.map(record=><option value={record.id} key={record.id}>{record.orderNumber} · {record.companyName}</option>)}
                 </select>
                 <span className={previewInvoice?"is-real":"is-sample"}>{previewLoading?"Loading preview…":previewInvoice?"Saved invoice data":"Sample data"}</span>
+                <button type="button" className="btn btn-sm btn-outline-primary" onClick={openActualPrintPreview} disabled={!previewRecordId||previewLoading||printPreviewLoading} title="Render the current design using the real invoice print template">
+                  {printPreviewLoading?<span className="spinner-border spinner-border-sm me-1"/>:<i className="bi bi-file-earmark-pdf me-1"/>}
+                  {printPreviewLoading?"Preparing…":"Actual print"}
+                </button>
               </div>
               <div className="invoice-builder-page-settings">
                 <label>Paper</label><select value={activeTemplate.pageSize} onChange={event=>setPageSize(event.target.value)}><option value="A4">A4</option><option value="A5">A5</option><option value="Letter">Letter</option></select>
@@ -642,6 +691,34 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
           <div><button type="button" className="btn btn-light border" onClick={onClose}>Cancel</button><button type="button" className="btn btn-primary" disabled={saving} onClick={()=>onSave?.({...localDesign,enabled:true})}>{saving?"Saving...":"Save and use design"}</button></div>
         </footer>
       </div>
+      {printPreviewOpen&&printPreviewHtml&&(
+        <div className="invoice-builder-print-preview" role="dialog" aria-modal="true" aria-label="Actual invoice print preview">
+          <div className="invoice-builder-print-preview-dialog">
+            <header className="invoice-builder-print-preview-header">
+              <div>
+                <strong>Actual print preview</strong>
+                <small>This uses your current design edits and the selected saved invoice. Nothing is saved or changed.</small>
+              </div>
+              <button type="button" className="btn btn-light border" onClick={()=>setPrintPreviewOpen(false)} aria-label="Close print preview"><i className="bi bi-x-lg"/></button>
+            </header>
+            <div className="invoice-builder-print-preview-content">
+              <iframe
+                ref={printPreviewFrameRef}
+                title="Rendered invoice print preview"
+                srcDoc={printPreviewHtml}
+                sandbox="allow-same-origin allow-modals"
+              />
+            </div>
+            <footer className="invoice-builder-print-preview-footer">
+              <span>Review page breaks and layout here before printing.</span>
+              <div>
+                <button type="button" className="btn btn-light border" onClick={()=>setPrintPreviewOpen(false)}>Back to designer</button>
+                <button type="button" className="btn btn-primary" onClick={printActualInvoice}><i className="bi bi-printer me-1"/>Print invoice</button>
+              </div>
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -121,6 +121,44 @@ test("custom and legacy invoice print template compiles as valid EJS",()=>{
   assert.doesNotThrow(()=>ejs.compile(fs.readFileSync(templatePath,"utf8")));
 });
 
+test("actual print template renders the in-session design and saved invoice rows",async()=>{
+  const template={
+    id:"in-session-preview",name:"Preview design",pageSize:"A4",orientation:"portrait",
+    blocks:[
+      {id:"invoice-no",type:"field",fieldKey:"invoice_no",label:"Invoice number",x:8,y:10,w:45,h:6,fontSize:12,bold:true,align:"left",color:"#172335",visible:true},
+      {id:"items",type:"items_table",x:6,y:24,w:88,h:42,fontSize:8,visible:true},
+      {id:"totals",type:"totals",x:62,y:72,w:32,h:20,fontSize:9,visible:true}
+    ]
+  };
+  const html=await ejs.renderFile(path.join(__dirname,"../public/invoiceTable.ejs"),{
+    invoiceConfig:{
+      invoiceTitle:"TAX INVOICE",pageSize:"A4",accentColor:"#172335",
+      itemColumns:[{key:"sr",label:"#",width:8,visible:true,order:0},{key:"description",label:"Product",width:52,visible:true,order:1},{key:"amount",label:"Amount",width:20,visible:true,order:2}],
+      design:{enabled:true,activeTemplateId:template.id,templates:[template]}
+    },
+    invoicePages:buildInvoiceDesignPages(template,[{orderName:"Cotton fabric",qtyUnit:"PCS",quantity:2,unitPrice:500}]),
+    profileLogoUrl:"",publicUploadBaseUrl:"",
+    profileHeaderTitle:"Invoice",profileCompanyName:"Example Business",profileCompanyAddress:"Surat",
+    profileEmailAddress:"",profileWebsite:"",profilePhoneNumber1:"9876543210",profilePhoneNumber2:"",
+    profileGstNumber:"",profilePanNumber:"",profileBankName:"Example Bank",profileAccountNo:"123456",
+    profileBranchName:"Surat",profileIfsc:"EXAMPLE0001",
+    clientChallanNumber:"",clientCompanyName:"Example Customer",clientAddress:"Ring Road",
+    clientPhoneNumber:"",clientGstNumber:"",clientState:"Gujarat",
+    orderNumber:"INV-PREVIEW-001",createdAt:"18/11/2026",dueDate:"18/12/2026",
+    paymentTerm:"30",ewayBillNo:"N/A",
+    subOrders:[{orderName:"Cotton fabric",qtyUnit:"PCS",quantity:2,unitPrice:500}],
+    orderPaidAmount:0,orderTotalCost:1000,orderSubTotal:1000,orderDisRate:0,orderDiscountAmount:0,
+    orderTax:9,orderTaxAmount:90,orderIgstTax:0,orderIgstTaxAmount:0,orderFinalRevenue:1180,
+    orderFinalRevenueRoundOff:0,orderFinalRevenueAfterRoundOff:1180,orderFinalRevenueInWords:"One thousand one hundred eighty only",
+    paymentStatus:"Unpaid",dueAmount:1180,creditAppliedAmount:0,payments:[]
+  });
+  assert.match(html,/INV-PREVIEW-001/);
+  assert.match(html,/Cotton fabric/);
+  assert.match(html,/1000\.00/);
+  assert.match(html,/left:8%;top:10%;width:45%;height:6%/);
+  assert.match(html,/Invoice total/);
+});
+
 test("real invoice preview maps saved business, customer, item and financial data without changing the invoice",()=>{
   const order={
     _id:"64b000000000000000000010",

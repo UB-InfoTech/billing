@@ -14,6 +14,7 @@ import EWayBillForm from "../components/EWayBillForm";
 import ClientActivityPanel from "../components/ClientActivityPanel";
 import DynamicTable from "../components/DynamicTable";
 import FormConfigurator from "../components/FormConfigurator";
+import InvoiceCustomerPicker from "../components/InvoiceCustomerPicker";
 import ConfiguredField from "../components/ConfiguredField";
 import ArithmeticInput from "../components/ArithmeticInput";
 import {useFormConfiguration,applyFormulas,hydrateConfiguredValues,applyAutoFill,getFieldState,syncConfiguredCustomFields,buildConfiguredDefaults,groupFieldsBySection} from "../hooks/useFormConfiguration";
@@ -43,6 +44,7 @@ function Order2() {
     
     const [orders, setOrders] = useState([]);
     const [clients, setClients] = useState([]);
+    const [clientsLoading,setClientsLoading]=useState(true);
     const [clientsData, setClientsData] = useState([]);
     const [products, setProducts] = useState([]);
     const [profile, setProfile] = useState({
@@ -371,17 +373,24 @@ function Order2() {
     const OrderBillNo = (profile.billNoPrefix || '') + profile.billNoSequence + (profile.billNoSuffix || '');
 
     const fetchClients = async () => {
+        setClientsLoading(true);
         try {
-            const response = await axios.get(`${linkone}/api/clients`, {
+            const response = await axios.get(linkone+"/api/clients", {
                 headers: { 'x-auth-token': token || '' }
             });
-            setClients(Array.isArray(response.data) ? response.data : []);
+            const incoming=Array.isArray(response.data)?response.data:[];
+            setClients(previous=>{
+                const incomingIds=new Set(incoming.map(client=>String(client._id)));
+                return [...incoming,...previous.filter(client=>!incomingIds.has(String(client._id)))];
+            });
         } catch (error) {
             setOrdersMessage(
                 error.response?.data?.message ||
                 'Customer records could not be loaded. Refresh the page and try again.'
             );
             console.error('Error fetching invoice customers', error);
+        } finally {
+            setClientsLoading(false);
         }
     };
 
@@ -430,6 +439,28 @@ function Order2() {
         updatedOrders[index]={...next,customFields:next.customFields||{}};
         setSubOrders(updatedOrders);
         setFormData(prev=>({...prev,subOrders:updatedOrders}));
+    };
+
+    const handleInvoiceCustomerSelect=customer=>{
+        const customerField=orderFormConfig.fields.find(field=>field.key==="companyName"&&!field.custom);
+        setFormData(previous=>{
+            const selectedId=customer?String(customer._id||""):"";
+            const selectedName=customer?(customer.companyName||customer.name||""):"";
+            let next={...previous,clientId:selectedId,companyName:selectedName};
+            next=applyAutoFill(customerField,customer,next);
+            next.clientId=selectedId;
+            next.companyName=selectedName;
+            return applyFormulas(orderFormConfig.fields,syncConfiguredCustomFields(next,orderFormConfig.fields));
+        });
+        setInvoiceFormError("");
+    };
+
+    const handleCreateInvoiceCustomer=async values=>{
+        const response=await axios.post(linkone+"/api/clients",values,authConfig());
+        const created=response.data?.client||response.data;
+        if(!created?._id)throw new Error("The customer was saved but could not be selected. Refresh the customer list and try again.");
+        setClients(previous=>[created,...previous.filter(client=>String(client._id)!==String(created._id))]);
+        return created;
     };
 
     const handleConfiguredOrderValue=(name,value,record=null,field=null)=>{
@@ -855,8 +886,8 @@ function Order2() {
             focusInvoiceField("orderNumber");
             return;
         }
-        if (!String(formData.companyName || "").trim()) {
-            setInvoiceFormError("Choose a customer before saving this invoice.");
+        if (!String(formData.companyName || "").trim() || (!editingOrder&&!String(formData.clientId||"").trim())) {
+            setInvoiceFormError("Choose a saved customer, or create one from the Customer field, before saving this invoice.");
             focusInvoiceField("companyName");
             return;
         }
@@ -2516,7 +2547,7 @@ const styles = {
                                 ></button>
                             </div>
                             <div className="modal-body p-4 invoice-create-body">
-                                <form className="invoice-form-workspace" onSubmit={handleSubmit}>
+                                <form className="invoice-form-workspace" onSubmit={handleSubmit} noValidate>
                                     {invoiceFormError&&<div className="alert alert-danger d-flex gap-2 align-items-start" role="alert"><i className="bi bi-exclamation-circle-fill mt-1"></i><div>{invoiceFormError}</div></div>}
                                     <section className="invoice-configured-fields">
                                         <div className="invoice-configured-heading">
@@ -2542,6 +2573,22 @@ const styles = {
                                                             const value=field.key==="orderDate"
                                                                 ? formatDateInput(configuredOrderValue(field))
                                                                 : configuredOrderValue(field);
+                                                            const customerPicker=field.key==="companyName"&&!field.custom;
+                                                            if(customerPicker){
+                                                                return <div key={field.key} className={\`col-12 col-md-\${field.width||6}\`}>
+                                                                    <InvoiceCustomerPicker
+                                                                        field={field}
+                                                                        clients={clients}
+                                                                        loading={clientsLoading}
+                                                                        selectedClientId={formData.clientId||""}
+                                                                        selectedLabel={formData.companyName||""}
+                                                                        required={state.required}
+                                                                        disabled={state.disabled}
+                                                                        onSelect={handleInvoiceCustomerSelect}
+                                                                        onCreateCustomer={handleCreateInvoiceCustomer}
+                                                                    />
+                                                                </div>;
+                                                            }
                                                             return <div key={field.key} className={`col-12 col-md-${field.width||6}`}>
                                                                 <ConfiguredField
                                                                     field={{...field,required:state.required,readOnly:state.readOnly,disabled:state.disabled}}
@@ -2551,8 +2598,6 @@ const styles = {
                                                                     lookupRecords={source}
                                                                     onLookupSearch={searchLinkedRecords}
                                                                     options={field.options||[]}
-                                                                    listId={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?"orderCompanyName":undefined}
-                                                                    listOptions={field.key==="companyName"&&!field.custom&&!field.dataSource?.resource?clients.map(client=>client.companyName):[]}
                                                                     icon=""
                                                                     required={state.required}
                                                                 />

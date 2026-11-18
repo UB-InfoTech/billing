@@ -159,6 +159,29 @@ test("missing and empty-string validation bounds remain unbounded", () => {
   assert.equal(empty.validation.max, null);
 });
 
+test("legacy zero maximums on number and currency fields are treated as unbounded",()=>{
+  for(const fieldType of ["number","currency"]){
+    const [field]=sanitizeFields([{
+      key:"amount",
+      label:"Amount",
+      fieldType,
+      validation:{min:0,max:0}
+    }]);
+    assert.equal(field.validation.min,0);
+    assert.equal(field.validation.max,null);
+  }
+});
+
+test("percentage zero maximums remain explicit",()=>{
+  const [field]=sanitizeFields([{
+    key:"commissionRate",
+    label:"Commission rate",
+    fieldType:"percentage",
+    validation:{min:0,max:0}
+  }]);
+  assert.equal(field.validation.max,0);
+});
+
 test("explicit zero and positive validation bounds are preserved", () => {
   const [field] = sanitizeFields([{
     key: "quantity",

@@ -321,8 +321,14 @@ const normalizeConfiguredFieldValue=(field,value)=>{
       if(field.validation?.min!==null&&field.validation?.min!==undefined&&number<Number(field.validation.min)){
         throw makeValidationError(field,`“${label}” must be at least ${field.validation.min}.`);
       }
-      if(field.validation?.max!==null&&field.validation?.max!==undefined&&number>Number(field.validation.max)){
-        throw makeValidationError(field,`“${label}” cannot be more than ${field.validation.max}.`);
+      const configuredMaximum=field.validation?.max;
+      const legacyEmptyMaximum=["number","currency"].includes(field.fieldType)
+        &&configuredMaximum!==null
+        &&configuredMaximum!==undefined
+        &&String(configuredMaximum).trim()!==""
+        &&Number(configuredMaximum)===0;
+      if(!legacyEmptyMaximum&&configuredMaximum!==null&&configuredMaximum!==undefined&&number>Number(configuredMaximum)){
+        throw makeValidationError(field,`“${label}” cannot be more than ${configuredMaximum}.`);
       }
       return field.custom
         ?field.fieldType==="currency"?Math.round((number+Number.EPSILON)*100)/100:number

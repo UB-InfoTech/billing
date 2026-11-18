@@ -1,6 +1,7 @@
 import {evaluateArithmeticExpression} from "../utils/arithmetic";
 import {useCallback,useEffect,useMemo,useState} from "react";
 import axios from "axios";
+import {normalizeNumericValidation} from "../utils/numericValidation";
 const FORM_SECTION_LABELS={
   general:"General details",
   basic:"Basic details",
@@ -140,7 +141,7 @@ export const mergeFormFields=(baseFields,savedFields,formKey="")=>{
     }:{type:"none",resource:"",valueField:"_id",labelField:"",searchField:"",autoFill:[]},
     conditions:Array.isArray(field.conditions)?field.conditions.slice():[],
     showMatchMode:field.showMatchMode==="any"?"any":"all",
-    validation:field.validation&&typeof field.validation==="object"?{min:field.validation.min??null,max:field.validation.max??null,pattern:field.validation.pattern||""}:{min:null,max:null,pattern:""}
+    validation:normalizeNumericValidation(field.fieldType,field.validation)
   });
 
   const base=(baseFields||[]).map(normalize);
@@ -179,7 +180,7 @@ export const mergeFormFields=(baseFields,savedFields,formKey="")=>{
       }:field.dataSource,
       conditions:Array.isArray(savedField.conditions)?savedField.conditions:field.conditions,
       showMatchMode:savedField.showMatchMode==="any"?"any":savedField.showMatchMode==="all"?"all":field.showMatchMode,
-      validation:savedField.validation||field.validation,
+      validation:normalizeNumericValidation(savedField.fieldType||field.fieldType,savedField.validation||field.validation),
       custom:false,
       system:Boolean(field.system)
     };

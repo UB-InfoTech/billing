@@ -209,3 +209,18 @@ test("server preserves a non-editable field's configured default on new records"
   });
   assert.equal(preserved.customFields.origin,"Created in billing");
 });
+
+test("legacy zero maximums do not block positive number or currency values",()=>{
+  for(const fieldType of ["number","currency"]){
+    const field={key:"value",label:"Value",fieldType,validation:{min:0,max:0}};
+    assert.equal(normalizeConfiguredFieldValue(field,"125.50"),"125.50");
+  }
+});
+
+test("minimum and real positive maximums remain enforced after legacy maximum repair",()=>{
+  const field={key:"value",label:"Value",fieldType:"currency",validation:{min:10,max:0}};
+  assert.throws(()=>normalizeConfiguredFieldValue(field,"9"),/at least 10/i);
+  assert.equal(normalizeConfiguredFieldValue(field,"125"),"125");
+  const bounded={...field,validation:{min:10,max:100}};
+  assert.throws(()=>normalizeConfiguredFieldValue(bounded,"125"),/more than 100/i);
+});

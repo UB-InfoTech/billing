@@ -2,6 +2,7 @@ import React,{useEffect,useMemo,useState} from "react";
 import axios from "axios";
 import {evaluateArithmeticExpression} from "../utils/arithmetic";
 import {groupFieldsBySection} from "../hooks/useFormConfiguration";
+import {normalizeNumericValidation} from "../utils/numericValidation";
 
 const FIELD_TYPES=[
   {value:"text",label:"Short text",icon:"bi-fonts"},
@@ -114,7 +115,7 @@ const clone=field=>({
   formula:field.formula||"",
   helpText:String(field.helpText||""),
   defaultValue:field.defaultValue??"",
-  validation:field.validation&&typeof field.validation==="object"?{min:field.validation.min??null,max:field.validation.max??null,pattern:field.validation.pattern||""}:{min:null,max:null,pattern:""},
+  validation:normalizeNumericValidation(field.fieldType,field.validation),
   editable:field.editable!==false,
   readOnly:Boolean(field.readOnly||field.formula),
   disabled:Boolean(field.disabled),

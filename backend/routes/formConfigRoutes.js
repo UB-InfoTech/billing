@@ -151,9 +151,14 @@ const sanitizeFields=fields=>{
       showMatchMode:raw?.showMatchMode==="any"?"any":"all",
       validation:{
         // Number(null) and Number("") are both 0. Treat blank limits as
-        // unbounded so saving a form doesn't silently cap numeric fields at 0.
+        // unbounded. Older saved number/currency forms may already contain a
+        // zero maximum created by that bug, so treat it as an empty maximum.
         min:fieldType==="percentage"?(validationMin??0):validationMin,
-        max:fieldType==="percentage"?(validationMax??100):validationMax,
+        max:fieldType==="percentage"
+          ?(validationMax??100)
+          :["number","currency"].includes(fieldType)&&validationMax===0
+            ?null
+            :validationMax,
         pattern:cleanString(raw?.validation?.pattern,500)
       }
     };

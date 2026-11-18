@@ -2,6 +2,7 @@ import React,{useEffect,useId,useRef,useState} from "react";
 import axios from "axios";
 import ArithmeticInput from "./ArithmeticInput";
 import {normalizeBooleanValue} from "../utils/fieldValue";
+import {normalizeNumericValidation} from "../utils/numericValidation";
 
 export default function ConfiguredField({
   field,
@@ -97,6 +98,7 @@ export default function ConfiguredField({
   const effectiveRequired=field.required===true||required;
   const effectiveHelp=help??field.helpText;
   const effectiveDisabled=disabled||Boolean(field.disabled);
+  const validation=normalizeNumericValidation(field.fieldType,field.validation);
 
   const handleValue=next=>{
     onChange?.(next);
@@ -156,9 +158,9 @@ export default function ConfiguredField({
     disabled:effectiveDisabled,
     required:effectiveRequired,
     readOnly:effectiveReadOnly,
-    min:field.validation?.min??undefined,
-    max:field.validation?.max??undefined,
-    pattern:field.validation?.pattern||undefined
+    min:validation.min??undefined,
+    max:validation.max??undefined,
+    pattern:validation.pattern||undefined
   };
 
   let control=null;
@@ -310,8 +312,8 @@ export default function ConfiguredField({
           value={value}
           onValueChange={handleValue}
           className="form-control form-entry-control"
-          min={field.validation?.min??min??0}
-          max={field.validation?.max??max??100}
+          min={validation.min??min??0}
+          max={validation.max??max??100}
           step="0.01"
           disabled={effectiveDisabled}
           required={effectiveRequired}
@@ -332,8 +334,8 @@ export default function ConfiguredField({
           value={value}
           onValueChange={handleValue}
           className="form-control form-entry-control"
-          min={field.validation?.min??min}
-          max={field.validation?.max??max}
+          min={validation.min??min}
+          max={validation.max??max}
           step={step||"0.01"}
           disabled={effectiveDisabled}
           required={effectiveRequired}

@@ -299,8 +299,8 @@ export default function Profile(){
                   ))}
                 </section>
                 {additionalProfileFields.some(field=>getFieldState(field,{...profile,...(profile.customFields||{})}).visible)&&(
-                  <details className="profile-additional-details mt-3">
-                    <summary><i className="bi bi-plus-circle me-2"></i>Registrations, banking and billing <span>GST, PAN, CIN, Udyam, bank details, invoice numbering and E-Way Bill setup</span></summary>
+                  <details className="profile-additional-details mt-3" open>
+                    <summary><i className="bi bi-chevron-down me-2" aria-hidden="true"></i>Business registrations, banking and billing <span>GST, PAN, CIN, Udyam, bank details, invoice numbering and E-Way Bill setup</span></summary>
                     <div className="row g-3 p-3">{additionalProfileFields.map(renderProfileField)}</div>
                   </details>
                 )}

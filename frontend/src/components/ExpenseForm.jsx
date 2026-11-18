@@ -228,8 +228,8 @@ export default function ExpenseForm({onSubmit,onCancel,initialData=EMPTY_INITIAL
               <div className="row g-3">{primaryFields.map(renderExpenseField)}</div>
             </section>
 
-            <details className="expense-additional-details mt-3">
-                <summary><i className="bi bi-plus-circle me-2"></i>More details and receipt <span>Payment method, GST, customer links, notes and supporting receipt</span></summary>
+            <details className="expense-additional-details mt-3" open>
+                <summary><i className="bi bi-chevron-down me-2" aria-hidden="true"></i>Additional expense details and receipt <span>Payment method, GST, customer links, notes and supporting receipt</span></summary>
                 <div className="expense-additional-details-body">
                   {sectionNames.map(section=>{
                     const sectionFields=additionalFields.filter(field=>(field.section||"General")===section);

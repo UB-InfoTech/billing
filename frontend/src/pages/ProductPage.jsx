@@ -387,8 +387,8 @@ export default function ProductPage(){
                   <div className="row g-3">{primaryProductFields.map(renderProductField)}</div>
                 </section>
 
-                <details className="product-additional-details mt-3">
-                  <summary><i className="bi bi-plus-circle me-2"></i>More product details <span>Codes, stock, purchase price, description and images</span></summary>
+                <details className="product-additional-details mt-3" open>
+                  <summary><i className="bi bi-chevron-down me-2" aria-hidden="true"></i>Additional product details <span>Codes, stock, purchase price, description and images</span></summary>
                   <div className="product-additional-details-body">
                     {productSections.map(section=>{
                       const sectionFields=additionalProductFields.filter(field=>(field.section||"General")===section);

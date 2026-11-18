@@ -4355,6 +4355,53 @@ textarea.form-entry-control{min-height:84px;resize:vertical}
     font-size: 12px !important;
     line-height: 1.4;
   }
+  .customer-form-section > summary {
+    cursor: pointer;
+    list-style: none;
+    outline: none;
+  }
+
+  .customer-form-section > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .customer-form-section > summary::marker {
+    content: "";
+  }
+
+  .customer-form-section:not([open]) > .customer-form-section-heading {
+    margin-bottom: 0 !important;
+  }
+
+  .customer-form-section-chevron {
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: var(--workspace-muted);
+    transition: transform .18s ease;
+  }
+
+  .customer-form-section[open] .customer-form-section-chevron,
+  .expense-additional-details[open] > summary > .bi,
+  .product-additional-details[open] > summary > .bi,
+  .profile-additional-details[open] > summary > .bi {
+    transform: rotate(180deg);
+  }
+
+  .expense-additional-details > summary > .bi,
+  .product-additional-details > summary > .bi,
+  .profile-additional-details > summary > .bi {
+    flex: 0 0 auto;
+    transition: transform .18s ease;
+  }
+
+  .customer-form-section > summary:focus-visible,
+  .expense-additional-details > summary:focus-visible,
+  .product-additional-details > summary:focus-visible,
+  .profile-additional-details > summary:focus-visible {
+    outline: 3px solid rgba(13, 110, 253, .22);
+    outline-offset: 2px;
+  }
+
 
   .customer-form-workspace .row,
   .invoice-form-workspace .row {

@@ -1062,22 +1062,23 @@ function Clients() {
                   {formError&&<div className="alert alert-danger mx-3 mt-3 mb-0" role="alert">{formError}</div>}
                   <form className="customer-form-workspace" onSubmit={editingClient?handleUpdateClient:handleAddClient}>
                     <div className="modal-body p-3 customer-a4-sheet-body client-form-body">
-                      <div className="client-form-intro">
-                        <span className="client-form-intro-icon"><i className="bi bi-person-plus"></i></span>
-                        <div><strong>Start with the customer name</strong><p>Only complete the information you have. You can add or update the rest later.</p></div>
+                      <div className="customer-paper-intro">
+                        <div className="customer-paper-instruction"><strong>Start with the customer name.</strong> Only complete the information you have. You can add or update the rest later.</div>
                       </div>
                       {clientFormSections.map((section,sectionIndex)=>{
                         const values={...newClient,...(newClient.customFields||{})};
                         const sectionFields=section.fields.filter(field=>getFieldState(field,values).visible);
                         if(!sectionFields.length)return null;
                         const hasRequired=sectionFields.some(field=>getFieldState(field,values).required);
-                        const expanded=sectionIndex===0||hasRequired;
                         return (
-                          <details className="client-form-section" key={section.key} open={expanded||undefined}>
-                            <summary>
-                              <span className="client-form-section-number">{sectionIndex+1}</span>
-                              <span className="client-form-section-copy"><strong>{section.label}</strong><small>{hasRequired?"Includes required information":"Optional · You can fill this later"}</small></span>
-                              <i className="bi bi-chevron-down client-form-section-chevron"></i>
+                          <details className="customer-form-section" key={section.key} open>
+                            <summary className="customer-form-section-heading">
+                              <span className="customer-section-number">{sectionIndex+1}</span>
+                              <div>
+                                <h6>{section.label}</h6>
+                                <div className="small">{hasRequired?"Includes required information":"Optional · You can fill this later"}</div>
+                              </div>
+                              <i className="bi bi-chevron-down customer-form-section-chevron" aria-hidden="true"></i>
                             </summary>
                             <div className="row g-3 client-form-section-fields">
                               {sectionFields.map(renderClientField)}

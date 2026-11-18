@@ -59,6 +59,8 @@ test("OCR text matcher suggests common invoice field mappings without forcing a 
   assert.equal(suggestInvoiceField("Due Date").fieldKey,"due_date");
   assert.equal(suggestInvoiceField("Bill To").fieldKey,"customer_name");
   assert.equal(suggestInvoiceField("Supplier GSTIN",{top:10}).fieldKey,"company_gstin");
+  assert.equal(suggestInvoiceField("Customer GSTIN").fieldKey,"customer_gstin");
+  assert.equal(suggestInvoiceField("Customer Phone").fieldKey,"customer_phone");
   assert.equal(suggestInvoiceField("GSTIN",{top:35}).fieldKey,"customer_gstin");
   assert.equal(suggestInvoiceField("Amount paid").fieldKey,"amount_paid");
   assert.equal(suggestInvoiceField("random words"),null);

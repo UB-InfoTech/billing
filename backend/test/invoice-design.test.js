@@ -238,6 +238,59 @@ test("invoice design rejects another owner's background and bounds layout values
   assert.equal(template.blocks[0].showLabel,true);
 });
 
+test("invoice designs preserve professional element styling and safe imported images",()=>{
+  const owner="64b000000000000000000001";
+  const image="data:image/png;base64,"+"A".repeat(64);
+  const design=sanitizeInvoiceDesign({
+    enabled:true,
+    templates:[{id:"custom",templateKey:"premium",background:{url:""},blocks:[
+      {id:"accent",type:"shape",x:0,y:0,w:100,h:12,backgroundColor:"#172554",borderRadius:4},
+      {id:"logo-image",type:"image",label:"Logo",imageUrl:image,imageFit:"cover",opacity:0.6,x:80,y:5,w:14,h:10},
+      {id:"brand",type:"field",fieldKey:"company_name",label:"Business name",x:5,y:5,w:60,h:6,fontSize:19,fontFamily:"Georgia",italic:true,backgroundColor:"#ffffff",borderColor:"#1d4ed8",borderWidth:1,padding:2,showLabel:false}
+    ]}]
+  },owner);
+  const blocks=design.templates[0].blocks;
+  assert.equal(blocks.length,3);
+  assert.equal(blocks[0].type,"shape");
+  assert.equal(blocks[0].backgroundColor,"#172554");
+  assert.equal(blocks[1].type,"image");
+  assert.equal(blocks[1].imageUrl,image);
+  assert.equal(blocks[1].imageFit,"cover");
+  assert.equal(blocks[1].opacity,0.6);
+  assert.equal(blocks[2].fontFamily,"Georgia");
+  assert.equal(blocks[2].italic,true);
+  assert.equal(blocks[2].borderWidth,1);
+  assert.equal(blocks[2].showLabel,false);
+});
+
+test("invalid imported images and unsafe style values are rejected",()=>{
+  const design=sanitizeInvoiceDesign({
+    templates:[{id:"unsafe",blocks:[
+      {id:"bad-image",type:"image",imageUrl:"https://example.com/logo.png",x:5,y:5,w:20,h:10},
+      {id:"bad-shape",type:"shape",backgroundColor:"url(javascript:alert(1))",borderColor:"red",fontFamily:"Comic Sans MS",borderWidth:99,opacity:2,x:5,y:5,w:20,h:10}
+    ]}]
+  });
+  assert.equal(design.templates[0].blocks.length,1);
+  const shape=design.templates[0].blocks[0];
+  assert.equal(shape.backgroundColor,"transparent");
+  assert.equal(shape.borderColor,"#172335");
+  assert.equal(shape.fontFamily,"Arial");
+  assert.equal(shape.borderWidth,6);
+  assert.equal(shape.opacity,1);
+});
+
+test("professional invoice design library contains distinct ready-to-use layouts",async()=>{
+  const {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate}=await import("../../frontend/src/utils/invoiceTemplateLibrary.js");
+  assert.equal(INVOICE_DESIGN_PRESETS.length,8);
+  const keys=INVOICE_DESIGN_PRESETS.map(preset=>preset.key);
+  assert.equal(new Set(keys).size,8);
+  const templates=keys.map(key=>createInvoiceDesignTemplate("tpl-"+key,key));
+  assert.ok(templates.some(template=>template.blocks.some(block=>block.type==="shape")));
+  assert.ok(templates.some(template=>template.pageSize==="A5"));
+  assert.ok(templates.every(template=>template.blocks.some(block=>block.type==="items_table")));
+  assert.equal(createBlankInvoiceDesignTemplate("blank").blocks.length,0);
+});
+
 test("invoice backgrounds must match their declared file signatures",()=>{
   assert.equal(hasInvoiceBackgroundSignature(Buffer.from("%PDF-1.7"),"application/pdf"),true);
   assert.equal(hasInvoiceBackgroundSignature(Buffer.from("%PDX-1.7"),"application/pdf"),false);
@@ -305,6 +358,8 @@ test("actual print template renders the in-session design and saved invoice rows
   const template={
     id:"in-session-preview",name:"Preview design",pageSize:"A4",orientation:"portrait",
     blocks:[
+      {id:"accent-band",type:"shape",label:"",x:0,y:0,w:100,h:3,backgroundColor:"#172554",borderWidth:0,visible:true},
+      {id:"imported-mark",type:"image",label:"Imported mark",imageUrl:"data:image/png;base64,AAAA",x:88,y:4,w:8,h:8,visible:true},
       {id:"invoice-no",type:"field",fieldKey:"invoice_no",label:"Invoice number",showLabel:false,x:8,y:10,w:45,h:6,fontSize:12,bold:true,align:"left",color:"#172335",visible:true},
       {id:"items",type:"items_table",x:6,y:24,w:88,h:42,fontSize:8,visible:true},
       {id:"totals",type:"totals",x:62,y:72,w:32,h:20,fontSize:9,visible:true}
@@ -337,6 +392,8 @@ test("actual print template renders the in-session design and saved invoice rows
   assert.match(html,/Cotton fabric/);
   assert.match(html,/1000\.00/);
   assert.match(html,/left:8%;top:10%;width:45%;height:6%/);
+  assert.match(html,/background-color:#172554/);
+  assert.match(html,/data:image\/png;base64,AAAA/);
   assert.match(html,/Invoice total/);
 });
 

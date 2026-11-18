@@ -3,6 +3,7 @@ import axios from "axios";
 import "./InvoicePrintBuilder.css";
 import {buildInvoiceSmartLayout,scanImportedInvoiceLayout} from "../utils/invoiceLayoutScanner.js";
 import {inferOcrValueBox} from "../utils/invoiceOcrMapping.js";
+import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
@@ -27,29 +28,8 @@ const SAMPLE_VALUES={
   invoice_title:"TAX INVOICE",invoice_no:"INV-00001",invoice_date:"18 Nov 2026",due_date:"25 Nov 2026",challan_no:"CH-001",payment_terms:"Net 7 days",eway_bill:"E-Way Bill number",
   subtotal:"₹ 10,000.00",discount:"− ₹ 500.00",taxable_value:"₹ 9,500.00",cgst:"₹ 855.00",sgst:"₹ 855.00",igst:"₹ 0.00",round_off:"₹ 0.00",grand_total:"₹ 11,210.00",amount_paid:"₹ 5,000.00",balance_due:"₹ 6,210.00",amount_words:"Eleven thousand two hundred ten only",bank_details:"Bank name · Account number · IFSC",terms:"Goods once sold will not be taken back.",signature:"For Your Business · Authorised Signatory"
 };
-const makeBlock=(id,type,fieldKey,label,x,y,w,h,extra={})=>({id,type,fieldKey:fieldKey||"",label:label||"",text:"",x,y,w,h,fontSize:10,bold:false,align:"left",color:"#172335",visible:true,...extra});
-const makeTemplate=(id,name,key)=>{
-  const modern=key==="modern";
-  const classic=key==="classic";
-  const blocks=[
-    makeBlock("business-name","field","company_name","Business name",6,4,60,6, {fontSize:modern?19:17,bold:true,color:modern?"#1d4ed8":"#172335"}),
-    makeBlock("business-address","field","company_address","Business address",6,11,61,6,{fontSize:8}),
-    makeBlock("business-gstin","field","company_gstin","Business GSTIN",6,18,60,3,{fontSize:8,bold:true}),
-    makeBlock("business-logo","logo","logo","Business logo",81,4,13,11,{align:"center"}),
-    makeBlock("invoice-title","field","invoice_title","Invoice title",64,18,30,5,{fontSize:13,bold:true,align:"right"}),
-    makeBlock("invoice-number","field","invoice_no","Invoice number",64,23,30,3,{fontSize:8,bold:true,align:"right"}),
-    makeBlock("customer-name","field","customer_name","Customer name",6,26,44,5,{fontSize:10,bold:true}),
-    makeBlock("customer-address","field","customer_address","Customer address",6,32,44,8,{fontSize:8}),
-    makeBlock("invoice-date","field","invoice_date","Invoice date",58,27,36,4,{fontSize:9,align:"right"}),
-    makeBlock("due-date","field","due_date","Due date",58,32,36,4,{fontSize:9,align:"right"}),
-    makeBlock("item-table","items_table","items","Invoice items",6,43,88,33,{fontSize:8,color:modern?"#1d4ed8":"#172335"}),
-    makeBlock("invoice-totals","totals","totals","Invoice totals",61,78,33,15,{fontSize:9,align:"right"}),
-    makeBlock("invoice-terms","field","terms","Terms and conditions",6,80,48,11,{fontSize:8}),
-    makeBlock("invoice-signature","field","signature","Authorised signatory",64,94,30,4,{fontSize:8,bold:true,align:"right"})
-  ];
-  if(classic)blocks[9]={...blocks[9],color:"#111827"};
-  return {id,name,templateKey:key,pageSize:"A4",orientation:"portrait",background:{url:"",type:"none",locked:true,visible:true},blocks};
-};
+const makeBlock=(id,type,fieldKey,label,x,y,w,h,extra={})=>({id,type,fieldKey:fieldKey||"",label:label||"",text:"",x,y,w,h,fontSize:10,bold:false,align:"left",color:"#172335",backgroundColor:"transparent",borderColor:"#d8e0e9",borderWidth:0,borderRadius:0,padding:1,fontFamily:"Arial",italic:false,opacity:1,visible:true,showLabel:true,...extra});
+const makeTemplate=(id,name,key)=>({...createInvoiceDesignTemplate(id,key),name:name||createInvoiceDesignTemplate(id,key).name});
 const makeInitialDesign=()=>({enabled:false,activeTemplateId:"clean-default",templates:[makeTemplate("clean-default","Clean","clean")]});
 const createId=prefix=>prefix+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7);
 const clamp=(value,min,max)=>Math.min(max,Math.max(min,Number(value)||min));
@@ -112,6 +92,9 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [ocrView,setOcrView]=useState("suggested");
   const [highlightedOcrLineId,setHighlightedOcrLineId]=useState("");
   const [fieldSearch,setFieldSearch]=useState("");
+  const [showTemplateLibrary,setShowTemplateLibrary]=useState(false);
+  const [confirmDeleteTemplate,setConfirmDeleteTemplate]=useState(false);
+  const [htmlImporting,setHtmlImporting]=useState(false);
   const [previewRecords,setPreviewRecords]=useState([]);
   const [previewRecordId,setPreviewRecordId]=useState("");
   const [previewInvoice,setPreviewInvoice]=useState(null);
@@ -124,6 +107,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const canvasRef=useRef(null);
   const printPreviewFrameRef=useRef(null);
   const importRef=useRef(null);
+  const htmlImportRef=useRef(null);
+  const elementImageRef=useRef(null);
   const currentDesignRef=useRef(localDesign);
   const historyRef=useRef(history);
   const draggingRef=useRef(null);
@@ -167,6 +152,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const handlePreviewRecordChange=async event=>{
     const id=event.target.value;
     setPreviewRecordId(id);
+    setPrintPreviewHtml("");
+    setPrintPreviewOpen(false);
     setPreviewError("");
     const requestId=++previewRequestRef.current;
     if(!id){
@@ -257,10 +244,13 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   },[fieldSearch]);
   const highlightedOcrLine=ocrScan?.lines.find(line=>line.id===highlightedOcrLineId)||null;
   const referenceReady=Boolean(activeTemplate.background?.url);
+  const designChosen=referenceReady||activeTemplate.templateKey!=="blank";
   const liveFieldCount=activeTemplate.blocks.filter(block=>block.visible!==false&&["field","items_table","totals","logo"].includes(block.type)).length;
   const applyDesign=next=>{
     currentDesignRef.current=next;
     setLocalDesign(next);
+    setPrintPreviewHtml("");
+    setPrintPreviewOpen(false);
     onChange?.(next);
   };
   const pushHistory=snapshot=>{
@@ -314,17 +304,18 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const updateBlock=(blockId,patch,options={})=>{
     updateActive({blocks:activeTemplate.blocks.map(block=>block.id===blockId?{...block,...patch}:block)},options);
   };
-  const addBlock=(type,fieldKey,position,dimensions={})=>{
-    const label=type==="field"?(FIELD_LABELS[fieldKey]||"Invoice field"):type==="items_table"?"Invoice items":type==="totals"?"Invoice totals":type==="text"?"Text":type==="divider"?"Divider":"Business logo";
+  const addBlock=(type,fieldKey,position,dimensions={},extra={})=>{
+    if(activeTemplate.blocks.length>=80){setError("This design can contain up to 80 elements. Remove an unused item before adding another.");return;}
+    const label=type==="field"?(FIELD_LABELS[fieldKey]||"Invoice field"):type==="items_table"?"Invoice items":type==="totals"?"Invoice totals":type==="text"?"Text":type==="divider"?"Divider":type==="shape"?"Accent shape":type==="image"?"Image":"Business logo";
     const id=createId("block");
     const width=dimensions.w??(type==="items_table"?55:type==="totals"?28:type==="logo"?15:30);
     const height=dimensions.h??(type==="items_table"?18:type==="totals"?16:type==="logo"?12:5);
     const x=clamp(position?.x??34,0,100-width);
     const y=clamp(position?.y??40,0,100-height);
-    const newBlock=makeBlock(id,type,fieldKey,label,x,y,width,height,{showLabel:type==="field"?!activeTemplate.background?.url:false});
+    const newBlock=makeBlock(id,type,fieldKey,label,x,y,width,height,{showLabel:type==="field"?!activeTemplate.background?.url:false,...extra});
     if(type==="text")newBlock.text="Your text";
     if(type==="items_table")newBlock.fontSize=8;
-    updateActive({blocks:[...activeTemplate.blocks,newBlock]});
+    updateActive({blocks:type==="shape"?[newBlock,...activeTemplate.blocks]:[...activeTemplate.blocks,newBlock]});
     setSelectedBlockId(id);
   };
   const findOpenPalettePosition=(width,height)=>{
@@ -421,11 +412,47 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setMessage((FIELD_LABELS[placementField]||"Invoice element")+" positioned. You can drag or resize it on the page.");
   };
   const chooseTemplate=key=>{
-    const name=key==="classic"?"Traditional":key==="modern"?"Modern":"Clean";
-    const id=createId(key);
-    const template=makeTemplate(id,name,key);
-    updateDesign({...localDesign,activeTemplateId:id,templates:[...localDesign.templates,template].slice(-12)});
-    setSelectedBlockId(template.blocks[0]?.id||"");
+    if(localDesign.templates.length>=12){setError("You can keep up to 12 invoice designs. Delete an unused design before adding another.");return;}
+    const template=createInvoiceDesignTemplate(createId("design"),key);
+    updateDesign({...localDesign,activeTemplateId:template.id,templates:[...localDesign.templates,template]});
+    setSelectedBlockId(template.blocks[0]?.id||"");setShowTemplateLibrary(false);setConfirmDeleteTemplate(false);
+    setMessage(template.name+" added. You can now edit every element and position it on the page.");
+  };
+  const createBlankDesign=()=>{
+    if(localDesign.templates.length>=12){setError("You can keep up to 12 invoice designs. Delete an unused design first.");return;}
+    const template=createBlankInvoiceDesignTemplate(createId("blank"),"My blank invoice");
+    updateDesign({...localDesign,activeTemplateId:template.id,templates:[...localDesign.templates,template]});
+    setSelectedBlockId("");setShowTemplateLibrary(false);setConfirmDeleteTemplate(false);
+    setMessage("Blank design created. Add fields, text, images, dividers and accent shapes from the left panel.");
+  };
+  const deleteActiveTemplate=()=>{
+    if(!confirmDeleteTemplate){setConfirmDeleteTemplate(true);return;}
+    if(localDesign.templates.length===1){
+      const blank=createBlankInvoiceDesignTemplate(createId("blank"),"My blank invoice");
+      updateDesign({...localDesign,enabled:false,activeTemplateId:blank.id,templates:[blank]});
+      setSelectedBlockId("");setConfirmDeleteTemplate(false);
+      setMessage("The design was deleted. A blank design is ready to customize.");return;
+    }
+    const remaining=localDesign.templates.filter(template=>template.id!==activeTemplate.id);
+    const next=remaining[0];
+    updateDesign({...localDesign,activeTemplateId:next.id,templates:remaining});
+    setSelectedBlockId(next.blocks[0]?.id||"");setConfirmDeleteTemplate(false);
+    setMessage(activeTemplate.name+" deleted. Your other designs are unchanged.");
+  };
+  const duplicateSelectedBlock=()=>{
+    if(!selectedBlock)return;
+    if(activeTemplate.blocks.length>=80){setError("This design can contain up to 80 elements.");return;}
+    const copy={...selectedBlock,id:createId("element"),x:clamp(selectedBlock.x+2,0,100-selectedBlock.w),y:clamp(selectedBlock.y+2,0,100-selectedBlock.h),label:(selectedBlock.label||"Element")+" copy"};
+    updateActive({blocks:[...activeTemplate.blocks,copy]});setSelectedBlockId(copy.id);
+  };
+  const moveSelectedLayer=direction=>{
+    if(!selectedBlock)return;
+    const blocks=activeTemplate.blocks.slice();
+    const index=blocks.findIndex(block=>block.id===selectedBlock.id);
+    const target=index+direction;
+    if(index<0||target<0||target>=blocks.length)return;
+    [blocks[index],blocks[target]]=[blocks[target],blocks[index]];
+    updateActive({blocks});
   };
   const duplicateTemplate=()=>{
     if(localDesign.templates.length>=12){setError("You can save up to 12 invoice designs.");return;}
@@ -440,6 +467,40 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     updateActive({blocks:activeTemplate.blocks.filter(block=>block.id!==selectedBlock.id)});
     setSelectedBlockId("");
   };
+  const handleHtmlUpload=async file=>{
+    if(!file)return;
+    setError("");setMessage("");
+    if(localDesign.templates.length>=12){setError("You can keep up to 12 invoice designs. Delete an unused design first.");if(htmlImportRef.current)htmlImportRef.current.value="";return;}
+    setHtmlImporting(true);
+    try{
+      const {convertInvoiceHtml}=await import("../utils/invoiceHtmlImporter.js");
+      const imported=await convertInvoiceHtml(file);
+      const template=createBlankInvoiceDesignTemplate(createId("html"),imported.name);
+      template.templateKey="html-import";template.pageSize=imported.pageSize||"A4";template.blocks=imported.blocks;
+      updateDesign({...localDesign,activeTemplateId:template.id,templates:[...localDesign.templates,template]});
+      setSelectedBlockId(template.blocks[0]?.id||"");setShowTemplateLibrary(false);
+      const summary=imported.matchedFieldCount+" live fields, "+imported.staticTextCount+" text elements"+(imported.imageCount?", "+imported.imageCount+" embedded images":"");
+      setMessage("HTML design converted into editable elements: "+summary+"."+(imported.warning?" "+imported.warning:""));
+    }catch(importError){setError(importError.message||"This HTML design could not be converted. Try PDF or image import instead.");}
+    finally{setHtmlImporting(false);if(htmlImportRef.current)htmlImportRef.current.value="";}
+  };
+
+  const handleElementImageUpload=file=>{
+    if(!file)return;
+    const allowed=["image/png","image/jpeg","image/webp","image/gif"];
+    if(!allowed.includes(String(file.type||"").toLowerCase())){setError("Choose a PNG, JPG, WebP or GIF image.");return;}
+    if(Number(file.size)>180*1024){setError("Images added as editable elements must be 180 KB or smaller. For larger artwork, import it as a PDF or image reference.");return;}
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const imageUrl=String(reader.result||"");
+      if(!imageUrl.startsWith("data:image/")){setError("This image could not be read.");return;}
+      addBlock("image","",findOpenPalettePosition(20,14),{w:20,h:14},{imageUrl,label:file.name||"Image",padding:0});
+    };
+    reader.onerror=()=>setError("This image could not be read.");
+    reader.readAsDataURL(file);
+    if(elementImageRef.current)elementImageRef.current.value="";
+  };
+
   const handleUpload=async file=>{
     if(!file)return;
     const fileName=String(file.name||"").toLowerCase();
@@ -670,6 +731,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   ];
 
   const renderBlockContent=block=>{
+    if(block.type==="shape")return null;
+    if(block.type==="image")return <img className="invoice-builder-imported-image" style={{objectFit:block.imageFit||"contain"}} src={block.imageUrl} alt={block.label||"Imported invoice image"}/>;
     if(block.type==="text")return <span>{block.text||block.label}</span>;
     if(block.type==="divider")return <div className="invoice-builder-divider-line"/>;
     if(block.type==="logo"){
@@ -725,7 +788,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
           </div>
         </header>
         <nav className="invoice-builder-steps" aria-label="Invoice design steps">
-          <div className={referenceReady?"is-complete":"is-current"}><span>{referenceReady?<i className="bi bi-check-lg"/>:"1"}</span><div><strong>Choose a design</strong><small>{referenceReady?"Reference imported safely":"Pick a starter or import PDF / image"}</small></div></div>
+          <div className={designChosen?"is-complete":"is-current"}><span>{designChosen?<i className="bi bi-check-lg"/>:"1"}</span><div><strong>Choose a design</strong><small>{referenceReady?"Reference imported safely":activeTemplate.templateKey==="html-import"?"HTML design converted":"Starter design selected"}</small></div></div>
           <div className={liveFieldCount>0?"is-complete":referenceReady?"is-current":""}><span>{liveFieldCount>0?<i className="bi bi-check-lg"/>:"2"}</span><div><strong>Place invoice details</strong><small>{liveFieldCount>0?liveFieldCount+" editable elements":"Add the fields your invoice needs"}</small></div></div>
           <div className={printPreviewHtml?"is-complete":liveFieldCount>0?"is-current":""}><span>{printPreviewHtml?<i className="bi bi-check-lg"/>:"3"}</span><div><strong>Check and save</strong><small>{printPreviewHtml?"Print preview checked":"Preview the real invoice before saving"}</small></div></div>
         </nav>
@@ -751,10 +814,13 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
             ))}
             {!filteredFieldGroups.length&&<div className="invoice-builder-field-no-results">No fields match “{fieldSearch}”. Try another name.</div>}
             <div className="invoice-builder-extra-tools">
-              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("items_table","items")}> <i className="bi bi-table me-1"/>Add item table</button>
-              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("totals","totals")}> <i className="bi bi-calculator me-1"/>Add totals</button>
-              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("text","")}> <i className="bi bi-fonts me-1"/>Add text</button>
-              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("divider","")}> <i className="bi bi-dash-lg me-1"/>Add divider</button>
+              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("items_table","items")}> <i className="bi bi-table me-1"/>Item table</button>
+              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("totals","totals")}> <i className="bi bi-calculator me-1"/>Totals</button>
+              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("text","")}> <i className="bi bi-fonts me-1"/>Text</button>
+              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("divider","")}> <i className="bi bi-dash-lg me-1"/>Divider</button>
+              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("shape","",{x:8,y:40},{w:34,h:7})}> <i className="bi bi-square me-1"/>Accent box</button>
+              <button type="button" className="btn btn-sm btn-light border" onClick={()=>elementImageRef.current?.click()}> <i className="bi bi-image me-1"/>Image</button>
+              <input ref={elementImageRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={event=>handleElementImageUpload(event.target.files?.[0])}/>
             </div>
           </aside>
 
@@ -762,17 +828,21 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
             <div className="invoice-builder-toolbar">
               <div className="invoice-builder-templates">
                 <label htmlFor="invoice-design-template">Design</label>
-                <select id="invoice-design-template" className="form-select form-select-sm" value={activeTemplate.id} onChange={event=>updateDesign({...localDesign,activeTemplateId:event.target.value})}>
+                <select id="invoice-design-template" className="form-select form-select-sm" value={activeTemplate.id} onChange={event=>{updateDesign({...localDesign,activeTemplateId:event.target.value});setConfirmDeleteTemplate(false);}}>
                   {localDesign.templates.map(template=><option value={template.id} key={template.id}>{template.name}</option>)}
                 </select>
                 <button type="button" className="btn btn-sm btn-light border" onClick={undo} disabled={!history.past.length} title="Undo (Ctrl+Z)"><i className="bi bi-arrow-counterclockwise me-1"/>Undo</button>
                 <button type="button" className="btn btn-sm btn-light border" onClick={redo} disabled={!history.future.length} title="Redo (Ctrl+Y)"><i className="bi bi-arrow-clockwise me-1"/>Redo</button>
                 <button type="button" className="btn btn-sm btn-light border" onClick={duplicateTemplate} disabled={localDesign.templates.length>=12} title="Duplicate this design"><i className="bi bi-copy"/></button>
+                <button type="button" className="btn btn-sm btn-light border" onClick={deleteActiveTemplate} title="Delete this design"><i className="bi bi-trash"/></button>
               </div>
               <div className="invoice-builder-toolbar-actions">
-                <label className="btn btn-sm btn-light border mb-0" htmlFor="invoice-design-import"><i className="bi bi-upload me-1"/>{uploading?"Importing…":"Import PDF or image"}</label>
+                <button type="button" className="btn btn-sm btn-light border" onClick={()=>setShowTemplateLibrary(true)}><i className="bi bi-grid me-1"/>Templates</button>
+                <label className="btn btn-sm btn-light border mb-0" htmlFor="invoice-html-import"><i className="bi bi-code-slash me-1"/>{htmlImporting?"Reading HTML…":"Import HTML"}</label>
+                <input ref={htmlImportRef} id="invoice-html-import" type="file" accept=".html,.htm,text/html" hidden onChange={event=>handleHtmlUpload(event.target.files?.[0])}/>
+                <label className="btn btn-sm btn-light border mb-0" htmlFor="invoice-design-import"><i className="bi bi-upload me-1"/>{uploading?"Importing…":"Import PDF / image"}</label>
                 <input ref={importRef} id="invoice-design-import" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" hidden onChange={event=>handleUpload(event.target.files?.[0])}/>
-                <small className="invoice-builder-import-hint">PDF, JPG, PNG or WebP · up to 12 MB</small>
+                <button type="button" className="btn btn-sm btn-light border" onClick={createBlankDesign}><i className="bi bi-plus-lg me-1"/>New blank</button>
                 <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>updateDesign({...localDesign,enabled:!localDesign.enabled})}>{localDesign.enabled?"Using custom design":"Use this design"}</button>
               </div>
             </div>
@@ -815,7 +885,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   </div>
                   <div className="invoice-builder-block-layer">
                     {activeTemplate.blocks.filter(block=>block.visible!==false).map(block=>(
-                      <button type="button" key={block.id} className={"invoice-builder-block "+(selectedBlockId===block.id?"is-selected":"")+(dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,textAlign:block.align,color:block.color}} onClick={()=>{if(!placingField)setSelectedBlockId(block.id);}} onPointerDown={event=>{if(!placingField)startBlockDrag(event,block);}} aria-label={"Move "+(block.label||"invoice element")}>
+                      <button type="button" key={block.id} className={"invoice-builder-block "+(selectedBlockId===block.id?"is-selected":"")+(dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,fontStyle:block.italic?"italic":"normal",fontFamily:block.fontFamily||"Arial",textAlign:block.align,color:block.color,backgroundColor:block.backgroundColor||"transparent",border:block.borderWidth?block.borderWidth+"px solid "+(block.borderColor||"#d8e0e9"):undefined,borderRadius:block.borderRadius+"px",padding:block.padding+"px",opacity:block.opacity??1}} onClick={()=>{if(!placingField)setSelectedBlockId(block.id);}} onPointerDown={event=>{if(!placingField)startBlockDrag(event,block);}} aria-label={"Move "+(block.label||"invoice element")}>
                         {renderBlockContent(block)}
                         {selectedBlockId===block.id&&<span className="invoice-builder-resize-handle" data-resize-handle="true" onPointerDown={event=>startBlockResize(event,block)} aria-hidden="true"/>}
                       </button>
@@ -938,28 +1008,43 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 )}
                 {selectedBlock.type==="text"&&<><label className="form-label">Text</label><textarea className="form-control form-control-sm mb-3" rows={3} value={selectedBlock.text} onChange={event=>updateBlock(selectedBlock.id,{text:event.target.value})}/></>}
                 {selectedBlock.type==="field"&&<div className="form-check form-switch mb-3"><input id="invoice-block-show-label" className="form-check-input" type="checkbox" checked={selectedBlock.showLabel!==false} onChange={event=>updateBlock(selectedBlock.id,{showLabel:event.target.checked})}/><label className="form-check-label" htmlFor="invoice-block-show-label">Show field label before the value</label><small className="d-block text-secondary">Turn this off when the imported design already prints the label.</small></div>}
+                <div className="invoice-builder-selected-actions"><button type="button" className="btn btn-sm btn-light border" onClick={duplicateSelectedBlock}><i className="bi bi-copy me-1"/>Duplicate element</button><button type="button" className="btn btn-sm btn-light border" onClick={()=>moveSelectedLayer(1)} title="Bring forward"><i className="bi bi-front"/></button><button type="button" className="btn btn-sm btn-light border" onClick={()=>moveSelectedLayer(-1)} title="Send backward"><i className="bi bi-back"/></button></div>
                 <h4>Position and size</h4>
                 <div className="invoice-builder-number-grid">
                   {[[ "Left", "x"],["Top","y"],["Width","w"],["Height","h"]].map(([label,key])=><div key={key}><label className="form-label">{label} (%)</label><input type="number" min={0} max={100} className="form-control form-control-sm" value={selectedBlock[key]} onChange={event=>updateBlock(selectedBlock.id,{[key]:clamp(event.target.value,0,100)})}/></div>)}
                 </div>
                 <h4>Appearance</h4>
-                <div className="invoice-builder-number-grid">
+                {selectedBlock.type!=="shape"&&selectedBlock.type!=="image"&&<div className="invoice-builder-number-grid">
                   <div><label className="form-label">Text size</label><input type="number" min={6} max={48} className="form-control form-control-sm" value={selectedBlock.fontSize} onChange={event=>updateBlock(selectedBlock.id,{fontSize:clamp(event.target.value,6,48)})}/></div>
                   <div><label className="form-label">Text colour</label><input type="color" className="form-control form-control-color w-100" value={selectedBlock.color} onChange={event=>updateBlock(selectedBlock.id,{color:event.target.value})}/></div>
+                </div>}
+                <div className="invoice-builder-number-grid mt-3">
+                  <div><label className="form-label">Background</label><input type="color" className="form-control form-control-color w-100" value={selectedBlock.backgroundColor&&selectedBlock.backgroundColor!=="transparent"?selectedBlock.backgroundColor:"#ffffff"} onChange={event=>updateBlock(selectedBlock.id,{backgroundColor:event.target.value})}/><button type="button" className="btn btn-link btn-sm p-0 mt-1" onClick={()=>updateBlock(selectedBlock.id,{backgroundColor:"transparent"})}>No fill</button></div>
+                  <div><label className="form-label">Border colour</label><input type="color" className="form-control form-control-color w-100" value={selectedBlock.borderColor||"#d8e0e9"} onChange={event=>updateBlock(selectedBlock.id,{borderColor:event.target.value})}/></div>
+                </div>
+                <div className="invoice-builder-number-grid mt-2">
+                  <div><label className="form-label">Border width (px)</label><input type="number" min={0} max={6} className="form-control form-control-sm" value={selectedBlock.borderWidth??0} onChange={event=>updateBlock(selectedBlock.id,{borderWidth:clamp(event.target.value,0,6)})}/></div>
+                  <div><label className="form-label">Corner roundness</label><input type="number" min={0} max={24} className="form-control form-control-sm" value={selectedBlock.borderRadius??0} onChange={event=>updateBlock(selectedBlock.id,{borderRadius:clamp(event.target.value,0,24)})}/></div>
+                  <div><label className="form-label">Inner spacing</label><input type="number" min={0} max={16} className="form-control form-control-sm" value={selectedBlock.padding??1} onChange={event=>updateBlock(selectedBlock.id,{padding:clamp(event.target.value,0,16)})}/></div>
+                  <div><label className="form-label">Font family</label><select className="form-select form-select-sm" value={selectedBlock.fontFamily||"Arial"} onChange={event=>updateBlock(selectedBlock.id,{fontFamily:event.target.value})}><option>Arial</option><option>Helvetica</option><option>Georgia</option><option>Times New Roman</option><option>Verdana</option><option>Tahoma</option></select></div>
                 </div>
                 <label className="form-label mt-3">Alignment</label><div className="btn-group w-100 mb-3" role="group" aria-label="Text alignment">{["left","center","right"].map(value=><button type="button" className={"btn btn-sm "+(selectedBlock.align===value?"btn-primary":"btn-light border")} key={value} onClick={()=>updateBlock(selectedBlock.id,{align:value})}><i className={"bi bi-text-"+value}/></button>)}</div>
                 <div className="form-check form-switch"><input id="invoice-block-bold" className="form-check-input" type="checkbox" checked={selectedBlock.bold} onChange={event=>updateBlock(selectedBlock.id,{bold:event.target.checked})}/><label className="form-check-label" htmlFor="invoice-block-bold">Bold text</label></div>
+                {selectedBlock.type==="image"&&<div className="mt-3"><label className="form-label">Image fit</label><select className="form-select form-select-sm" value={selectedBlock.imageFit||"contain"} onChange={event=>updateBlock(selectedBlock.id,{imageFit:event.target.value})}><option value="contain">Show full image</option><option value="cover">Fill the element</option><option value="fill">Stretch to fit</option></select></div>}
+                <div className="mt-3"><label className="form-label d-flex justify-content-between"><span>Transparency</span><span>{Math.round((selectedBlock.opacity??1)*100)}%</span></label><input className="form-range" type="range" min="0.1" max="1" step="0.05" value={selectedBlock.opacity??1} onChange={event=>updateBlock(selectedBlock.id,{opacity:Number(event.target.value)})}/></div>
+                <div className="form-check form-switch mt-2"><input id="invoice-block-italic" className="form-check-input" type="checkbox" checked={selectedBlock.italic===true} onChange={event=>updateBlock(selectedBlock.id,{italic:event.target.checked})}/><label className="form-check-label" htmlFor="invoice-block-italic">Italic text</label></div>
                 <div className="form-check form-switch mt-2"><input id="invoice-block-visible" className="form-check-input" type="checkbox" checked={selectedBlock.visible!==false} onChange={event=>updateBlock(selectedBlock.id,{visible:event.target.checked})}/><label className="form-check-label" htmlFor="invoice-block-visible">Show on invoice</label></div>
               </section>
             )}
             <section className="invoice-builder-property-card">
-              <h3>Design collection</h3>
-              <p>Start from a different look, then adjust every element.</p>
-              <div className="invoice-builder-preset-list">
-                <button type="button" onClick={()=>chooseTemplate("clean")}><span className="invoice-builder-preset-preview clean"/>Clean layout</button>
-                <button type="button" onClick={()=>chooseTemplate("classic")}><span className="invoice-builder-preset-preview classic"/>Traditional layout</button>
-                <button type="button" onClick={()=>chooseTemplate("modern")}><span className="invoice-builder-preset-preview modern"/>Modern layout</button>
-              </div>
+              <div className="d-flex justify-content-between align-items-center gap-2 mb-2"><h3 className="mb-0">Selected design</h3><button type="button" className="btn btn-sm btn-light border" onClick={()=>setShowTemplateLibrary(true)}>Browse templates</button></div>
+              <p>{activeTemplate.name} · {activeTemplate.blocks.length} elements. Your other saved designs remain unchanged while you edit this one.</p>
+              <div className="invoice-builder-design-actions"><button type="button" className="btn btn-sm btn-light border" onClick={duplicateTemplate} disabled={localDesign.templates.length>=12}><i className="bi bi-copy me-1"/>Duplicate</button><button type="button" className="btn btn-sm btn-light border" onClick={()=>setConfirmDeleteTemplate(value=>!value)}><i className="bi bi-trash me-1"/>Delete</button><button type="button" className="btn btn-sm btn-primary" onClick={createBlankDesign} disabled={localDesign.templates.length>=12}><i className="bi bi-plus-lg me-1"/>New design</button></div>
+              {confirmDeleteTemplate&&<div className="invoice-builder-delete-confirm"><span>Delete “{activeTemplate.name}”?</span><button type="button" className="btn btn-sm btn-danger" onClick={deleteActiveTemplate}>Delete design</button><button type="button" className="btn btn-sm btn-light border" onClick={()=>setConfirmDeleteTemplate(false)}>Keep it</button></div>}
+            </section>
+            <section className="invoice-builder-property-card invoice-builder-layers">
+              <div className="d-flex justify-content-between align-items-center gap-2 mb-2"><h3 className="mb-0">Elements on this page</h3><small>{activeTemplate.blocks.length}/80</small></div>
+              {activeTemplate.blocks.length===0?<p>Start by adding a field, text, image, divider or accent shape.</p>:<div className="invoice-builder-layer-list">{activeTemplate.blocks.slice().reverse().map(block=><div className={selectedBlockId===block.id?"is-selected":""} key={block.id}><button type="button" className="invoice-builder-layer-select" onClick={()=>setSelectedBlockId(block.id)}><i className={"bi "+(block.type==="field"?"bi-braces":block.type==="items_table"?"bi-table":block.type==="image"||block.type==="logo"?"bi-image":block.type==="shape"?"bi-square":block.type==="divider"?"bi-dash":"bi-fonts")}/><span>{block.label||block.text||block.type.replace("_"," ")}</span></button><button type="button" className="invoice-builder-layer-visibility" title={block.visible===false?"Show element":"Hide element"} onClick={()=>updateBlock(block.id,{visible:block.visible===false})}><i className={"bi "+(block.visible===false?"bi-eye-slash":"bi-eye")}/></button></div>)}</div>}
             </section>
           </aside>
         </div>
@@ -968,6 +1053,18 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
           <div><button type="button" className="btn btn-light border" onClick={onClose}>Cancel</button><button type="button" className="btn btn-primary" disabled={saving} onClick={()=>onSave?.({...localDesign,enabled:true})}>{saving?"Saving...":"Save and use design"}</button></div>
         </footer>
       </div>
+      {showTemplateLibrary&&<div className="invoice-builder-template-modal" role="dialog" aria-modal="true" aria-label="Professional invoice templates">
+        <div className="invoice-builder-template-dialog">
+          <header><div><strong>Professional invoice templates</strong><small>Choose a ready-made layout. Every field, colour and position can be changed afterwards.</small></div><button type="button" className="btn btn-light border" onClick={()=>setShowTemplateLibrary(false)} aria-label="Close templates"><i className="bi bi-x-lg"/></button></header>
+          <div className="invoice-builder-template-intro"><span><i className="bi bi-stars me-1"/>8 ready-to-customize designs</span><button type="button" className="btn btn-sm btn-outline-primary" onClick={createBlankDesign}><i className="bi bi-plus-lg me-1"/>Start with a blank page</button></div>
+          <div className="invoice-builder-template-grid">{INVOICE_DESIGN_PRESETS.map(preset=><article className="invoice-builder-template-card" key={preset.key}>
+            <div className={"invoice-builder-template-thumb theme-"+preset.key} aria-hidden="true"><span className="thumb-brand"/><span className="thumb-brand-line"/><span className="thumb-title"/><span className="thumb-customer"/><span className="thumb-meta"/><span className="thumb-table"/><span className="thumb-total"/><span className="thumb-foot"/></div>
+            <div className="invoice-builder-template-card-copy"><div><strong>{preset.name}</strong><small>{preset.description}</small></div><span className="invoice-builder-template-category">{preset.category}</span></div>
+            <button type="button" className="btn btn-sm btn-primary w-100" onClick={()=>chooseTemplate(preset.key)}>Use this design</button>
+          </article>)}</div>
+          <footer><small>Choosing a template creates a new design. Your current design is kept.</small><button type="button" className="btn btn-light border" onClick={()=>setShowTemplateLibrary(false)}>Close</button></footer>
+        </div>
+      </div>}
       {printPreviewOpen&&printPreviewHtml&&(
         <div className="invoice-builder-print-preview" role="dialog" aria-modal="true" aria-label="Actual invoice print preview">
           <div className="invoice-builder-print-preview-dialog">

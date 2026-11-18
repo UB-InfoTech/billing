@@ -1,5 +1,7 @@
 const PAGE_SIZES=new Set(["A4","A5","Letter"]);
-const BLOCK_TYPES=new Set(["field","text","items_table","totals","logo","divider"]);
+const BLOCK_TYPES=new Set(["field","text","items_table","totals","logo","divider","shape","image"]);
+const TEMPLATE_KEYS=new Set(["clean","modern","classic","classic-gst","elegant","compact","retail","premium","minimal","blank","imported","html-import"]);
+const FONT_FAMILIES=new Set(["Arial","Helvetica","Georgia","Times New Roman","Verdana","Tahoma"]);
 const FIELD_KEYS=new Set([
   "company_name","company_address","company_gstin","company_phone","company_email",
   "customer_name","customer_address","customer_phone","customer_gstin","customer_state",
@@ -27,6 +29,8 @@ const cleanString=(value,max,fallback="")=>String(value??fallback).trim().slice(
 const clamp=(value,min,max,fallback)=>Number.isFinite(Number(value))?Math.min(max,Math.max(min,Number(value))):fallback;
 const safeId=value=>/^[a-z0-9_-]{1,48}$/i.test(String(value||""))?String(value):"";
 const safeColor=value=>/^#[0-9a-f]{6}$/i.test(String(value||""))?String(value):"#172335";
+const safeBackground=value=>String(value||"")==="transparent"?"transparent":/^#[0-9a-f]{6}$/i.test(String(value||""))?String(value):"transparent";
+const safeImage=value=>/^data:image\\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]{1,250000}$/i.test(String(value||""))?String(value):"";
 
 function defaultTemplate(id="clean-default",name="Clean"){
   return {
@@ -41,6 +45,7 @@ function sanitizeBlock(block,index,hasBackground=false){
   const id=safeId(block.id)||"block-"+(index+1);
   const fieldKey=block.type==="field"&&FIELD_KEYS.has(String(block.fieldKey||""))?String(block.fieldKey):"";
   if(block.type==="field"&&!fieldKey)return null;
+  if(block.type==="image"&&!safeImage(block.imageUrl))return null;
   const x=clamp(block.x,0,97,6);
   const y=clamp(block.y,0,97,6);
   const w=clamp(block.w,3,100-x,30);
@@ -49,11 +54,21 @@ function sanitizeBlock(block,index,hasBackground=false){
     id,type:block.type,fieldKey,
     label:cleanString(block.label,80,block.type==="text"?"Text":fieldKey.replace(/_/g," ")),
     text:block.type==="text"?cleanString(block.text,500):"",
+    imageUrl:block.type==="image"?safeImage(block.imageUrl):"",
+    imageFit:block.type==="image"&&["contain","cover","fill"].includes(block.imageFit)?block.imageFit:"contain",
     x,y,w,h,
     fontSize:clamp(block.fontSize,6,48,10),
     bold:block.bold===true,
     align:["left","center","right"].includes(block.align)?block.align:"left",
     color:safeColor(block.color),
+    backgroundColor:safeBackground(block.backgroundColor),
+    borderColor:safeColor(block.borderColor),
+    borderWidth:clamp(block.borderWidth,0,6,0),
+    borderRadius:clamp(block.borderRadius,0,24,0),
+    padding:clamp(block.padding,0,16,1),
+    fontFamily:FONT_FAMILIES.has(block.fontFamily)?block.fontFamily:"Arial",
+    italic:block.italic===true,
+    opacity:clamp(block.opacity,0.1,1,1),
     showLabel:block.type==="field"?(block.showLabel===undefined?!hasBackground:block.showLabel!==false):false,
     visible:block.visible!==false
   };
@@ -70,7 +85,7 @@ function sanitizeTemplate(template,index,ownerId){
   return {
     id,
     name:cleanString(template.name,60,"My invoice design")||"My invoice design",
-    templateKey:["clean","classic","modern","imported"].includes(template.templateKey)?template.templateKey:"clean",
+    templateKey:TEMPLATE_KEYS.has(template.templateKey)?template.templateKey:"clean",
     pageSize:PAGE_SIZES.has(template.pageSize)?template.pageSize:"A4",
     orientation:template.orientation==="landscape"?"landscape":"portrait",
     background:{

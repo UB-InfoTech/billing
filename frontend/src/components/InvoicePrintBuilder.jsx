@@ -97,6 +97,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [uploading,setUploading]=useState(false);
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
+  const [placementField,setPlacementField]=useState("company_name");
+  const [placingField,setPlacingField]=useState(false);
   const canvasRef=useRef(null);
   const importRef=useRef(null);
   const currentDesignRef=useRef(localDesign);
@@ -173,13 +175,16 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const updateBlock=(blockId,patch,options={})=>{
     updateActive({blocks:activeTemplate.blocks.map(block=>block.id===blockId?{...block,...patch}:block)},options);
   };
-  const addBlock=(type,fieldKey,position)=>{
+  const addBlock=(type,fieldKey,position,dimensions={})=>{
     const label=type==="field"?(FIELD_LABELS[fieldKey]||"Invoice field"):type==="items_table"?"Invoice items":type==="totals"?"Invoice totals":type==="text"?"Text":type==="divider"?"Divider":"Business logo";
     const id=createId("block");
-    const newBlock=makeBlock(id,type,fieldKey,label,position?.x??34,position?.y??40, type==="items_table"?55:type==="totals"?28:30,type==="items_table"?18:type==="totals"?16:5);
+    const width=dimensions.w??(type==="items_table"?55:type==="totals"?28:type==="logo"?15:30);
+    const height=dimensions.h??(type==="items_table"?18:type==="totals"?16:type==="logo"?12:5);
+    const x=clamp(position?.x??34,0,100-width);
+    const y=clamp(position?.y??40,0,100-height);
+    const newBlock=makeBlock(id,type,fieldKey,label,x,y,width,height);
     if(type==="text")newBlock.text="Your text";
     if(type==="items_table")newBlock.fontSize=8;
-    if(type==="logo")newBlock.w=15;
     updateActive({blocks:[...activeTemplate.blocks,newBlock]});
     setSelectedBlockId(id);
   };
@@ -189,7 +194,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       ["invoice_no","Invoice number"],["customer_name","Customer name"],["customer_address","Customer address"],
       ["items","Invoice items"],["totals","Invoice totals"],["terms","Terms and conditions"],["signature","Authorised signatory"]
     ];
-    const existing=new Set(activeTemplate.blocks.map(block=>block.fieldKey||block.type));
+    const existing=new Set(activeTemplate.blocks.map(block=>block.type==="items_table"?"items":block.type==="totals"?"totals":block.type==="logo"?"logo":block.fieldKey||block.type));
     const blocks=activeTemplate.blocks.slice();
     suggested.forEach(([key,label])=>{
       const type=key==="items"?"items_table":key==="totals"?"totals":key==="logo"?"logo":"field";
@@ -199,8 +204,32 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       blocks.push(makeBlock(id,type,type==="field"?key:key,label,7+(offset%2)*46,40+Math.floor(blocks.length/2)*7,type==="items_table"?86:type==="totals"?34:40,type==="items_table"?22:type==="totals"?13:5,{fontSize:type==="items_table"?8:9}));
       existing.add(key);
     });
+    if(blocks.length===activeTemplate.blocks.length){
+      setMessage("Your starter fields are already on this design. Use guided placement below to add another field or place a replacement over the imported reference.");
+      return;
+    }
     updateActive({blocks});
-    setMessage("Suggested editable fields added. Drag them over the matching areas of your reference.");
+    setMessage("Suggested invoice fields added. Move and resize them to match your imported design.");
+  };
+  const placeFieldOnCanvas=event=>{
+    if(!placingField||!placementField||!canvasRef.current)return;
+    const rect=canvasRef.current.getBoundingClientRect();
+    if(!rect.width||!rect.height)return;
+    const clickX=clamp((event.clientX-rect.left)/rect.width*100,0,100);
+    const clickY=clamp((event.clientY-rect.top)/rect.height*100,0,100);
+    const type=placementField==="items"?"items_table":placementField==="totals"?"totals":placementField==="logo"?"logo":"field";
+    const dimensions=type==="items_table"?{w:88,h:22}
+      :type==="totals"?{w:32,h:17}
+      :type==="logo"?{w:15,h:12}
+      :placementField==="terms"||placementField==="bank_details"?{w:44,h:10}
+      :placementField==="amount_words"?{w:58,h:7}
+      :placementField==="company_name"?{w:52,h:7}
+      :{w:38,h:5};
+    const x=clamp(clickX-dimensions.w/2,0,100-dimensions.w);
+    const y=clamp(clickY-dimensions.h/2,0,100-dimensions.h);
+    addBlock(type,placementField,{x,y},dimensions);
+    setPlacingField(false);
+    setMessage((FIELD_LABELS[placementField]||"Invoice element")+" added. Resize and style it to fit the imported design.");
   };
   const chooseTemplate=key=>{
     const name=key==="classic"?"Traditional":key==="modern"?"Modern":"Clean";
@@ -408,13 +437,14 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                       ? <iframe className="invoice-builder-background" title="Imported PDF invoice reference" src={backgroundUrl+"#toolbar=0&navpanes=0&scrollbar=0"} tabIndex="-1"/>
                       : <img className="invoice-builder-background" src={backgroundUrl} alt="Imported invoice reference background" draggable="false"/>
                   )}
+                  {placingField&&<button type="button" className="invoice-builder-placement-layer" onClick={placeFieldOnCanvas} aria-label={"Place "+(FIELD_LABELS[placementField]||"invoice element")+" at the selected position"}><span>Click on the page to place {FIELD_LABELS[placementField]||"the selected element"}</span></button>}
                   <div className="invoice-builder-alignment-guides" aria-hidden="true">
                     {alignmentGuides.vertical.map((position,index)=><span key={"v-"+index} className="invoice-builder-alignment-guide vertical" style={{left:position+"%"}}/>)}
                     {alignmentGuides.horizontal.map((position,index)=><span key={"h-"+index} className="invoice-builder-alignment-guide horizontal" style={{top:position+"%"}}/>)}
                   </div>
                   <div className="invoice-builder-block-layer">
                     {activeTemplate.blocks.filter(block=>block.visible!==false).map(block=>(
-                      <button type="button" key={block.id} className={"invoice-builder-block "+(selectedBlockId===block.id?"is-selected":"")+(dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,textAlign:block.align,color:block.color}} onClick={()=>setSelectedBlockId(block.id)} onPointerDown={event=>startBlockDrag(event,block)} aria-label={"Move "+(block.label||"invoice element")}>
+                      <button type="button" key={block.id} className={"invoice-builder-block "+(selectedBlockId===block.id?"is-selected":"")+(dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,textAlign:block.align,color:block.color}} onClick={()=>{if(!placingField)setSelectedBlockId(block.id);}} onPointerDown={event=>{if(!placingField)startBlockDrag(event,block);}} aria-label={"Move "+(block.label||"invoice element")}>
                         {renderBlockContent(block)}
                         {selectedBlockId===block.id&&<span className="invoice-builder-resize-handle" data-resize-handle="true" onPointerDown={event=>startBlockResize(event,block)} aria-hidden="true"/>}
                       </button>
@@ -439,9 +469,23 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 <div className="d-flex flex-wrap gap-2">
                   <button type="button" className="btn btn-sm btn-light border" onClick={addSuggestedFields}><i className="bi bi-magic me-1"/>Add suggested fields</button>
                   <span className="badge text-bg-light border">Locked reference layer</span>
-                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>updateActive({background:{url:"",type:"none",locked:true,visible:true}})}>Remove</button>
+                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>{setPlacingField(false);updateActive({background:{url:"",type:"none",locked:true,visible:true}});}}>Remove</button>
                 </div>
-                <div className="small text-secondary mt-2">{activeTemplate.background.type==="pdf"?"PDF page shown as a reference. Place editable invoice fields over the areas you want to replace.":"Image shown as a reference. Place editable invoice fields over the areas you want to replace."}</div>
+                <div className="invoice-builder-mapping-guide mt-3">
+                  <strong>Guided field placement</strong>
+                  <p>Choose an invoice field, then click its exact position on the reference. You can resize and style it afterwards.</p>
+                  <label className="form-label" htmlFor="invoice-field-to-place">Field to add</label>
+                  <select id="invoice-field-to-place" className="form-select form-select-sm" value={placementField} onChange={event=>{setPlacementField(event.target.value);setPlacingField(false);}}>
+                    {FIELD_GROUPS.map(group=><optgroup label={group.title} key={group.title}>{group.items.map(([key,label])=><option value={key} key={key}>{label}</option>)}</optgroup>)}
+                    <optgroup label="Invoice structure"><option value="items">Invoice items table</option><option value="totals">Invoice totals</option></optgroup>
+                  </select>
+                  <div className="d-flex gap-2 mt-2">
+                    <button type="button" className="btn btn-sm btn-primary flex-grow-1" onClick={()=>{setPlacingField(true);setMessage("Click the location on the invoice page where "+(FIELD_LABELS[placementField]||"the selected element")+" should appear.");}} disabled={!placementField}>Place on page</button>
+                    {placingField&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>setPlacingField(false)}>Cancel</button>}
+                  </div>
+                  {placingField&&<div className="small text-primary mt-2">Placement mode is on. Click the matching area on the invoice page.</div>}
+                </div>
+                <div className="small text-secondary mt-2">{activeTemplate.background.type==="pdf"?"PDF page shown as a locked reference. Map fields onto the visible page; the original file will not move.":"Image shown as a locked reference. Map fields onto the visible page; the original file will not move."}</div>
               </section>
             )}
             {!selectedBlock?(

@@ -111,3 +111,9 @@
 .invoice-builder-block.is-dragging{z-index:7;opacity:.92;cursor:grabbing}
 .invoice-builder-resize-handle{position:absolute;right:2px;bottom:2px;z-index:10;width:12px;height:12px;border:2px solid #fff;border-radius:3px;background:#1769c2;box-shadow:0 0 0 1px #1769c2;cursor:nwse-resize;touch-action:none}
 .invoice-builder-toolbar .btn:disabled{opacity:.42;cursor:not-allowed}
+
+.invoice-builder-mapping-guide{padding:11px;border:1px solid #dce7f3;border-radius:8px;background:#f7faff}
+.invoice-builder-mapping-guide>strong{display:block;margin-bottom:5px;color:#294562;font-size:12px}
+.invoice-builder-mapping-guide p{margin:0 0 9px;color:#63778e;font-size:10px;line-height:1.45}
+.invoice-builder-placement-layer{position:absolute;inset:0;z-index:8;display:flex;align-items:flex-start;justify-content:center;padding:12px;border:0;background:rgba(39,111,180,.08);cursor:crosshair;touch-action:pan-x pan-y}
+.invoice-builder-placement-layer>span{position:sticky;top:0;padding:7px 11px;border:1px solid #b9d5ef;border-radius:7px;background:#fff;color:#245d92;box-shadow:0 2px 10px rgba(28,68,105,.14);font-size:11px;font-weight:700;pointer-events:none}

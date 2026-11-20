@@ -89,6 +89,96 @@ const getSnappedPosition=(block,x,y,blocks)=>{
   };
 };
 
+const TEMPLATE_THUMBNAIL_VALUES={
+  company_name:"Your Business Name",
+  company_address:"Business address · City",
+  company_gstin:"GSTIN · 24ABCDE1234F1Z5",
+  company_phone:"+91 98765 43210",
+  customer_name:"Customer / Company",
+  customer_address:"Customer billing address",
+  customer_gstin:"Customer GSTIN",
+  invoice_title:"TAX INVOICE",
+  invoice_no:"INV-001",
+  invoice_date:"Invoice Date · 20/11/2026",
+  due_date:"Due Date · 27/11/2026",
+  challan_no:"CH-001",
+  payment_terms:"Net 7 days",
+  subtotal:"₹ 10,000.00",
+  discount:"− ₹ 500.00",
+  taxable_value:"₹ 9,500.00",
+  cgst:"₹ 855.00",
+  sgst:"₹ 855.00",
+  grand_total:"₹ 11,210.00",
+  amount_paid:"₹ 5,000.00",
+  balance_due:"₹ 6,210.00",
+  amount_words:"Eleven thousand two hundred ten only",
+  bank_details:"Bank · Account · IFSC",
+  terms:"Goods once sold will not be taken back.",
+  signature:"Authorised Signatory"
+};
+
+function renderTemplateThumbnail(preset){
+  const template=createInvoiceDesignTemplate("gallery-"+preset.key,preset.key);
+  return (
+    <div className="invoice-builder-template-thumb" aria-hidden="true">
+      {template.blocks.filter(block=>block.visible!==false).map((block,index)=>{
+        const fontSize=Math.max(2,(Number(block.fontSize)||8)*0.23);
+        const style={
+          left:block.x+"%",
+          top:block.y+"%",
+          width:block.w+"%",
+          height:block.h+"%",
+          zIndex:index+1,
+          fontSize:fontSize+"px",
+          fontWeight:block.bold?800:500,
+          fontStyle:block.italic?"italic":"normal",
+          textAlign:block.align||"left",
+          color:block.color||"#172335",
+          backgroundColor:block.backgroundColor&&block.backgroundColor!=="transparent"?block.backgroundColor:"transparent",
+          border:block.borderWidth?Math.max(.35,Number(block.borderWidth)*.2)+"px solid "+(block.borderColor||"#d8e0e9"):"none",
+          borderRadius:Math.max(0,Number(block.borderRadius)||0)*.2+"px",
+          padding:Math.max(0,Number(block.padding)||0)*.2+"px",
+          opacity:block.opacity??1
+        };
+        let content=null;
+        if(block.type==="field"){
+          const value=TEMPLATE_THUMBNAIL_VALUES[block.fieldKey]||block.label||"Invoice detail";
+          content=<>{block.label&&block.showLabel!==false&&<span className="template-thumb-field-label">{block.label}: </span>}{value}</>;
+        }else if(block.type==="text"){
+          content=block.text||block.label;
+        }else if(block.type==="items_table"){
+          content=(
+            <div className="template-thumb-items">
+              <div className="template-thumb-items-head"><span>ITEM DESCRIPTION</span><span>QTY</span><span>AMOUNT</span></div>
+              {["Premium cotton fabric","Embroidered dress material","Additional item"].map((label,rowIndex)=>(
+                <div className="template-thumb-items-row" key={label} style={{backgroundColor:rowIndex%2?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#fff")}}>
+                  <span>{label}</span><span>{rowIndex+1}</span><span>₹ 500</span>
+                </div>
+              ))}
+            </div>
+          );
+        }else if(block.type==="totals"){
+          content=(
+            <div className="template-thumb-totals">
+              <div><span>Subtotal</span><b>₹ 10,000</b></div>
+              <div><span>Discount</span><b>₹ 500</b></div>
+              <div><span>Tax</span><b>₹ 1,710</b></div>
+              <div className="template-thumb-total-final"><span>Total</span><b>₹ 11,210</b></div>
+            </div>
+          );
+        }else if(block.type==="logo"){
+          content=<div className="template-thumb-logo"><i className="bi bi-image"/></div>;
+        }else if(block.type==="image"){
+          content=<div className="template-thumb-image"/>;
+        }else if(block.type==="divider"){
+          content=<div className="template-thumb-divider"/>;
+        }
+        return <div key={block.id||index} className={"template-thumb-block template-thumb-"+block.type} style={style}>{content}</div>;
+      })}
+    </div>
+  );
+}
+
 export default function InvoicePrintBuilder({design,onChange,onSave,onClose,saving=false}){
   const [localDesign,setLocalDesign]=useState(()=>design&&Array.isArray(design.templates)&&design.templates.length?design:makeInitialDesign());
   const [selectedBlockId,setSelectedBlockId]=useState("business-name");
@@ -1217,7 +1307,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
           <header><div><strong>Professional invoice templates</strong><small>Choose a ready-made layout. Every field, colour and position can be changed afterwards.</small></div><button type="button" className="btn btn-light border" onClick={()=>setShowTemplateLibrary(false)} aria-label="Close templates"><i className="bi bi-x-lg"/></button></header>
           <div className="invoice-builder-template-intro"><span><i className="bi bi-stars me-1"/>8 ready-to-customize designs</span><button type="button" className="btn btn-sm btn-outline-primary" onClick={createBlankDesign}><i className="bi bi-plus-lg me-1"/>Start with a blank page</button></div>
           <div className="invoice-builder-template-grid">{INVOICE_DESIGN_PRESETS.map(preset=><article className="invoice-builder-template-card" key={preset.key}>
-            <div className={"invoice-builder-template-thumb theme-"+preset.key} aria-hidden="true"><span className="thumb-brand"/><span className="thumb-brand-line"/><span className="thumb-title"/><span className="thumb-customer"/><span className="thumb-meta"/><span className="thumb-table"/><span className="thumb-total"/><span className="thumb-foot"/></div>
+            {renderTemplateThumbnail(preset)}
             <div className="invoice-builder-template-card-copy"><div><strong>{preset.name}</strong><small>{preset.description}</small></div><span className="invoice-builder-template-category">{preset.category}</span></div>
             <button type="button" className="btn btn-sm btn-primary w-100" onClick={()=>chooseTemplate(preset.key)}>Use this design</button>
           </article>)}</div>

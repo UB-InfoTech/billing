@@ -507,12 +507,18 @@ test("invoice layout analysis detects fixable overflow and safe corrections",asy
 test("safe invoice layout corrections leave overlap-only and hidden elements unchanged",async()=>{const {applySafeInvoiceLayoutFixes}=await import("../../frontend/src/utils/invoiceLayoutQuality.js");const blocks=[{id:"a",type:"field",x:5,y:5,w:20,h:10,visible:true},{id:"b",type:"field",x:10,y:8,w:20,h:10,visible:true},{id:"hidden",type:"field",x:120,y:120,w:20,h:20,visible:false}];assert.deepEqual(applySafeInvoiceLayoutFixes(blocks,[]).blocks,blocks);});
 
 test("invoice print margins are sanitized, persisted and reflected by the print renderer",async()=>{
- const sanitized=sanitizeInvoiceDesign({templates:[{id:"margin",pageSize:"A5",orientation:"landscape",printMargins:{top:8,right:30,bottom:-4,left:"5"},blocks:[]}]});
+ const sanitized=sanitizeInvoiceDesign({templates:[{id:"margin",pageSize:"A5",orientation:"landscape",printMargins:{top:8,right:30,bottom:-4,left:"5"},blocks:[
+  {id:"blank-notes",type:"blank_table",label:"Notes table",x:5,y:54,w:90,h:18,
+   tableColumns:[{id:"material",label:"Material",width:60},{id:"notes",label:"Notes",width:40}],
+   tableRows:[["Cotton fabric","Check stitching"]],tableHeaderBackground:"#123456",tableHeaderColor:"#ffffff",tableBorderColor:"#abcdef"},
+  {id:"custom-note",type:"text",label:"Handling note",text:"Handle with care",x:5,y:76,w:90,h:5,
+   lineHeight:1.8,letterSpacing:2.5,textDecoration:"underline",textTransform:"uppercase",verticalAlign:"middle"}
+ ]}]});
  assert.deepEqual(sanitized.templates[0].printMargins,{top:8,right:25,bottom:0,left:5});
  const template=sanitized.templates[0];
  const html=await ejs.renderFile(path.join(__dirname,"../public/invoiceTable.ejs"),{
   invoiceConfig:{invoiceTitle:"TAX INVOICE",pageSize:"A4",accentColor:"#172335",itemColumns:[],design:{enabled:true,activeTemplateId:"margin",templates:[template]}},
-  invoicePages:[{pageNumber:1,totalPages:1,blocks:[],rows:[]}],profileLogoUrl:"",publicUploadBaseUrl:"",
+  invoicePages:[{pageNumber:1,totalPages:1,blocks:template.blocks,rows:[]}],profileLogoUrl:"",publicUploadBaseUrl:"",
   profileHeaderTitle:"Invoice",profileCompanyName:"Example",profileCompanyAddress:"Surat",profileEmailAddress:"",profileWebsite:"",
   profilePhoneNumber1:"",profilePhoneNumber2:"",profileGstNumber:"",profilePanNumber:"",profileBankName:"",profileAccountNo:"",
   profileBranchName:"",profileIfsc:"",clientChallanNumber:"",clientCompanyName:"Customer",clientAddress:"Address",
@@ -523,7 +529,14 @@ test("invoice print margins are sanitized, persisted and reflected by the print 
   creditAppliedAmount:0,payments:[]
  });
  assert.match(html,/size: A5 landscape/);
- assert.match(html,/top:8mm;right:25mm;bottom:0mm;left:5mm/);
+
+ assert.match(html,/class="design-blank-table"/);
+ assert.match(html,/>Material<\\/th>/);
+ assert.match(html,/>Cotton fabric<\\/td>/);
+ assert.match(html,/text-decoration:underline/);
+ assert.match(html,/text-transform:uppercase/);
+ assert.match(html,/line-height:1\\.8/);
+ assert.match(html,/letter-spacing:2\\.5px/); assert.match(html,/top:8mm;right:25mm;bottom:0mm;left:5mm/);
 });
 test("print pagination accounts for reduced printable height from top and bottom margins",()=>{
  const base={pageSize:"A4",orientation:"portrait",blocks:[{type:"items_table",x:5,y:10,w:90,h:33}]};

@@ -4,6 +4,7 @@ import "./InvoicePrintBuilder.css";
 import {buildInvoiceSmartLayout,scanImportedInvoiceLayout} from "../utils/invoiceLayoutScanner.js";
 import {inferOcrValueBox} from "../utils/invoiceOcrMapping.js";
 import {analyzeInvoiceLayout,applySafeInvoiceLayoutFixes} from "../utils/invoiceLayoutQuality.js";
+import {estimateInvoiceTextOverflow,getInvoiceMarginWarnings,getInvoicePrintGeometry} from "../utils/invoicePrintFit.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
@@ -125,6 +126,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [printPreviewError,setPrintPreviewError]=useState("");
   const canvasRef=useRef(null);
   const printPreviewFrameRef=useRef(null);
+  const printCheckRef=useRef(null);
   const importRef=useRef(null);
   const htmlImportRef=useRef(null);
   const elementImageRef=useRef(null);
@@ -265,7 +267,16 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const referenceReady=Boolean(activeTemplate.background?.url);
   const designChosen=referenceReady||activeTemplate.templateKey!=="blank";
   const liveFieldCount=activeTemplate.blocks.filter(block=>block.visible!==false&&["field","items_table","totals","logo"].includes(block.type)).length;
-  const designWarnings=useMemo(()=>analyzeInvoiceLayout(activeTemplate.blocks,previewColumns),[activeTemplate.blocks,previewColumns]);
+  const previewFields=previewInvoice?.fields||SAMPLE_VALUES;
+  const previewColumns=previewInvoice?.itemColumns?.length?previewInvoice.itemColumns:DEFAULT_ITEM_COLUMNS;
+  const printMargins=activeTemplate.printMargins||{top:0,right:0,bottom:0,left:0};
+  const printGeometry=getInvoicePrintGeometry(activeTemplate.pageSize,activeTemplate.orientation,printMargins);
+  const pageContentInset={top:(printGeometry.margins.top/printGeometry.heightMm*100)+"%",right:(printGeometry.margins.right/printGeometry.widthMm*100)+"%",bottom:(printGeometry.margins.bottom/printGeometry.heightMm*100)+"%",left:(printGeometry.margins.left/printGeometry.widthMm*100)+"%"};
+  const designWarnings=useMemo(()=>[
+    ...analyzeInvoiceLayout(activeTemplate.blocks,previewColumns),
+    ...estimateInvoiceTextOverflow(activeTemplate.blocks,previewFields,{pageSize:activeTemplate.pageSize,orientation:activeTemplate.orientation,printMargins}),
+    ...getInvoiceMarginWarnings(activeTemplate.pageSize,activeTemplate.orientation,printMargins)
+  ],[activeTemplate.blocks,activeTemplate.pageSize,activeTemplate.orientation,previewColumns,previewFields,printMargins]);
   const applyDesign=next=>{
     currentDesignRef.current=next;
     setLocalDesign(next);
@@ -751,10 +762,6 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     ?(activeTemplate.pageSize==="Letter"?1.294:1.414)
     :(activeTemplate.pageSize==="Letter"?0.773:0.707);
   const backgroundUrl=activeTemplate.background?.url?API+activeTemplate.background.url:"";
-  const previewFields=previewInvoice?.fields||SAMPLE_VALUES;
-  const previewColumns=previewInvoice?.itemColumns?.length
-    ?previewInvoice.itemColumns
-    :DEFAULT_ITEM_COLUMNS;
   const previewItems=previewInvoice?.items||[
     {sr:"1",description:"Sample product",quantity:"2",unitPrice:"500.00",amount:"1000.00",qtyUnit:"PCS"},
     {sr:"2",description:"Another product",quantity:"1",unitPrice:"750.00",amount:"750.00",qtyUnit:"PCS"}
@@ -916,18 +923,19 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 {!previewRecordId&&<small className="invoice-builder-preview-help">Sample values are shown. Create an invoice to check the real print output.</small>}
               </div>
               <div className="invoice-builder-page-settings">
-                <button type="button" className={"btn btn-sm "+(designWarnings.length?"btn-outline-warning":"btn-light border")} onClick={()=>setPrintPreviewOpen(false)} title="Review potential print-layout issues"><i className="bi bi-clipboard-check me-1"/>Print check {designWarnings.length?("(" +designWarnings.length+")"):"✓"}</button>
+                <button type="button" className={"btn btn-sm "+(designWarnings.length?"btn-outline-warning":"btn-light border")} onClick={()=>printCheckRef.current?.scrollIntoView({behavior:"smooth",block:"nearest"})} title="Review potential print-layout issues"><i className="bi bi-clipboard-check me-1"/>Print check {designWarnings.length?("(" +designWarnings.length+")"):"✓"}</button>
                 <label>Paper</label><select value={activeTemplate.pageSize} onChange={event=>setPageSize(event.target.value)}><option value="A4">A4</option><option value="A5">A5</option><option value="Letter">Letter</option></select>
                 <select aria-label="Page orientation" value={activeTemplate.orientation} onChange={event=>updateActive({orientation:event.target.value})}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>
+                <details className="invoice-builder-margin-settings"><summary>Margins</summary><div className="invoice-builder-margin-popover"><strong>Printable area (mm)</strong><div className="invoice-builder-margin-grid">{[["Top","top"],["Right","right"],["Bottom","bottom"],["Left","left"]].map(([label,key])=><label key={key}>{label}<input type="number" min="0" max="25" step="1" className="form-control form-control-sm" value={printMargins[key]??0} onChange={event=>updateActive({printMargins:{...printMargins,[key]:Math.max(0,Math.min(25,Number(event.target.value)||0))}})}/></label>)}</div><small>Elements are positioned inside this printable area. Imported reference backgrounds stay full-page.</small></div></details>
                 <button type="button" className={"btn btn-sm "+(showGrid?"btn-primary":"btn-light border")} onClick={()=>setShowGrid(value=>!value)} aria-pressed={showGrid} title="Show a 2% alignment grid"><i className="bi bi-grid-3x3 me-1"/>Grid</button>
                 <button type="button" className={"btn btn-sm "+(snapToGrid?"btn-primary":"btn-light border")} onClick={()=>setSnapToGrid(value=>!value)} aria-pressed={snapToGrid} title="Snap moved elements to the 2% grid"><i className="bi bi-magnet me-1"/>Snap</button>
               </div>
             </div>
 
-            {designWarnings.length>0&&<div className="invoice-builder-print-check" role="status"><strong>Layout check · {designWarnings.length} issue{designWarnings.length===1?"":"s"} to review</strong>{designWarnings.some(issue=>issue.fixable)&&<button type="button" className="btn btn-sm btn-outline-primary mt-2" onClick={()=>{const result=applySafeInvoiceLayoutFixes(activeTemplate.blocks,previewColumns);if(result.changed)updateActive({blocks:result.blocks});}}>Fix safe issues</button>}<ul>{designWarnings.slice(0,8).map((issue,index)=><li key={index}><span className={issue.severity==="error"?"text-danger":"text-warning"}>{issue.title}</span> — {issue.detail}</li>)}</ul><small>Overlap warnings are suggestions. Confirm the final result using Actual print.</small></div>}
+            <div ref={printCheckRef} className="invoice-builder-print-check" role="status"><strong>{designWarnings.length?("Layout check · "+designWarnings.length+" issue"+(designWarnings.length===1?"":"s")+" to review"):"Layout check · No estimated issues found"}</strong>{designWarnings.some(issue=>issue.fixable)&&<button type="button" className="btn btn-sm btn-outline-primary mt-2" onClick={()=>{const result=applySafeInvoiceLayoutFixes(activeTemplate.blocks,previewColumns);if(result.changed)updateActive({blocks:result.blocks});}}>Fix safe issues</button>}{designWarnings.length>0?<ul>{designWarnings.slice(0,8).map((issue,index)=><li key={index}><span className={issue.severity==="error"?"text-danger":"text-warning"}>{issue.title}</span> — {issue.detail}</li>)}</ul>:<small>No obvious layout problems were estimated. Confirm the final design in Actual print before printing.</small>}{designWarnings.length>0&&<small>Text-fit checks are estimates. Confirm the final result using Actual print.</small>}</div>
             <div className="invoice-builder-canvas-scroll">
               <div className={"invoice-builder-page "+(activeTemplate.orientation==="landscape"?"is-landscape":"")} style={{aspectRatio:activeTemplate.orientation==="landscape"?"1.414 / 1":String(canvasRatio).replace("/"," / ")}}>
-                <div className="invoice-builder-canvas" ref={canvasRef} onDragOver={event=>event.preventDefault()} onDrop={handlePaletteDrop} onPointerMove={moveBlock} onPointerUp={finishBlockDrag} onPointerCancel={finishBlockDrag}>
+                <div className="invoice-builder-canvas" onDragOver={event=>event.preventDefault()} onDrop={handlePaletteDrop} onPointerMove={moveBlock} onPointerUp={finishBlockDrag} onPointerCancel={finishBlockDrag}>
                   {highlightedOcrLine?.box&&<div className="invoice-builder-ocr-highlight is-label" style={{left:highlightedOcrLine.box.x+"%",top:highlightedOcrLine.box.y+"%",width:highlightedOcrLine.box.w+"%",height:Math.max(2,highlightedOcrLine.box.h)+"%"}}><span>Matched text</span></div>}
                   {highlightedOcrLine?.valueBox&&<div className={"invoice-builder-ocr-highlight is-target "+(highlightedOcrLine.valueBox.kind==="estimated"?"is-estimated":"")} style={{left:highlightedOcrLine.valueBox.x+"%",top:highlightedOcrLine.valueBox.y+"%",width:highlightedOcrLine.valueBox.w+"%",height:highlightedOcrLine.valueBox.h+"%"}}><span>{highlightedOcrLine.valueBox.kind==="estimated"?"Suggested space":"Live field position"}</span></div>}
                   {activeTemplate.background?.url&&activeTemplate.background.visible!==false&&(
@@ -935,7 +943,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                       ? <iframe className="invoice-builder-background" title="Imported PDF invoice reference" src={backgroundUrl+"#toolbar=0&navpanes=0&scrollbar=0"} tabIndex="-1"/>
                       : <img className="invoice-builder-background" src={backgroundUrl} alt="Imported invoice reference background" draggable="false"/>
                   )}
-                  <div className={"invoice-builder-grid-overlay"+(showGrid?" is-visible":"")} aria-hidden="true"/>
+                  <div className="invoice-builder-safe-area" ref={canvasRef} style={pageContentInset}>
+                    <div className={"invoice-builder-grid-overlay"+(showGrid?" is-visible":"")} aria-hidden="true"/>
                   {placingField&&<button type="button" className="invoice-builder-placement-layer" onClick={placeFieldOnCanvas} aria-label={"Place "+(FIELD_LABELS[placementField]||"invoice element")+" at the selected position"}><span>Click on the page to place {FIELD_LABELS[placementField]||"the selected element"}</span></button>}
                   <div className="invoice-builder-alignment-guides" aria-hidden="true">
                     {alignmentGuides.vertical.map((position,index)=><span key={"v-"+index} className="invoice-builder-alignment-guide vertical" style={{left:position+"%"}}/>)}
@@ -948,6 +957,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                         {selectedBlockId===block.id&&<span className="invoice-builder-resize-handle" data-resize-handle="true" onPointerDown={event=>startBlockResize(event,block)} aria-hidden="true"/>}
                       </button>
                     ))}
+                  </div>
                   </div>
                   {activeTemplate.background?.url&&<div className="invoice-builder-reference-hint">Reference background · {activeTemplate.background.type.toUpperCase()}</div>}
                 </div>

@@ -47,6 +47,7 @@ function createInvoiceDesignTemplate(id,key="clean"){
   const accent=preset.accent;
   const base={
     id,name:preset.name,templateKey:key,pageSize:key==="compact"?"A5":"A4",orientation:"portrait",
+    printMargins:{top:0,right:0,bottom:0,left:0},
     background:{url:"",type:"none",locked:true,visible:true}
   };
   let blocks=[];
@@ -181,6 +182,7 @@ function createInvoiceDesignTemplate(id,key="clean"){
 function createBlankInvoiceDesignTemplate(id,name="Blank design"){
   return {
     id,name,templateKey:"blank",pageSize:"A4",orientation:"portrait",
+    printMargins:{top:0,right:0,bottom:0,left:0},
     background:{url:"",type:"none",locked:true,visible:true},
     blocks:[]
   };

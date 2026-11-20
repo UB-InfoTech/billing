@@ -36,6 +36,7 @@ const clamp=(value,min,max,fallback)=>Number.isFinite(Number(value))?Math.min(ma
 const safeId=value=>/^[a-z0-9_-]{1,48}$/i.test(String(value||""))?String(value):"";
 const safeColor=value=>/^#[0-9a-f]{6}$/i.test(String(value||""))?String(value):"#172335";
 const safeBackground=value=>String(value||"")==="transparent"?"transparent":/^#[0-9a-f]{6}$/i.test(String(value||""))?String(value):"transparent";
+const safePrintMargin=value=>clamp(value,0,25,0);
 const safeImage=value=>/^data:image\/(?:png|jpeg|webp|gif);base64,[a-z0-9+/=]{1,250000}$/i.test(String(value||""))?String(value):"";
 
 function defaultTemplate(id="clean-default",name="Clean"){
@@ -120,6 +121,7 @@ function sanitizeTemplate(template,index,ownerId){
     templateKey:TEMPLATE_KEYS.has(template.templateKey)?template.templateKey:"clean",
     pageSize:PAGE_SIZES.has(template.pageSize)?template.pageSize:"A4",
     orientation:template.orientation==="landscape"?"landscape":"portrait",
+    printMargins:{top:safePrintMargin(template.printMargins?.top),right:safePrintMargin(template.printMargins?.right),bottom:safePrintMargin(template.printMargins?.bottom),left:safePrintMargin(template.printMargins?.left)},
     background:{
       url:safeBackground,
       type:safeBackground?(extension==="pdf"?"pdf":"image"):"none",

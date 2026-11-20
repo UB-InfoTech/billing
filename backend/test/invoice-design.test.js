@@ -503,3 +503,55 @@ test("real invoice preview calculates interstate tax consistently with the invoi
 
 test("invoice layout analysis detects fixable overflow and safe corrections",async()=>{const {analyzeInvoiceLayout,applySafeInvoiceLayoutFixes}=await import("../../frontend/src/utils/invoiceLayoutQuality.js");const blocks=[{id:"off",type:"field",x:96,y:95,w:8,h:8,visible:true},{id:"table",type:"items_table",x:5,y:30,w:90,h:30,visible:true,columns:[{key:"a",width:70,visible:true},{key:"b",width:60,visible:true}]},{id:"overlap",type:"field",x:6,y:30,w:20,h:10,visible:true}];const warnings=analyzeInvoiceLayout(blocks,[]);assert.ok(warnings.some(w=>w.title==="Element outside page"&&w.fixable));assert.ok(warnings.some(w=>w.title==="Item table columns exceed 100%"&&w.fixable));assert.ok(warnings.some(w=>w.title==="Possible element overlap"&&!w.fixable));const fixed=applySafeInvoiceLayoutFixes(blocks,[]);assert.equal(fixed.changed,true);assert.ok(fixed.blocks[0].x+fixed.blocks[0].w<=100);assert.ok(fixed.blocks[0].y+fixed.blocks[0].h<=100);assert.ok(fixed.blocks[1].columns.reduce((s,c)=>s+c.width,0)<=100.0001);});
 test("safe invoice layout corrections leave overlap-only and hidden elements unchanged",async()=>{const {applySafeInvoiceLayoutFixes}=await import("../../frontend/src/utils/invoiceLayoutQuality.js");const blocks=[{id:"a",type:"field",x:5,y:5,w:20,h:10,visible:true},{id:"b",type:"field",x:10,y:8,w:20,h:10,visible:true},{id:"hidden",type:"field",x:120,y:120,w:20,h:20,visible:false}];assert.deepEqual(applySafeInvoiceLayoutFixes(blocks,[]).blocks,blocks);});
+
+test("invoice print margins are sanitized, persisted and reflected by the print renderer",async()=>{
+ const sanitized=sanitizeInvoiceDesign({templates:[{id:"margin",pageSize:"A5",orientation:"landscape",printMargins:{top:8,right:30,bottom:-4,left:"5"},blocks:[]}]});
+ assert.deepEqual(sanitized.templates[0].printMargins,{top:8,right:25,bottom:0,left:5});
+ const template=sanitized.templates[0];
+ const html=await ejs.renderFile(path.join(__dirname,"../public/invoiceTable.ejs"),{
+  invoiceConfig:{invoiceTitle:"TAX INVOICE",pageSize:"A4",accentColor:"#172335",itemColumns:[],design:{enabled:true,activeTemplateId:"margin",templates:[template]}},
+  invoicePages:[{pageNumber:1,totalPages:1,blocks:[],rows:[]}],profileLogoUrl:"",publicUploadBaseUrl:"",
+  profileHeaderTitle:"Invoice",profileCompanyName:"Example",profileCompanyAddress:"Surat",profileEmailAddress:"",profileWebsite:"",
+  profilePhoneNumber1:"",profilePhoneNumber2:"",profileGstNumber:"",profilePanNumber:"",profileBankName:"",profileAccountNo:"",
+  profileBranchName:"",profileIfsc:"",clientChallanNumber:"",clientCompanyName:"Customer",clientAddress:"Address",
+  clientPhoneNumber:"",clientGstNumber:"",clientState:"Gujarat",orderNumber:"INV-MARGIN",createdAt:"",dueDate:"",
+  paymentTerm:"",ewayBillNo:"",subOrders:[],orderPaidAmount:0,orderTotalCost:0,orderSubTotal:0,orderDisRate:0,
+  orderDiscountAmount:0,orderTax:0,orderTaxAmount:0,orderIgstTax:0,orderIgstTaxAmount:0,orderFinalRevenue:0,
+  orderFinalRevenueRoundOff:0,orderFinalRevenueAfterRoundOff:0,orderFinalRevenueInWords:"",paymentStatus:"Unpaid",dueAmount:0,
+  creditAppliedAmount:0,payments:[]
+ });
+ assert.match(html,/size: A5 landscape/);
+ assert.match(html,/top:8mm;right:25mm;bottom:0mm;left:5mm/);
+});
+test("print pagination accounts for reduced printable height from top and bottom margins",()=>{
+ const base={pageSize:"A4",orientation:"portrait",blocks:[{type:"items_table",x:5,y:10,w:90,h:33}]};
+ const baseCapacity=getInvoiceRowsPerPage(base);
+ const marginCapacity=getInvoiceRowsPerPage({...base,printMargins:{top:20,bottom:20}});
+ assert.ok(marginCapacity<baseCapacity);
+ const rows=Array.from({length:30},(_,index)=>({orderName:"Item "+index}));
+ const pages=buildInvoiceDesignPages({...base,printMargins:{top:20,bottom:20}},rows);
+ assert.deepEqual(pages.flatMap(page=>page.rows.map(row=>row.itemNumber)),Array.from({length:30},(_,index)=>index+1));
+});
+test("print geometry validates A4 and A5 landscape printable dimensions",async()=>{
+ const {getInvoicePrintGeometry}=await import("../../frontend/src/utils/invoicePrintFit.js");
+ const a4=getInvoicePrintGeometry("A4","portrait",{top:10,right:5,bottom:10,left:5});
+ const a5=getInvoicePrintGeometry("A5","landscape",{top:5,right:5,bottom:5,left:5});
+ assert.deepEqual([a4.widthMm,a4.heightMm,a4.contentWidthMm,a4.contentHeightMm],[210,297,200,277]);
+ assert.deepEqual([a5.widthMm,a5.heightMm,a5.contentWidthMm,a5.contentHeightMm],[210,148,200,138]);
+});
+test("invoice text fit check warns when field content exceeds its estimated printable box",async()=>{
+ const {estimateInvoiceTextOverflow}=await import("../../frontend/src/utils/invoicePrintFit.js");
+ const warnings=estimateInvoiceTextOverflow([{id:"address",type:"field",fieldKey:"customer_address",label:"Customer address",showLabel:true,x:0,y:0,w:8,h:2,fontSize:12,padding:1,visible:true}],{customer_address:"A very long billing address with multiple words that cannot fit in a tiny field."},{pageSize:"A5",orientation:"portrait"});
+ assert.equal(warnings.length,1);
+ assert.equal(warnings[0].title,"Text may overflow its box");
+});
+
+test("safe table width correction also freezes inherited defaults into a valid design-specific fit",async()=>{
+ const {applySafeInvoiceLayoutFixes}=await import("../../frontend/src/utils/invoiceLayoutQuality.js");
+ const columns=[{key:"description",width:70,visible:true},{key:"amount",width:70,visible:true},{key:"taxable",width:70,visible:true}];
+ const result=applySafeInvoiceLayoutFixes([{id:"table",type:"items_table",x:5,y:5,w:90,h:30,visible:true}],columns);
+ assert.equal(result.changed,true);
+ assert.equal(result.blocks[0].columns.length,3);
+ assert.ok(result.blocks[0].columns.every(column=>column.width>=3));
+ assert.ok(result.blocks[0].columns.reduce((sum,column)=>sum+column.width,0)<=100.0001);
+});

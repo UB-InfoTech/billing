@@ -13,7 +13,11 @@ function getInvoiceRowsPerPage(template={}){
     block=>block&&block.type==="items_table"&&block.visible!==false
   );
   if(!table)return 60;
-  const tableHeight=pageHeight*Math.min(100,Math.max(2,Number(table.h)||2))/100;
+  const margins=template.printMargins||{};
+  const top=Math.max(0,Math.min(25,Number(margins.top)||0));
+  const bottom=Math.max(0,Math.min(25,Number(margins.bottom)||0));
+  const printableHeight=Math.max(1,pageHeight-top-bottom);
+  const tableHeight=printableHeight*Math.min(100,Math.max(2,Number(table.h)||2))/100;
   return Math.max(1,Math.min(60,Math.floor((tableHeight-HEADER_HEIGHT_MM-SAFETY_GAP_MM)/ROW_HEIGHT_MM)));
 }
 

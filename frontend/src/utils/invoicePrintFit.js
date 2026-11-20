@@ -1,0 +1,46 @@
+const PAGE_DIMENSIONS_MM={A4:{width:210,height:297},A5:{width:148,height:210},Letter:{width:215.9,height:279.4}};
+const safeMm=value=>Math.max(0,Math.min(25,Number.isFinite(Number(value))?Number(value):0));
+export function getInvoicePrintGeometry(pageSize="A4",orientation="portrait",printMargins={}){
+ const base=PAGE_DIMENSIONS_MM[pageSize]||PAGE_DIMENSIONS_MM.A4,landscape=orientation==="landscape";
+ const widthMm=landscape?base.height:base.width,heightMm=landscape?base.width:base.height;
+ const margins={top:safeMm(printMargins.top),right:safeMm(printMargins.right),bottom:safeMm(printMargins.bottom),left:safeMm(printMargins.left)};
+ return {widthMm,heightMm,margins,contentWidthMm:Math.max(1,widthMm-margins.left-margins.right),contentHeightMm:Math.max(1,heightMm-margins.top-margins.bottom)};
+}
+const charUnit=char=>/[ilI.,'’!|:;]/u.test(char)?0.28:/[MW@%₹#&]/u.test(char)?0.82:/\s/u.test(char)?0.3:0.52;
+function estimateLineCount(value,maxUnits){
+ let total=0;
+ String(value??"").split(/\r?\n/u).forEach(paragraph=>{
+  const words=paragraph.trim().split(/\s+/u).filter(Boolean);
+  if(!words.length){total+=1;return;}
+  let used=0;
+  words.forEach(word=>{
+   const units=Array.from(word).reduce((sum,char)=>sum+charUnit(char),0),gap=used?0.3:0;
+   if(used&&used+gap+units>maxUnits){total+=1;used=0;}
+   if(units>maxUnits){const lines=Math.ceil(units/maxUnits);total+=Math.max(0,lines-1);used=units-(lines-1)*maxUnits;}
+   else used+=(used?0.3:0)+units;
+  });
+  total+=1;
+ });
+ return Math.max(1,total);
+}
+export function estimateInvoiceTextOverflow(blocks=[],values={},options={}){
+ const geometry=getInvoicePrintGeometry(options.pageSize,options.orientation,options.printMargins),warnings=[];
+ (Array.isArray(blocks)?blocks:[]).forEach(block=>{
+  if(!block||block.visible===false||!["field","text"].includes(block.type))return;
+  let value=block.type==="text"?(block.text||block.label):(values[block.fieldKey]??"");
+  if(value===null||value===undefined||String(value).trim()==="")return;
+  if(block.type==="field"&&block.label&&block.showLabel!==false)value=block.label+": "+value;
+  const fontSize=Math.max(6,Math.min(48,Number(block.fontSize)||10));
+  const widthPx=geometry.contentWidthMm*Math.max(0,Number(block.w)||0)/100*96/25.4-2*(Number(block.padding)||0);
+  const heightPx=geometry.contentHeightMm*Math.max(0,Number(block.h)||0)/100*96/25.4-2*(Number(block.padding)||0);
+  const maxUnits=Math.max(1,widthPx/fontSize),availableLines=Math.max(0,heightPx/(fontSize*1.25));
+  const requiredLines=estimateLineCount(value,maxUnits);
+  if(requiredLines>availableLines+0.25)warnings.push({severity:"warning",title:"Text may overflow its box",detail:(block.label||block.fieldKey||"Text")+" is estimated to need "+requiredLines+" lines; its box fits about "+availableLines.toFixed(1)+".",fixable:false,blockId:block.id});
+ });
+ return warnings;
+}
+export function getInvoiceMarginWarnings(pageSize,orientation,printMargins={}){
+ const geometry=getInvoicePrintGeometry(pageSize,orientation,printMargins);
+ if(geometry.contentWidthMm/geometry.widthMm<0.68||geometry.contentHeightMm/geometry.heightMm<0.68)return [{severity:"warning",title:"Print margins are very large",detail:"The printable area is unusually small. Reduce the margins or check the selected paper size.",fixable:false}];
+ return [];
+}

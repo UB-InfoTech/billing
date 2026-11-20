@@ -19,7 +19,7 @@ export function measureRenderedInvoiceDocument(documentRef){
   return {
     pages:sheets.map((sheet,pageIndex)=>{
       const sheetRect=sheet.getBoundingClientRect();
-      const blocks=Array.from(sheet.querySelectorAll(".design-block")).map(block=>{
+      const blocks=Array.from(sheet.querySelectorAll(".design-block")).map((block,blockIndex)=>{
         const bounds=getRect(block,sheetRect);
         const type=block.getAttribute("data-block-type")||"";
         const table=block.querySelector(".design-items");
@@ -36,11 +36,13 @@ export function measureRenderedInvoiceDocument(documentRef){
           alt:image.getAttribute("alt")||""
         }));
         return {
-          id:block.getAttribute("data-block-id")||("page-"+(pageIndex+1)+"-block-"+(blocks?.length||0)),
+          id:block.getAttribute("data-block-id")||("page-"+(pageIndex+1)+"-block-"+(blockIndex+1)),
           type,
           bounds,
           contentHeight:Number(block.scrollHeight)||0,
           clientHeight:Number(block.clientHeight)||0,
+          contentWidth:Number(block.scrollWidth)||0,
+          clientWidth:Number(block.clientWidth)||0,
           rows,
           images
         };
@@ -83,12 +85,14 @@ export function analyzeRenderedInvoiceMetrics(measurements={}){
           blockId:block.id
         });
       }
-      if(["field","text","totals"].includes(block.type)&&Number(block.contentHeight)>Number(block.clientHeight)+RECT_TOLERANCE_PX){
+      const overflowsVertically=Number(block.contentHeight)>Number(block.clientHeight)+RECT_TOLERANCE_PX;
+      const overflowsHorizontally=Number(block.contentWidth)>Number(block.clientWidth)+RECT_TOLERANCE_PX;
+      if(["field","text","totals"].includes(block.type)&&(overflowsVertically||overflowsHorizontally)){
         warnings.push({
           id:"clipped-content-"+pageNumber+"-"+block.id,
           severity:"warning",
           title:"Text or totals may be clipped",
-          detail:blockName+" needs more vertical space on page "+pageNumber+". Increase its height or reduce the text size.",
+          detail:blockName+" does not fit its box on page "+pageNumber+". Increase its size or reduce the text size.",
           pageNumber,
           blockId:block.id
         });

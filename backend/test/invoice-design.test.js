@@ -635,3 +635,34 @@ test("browser-measured invoice print check reports a clean multi-page layout",as
  assert.deepEqual(result.warnings,[]);
  assert.equal(result.hasErrors,false);
 });
+
+ 
+test("browser invoice measurement extracts page, block, row and image geometry",async()=>{
+ const {measureRenderedInvoiceDocument}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const rect=(left,top,right,bottom)=>({left,top,right,bottom,width:right-left,height:bottom-top});
+ const row={
+  getBoundingClientRect:()=>rect(20,220,780,245),
+  getAttribute:key=>({"data-item-number":"3","data-item-label":"Cotton fabric"}[key]||null)
+ };
+ const table={querySelectorAll:selector=>selector==="tbody tr"?[row]:[]};
+ const image={complete:true,naturalWidth:0,getAttribute:key=>key==="alt"?"Business logo":null};
+ const block={
+  getBoundingClientRect:()=>rect(20,200,780,500),
+  getAttribute:key=>({"data-block-id":"item-table","data-block-type":"items_table"}[key]||null),
+  querySelector:selector=>selector===".design-items"?table:null,
+  querySelectorAll:selector=>selector==="img"?[image]:[],
+  scrollHeight:300,clientHeight:300,scrollWidth:760,clientWidth:760
+ };
+ const sheet={
+  getBoundingClientRect:()=>rect(0,0,800,1100),
+  querySelectorAll:selector=>selector===".design-block"?[block]:[],
+  clientWidth:800,clientHeight:1100
+ };
+ const documentRef={querySelectorAll:selector=>selector===".design-sheet"?[sheet]:[]};
+ const measured=measureRenderedInvoiceDocument(documentRef);
+ assert.equal(measured.pages.length,1);
+ assert.equal(measured.pages[0].blocks[0].id,"item-table");
+ assert.equal(measured.pages[0].blocks[0].rows[0].itemNumber,3);
+ assert.equal(measured.pages[0].blocks[0].rows[0].label,"Cotton fabric");
+ assert.equal(measured.pages[0].blocks[0].images[0].broken,true);
+});

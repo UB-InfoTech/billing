@@ -123,6 +123,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [printPreviewOpen,setPrintPreviewOpen]=useState(false);
   const [printPreviewHtml,setPrintPreviewHtml]=useState("");
   const [printPreviewLoading,setPrintPreviewLoading]=useState(false);
+  const [printPreviewReady,setPrintPreviewReady]=useState(false);
   const [printPreviewError,setPrintPreviewError]=useState("");
   const canvasRef=useRef(null);
   const printPreviewFrameRef=useRef(null);
@@ -175,6 +176,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setPreviewRecordId(id);
     setPrintPreviewHtml("");
     setPrintPreviewOpen(false);
+    setPrintPreviewReady(false);
     setPreviewError("");
     const requestId=++previewRequestRef.current;
     if(!id){
@@ -214,6 +216,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       if(!normalizedHtmlStart.startsWith("<!doctype html")&&!normalizedHtmlStart.startsWith("<html")){
         throw new Error("The invoice renderer did not return a printable preview.");
       }
+      setPrintPreviewReady(false);
       setPrintPreviewHtml(html);
       setPrintPreviewOpen(true);
     }catch(previewRenderError){
@@ -229,9 +232,20 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     }
   };
 
+  const closeActualPrintPreview=()=>{
+    setPrintPreviewOpen(false);
+    setPrintPreviewReady(false);
+  };
+
+  const handleActualPreviewLoad=event=>{
+    const frame=event.currentTarget;
+    const documentHtml=frame.contentDocument?.documentElement?.innerHTML||"";
+    if(frame.contentWindow?.location?.href==="about:srcdoc"&&documentHtml.trim())setPrintPreviewReady(true);
+  };
+
   const printActualInvoice=()=>{
     const frameWindow=printPreviewFrameRef.current?.contentWindow;
-    if(!frameWindow)return;
+    if(!frameWindow||!printPreviewReady)return;
     frameWindow.focus();
     frameWindow.print();
   };
@@ -282,6 +296,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setLocalDesign(next);
     setPrintPreviewHtml("");
     setPrintPreviewOpen(false);
+    setPrintPreviewReady(false);
     onChange?.(next);
   };
   const pushHistory=snapshot=>{
@@ -850,7 +865,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         <nav className="invoice-builder-steps" aria-label="Invoice design steps">
           <div className={designChosen?"is-complete":"is-current"}><span>{designChosen?<i className="bi bi-check-lg"/>:"1"}</span><div><strong>Choose a design</strong><small>{referenceReady?"Reference imported safely":activeTemplate.templateKey==="html-import"?"HTML design converted":"Starter design selected"}</small></div></div>
           <div className={liveFieldCount>0?"is-complete":referenceReady?"is-current":""}><span>{liveFieldCount>0?<i className="bi bi-check-lg"/>:"2"}</span><div><strong>Place invoice details</strong><small>{liveFieldCount>0?liveFieldCount+" editable elements":"Add the fields your invoice needs"}</small></div></div>
-          <div className={printPreviewHtml?"is-complete":liveFieldCount>0?"is-current":""}><span>{printPreviewHtml?<i className="bi bi-check-lg"/>:"3"}</span><div><strong>Check and save</strong><small>{printPreviewHtml?"Print preview checked":"Preview the real invoice before saving"}</small></div></div>
+          <div className={printPreviewReady?"is-complete":printPreviewHtml?"is-current":liveFieldCount>0?"is-current":""}><span>{printPreviewReady?<i className="bi bi-check-lg"/>:"3"}</span><div><strong>Check and save</strong><small>{printPreviewReady?"Print preview checked":printPreviewHtml?"Loading actual print preview":"Preview the real invoice before saving"}</small></div></div>
         </nav>
         {error&&<div className="alert alert-danger m-3 mb-0">{error}</div>}
         {previewError&&<div className="alert alert-warning m-3 mb-0">{previewError} You can continue with sample data.</div>}
@@ -1183,7 +1198,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 <strong>Actual print preview</strong>
                 <small>This uses your current design edits and the selected saved invoice. Nothing is saved or changed.</small>
               </div>
-              <button type="button" className="btn btn-light border" onClick={()=>setPrintPreviewOpen(false)} aria-label="Close print preview"><i className="bi bi-x-lg"/></button>
+              <button type="button" className="btn btn-light border" onClick={closeActualPrintPreview} aria-label="Close print preview"><i className="bi bi-x-lg"/></button>
             </header>
             <div className="invoice-builder-print-preview-content">
               <iframe
@@ -1191,13 +1206,14 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 title="Rendered invoice print preview"
                 srcDoc={printPreviewHtml}
                 sandbox="allow-same-origin allow-modals"
+                onLoad={handleActualPreviewLoad}
               />
             </div>
             <footer className="invoice-builder-print-preview-footer">
-              <span>Review page breaks and layout here before printing.</span>
+              <span aria-live="polite">{printPreviewReady?"Invoice preview is ready. Review page breaks before printing.":"Loading invoice layout and images…"}</span>
               <div>
-                <button type="button" className="btn btn-light border" onClick={()=>setPrintPreviewOpen(false)}>Back to designer</button>
-                <button type="button" className="btn btn-primary" onClick={printActualInvoice}><i className="bi bi-printer me-1"/>Print invoice</button>
+                <button type="button" className="btn btn-light border" onClick={closeActualPrintPreview}>Back to designer</button>
+                <button type="button" className="btn btn-primary" onClick={printActualInvoice} disabled={!printPreviewReady} title={printPreviewReady?"Print the loaded invoice":"Wait for the invoice preview to finish loading"}><i className="bi bi-printer me-1"/>{printPreviewReady?"Print invoice":"Preparing print…"}</button>
               </div>
             </footer>
           </div>

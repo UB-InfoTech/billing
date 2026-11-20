@@ -1442,7 +1442,7 @@ async function renderInvoice(order,res,request,designOverride){
   const profileLogoUrl=logoPath&&publicUploadBaseUrl?publicUploadBaseUrl+logoPath:logoPath;
   const activeDesign=invoiceConfig.design?.templates?.find(item=>item.id===invoiceConfig.design.activeTemplateId);
   const invoicePages=invoiceConfig.design?.enabled&&activeDesign
-    ?buildInvoiceDesignPages(activeDesign,order.subOrders||[])
+    ?buildInvoiceDesignPages(activeDesign,order.subOrders||[],{itemColumns:invoiceConfig.itemColumns,discountRate:order.discountRate||0})
     :[];
   const client=order.clientId?await Client.findOne({_id:order.clientId,createdBy:String(order.createdBy)}).lean():null;
   const dueDate=new Date(order.orderDate||new Date());

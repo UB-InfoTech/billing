@@ -61,12 +61,12 @@
     .design-content-area{position:absolute;z-index:1;top:<%= designPrintMargins.top %>mm;right:<%= designPrintMargins.right %>mm;bottom:<%= designPrintMargins.bottom %>mm;left:<%= designPrintMargins.left %>mm;}
     .design-block{position:absolute;z-index:1;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.25}
     .design-block .field-label{font-size:.8em;color:#64748b;font-weight:600}
-    .design-items{width:100%;height:100%;overflow:hidden}
+    .design-items{width:100%;min-height:100%;overflow:visible}
     .design-items table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8px}
     .design-items th,.design-items td{border:1px solid #9aa8b8;padding:4px;vertical-align:top;overflow-wrap:anywhere}
     .design-items th{height:8mm;background:#edf2f7;text-align:center;font-weight:800}
-    .design-items td{height:9mm;max-height:9mm}
-    .design-cell-text{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;line-height:1.2;overflow-wrap:anywhere}
+    .design-items td{min-height:9mm;height:auto}
+    .design-cell-text{display:block;overflow:visible;line-height:1.2;overflow-wrap:anywhere;white-space:pre-wrap}
     .design-items thead{display:table-header-group}
     .design-items tr{height:9mm;break-inside:avoid;page-break-inside:avoid}
     .design-page-number{position:absolute;right:6%;top:1%;z-index:5;font-size:8px;color:#64748b}
@@ -149,12 +149,12 @@
           <% const blockColumns=Array.isArray(block.columns)&&block.columns.length?block.columns.filter(column=>column.visible!==false):designColumns; %>
           <% const tableColumns=blockColumns.length?blockColumns:designColumns; %>
           <div class="design-items" style="font-size:<%= block.fontSize %>px;color:<%= block.color %>">
-            <table>
+            <table style="font-size:<%= Number(block.fontSize||8) %>px">
               <colgroup><% tableColumns.forEach(column=>{ %><col style="width:<%= Number(column.width||8) %>%"><% }) %></colgroup>
               <thead><tr><% tableColumns.forEach(column=>{ %><th style="background:<%= block.tableHeaderBackground||"#edf2f7" %>;color:<%= block.tableHeaderColor||"#172335" %>;border-color:<%= block.tableBorderColor||"#b8c4d1" %>;border-width:<%= Number(block.tableBorderWidth??1) %>px;padding:<%= Number(block.tableCellPadding??4) %>px"><span class="design-cell-text"><%= column.label %></span></th><% }) %></tr></thead>
               <tbody>
-                <% (page.rows||[]).forEach((entry,rowIndex)=>{ const row={...entry.item,_index:entry.itemNumber}; const rowBackground=block.alternateRows!==false&&rowIndex%2===1?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#ffffff"); %>
-                  <tr><% tableColumns.forEach(column=>{ %><td style="background:<%= rowBackground %>;border-color:<%= block.tableBorderColor||"#b8c4d1" %>;border-width:<%= Number(block.tableBorderWidth??1) %>px;padding:<%= Number(block.tableCellPadding??4) %>px"><span class="design-cell-text"><%= itemValue(row,column) %></span></td><% }) %></tr>
+                <% (page.rows||[]).forEach((entry,rowIndex)=>{ const row={...entry.item,_index:entry.itemNumber}; const rowBackground=block.alternateRows!==false&&(Number(entry.itemNumber||rowIndex+1)-1)%2===1?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#ffffff"); %>
+                  <tr style="height:<%= Number(entry.rowHeightMm||9).toFixed(2) %>mm"><% tableColumns.forEach(column=>{ %><td style="background:<%= rowBackground %>;border-color:<%= block.tableBorderColor||"#b8c4d1" %>;border-width:<%= Number(block.tableBorderWidth??1) %>px;padding:<%= Number(block.tableCellPadding??4) %>px"><span class="design-cell-text"><%= itemValue(row,column) %></span></td><% }) %></tr>
                 <% }) %>
               </tbody>
             </table>

@@ -418,6 +418,7 @@ test("actual print template renders the in-session design and saved invoice rows
   assert.match(html,/INV-PREVIEW-001/);
   assert.doesNotMatch(html,/Invoice number:/);
   assert.match(html,/Cotton fabric/);
+  assert.match(html,/height:9\.00mm/);
   assert.match(html,/1000\.00/);
   assert.match(html,/left:8%;top:10%;width:45%;height:6%/);
   assert.match(html,/background-color:#172554/);
@@ -554,4 +555,55 @@ test("safe table width correction also freezes inherited defaults into a valid d
  assert.equal(result.blocks[0].columns.length,3);
  assert.ok(result.blocks[0].columns.every(column=>column.width>=3));
  assert.ok(result.blocks[0].columns.reduce((sum,column)=>sum+column.width,0)<=100.0001);
+});
+
+test("variable-height item rows paginate by description wrapping and keep every item on one page",()=>{
+ const template={pageSize:"A4",orientation:"portrait",blocks:[
+  {id:"items",type:"items_table",x:5,y:20,w:90,h:22,fontSize:8,tableCellPadding:4,visible:true,
+   columns:[{key:"sr",label:"#",width:8,visible:true},{key:"description",label:"Description",width:25,visible:true},{key:"amount",label:"Amount",width:20,visible:true}]},
+  {id:"totals",type:"totals",x:65,y:80,w:30,h:15,visible:true}
+ ]};
+ const shortItems=Array.from({length:12},(_,index)=>({orderName:"Item "+(index+1),quantity:1,unitPrice:100}));
+ const longItems=Array.from({length:12},(_,index)=>({orderName:"Premium embroidered fabric with an unusually detailed description "+("and special finishing details ").repeat(4)+index,quantity:1,unitPrice:100}));
+ const shortPages=buildInvoiceDesignPages(template,shortItems,{itemColumns:[]});
+ const longPages=buildInvoiceDesignPages(template,longItems,{itemColumns:[]});
+ assert.ok(longPages.length>shortPages.length);
+ assert.ok(longPages.some(page=>page.rows.some(row=>row.estimatedLines>1)));
+ assert.deepEqual(longPages.flatMap(page=>page.rows.map(row=>row.itemNumber)),Array.from({length:12},(_,index)=>index+1));
+ assert.ok(longPages.every(page=>page.rows.length===1||page.rowHeightTotalMm+11<=page.tableHeightMm+0.01));
+ assert.ok(longPages[longPages.length-1].blocks.some(block=>block.type==="totals"));
+ assert.ok(longPages.slice(0,-1).every(page=>!page.blocks.some(block=>block.type==="totals")));
+});
+test("invoice row measurements use the same display quantities as the printed item table",()=>{
+ const {getInvoiceItemCellValue}=require("../utils/invoiceDesignPagination");
+ const item={qtyUnit:"PCS",quantity:10,shortPcs:2,unitPrice:5};
+ assert.equal(getInvoiceItemCellValue(item,{key:"amount"},0,1),"40.00");
+ assert.equal(getInvoiceItemCellValue(item,{key:"sr"},0,7),7);
+});
+test("variable-height row measurement follows the visible table columns and font size",()=>{
+ const {estimateInvoiceItemRow}=require("../utils/invoiceDesignPagination");
+ const metrics={tableWidthMm:180};
+ const item={orderName:"Long product description ".repeat(8),hsnCode:"5208",unitPrice:125};
+ const narrow={type:"items_table",fontSize:8,tableCellPadding:4,columns:[{key:"description",width:20,visible:true}]};
+ const wide={...narrow,columns:[{key:"description",width:70,visible:true}]};
+ const largeFont={...wide,fontSize:12};
+ const narrowHeight=estimateInvoiceItemRow(item,narrow.columns,metrics,narrow,{},1);
+ const wideHeight=estimateInvoiceItemRow(item,wide.columns,metrics,wide,{},1);
+ const largeFontHeight=estimateInvoiceItemRow(item,wide.columns,metrics,largeFont,{},1);
+ assert.ok(narrowHeight.rowHeightMm>=wideHeight.rowHeightMm);
+ assert.ok(largeFontHeight.rowHeightMm>=wideHeight.rowHeightMm);
+});
+test("multi-page invoice pagination retains original line numbering and moves totals to the final page",()=>{
+ const template={pageSize:"A5",orientation:"portrait",blocks:[
+  {id:"items",type:"items_table",x:5,y:30,w:90,h:30,visible:true,columns:[{key:"description",width:40,visible:true}]},
+  {id:"totals",type:"totals",x:60,y:70,w:35,h:20,visible:true},
+  {id:"signature",type:"field",fieldKey:"signature",x:60,y:92,w:35,h:5,visible:true}
+ ]};
+ const rows=Array.from({length:18},(_,index)=>({orderName:"Item "+(index+1)}));
+ const pages=buildInvoiceDesignPages(template,rows);
+ assert.ok(pages.length>1);
+ assert.deepEqual(pages.flatMap(page=>page.rows.map(row=>row.itemNumber)),Array.from({length:18},(_,index)=>index+1));
+ assert.equal(pages[0].blocks.some(block=>block.type==="totals"),false);
+ assert.ok(pages[pages.length-1].blocks.some(block=>block.type==="totals"));
+ assert.ok(pages[pages.length-1].blocks.some(block=>block.id==="signature"));
 });

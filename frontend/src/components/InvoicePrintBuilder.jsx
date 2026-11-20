@@ -45,7 +45,7 @@ const SAMPLE_VALUES={
   company_name:"Your Business Name",company_address:"Business address · City · PIN",company_gstin:"GSTIN: 24ABCDE1234F1Z5",company_phone:"+91 98765 43210",company_email:"hello@yourbusiness.com",
   customer_name:"Customer / Company name",customer_address:"Customer billing address",customer_phone:"+91 98765 43210",customer_gstin:"Customer GSTIN",customer_state:"Gujarat",
   invoice_title:"TAX INVOICE",invoice_no:"INV-00001",invoice_date:"18 Nov 2026",due_date:"25 Nov 2026",challan_no:"CH-001",payment_terms:"Net 7 days",eway_bill:"E-Way Bill number",
-  subtotal:"₹ 10,000.00",discount:"− ₹ 500.00",taxable_value:"₹ 9,500.00",cgst:"₹ 855.00",sgst:"₹ 855.00",igst:"₹ 0.00",round_off:"₹ 0.00",grand_total:"₹ 11,210.00",amount_paid:"₹ 5,000.00",balance_due:"₹ 6,210.00",amount_words:"Eleven thousand two hundred ten only",bank_details:"Bank name · Account number · IFSC",terms:"Goods once sold will not be taken back.",signature:"For Your Business · Authorised Signatory"
+  subtotal:"₹ 10,000.00",discount:"− ₹ 500.00",taxable_value:"₹ 9,500.00",cgst:"₹ 855.00",sgst:"₹ 855.00",igst:"₹ 0.00",round_off:"₹ 0.00",grand_total:"₹ 11,210.00",amount_paid:"₹ 5,000.00",balance_due:"₹ 6,210.00",amount_words:"Eleven thousand two hundred ten only",bank_details:"Bank name · Account number · IFSC",terms:"Thank you for your business. Please contact us if you have any questions.",signature:"For Your Business · Authorised Signatory"
 };
 const makeBlock=(id,type,fieldKey,label,x,y,w,h,extra={})=>({id,type,fieldKey:fieldKey||"",label:label||"",text:"",x,y,w,h,fontSize:10,bold:false,align:"left",color:"#172335",backgroundColor:"transparent",borderColor:"#d8e0e9",borderWidth:0,borderRadius:0,padding:1,fontFamily:"Arial",italic:false,opacity:1,visible:true,showLabel:true,...extra});
 const makeTemplate=(id,name,key)=>({...createInvoiceDesignTemplate(id,key),name:name||createInvoiceDesignTemplate(id,key).name});
@@ -92,17 +92,21 @@ const getSnappedPosition=(block,x,y,blocks)=>{
 const TEMPLATE_THUMBNAIL_VALUES={
   company_name:"Your Business Name",
   company_address:"Business address · City",
-  company_gstin:"GSTIN · 24ABCDE1234F1Z5",
+  company_gstin:"24ABCDE1234F1Z5",
   company_phone:"+91 98765 43210",
+  company_email:"accounts@yourbusiness.in",
   customer_name:"Customer / Company",
   customer_address:"Customer billing address",
-  customer_gstin:"Customer GSTIN",
+  customer_phone:"+91 98765 43210",
+  customer_gstin:"24ABCDE1234F1Z5",
+  customer_state:"Gujarat",
   invoice_title:"TAX INVOICE",
   invoice_no:"INV-001",
   invoice_date:"Invoice Date · 20/11/2026",
   due_date:"Due Date · 27/11/2026",
   challan_no:"CH-001",
   payment_terms:"Net 7 days",
+  eway_bill:"E-Way Bill · 2410 1234 5678",
   subtotal:"₹ 10,000.00",
   discount:"− ₹ 500.00",
   taxable_value:"₹ 9,500.00",
@@ -113,7 +117,7 @@ const TEMPLATE_THUMBNAIL_VALUES={
   balance_due:"₹ 6,210.00",
   amount_words:"Eleven thousand two hundred ten only",
   bank_details:"Bank · Account · IFSC",
-  terms:"Goods once sold will not be taken back.",
+  terms:"Thank you for your business. Please contact us if you have any questions.",
   signature:"Authorised Signatory"
 };
 
@@ -122,7 +126,7 @@ function renderTemplateThumbnail(preset){
   return (
     <div className="invoice-builder-template-thumb" style={{aspectRatio:preset.orientation==="landscape"?"297 / 210":"210 / 297"}} aria-hidden="true">
       {template.blocks.filter(block=>block.visible!==false).map((block,index)=>{
-        const fontSize=Math.max(2,(Number(block.fontSize)||8)*0.23);
+        const fontSize=Math.max(3.2,(Number(block.fontSize)||8)*0.38);
         const style={
           left:block.x+"%",
           top:block.y+"%",

@@ -756,21 +756,21 @@ test("custom text styling is sanitized and survives invoice design saves",()=>{
  assert.equal(safeNote.textTransform,"none");
  assert.equal(safeNote.verticalAlign,"top");
 });
-test("professional built-in templates include ready-to-print customer, invoice, tax, payment and terms sections",async()=>{
+test("professional built-in templates include complete, readable business and invoice details",async()=>{
  const {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate}=await import("../../frontend/src/utils/invoiceTemplateLibrary.js");
  assert.equal(INVOICE_DESIGN_PRESETS.length,14);
  for(const preset of INVOICE_DESIGN_PRESETS){
   const template=createInvoiceDesignTemplate("test-"+preset.key,preset.key);
   const fields=new Set(template.blocks.filter(block=>block.type==="field").map(block=>block.fieldKey));
+  const field=key=>template.blocks.find(block=>block.type==="field"&&block.fieldKey===key);
+  const table=template.blocks.find(block=>block.type==="items_table");
   assert.ok(fields.has("company_name"),preset.key+" has business name");
-  assert.ok(fields.has("customer_name"),preset.key+" has customer name");
-  assert.ok(fields.has("invoice_no"),preset.key+" has invoice number");
-  assert.ok(fields.has("invoice_date"),preset.key+" has invoice date");
-  assert.ok(fields.has("due_date"),preset.key+" has due date");
-  assert.ok(fields.has("amount_words"),preset.key+" has amount in words");
-  assert.ok(fields.has("terms"),preset.key+" has terms");
-  assert.ok(fields.has("bank_details"),preset.key+" has bank details");
-  assert.ok(template.blocks.some(block=>block.type==="items_table"),preset.key+" has invoice item table");
+  for(const key of ["company_address","company_gstin","company_phone","company_email","customer_name","customer_address","customer_phone","customer_gstin","customer_state","invoice_title","invoice_no","invoice_date","due_date","challan_no","payment_terms","eway_bill","amount_words","bank_details","terms","signature"])assert.ok(fields.has(key),preset.key+" has "+key);
+  assert.ok(field("company_name").fontSize>=20,preset.key+" has readable business name");
+  assert.ok(field("customer_name").fontSize>=11,preset.key+" has readable customer name");
+  assert.ok(field("invoice_title").fontSize>=17,preset.key+" has readable invoice title");
+  assert.ok(table.fontSize>=(preset.pageSize==="A5"?8.4:9),preset.key+" has readable item text");
+  assert.ok(Math.abs(table.columns.reduce((sum,column)=>sum+column.width,0)-100)<0.1,preset.key+" item columns use the full table width");
   assert.ok(template.blocks.some(block=>block.type==="totals"),preset.key+" has invoice totals");
   assert.ok(template.blocks.filter(block=>block.visible!==false).every(block=>block.x>=0&&block.y>=0&&block.x+block.w<=100.001&&block.y+block.h<=100.001),preset.key+" stays on the page");
  }
@@ -820,4 +820,85 @@ test("industry templates define their own business-specific invoice item columns
  assert.ok(!serviceColumns.includes("MTR"));
  assert.ok(retail.pageSize==="A5");
  assert.ok(INVOICE_DESIGN_PRESETS.every(preset=>preset.columns.length>=5));
+});
+
+
+test("ready-made textile invoice uses prominent type and pre-placed GST, customer and payment content",async()=>{
+ const {createInvoiceDesignTemplate}=await import("../../frontend/src/utils/invoiceTemplateLibrary.js");
+ const template=createInvoiceDesignTemplate("ready","textile-wholesale");
+ const get=key=>template.blocks.find(block=>block.type==="field"&&block.fieldKey===key);
+ const table=template.blocks.find(block=>block.type==="items_table");
+ assert.ok(get("company_name").fontSize>=20);
+ assert.ok(get("company_address").fontSize>=9);
+ assert.ok(get("customer_name").fontSize>=11);
+ assert.ok(get("invoice_title").fontSize>=19);
+ assert.equal(get("customer_name").showLabel,false);
+ assert.ok(table.columns.some(column=>column.key==="taxable"));
+ assert.ok(table.columns.some(column=>column.key==="MTR"));
+ assert.ok(table.columns.some(column=>column.key==="hsnCode"));
+ assert.ok(template.blocks.some(block=>block.type==="totals"));
+ assert.ok(get("eway_bill"));
+});
+
+test("empty invoice metadata values do not print orphaned field labels",async()=>{
+ const template=sanitizeInvoiceDesign({templates:[{id:"empty-meta",blocks:[{
+  id:"eway",type:"field",fieldKey:"eway_bill",label:"E-Way Bill",showLabel:true,x:5,y:5,w:40,h:4
+ }]}]}).templates[0];
+ const html=await ejs.renderFile(path.join(__dirname,"../public/invoiceTable.ejs"),{
+  invoiceConfig:{invoiceTitle:"TAX INVOICE",pageSize:"A4",accentColor:"#172335",itemColumns:[],design:{enabled:true,activeTemplateId:"empty-meta",templates:[template]}},
+  invoicePages:[{pageNumber:1,totalPages:1,blocks:template.blocks,rows:[]}],profileLogoUrl:"",publicUploadBaseUrl:"",
+  profileHeaderTitle:"Invoice",profileCompanyName:"Example",profileCompanyAddress:"Surat",profileEmailAddress:"",profileWebsite:"",
+  profilePhoneNumber1:"",profilePhoneNumber2:"",profileGstNumber:"",profilePanNumber:"",profileBankName:"",profileAccountNo:"",
+  profileBranchName:"",profileIfsc:"",clientChallanNumber:"",clientCompanyName:"Customer",clientAddress:"Address",
+  clientPhoneNumber:"",clientGstNumber:"",clientState:"Gujarat",orderNumber:"INV-EMPTY",createdAt:"",dueDate:"",
+  paymentTerm:"",ewayBillNo:"",subOrders:[],orderPaidAmount:0,orderTotalCost:0,orderSubTotal:0,orderDisRate:0,
+  orderDiscountAmount:0,orderTax:0,orderTaxAmount:0,orderIgstTax:0,orderIgstTaxAmount:0,orderFinalRevenue:0,
+  orderFinalRevenueRoundOff:0,orderFinalRevenueAfterRoundOff:0,orderFinalRevenueInWords:"",paymentStatus:"Unpaid",dueAmount:0,
+  creditAppliedAmount:0,payments:[]
+ });
+ const ewayBlock=html.match(/data-block-id="eway"[\s\S]*?<\/div>/)?.[0]||"";
+ assert.ok(ewayBlock);
+ assert.ok(!ewayBlock.includes("E-Way Bill:"));
+});
+
+
+test("industry invoice presets render readable live business, customer, item and payment sections",async()=>{
+ const {createInvoiceDesignTemplate}=await import("../../frontend/src/utils/invoiceTemplateLibrary.js");
+ for(const key of ["textile-wholesale","retail-counter","professional-services"]){
+  const source=createInvoiceDesignTemplate("render-"+key,key);
+  const template=sanitizeInvoiceDesign({enabled:true,activeTemplateId:source.id,templates:[source]}).templates[0];
+  const html=await ejs.renderFile(path.join(__dirname,"../public/invoiceTable.ejs"),{
+   invoiceConfig:{invoiceTitle:"TAX INVOICE",pageSize:template.pageSize,accentColor:"#214a70",itemColumns:[],design:{enabled:true,activeTemplateId:template.id,templates:[template]}},
+   invoicePages:[{pageNumber:1,totalPages:1,blocks:template.blocks,rows:[{
+    item:{orderName:"Premium cotton fabric",designNumber:"TX-100",hsnCode:"5208",quantity:4,qtyUnit:"MTR",MTR:48,cut:12,shortPcs:1,unitPrice:350},
+    itemNumber:1,rowHeightMm:9
+   }]}],
+   profileLogoUrl:"",publicUploadBaseUrl:"",profileHeaderTitle:"Invoice",
+   profileCompanyName:"A1 Textiles",profileCompanyAddress:"Surat, Gujarat 395002",
+   profileEmailAddress:"accounts@a1textiles.in",profileWebsite:"www.a1textiles.in",
+   profilePhoneNumber1:"+91 98765 43210",profilePhoneNumber2:"",profileGstNumber:"24ABCDE1234F1Z5",
+   profilePanNumber:"",profileBankName:"HDFC Bank",profileAccountNo:"1234567890",
+   profileBranchName:"Surat Main",profileIfsc:"HDFC0001234",
+   clientChallanNumber:"CH-2026-01",clientCompanyName:"Sample Garments",
+   clientAddress:"Ring Road, Surat",clientPhoneNumber:"+91 98765 00000",
+   clientGstNumber:"24XYZDE1234F1Z5",clientState:"Gujarat",
+   orderNumber:"INV-2026-001",createdAt:"20 Nov 2026",dueDate:"27 Nov 2026",
+   paymentTerm:"7",ewayBillNo:"241012345678",subOrders:[],
+   orderPaidAmount:500,orderTotalCost:1400,orderSubTotal:1400,orderDisRate:0,
+   orderDiscountAmount:0,orderTax:18,orderTaxAmount:126,orderIgstTax:0,
+   orderIgstTaxAmount:0,orderFinalRevenue:1652,orderFinalRevenueRoundOff:0,
+   orderFinalRevenueAfterRoundOff:1652,orderFinalRevenueInWords:"One thousand six hundred fifty two only",
+   paymentStatus:"Partially Paid",dueAmount:1152,creditAppliedAmount:0,payments:[]
+  });
+  assert.ok(html.includes("A1 Textiles"),key+" renders business name");
+  assert.ok(html.includes("Sample Garments"),key+" renders customer name");
+  assert.ok(html.includes("INV-2026-001"),key+" renders invoice number");
+  assert.ok(html.includes("Premium cotton fabric"),key+" renders live item description");
+  assert.ok(html.includes("24ABCDE1234F1Z5"),key+" renders GSTIN");
+  assert.ok(html.includes("241012345678"),key+" renders E-Way Bill");
+  assert.ok(html.includes("Bank details"),key+" renders bank details label");
+  assert.ok(html.includes("font-size:21.5px")||html.includes("font-size:20.5px")||html.includes("font-size:20px"),key+" renders prominent business typography");
+  assert.ok(html.includes("data-block-type=\"items_table\""),key+" renders item table");
+  assert.ok(html.includes("data-block-type=\"totals\""),key+" renders invoice totals");
+ }
 });

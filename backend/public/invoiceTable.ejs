@@ -59,20 +59,20 @@
     .design-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;border:0;object-fit:fill}
     .design-background-frame{position:absolute;inset:0;z-index:0;width:100%;height:100%;border:0;pointer-events:none;background:#fff}
     .design-content-area{position:absolute;z-index:1;top:<%= designPrintMargins.top %>mm;right:<%= designPrintMargins.right %>mm;bottom:<%= designPrintMargins.bottom %>mm;left:<%= designPrintMargins.left %>mm;}
-    .design-block{position:absolute;z-index:1;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.25}
-    .design-block .field-label{font-size:.8em;color:#64748b;font-weight:600}
+    .design-block{position:absolute;z-index:1;display:block;box-sizing:border-box;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.22}
+    .design-block .field-label{font-size:.82em;color:inherit;opacity:.78;font-weight:700;letter-spacing:.05px}
     .design-items{width:100%;min-height:100%;overflow:visible}
-    .design-items table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8px}
-    .design-items th,.design-items td{border:1px solid #9aa8b8;padding:4px;vertical-align:top;overflow-wrap:anywhere}
-    .design-items th{height:8mm;background:#edf2f7;text-align:center;font-weight:800}
-    .design-items td{min-height:9mm;height:auto}
+    .design-items table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:inherit}
+    .design-items th,.design-items td{border:1px solid #c4ced9;padding:4px 5px;vertical-align:middle;overflow-wrap:anywhere}
+    .design-items th{height:8mm;background:#edf2f7;text-align:center;font-weight:800;line-height:1.15;letter-spacing:.05px}
+    .design-items td{min-height:9mm;height:auto;line-height:1.2}
     .design-cell-text{display:block;overflow:visible;line-height:1.2;overflow-wrap:anywhere;white-space:pre-wrap}
     .design-items thead{display:table-header-group}
     .design-items tr{height:9mm;break-inside:avoid;page-break-inside:avoid}
-    .design-page-number{position:absolute;right:6%;top:1%;z-index:5;font-size:8px;color:#64748b}
-    .design-totals{width:100%;font-size:9px}
-    .design-totals div{display:flex;justify-content:space-between;gap:8px;padding:3px 1px;border-bottom:1px solid #e5eaf0}
-    .design-totals .grand{font-size:12px;font-weight:900;border-top:1.5px solid #475569}
+    .design-page-number{position:absolute;right:6%;top:1%;z-index:5;font-size:9px;color:#64748b}
+    .design-totals{width:100%;font-size:inherit;line-height:1.12}
+    .design-totals div{display:flex;justify-content:space-between;gap:8px;padding:1.5px 1px;border-bottom:1px solid #e5eaf0}
+    .design-totals .grand{font-size:1.2em;font-weight:900;border-top:1.5px solid #475569;padding-top:2px}
     .design-blank-table{width:100%;height:100%;overflow:hidden}
     .design-blank-table table{width:100%;height:100%;border-collapse:collapse;table-layout:fixed}
     .design-blank-table th,.design-blank-table td{border:1px solid #b8c4d1;padding:4px;overflow-wrap:anywhere;vertical-align:middle;white-space:pre-wrap}
@@ -103,7 +103,7 @@
     grand_total:orderFinalRevenueAfterRoundOff,amount_paid:orderPaidAmount,balance_due:dueAmount,
     amount_words:orderFinalRevenueInWords,
     bank_details:[profileBankName,profileAccountNo,profileBranchName,profileIfsc].filter(Boolean).join(" · "),
-    terms:"Goods once sold will not be taken back or replaced. Any complaint should be made within 7 days. Subject to Surat jurisdiction.",
+    terms:"Thank you for your business. Please contact us promptly if you have any questions about this invoice.",
     signature:"For, "+profileCompanyName+" · Authorised Signatory"
   };
   const itemValue=(item,column)=>{
@@ -154,7 +154,8 @@
           <% if(profileLogoUrl){ %><img src="<%= profileLogoUrl %>" alt="Business logo" style="width:100%;height:100%;object-fit:contain"><% } %>
         <% }else if(block.type==="field"){ %>
           <% const displayValue=designValues[block.fieldKey]??""; %>
-          <% if(block.label&&block.showLabel!==false){ %><span class="field-label"><%= block.label %>: </span><% } %><%= displayValue %>
+          <% const hasDisplayValue=displayValue!==undefined&&displayValue!==null&&String(displayValue).trim()!==""; %>
+          <% if(block.label&&block.showLabel!==false&&hasDisplayValue){ %><span class="field-label"><%= block.label %>: </span><% } %><%= hasDisplayValue?displayValue:"" %>
         <% }else if(block.type==="items_table"){ %>
           <% const blockColumns=Array.isArray(block.columns)&&block.columns.length?block.columns.filter(column=>column.visible!==false):designColumns; %>
           <% const tableColumns=blockColumns.length?blockColumns:designColumns; %>

@@ -245,11 +245,11 @@
 .invoice-builder-template-thumb .template-thumb-block{position:absolute;display:block;box-sizing:border-box;overflow:hidden;line-height:1.12;overflow-wrap:anywhere;white-space:pre-wrap}
 .invoice-builder-template-thumb .template-thumb-field-label{font-size:.78em;color:#64748b;font-weight:650}
 .invoice-builder-template-thumb .template-thumb-items{display:flex;flex-direction:column;width:100%;height:100%;overflow:hidden;border:1px solid #b8c4d1}
-.invoice-builder-template-thumb .template-thumb-items-head,.invoice-builder-template-thumb .template-thumb-items-row{display:grid;grid-template-columns:minmax(0,1fr) 12% 25%;align-items:center;gap:2px;min-height:0;padding:1px 2px;border-bottom:1px solid #e1e7ee;font-size:2px;line-height:1.05}
+.invoice-builder-template-thumb .template-thumb-items-head,.invoice-builder-template-thumb .template-thumb-items-row{display:grid;grid-template-columns:minmax(0,1fr) 12% 25%;align-items:center;gap:2px;min-height:0;padding:1px 2px;border-bottom:1px solid #e1e7ee;font-size:inherit;line-height:1.12}
 .invoice-builder-template-thumb .template-thumb-items-head{flex:0 0 17%;background:#edf2f7;color:#334155;font-weight:850}
 .invoice-builder-template-thumb .template-thumb-items-row{flex:1 1 0;color:#64748b}
 .invoice-builder-template-thumb .template-thumb-items-row span,.invoice-builder-template-thumb .template-thumb-items-head span{overflow:hidden;white-space:nowrap;text-overflow:clip}
-.invoice-builder-template-thumb .template-thumb-totals{display:flex;flex-direction:column;gap:1px;width:100%;height:100%;overflow:hidden;font-size:2.3px;line-height:1.05}
+.invoice-builder-template-thumb .template-thumb-totals{display:flex;flex-direction:column;gap:1px;width:100%;height:100%;overflow:hidden;font-size:inherit;line-height:1.12}
 .invoice-builder-template-thumb .template-thumb-totals>div{display:flex;justify-content:space-between;gap:3px;padding-bottom:1px;border-bottom:1px solid #e5eaf0}
 .invoice-builder-template-thumb .template-thumb-totals b{font-weight:850}
 .invoice-builder-template-thumb .template-thumb-total-final{padding-top:2px;border-top:1px solid #64748b;font-size:2.7px;font-weight:850}
@@ -410,3 +410,19 @@
  .invoice-builder-template-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
  .invoice-builder-blank-table-counts{grid-template-columns:1fr 1fr}
 }
+
+
+/* Higher-fidelity, readable template previews */
+.invoice-builder-template-thumb{box-shadow:0 2px 8px rgba(25,45,68,.07);background:#fff}
+.invoice-builder-template-thumb .template-thumb-block{line-height:1.15;overflow:hidden}
+.invoice-builder-template-thumb .template-thumb-field-label{font-size:.78em;color:inherit;opacity:.78;font-weight:700}
+.invoice-builder-template-thumb .template-thumb-items{border-color:#d4dde7}
+.invoice-builder-template-thumb .template-thumb-items-head{font-weight:800;letter-spacing:.02em}
+.invoice-builder-template-thumb .template-thumb-items-row{color:#46576b}
+.invoice-builder-template-thumb .template-thumb-totals>div{padding:1px 1px;border-bottom:1px solid #e7edf3}
+.invoice-builder-template-thumb .template-thumb-total-final{font-size:1.14em;border-top:1px solid #8190a2}
+.invoice-builder-template-card{padding:12px;border-radius:14px}
+.invoice-builder-template-card-copy{min-height:78px}
+.invoice-builder-template-card-copy strong{font-size:13px}
+.invoice-builder-template-card-copy small{font-size:10.5px;line-height:1.5}
+@media(min-width:1051px){.invoice-builder-template-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}}

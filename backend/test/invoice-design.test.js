@@ -535,8 +535,8 @@ test("invoice print margins are sanitized, persisted and reflected by the print 
  assert.ok(html.includes(">Cotton fabric</td>"));
  assert.match(html,/text-decoration:underline/);
  assert.match(html,/text-transform:uppercase/);
- assert.match(html,/line-height:1\\.8/);
- assert.match(html,/letter-spacing:2\\.5px/);
+ assert.match(html,/line-height:1\.8/);
+ assert.match(html,/letter-spacing:2\.5px/);
  assert.match(html,/top:8mm;right:25mm;bottom:0mm;left:5mm/);
 });
 test("print pagination accounts for reduced printable height from top and bottom margins",()=>{

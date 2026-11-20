@@ -310,9 +310,9 @@ test("invalid imported images and unsafe style values are rejected",()=>{
 
 test("professional invoice design library contains distinct ready-to-use layouts",async()=>{
   const {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate}=await import("../../frontend/src/utils/invoiceTemplateLibrary.js");
-  assert.equal(INVOICE_DESIGN_PRESETS.length,8);
+  assert.equal(INVOICE_DESIGN_PRESETS.length,14);
   const keys=INVOICE_DESIGN_PRESETS.map(preset=>preset.key);
-  assert.equal(new Set(keys).size,8);
+  assert.equal(new Set(keys).size,14);
   const templates=keys.map(key=>createInvoiceDesignTemplate("tpl-"+key,key));
   assert.ok(templates.some(template=>template.blocks.some(block=>block.type==="shape")));
   assert.ok(templates.some(template=>template.pageSize==="A5"));
@@ -726,13 +726,13 @@ test("blank invoice tables preserve safe editable headings, cells and print styl
 test("blank invoice table sanitization bounds columns, rows and cell text",()=>{
  const unsafe=sanitizeInvoiceDesign({templates:[{id:"limited",blocks:[{
   id:"static-grid",type:"blank_table",
-  tableColumns:Array.from({length:14},(_,index)=>({id:"c"+index,label:"Column "+index,width:20})),
-  tableRows:Array.from({length:40},()=>Array.from({length:14},()=>"x".repeat(500)))
+  tableColumns:Array.from({length:24},(_,index)=>({id:"c"+index,label:"Column "+index,width:20})),
+  tableRows:Array.from({length:110},()=>Array.from({length:14},()=>"x".repeat(500)))
  }]}]});
  const table=unsafe.templates[0].blocks[0];
- assert.equal(table.tableColumns.length,10);
- assert.equal(table.tableRows.length,30);
- assert.equal(table.tableRows[0].length,10);
+ assert.equal(table.tableColumns.length,20);
+ assert.equal(table.tableRows.length,100);
+ assert.equal(table.tableRows[0].length,20);
  assert.equal(table.tableRows[0][0].length,240);
  assert.ok(Math.abs(table.tableColumns.reduce((sum,column)=>sum+column.width,0)-100)<0.1);
 });
@@ -758,7 +758,7 @@ test("custom text styling is sanitized and survives invoice design saves",()=>{
 });
 test("professional built-in templates include ready-to-print customer, invoice, tax, payment and terms sections",async()=>{
  const {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate}=await import("../../frontend/src/utils/invoiceTemplateLibrary.js");
- assert.equal(INVOICE_DESIGN_PRESETS.length,8);
+ assert.equal(INVOICE_DESIGN_PRESETS.length,14);
  for(const preset of INVOICE_DESIGN_PRESETS){
   const template=createInvoiceDesignTemplate("test-"+preset.key,preset.key);
   const fields=new Set(template.blocks.filter(block=>block.type==="field").map(block=>block.fieldKey));
@@ -774,4 +774,50 @@ test("professional built-in templates include ready-to-print customer, invoice, 
   assert.ok(template.blocks.some(block=>block.type==="totals"),preset.key+" has invoice totals");
   assert.ok(template.blocks.filter(block=>block.visible!==false).every(block=>block.x>=0&&block.y>=0&&block.x+block.w<=100.001&&block.y+block.h<=100.001),preset.key+" stays on the page");
  }
+});
+
+
+test("blank invoice tables start as a genuinely empty editable grid and preserve zero rows",()=>{
+ const design=sanitizeInvoiceDesign({templates:[{id:"empty-grid",elementLimit:120,blocks:[{
+  id:"blank",type:"blank_table",tableColumns:[{id:"column-1",label:"",width:100}],tableRows:[[""]],tableShowHeader:false
+ }]}]});
+ const template=design.templates[0],table=template.blocks[0];
+ assert.equal(template.elementLimit,120);
+ assert.deepEqual(table.tableColumns.map(column=>column.label),[""]);
+ assert.deepEqual(table.tableRows,[[""]]);
+ assert.equal(table.tableShowHeader,false);
+ const zeroRows=sanitizeInvoiceDesign({templates:[{id:"zero-rows",blocks:[{
+  id:"blank",type:"blank_table",tableColumns:[{id:"column-1",label:"",width:100}],tableRows:[]
+ }]}]});
+ assert.deepEqual(zeroRows.templates[0].blocks[0].tableRows,[]);
+});
+
+test("invoice design element capacity is configurable and safely bounded",()=>{
+ const blocks=Array.from({length:175},(_,index)=>({id:"element-"+index,type:"text",text:"Note "+index,x:2,y:2,w:20,h:3}));
+ const expanded=sanitizeInvoiceDesign({templates:[{id:"expanded",elementLimit:200,blocks}]});
+ assert.equal(expanded.templates[0].elementLimit,200);
+ assert.equal(expanded.templates[0].blocks.length,175);
+ const capped=sanitizeInvoiceDesign({templates:[{id:"capped",elementLimit:999,blocks}]});
+ assert.equal(capped.templates[0].elementLimit,300);
+ assert.equal(capped.templates[0].blocks.length,175);
+ const defaulted=sanitizeInvoiceDesign({templates:[{id:"default-limit",blocks}]});
+ assert.equal(defaulted.templates[0].elementLimit,80);
+ assert.equal(defaulted.templates[0].blocks.length,80);
+});
+
+test("industry templates define their own business-specific invoice item columns",async()=>{
+ const {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate}=await import("../../frontend/src/utils/invoiceTemplateLibrary.js");
+ const textile=createInvoiceDesignTemplate("textile","textile-wholesale");
+ const services=createInvoiceDesignTemplate("services","professional-services");
+ const retail=createInvoiceDesignTemplate("retail","retail-counter");
+ const textileColumns=textile.blocks.find(block=>block.type==="items_table").columns.map(column=>column.key);
+ const serviceColumns=services.blocks.find(block=>block.type==="items_table").columns.map(column=>column.key);
+ const retailColumns=retail.blocks.find(block=>block.type==="items_table").columns.map(column=>column.key);
+ assert.ok(textileColumns.includes("MTR"));
+ assert.ok(textileColumns.includes("cut"));
+ assert.ok(textileColumns.includes("designNumber"));
+ assert.ok(serviceColumns.includes("description"));
+ assert.ok(!serviceColumns.includes("MTR"));
+ assert.ok(retail.pageSize==="A5");
+ assert.ok(INVOICE_DESIGN_PRESETS.every(preset=>preset.columns.length>=5));
 });

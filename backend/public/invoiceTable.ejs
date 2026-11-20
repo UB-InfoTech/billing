@@ -75,9 +75,11 @@
     .design-totals .grand{font-size:12px;font-weight:900;border-top:1.5px solid #475569}
     .design-blank-table{width:100%;height:100%;overflow:hidden}
     .design-blank-table table{width:100%;height:100%;border-collapse:collapse;table-layout:fixed}
-    .design-blank-table th,.design-blank-table td{border:1px solid #b8c4d1;padding:4px;overflow-wrap:anywhere;vertical-align:middle}
+    .design-blank-table th,.design-blank-table td{border:1px solid #b8c4d1;padding:4px;overflow-wrap:anywhere;vertical-align:middle;white-space:pre-wrap}
     .design-blank-table th{font-weight:800;text-align:center}
     .design-blank-table td{height:1px}
+    .design-blank-table tr{break-inside:avoid;page-break-inside:avoid}
+    .design-blank-table .design-blank-cell{display:block;min-height:1em;white-space:pre-wrap;overflow-wrap:anywhere}
     .design-custom-text{display:flex;width:100%;height:100%;white-space:pre-wrap;overflow-wrap:anywhere}
     .design-custom-text>span{display:block;width:100%;}
     @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.invoice{max-width:none}.design-sheet{margin:0;break-after:page;page-break-after:always}.design-sheet.is-last-page{break-after:auto;page-break-after:auto}}
@@ -179,7 +181,7 @@
               <% } %>
               <tbody>
                 <% blankRows.forEach((row,rowIndex)=>{ %>
-                  <tr><% blankColumns.forEach((column,columnIndex)=>{ const cellValue=Array.isArray(row)?row[columnIndex]:""; const rowBackground=block.alternateRows!==false&&rowIndex%2===1?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#ffffff"); %><td style="background:<%= rowBackground %>;border-color:<%= block.tableBorderColor||"#b8c4d1" %>;border-width:<%= Number(block.tableBorderWidth??1) %>px;padding:<%= Number(block.tableCellPadding??4) %>px"><%= cellValue||"" %></td><% }) %></tr>
+                  <tr><% blankColumns.forEach((column,columnIndex)=>{ const cellValue=Array.isArray(row)?row[columnIndex]:""; const rowBackground=block.alternateRows!==false&&rowIndex%2===1?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#ffffff"); %><td style="background:<%= rowBackground %>;border-color:<%= block.tableBorderColor||"#b8c4d1" %>;border-width:<%= Number(block.tableBorderWidth??1) %>px;padding:<%= Number(block.tableCellPadding??4) %>px;text-align:<%= block.align||"left" %>"><span class="design-blank-cell"><%= cellValue||"" %></span></td><% }) %></tr>
                 <% }) %>
               </tbody>
             </table>

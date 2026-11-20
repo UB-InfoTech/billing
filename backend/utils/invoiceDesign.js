@@ -1,6 +1,6 @@
 const PAGE_SIZES=new Set(["A4","A5","Letter"]);
 const BLOCK_TYPES=new Set(["field","text","items_table","blank_table","totals","logo","divider","shape","image"]);
-const TEMPLATE_KEYS=new Set(["clean","modern","classic","classic-gst","elegant","compact","retail","premium","minimal","blank","imported","html-import"]);
+const TEMPLATE_KEYS=new Set(["clean","modern","classic","classic-gst","elegant","compact","retail","premium","minimal","textile-wholesale","garment-workshop","retail-counter","fashion-retail","jewellery-premium","electronics-distribution","pharma-distribution","building-materials","professional-services","transport-logistics","food-catering","gst-wholesale","modern-business","executive-minimal","blank","imported","html-import"]);
 const FONT_FAMILIES=new Set(["Arial","Helvetica","Georgia","Times New Roman","Verdana","Tahoma"]);
 const FIELD_KEYS=new Set([
   "company_name","company_address","company_gstin","company_phone","company_email",
@@ -65,28 +65,22 @@ function sanitizeTableColumns(columns){
 }
 
 function sanitizeBlankTableColumns(columns){
-  const source=Array.isArray(columns)?columns.slice(0,10):[];
+  const source=Array.isArray(columns)?columns.slice(0,20):[];
   const cleaned=source.map((column,index)=>({
     id:safeId(column?.id)||"column-"+(index+1),
-    label:cleanString(column?.label,40,"Column "+(index+1))||"Column "+(index+1),
-    width:clamp(column?.width,5,80,[48,12,20,20][index]||15)
+    label:cleanString(column?.label,40,""),
+    width:clamp(column?.width,1,100,100/Math.max(1,source.length))
   }));
-  const safe=cleaned.length?cleaned:[
-    {id:"description",label:"Description",width:48},
-    {id:"quantity",label:"Qty",width:12},
-    {id:"rate",label:"Rate",width:20},
-    {id:"amount",label:"Amount",width:20}
-  ];
+  const safe=cleaned.length?cleaned:[{id:"column-1",label:"",width:100}];
   const total=safe.reduce((sum,column)=>sum+column.width,0)||safe.length;
-  return safe.map(column=>({...column,width:Math.max(1,Math.round(column.width/total*1000)/10)}));
+  return safe.map(column=>({...column,width:Math.max(.1,Math.round(column.width/total*1000)/10)}));
 }
 
 function sanitizeBlankTableRows(rows,columnCount){
-  const safeRows=Array.isArray(rows)?rows.slice(0,30):[];
-  const result=safeRows.map(row=>Array.from({length:columnCount},(_,index)=>
+  const source=Array.isArray(rows)?rows.slice(0,100):[Array.from({length:columnCount},()=>"")];
+  return source.map(row=>Array.from({length:columnCount},(_,index)=>
     cleanString(Array.isArray(row)?row[index]:"",240)
   ));
-  return result.length?result:[Array.from({length:columnCount},()=>"")];
 }
 
 function sanitizeBlock(block,index,hasBackground=false){
@@ -145,6 +139,7 @@ function sanitizeBlock(block,index,hasBackground=false){
 function sanitizeTemplate(template,index,ownerId){
   if(!template||typeof template!=="object")return null;
   const id=safeId(template.id)||"template-"+(index+1);
+  const elementLimit=Math.round(clamp(template.elementLimit,80,300,80));
   const rawBackground=template.background&&typeof template.background==="object"?template.background:{};
   const url=String(rawBackground.url||"");
   const prefix=ownerId?"^/uploads/invoice-designs/"+ownerId+"-[a-f0-9]{24}\\.(?:pdf|png|jpe?g|webp)$":"^/uploads/invoice-designs/[a-f0-9]{24}-[a-f0-9]{24}\\.(?:pdf|png|jpe?g|webp)$";
@@ -155,6 +150,7 @@ function sanitizeTemplate(template,index,ownerId){
     name:cleanString(template.name,60,"My invoice design")||"My invoice design",
     templateKey:TEMPLATE_KEYS.has(template.templateKey)?template.templateKey:"clean",
     pageSize:PAGE_SIZES.has(template.pageSize)?template.pageSize:"A4",
+    elementLimit,
     orientation:template.orientation==="landscape"?"landscape":"portrait",
     printMargins:{top:safePrintMargin(template.printMargins?.top),right:safePrintMargin(template.printMargins?.right),bottom:safePrintMargin(template.printMargins?.bottom),left:safePrintMargin(template.printMargins?.left)},
     background:{
@@ -163,7 +159,7 @@ function sanitizeTemplate(template,index,ownerId){
       locked:rawBackground.locked!==false,
       visible:rawBackground.visible!==false
     },
-    blocks:(Array.isArray(template.blocks)?template.blocks:DEFAULT_BLOCKS).slice(0,80).map((block,blockIndex)=>sanitizeBlock(block,blockIndex,Boolean(safeBackground))).filter(Boolean)
+    blocks:(Array.isArray(template.blocks)?template.blocks:DEFAULT_BLOCKS).slice(0,elementLimit).map((block,blockIndex)=>sanitizeBlock(block,blockIndex,Boolean(safeBackground))).filter(Boolean)
   };
 }
 

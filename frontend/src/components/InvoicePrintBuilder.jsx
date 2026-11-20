@@ -49,7 +49,7 @@ const SAMPLE_VALUES={
 };
 const makeBlock=(id,type,fieldKey,label,x,y,w,h,extra={})=>({id,type,fieldKey:fieldKey||"",label:label||"",text:"",x,y,w,h,fontSize:10,bold:false,align:"left",color:"#172335",backgroundColor:"transparent",borderColor:"#d8e0e9",borderWidth:0,borderRadius:0,padding:1,fontFamily:"Arial",italic:false,opacity:1,visible:true,showLabel:true,...extra});
 const makeTemplate=(id,name,key)=>({...createInvoiceDesignTemplate(id,key),name:name||createInvoiceDesignTemplate(id,key).name});
-const makeInitialDesign=()=>({enabled:false,activeTemplateId:"clean-default",templates:[makeTemplate("clean-default","Clean","clean")]});
+const makeInitialDesign=()=>({enabled:false,activeTemplateId:"clean-default",templates:[makeTemplate("clean-default","Modern business","modern-business")]});
 const createId=prefix=>prefix+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7);
 const clamp=(value,min,max)=>Math.min(max,Math.max(min,Number(value)||min));
 const snapAxis=(origin,size,lines)=>{
@@ -120,7 +120,7 @@ const TEMPLATE_THUMBNAIL_VALUES={
 function renderTemplateThumbnail(preset){
   const template=createInvoiceDesignTemplate("gallery-"+preset.key,preset.key);
   return (
-    <div className="invoice-builder-template-thumb" aria-hidden="true">
+    <div className="invoice-builder-template-thumb" style={{aspectRatio:preset.orientation==="landscape"?"297 / 210":"210 / 297"}} aria-hidden="true">
       {template.blocks.filter(block=>block.visible!==false).map((block,index)=>{
         const fontSize=Math.max(2,(Number(block.fontSize)||8)*0.23);
         const style={
@@ -147,12 +147,15 @@ function renderTemplateThumbnail(preset){
         }else if(block.type==="text"){
           content=block.text||block.label;
         }else if(block.type==="items_table"){
+          const columns=(block.columns||[]).filter(column=>column.visible!==false);
+          const samples={sr:"01",designNumber:"ST-240",description:"Premium fabric / product",hsnCode:"5208",quantity:"12",qtyUnit:"MTR",cut:"5.5",MTR:"66",shortPcs:"2",unitPrice:"₹ 450",amount:"₹ 29,700",discount:"5%",taxable:"₹ 28,215"};
+          const gridColumns=columns.map(column=>Math.max(1,Number(column.width)||1)+"fr").join(" ")||"1fr";
           content=(
             <div className="template-thumb-items">
-              <div className="template-thumb-items-head"><span>ITEM DESCRIPTION</span><span>QTY</span><span>AMOUNT</span></div>
-              {["Premium cotton fabric","Embroidered dress material","Additional item"].map((label,rowIndex)=>(
-                <div className="template-thumb-items-row" key={label} style={{backgroundColor:rowIndex%2?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#fff")}}>
-                  <span>{label}</span><span>{rowIndex+1}</span><span>₹ 500</span>
+              <div className="template-thumb-items-head" style={{gridTemplateColumns:gridColumns}}>{columns.map(column=><span key={column.key}>{column.label}</span>)}</div>
+              {["Premium cotton fabric","Embroidered work"].map((label,rowIndex)=>(
+                <div className="template-thumb-items-row" key={label} style={{gridTemplateColumns:gridColumns,backgroundColor:rowIndex%2?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#fff")}}>
+                  {columns.map(column=><span key={column.key}>{column.key==="description"?label:(samples[column.key]||"—")}</span>)}
                 </div>
               ))}
             </div>
@@ -204,6 +207,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [highlightedOcrLineId,setHighlightedOcrLineId]=useState("");
   const [fieldSearch,setFieldSearch]=useState("");
   const [showTemplateLibrary,setShowTemplateLibrary]=useState(false);
+  const [templateSearch,setTemplateSearch]=useState("");
+  const [templateCategory,setTemplateCategory]=useState("All industries");
   const [confirmDeleteTemplate,setConfirmDeleteTemplate]=useState(false);
   const [htmlImporting,setHtmlImporting]=useState(false);
   const [previewRecords,setPreviewRecords]=useState([]);
@@ -487,7 +492,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     updateActive({blocks:activeTemplate.blocks.map(block=>block.id===blockId?{...block,...patch}:block)},options);
   };
   const addBlock=(type,fieldKey,position,dimensions={},extra={})=>{
-    if(activeTemplate.blocks.length>=80){setError("This design can contain up to 80 elements. Remove an unused item before adding another.");return;}
+    const elementLimit=Math.min(300,Math.max(80,Number(activeTemplate.elementLimit)||80));
+    if(activeTemplate.blocks.length>=elementLimit){setError("This design has reached its "+elementLimit+" element limit. Increase the limit in Design settings or remove an unused element.");return;}
     const label=type==="field"?(FIELD_LABELS[fieldKey]||"Invoice field"):type==="items_table"?"Invoice items":type==="blank_table"?"Blank table":type==="totals"?"Invoice totals":type==="text"?"Text":type==="divider"?"Divider":type==="shape"?"Accent shape":type==="image"?"Image":"Business logo";
     const id=createId("block");
     const width=dimensions.w??(type==="items_table"||type==="blank_table"?55:type==="totals"?28:type==="logo"?15:30);
@@ -499,14 +505,17 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     if(type==="items_table")newBlock.fontSize=8;
     if(type==="blank_table"){
       newBlock.fontSize=8;
-      newBlock.tableColumns=[
-        {id:"description",label:"Description",width:48},
-        {id:"quantity",label:"Qty",width:12},
-        {id:"rate",label:"Rate",width:20},
-        {id:"amount",label:"Amount",width:20}
-      ];
-      newBlock.tableRows=Array.from({length:3},()=>["","","",""]);
-      newBlock.tableShowHeader=true;
+      newBlock.tableColumns=[{id:"column-1",label:"",width:100}];
+      newBlock.tableRows=[[""]];
+      newBlock.tableShowHeader=false;
+      newBlock.tableHeaderBackground="#edf2f7";
+      newBlock.tableHeaderColor="#334155";
+      newBlock.tableRowBackground="#ffffff";
+      newBlock.tableAlternateRowBackground="#f8fafc";
+      newBlock.tableBorderColor="#cbd5e1";
+      newBlock.tableBorderWidth=0.7;
+      newBlock.tableCellPadding=4;
+      newBlock.alternateRows=true;
     }
     updateActive({blocks:type==="shape"?[newBlock,...activeTemplate.blocks]:[...activeTemplate.blocks,newBlock]});
     setSelectedBlockId(id);
@@ -634,7 +643,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   };
   const duplicateSelectedBlock=()=>{
     if(!selectedBlock)return;
-    if(activeTemplate.blocks.length>=80){setError("This design can contain up to 80 elements.");return;}
+    const elementLimit=Math.min(300,Math.max(80,Number(activeTemplate.elementLimit)||80));
+    if(activeTemplate.blocks.length>=elementLimit){setError("This design has reached its "+elementLimit+" element limit. Increase the limit in Design settings.");return;}
     const copy={...selectedBlock,id:createId("element"),x:clamp(selectedBlock.x+2,0,100-selectedBlock.w),y:clamp(selectedBlock.y+2,0,100-selectedBlock.h),label:(selectedBlock.label||"Element")+" copy"};
     updateActive({blocks:[...activeTemplate.blocks,copy]});setSelectedBlockId(copy.id);
   };
@@ -669,7 +679,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       const {convertInvoiceHtml}=await import("../utils/invoiceHtmlImporter.js");
       const imported=await convertInvoiceHtml(file);
       const template=createBlankInvoiceDesignTemplate(createId("html"),imported.name);
-      template.templateKey="html-import";template.pageSize=imported.pageSize||"A4";template.blocks=imported.blocks;
+      template.templateKey="html-import";template.pageSize=imported.pageSize||"A4";template.blocks=imported.blocks.slice(0,300);template.elementLimit=Math.min(300,Math.max(80,Math.ceil(template.blocks.length/20)*20));
       updateDesign({...localDesign,activeTemplateId:template.id,templates:[...localDesign.templates,template]});
       setSelectedBlockId(template.blocks[0]?.id||"");setShowTemplateLibrary(false);
       const summary=imported.matchedFieldCount+" live fields, "+imported.staticTextCount+" text elements"+(imported.imageCount?", "+imported.imageCount+" embedded images":"");
@@ -939,36 +949,63 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const selectedBlankTableColumns=selectedBlock?.type==="blank_table"?(selectedBlock.tableColumns||[]):[];
   const selectedBlankTableRows=selectedBlock?.type==="blank_table"?(selectedBlock.tableRows||[]):[];
   const updateBlankTableColumns=columns=>{
-    const rows=selectedBlankTableRows.map(row=>columns.map((_,index)=>String(row?.[index]??"")));
-    updateBlock(selectedBlock.id,{tableColumns:columns,tableRows:rows});
+    const safeColumns=columns.slice(0,20);
+    const total=safeColumns.reduce((sum,column)=>sum+Math.max(1,Number(column.width)||1),0)||safeColumns.length;
+    const normalized=safeColumns.map(column=>({...column,width:Math.max(.1,Math.round((Math.max(1,Number(column.width)||1)/total)*1000)/10)}));
+    const rows=selectedBlankTableRows.map(row=>normalized.map((_,index)=>String(row?.[index]??"")));
+    updateBlock(selectedBlock.id,{tableColumns:normalized,tableRows:rows});
   };
-  const updateBlankTableColumn=(index,patch)=>{
-    updateBlankTableColumns(selectedBlankTableColumns.map((column,columnIndex)=>columnIndex===index?{...column,...patch}:column));
-  };
+  const updateBlankTableColumn=(index,patch)=>updateBlankTableColumns(selectedBlankTableColumns.map((column,columnIndex)=>columnIndex===index?{...column,...patch}:column));
   const updateBlankTableCell=(rowIndex,columnIndex,value)=>{
     const rows=selectedBlankTableRows.map(row=>row.slice());
     if(rows[rowIndex])rows[rowIndex][columnIndex]=value;
     updateBlock(selectedBlock.id,{tableRows:rows});
   };
-  const addBlankTableColumn=()=>{
-    if(selectedBlankTableColumns.length>=10)return;
-    const nextIndex=selectedBlankTableColumns.length+1;
-    const oldWidth=selectedBlankTableColumns.reduce((sum,column)=>sum+Number(column.width||0),0);
-    const columns=selectedBlankTableColumns.map(column=>({...column,width:Number(column.width||0)*0.85}));
-    columns.push({id:createId("column"),label:"Column "+nextIndex,width:Math.max(5,100-oldWidth*0.85)});
-    updateBlankTableColumns(columns);
+  const setBlankTableColumnCount=value=>{
+    const count=Math.max(1,Math.min(20,Math.round(Number(value)||1)));
+    if(count===selectedBlankTableColumns.length)return;
+    updateBlankTableColumns(Array.from({length:count},(_,index)=>selectedBlankTableColumns[index]?{...selectedBlankTableColumns[index],width:100/count}:{id:createId("column"),label:"",width:100/count}));
   };
+  const setBlankTableRowCount=value=>{
+    const count=Math.max(0,Math.min(100,Math.round(Number(value)||0)));
+    updateBlock(selectedBlock.id,{tableRows:Array.from({length:count},(_,index)=>selectedBlankTableRows[index]?selectedBlankTableRows[index].slice(0,selectedBlankTableColumns.length):selectedBlankTableColumns.map(()=>""))});
+  };
+  const updateBlankTableColumnWidth=(index,value)=>updateBlankTableColumn(index,{width:Math.max(1,Math.min(100,Number(value)||1))});
+  const reorderBlankTableColumn=(fromIndex,toIndex)=>{
+    if(fromIndex===toIndex||fromIndex<0||toIndex<0||fromIndex>=selectedBlankTableColumns.length||toIndex>=selectedBlankTableColumns.length)return;
+    const columns=selectedBlankTableColumns.slice();
+    const [moved]=columns.splice(fromIndex,1);columns.splice(toIndex,0,moved);
+    const rows=selectedBlankTableRows.map(row=>{const next=row.slice();const [cell]=next.splice(fromIndex,1);next.splice(toIndex,0,cell);return next;});
+    const total=columns.reduce((sum,column)=>sum+Number(column.width||1),0)||columns.length;
+    updateBlock(selectedBlock.id,{tableColumns:columns.map(column=>({...column,width:Math.round(Number(column.width||1)/total*1000)/10})),tableRows:rows});
+  };
+  const addBlankTableColumn=()=>setBlankTableColumnCount(selectedBlankTableColumns.length+1);
   const removeBlankTableColumn=index=>{
     if(selectedBlankTableColumns.length<=1)return;
-    updateBlankTableColumns(selectedBlankTableColumns.filter((_,columnIndex)=>columnIndex!==index));
+    const columns=selectedBlankTableColumns.filter((_,columnIndex)=>columnIndex!==index);
+    const rows=selectedBlankTableRows.map(row=>row.filter((_,columnIndex)=>columnIndex!==index));
+    const total=columns.reduce((sum,column)=>sum+Number(column.width||1),0)||columns.length;
+    updateBlock(selectedBlock.id,{tableColumns:columns.map(column=>({...column,width:Math.round(Number(column.width||1)/total*1000)/10})),tableRows:rows});
   };
-  const addBlankTableRow=()=>{
-    if(selectedBlankTableRows.length>=30)return;
-    updateBlock(selectedBlock.id,{tableRows:[...selectedBlankTableRows,selectedBlankTableColumns.map(()=>"")]});
-  };
-  const removeBlankTableRow=()=>{
-    if(selectedBlankTableRows.length<=1)return;
-    updateBlock(selectedBlock.id,{tableRows:selectedBlankTableRows.slice(0,-1)});
+  const addBlankTableRow=()=>setBlankTableRowCount(selectedBlankTableRows.length+1);
+  const removeBlankTableRow=index=>updateBlock(selectedBlock.id,{tableRows:selectedBlankTableRows.filter((_,rowIndex)=>rowIndex!==index)});
+  const handleBlankTablePaste=(event,rowIndex,columnIndex)=>{
+    const raw=event.clipboardData?.getData("text/plain")||"";
+    if(!raw.includes("\t")&&!raw.includes("\n"))return;
+    event.preventDefault();
+    const pasted=raw.replace(/\r/g,"").split("\n").filter((line,index,array)=>line!==""||index<array.length-1).map(line=>line.split("\t"));
+    if(!pasted.length)return;
+    const requestedColumns=columnIndex+Math.max(...pasted.map(row=>row.length));
+    const columnCount=Math.max(selectedBlankTableColumns.length,Math.min(20,requestedColumns));
+    const rowCount=Math.max(selectedBlankTableRows.length,Math.min(100,rowIndex+pasted.length));
+    if(requestedColumns>20||rowIndex+pasted.length>100)setError("The table can contain up to 20 columns and 100 rows. Extra pasted cells were not included.");
+    const columns=Array.from({length:columnCount},(_,index)=>selectedBlankTableColumns[index]||{id:createId("column"),label:"",width:100/columnCount});
+    const total=columns.reduce((sum,column)=>sum+Number(column.width||1),0)||columns.length;
+    const normalized=columns.map(column=>({...column,width:Math.round(Number(column.width||1)/total*1000)/10}));
+    const rows=Array.from({length:rowCount},(_,index)=>Array.from({length:columnCount},(_,col)=>String(selectedBlankTableRows[index]?.[col]??"")));
+    pasted.forEach((cells,rowOffset)=>cells.forEach((value,colOffset)=>{const targetRow=rowIndex+rowOffset,targetColumn=columnIndex+colOffset;if(targetRow<rowCount&&targetColumn<columnCount)rows[targetRow][targetColumn]=value.slice(0,240);}));
+    updateBlock(selectedBlock.id,{tableColumns:normalized,tableRows:rows});
+    setMessage("Pasted spreadsheet cells into the blank table.");
   };
 
   const renderBlockContent=block=>{
@@ -990,8 +1027,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       return (
         <div className="invoice-builder-sample-table" style={{color:block.color}}>
           <table>
-            <thead><tr>{columns.map(column=><th key={column.key} style={{backgroundColor:block.tableHeaderBackground||"#edf2f7",color:block.tableHeaderColor||"#172335",borderColor,borderWidth:(block.tableBorderWidth??1)+"px",padding:cellPadding+"px"}}>{column.label}</th>)}</tr></thead>
-            <tbody>{rows.map((item,index)=><tr key={item.sr||index}>{columns.map(column=><td key={column.key} style={{backgroundColor:block.alternateRows!==false&&index%2===1?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#ffffff"),borderColor,borderWidth:(block.tableBorderWidth??1)+"px",padding:cellPadding+"px"}}>{item[column.key]??""}</td>)}</tr>)}</tbody>
+            <thead><tr>{columns.map(column=><th key={column.key} style={{backgroundColor:block.tableHeaderBackground||"#edf2f7",color:block.tableHeaderColor||"#172335",borderColor,borderWidth:(block.tableBorderWidth??1)+"px",padding:cellPadding+"px",textAlign:block.align||"left"}}>{column.label}</th>)}</tr></thead>
+            <tbody>{rows.map((item,index)=><tr key={item.sr||index}>{columns.map(column=><td key={column.key} style={{backgroundColor:block.alternateRows!==false&&index%2===1?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#ffffff"),borderColor,borderWidth:(block.tableBorderWidth??1)+"px",padding:cellPadding+"px",textAlign:block.align||"left"}}>{item[column.key]??""}</td>)}</tr>)}</tbody>
           </table>
           {previewItems.length>rows.length&&<small className="invoice-builder-more-items">+ {previewItems.length-rows.length} more saved items</small>}
         </div>
@@ -1285,30 +1322,48 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 {selectedBlock.type==="blank_table"&&(
                   <div className="invoice-builder-table-editor invoice-builder-blank-table-editor">
                     <h4>Build your blank table</h4>
-                    <p>Create your own columns and rows for extra details, measurements, approvals or handwritten entries. This table does not change invoice totals.</p>
+                    <p>Start with an empty grid. Choose the exact number of columns and rows, name the headings, type into cells or paste a range copied from Excel. This table is separate from invoice items and never changes totals.</p>
+                    <div className="invoice-builder-blank-table-counts">
+                      <label>Number of columns<input className="form-control form-control-sm" type="number" min="1" max="20" value={selectedBlankTableColumns.length} onChange={event=>setBlankTableColumnCount(event.target.value)}/></label>
+                      <label>Number of rows<input className="form-control form-control-sm" type="number" min="0" max="100" value={selectedBlankTableRows.length} onChange={event=>setBlankTableRowCount(event.target.value)}/></label>
+                    </div>
                     <div className="invoice-builder-blank-table-columns">
                       {selectedBlankTableColumns.map((column,index)=>(
-                        <div className="invoice-builder-blank-table-column" key={column.id}>
-                          <label className="small text-secondary">Heading {index+1}</label>
-                          <input className="form-control form-control-sm" value={column.label} maxLength={40} onChange={event=>updateBlankTableColumn(index,{label:event.target.value})}/>
-                          <div className="d-flex align-items-center gap-2 mt-1"><label className="small text-secondary mb-0">Width</label><input className="form-control form-control-sm invoice-builder-column-width" type="number" min="5" max="80" value={Math.round(column.width||10)} onChange={event=>updateBlankTableColumn(index,{width:clamp(event.target.value,5,80)})}/><span className="small text-secondary">%</span></div>
+                        <div className="invoice-builder-blank-table-column" key={column.id} draggable onDragStart={event=>{event.dataTransfer.setData("application/x-blank-table-column",String(index));event.dataTransfer.effectAllowed="move";}} onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();const from=Number(event.dataTransfer.getData("application/x-blank-table-column"));if(Number.isInteger(from))reorderBlankTableColumn(from,index);}}>
+                          <label className="small text-secondary">Column {index+1} heading</label>
+                          <input className="form-control form-control-sm" value={column.label} maxLength={40} placeholder="Leave empty for no heading" onChange={event=>updateBlankTableColumn(index,{label:event.target.value})}/>
+                          <div className="d-flex align-items-center gap-2 mt-1"><label className="small text-secondary mb-0">Width</label><input className="form-control form-control-sm invoice-builder-column-width" type="number" min="1" max="100" value={Math.round(column.width||100/Math.max(1,selectedBlankTableColumns.length))} onChange={event=>updateBlankTableColumnWidth(index,event.target.value)}/><span className="small text-secondary">%</span></div>
                           <button type="button" className="btn btn-sm btn-link text-danger p-0 mt-1" onClick={()=>removeBlankTableColumn(index)} disabled={selectedBlankTableColumns.length<=1}>Remove column</button>
                         </div>
                       ))}
                     </div>
                     <div className="invoice-builder-blank-table-actions">
-                      <button type="button" className="btn btn-sm btn-light border" onClick={addBlankTableColumn} disabled={selectedBlankTableColumns.length>=10}><i className="bi bi-plus-lg me-1"/>Add column</button>
-                      <button type="button" className="btn btn-sm btn-light border" onClick={addBlankTableRow} disabled={selectedBlankTableRows.length>=30}><i className="bi bi-plus-lg me-1"/>Add row</button>
-                      <button type="button" className="btn btn-sm btn-light border" onClick={removeBlankTableRow} disabled={selectedBlankTableRows.length<=1}><i className="bi bi-dash-lg me-1"/>Remove last row</button>
+                      <button type="button" className="btn btn-sm btn-light border" onClick={addBlankTableColumn} disabled={selectedBlankTableColumns.length>=20}><i className="bi bi-plus-lg me-1"/>Add column</button>
+                      <button type="button" className="btn btn-sm btn-light border" onClick={addBlankTableRow} disabled={selectedBlankTableRows.length>=100}><i className="bi bi-plus-lg me-1"/>Add row</button>
+                      <button type="button" className="btn btn-sm btn-light border" onClick={()=>removeBlankTableRow(selectedBlankTableRows.length-1)} disabled={!selectedBlankTableRows.length}><i className="bi bi-dash-lg me-1"/>Remove last row</button>
                     </div>
                     <div className="invoice-builder-blank-table-grid-scroll">
                       <table className="invoice-builder-blank-table-grid">
-                        <thead><tr>{selectedBlankTableColumns.map(column=><th key={column.id}>{column.label||"Column"}</th>)}</tr></thead>
-                        <tbody>{selectedBlankTableRows.map((row,rowIndex)=><tr key={"row-"+rowIndex}>{selectedBlankTableColumns.map((column,columnIndex)=><td key={column.id}><input aria-label={"Row "+(rowIndex+1)+", "+(column.label||"column")} className="form-control form-control-sm" value={row[columnIndex]||""} maxLength={240} placeholder="Blank cell" onChange={event=>updateBlankTableCell(rowIndex,columnIndex,event.target.value)}/></td>)}</tr>)}</tbody>
+                        {selectedBlock.tableShowHeader!==false&&<thead><tr><th className="invoice-builder-blank-table-row-number">#</th>{selectedBlankTableColumns.map(column=><th key={column.id}>{column.label}</th>)}<th></th></tr></thead>}
+                        <tbody>{selectedBlankTableRows.map((row,rowIndex)=><tr key={"row-"+rowIndex}><td className="invoice-builder-blank-table-row-number">{rowIndex+1}</td>{selectedBlankTableColumns.map((column,columnIndex)=><td key={column.id}><input aria-label={"Row "+(rowIndex+1)+", "+(column.label||"column "+(columnIndex+1))} className="form-control form-control-sm" value={row[columnIndex]||""} maxLength={240} placeholder="Blank cell" onPaste={event=>handleBlankTablePaste(event,rowIndex,columnIndex)} onChange={event=>updateBlankTableCell(rowIndex,columnIndex,event.target.value)}/></td>)}<td><button type="button" className="btn btn-sm btn-link text-danger p-0" title="Remove this row" aria-label={"Remove row "+(rowIndex+1)} onClick={()=>removeBlankTableRow(rowIndex)}><i className="bi bi-trash"/></button></td></tr>)}</tbody>
                       </table>
                     </div>
+                    <p className="invoice-builder-blank-table-paste-hint">Copy a range of cells from Excel or Google Sheets and paste into a cell to fill the grid automatically. Drag the column cards above to change their order.</p>
                     <div className="form-check form-switch mt-3"><input id="invoice-blank-table-header" className="form-check-input" type="checkbox" checked={selectedBlock.tableShowHeader!==false} onChange={event=>updateBlock(selectedBlock.id,{tableShowHeader:event.target.checked})}/><label className="form-check-label small" htmlFor="invoice-blank-table-header">Show column headings</label></div>
-                    <div className="small text-secondary mt-2">{selectedBlankTableColumns.length} columns · {selectedBlankTableRows.length} rows · Blank cells stay blank on the printed invoice.</div>
+                    <h4>Table appearance</h4>
+                    <div className="invoice-builder-table-style-grid">
+                      <label>Heading background<input type="color" className="form-control form-control-color w-100" value={selectedBlock.tableHeaderBackground||"#edf2f7"} onChange={event=>updateBlock(selectedBlock.id,{tableHeaderBackground:event.target.value})}/></label>
+                      <label>Heading text<input type="color" className="form-control form-control-color w-100" value={selectedBlock.tableHeaderColor||"#334155"} onChange={event=>updateBlock(selectedBlock.id,{tableHeaderColor:event.target.value})}/></label>
+                      <label>Row background<input type="color" className="form-control form-control-color w-100" value={selectedBlock.tableRowBackground||"#ffffff"} onChange={event=>updateBlock(selectedBlock.id,{tableRowBackground:event.target.value})}/></label>
+                      <label>Alternate row<input type="color" className="form-control form-control-color w-100" value={selectedBlock.tableAlternateRowBackground||"#f8fafc"} onChange={event=>updateBlock(selectedBlock.id,{tableAlternateRowBackground:event.target.value})}/></label>
+                      <label>Border colour<input type="color" className="form-control form-control-color w-100" value={selectedBlock.tableBorderColor||"#cbd5e1"} onChange={event=>updateBlock(selectedBlock.id,{tableBorderColor:event.target.value})}/></label>
+                      <label>Cell spacing<input type="number" min="0" max="10" className="form-control form-control-sm" value={selectedBlock.tableCellPadding??4} onChange={event=>updateBlock(selectedBlock.id,{tableCellPadding:clamp(event.target.value,0,10)})}/></label>
+                    </div>
+                    <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mt-2">
+                      <div className="form-check form-switch"><input id="invoice-blank-table-alternate" type="checkbox" className="form-check-input" checked={selectedBlock.alternateRows!==false} onChange={event=>updateBlock(selectedBlock.id,{alternateRows:event.target.checked})}/><label className="form-check-label small" htmlFor="invoice-blank-table-alternate">Alternate row shading</label></div>
+                      <label className="small text-secondary d-flex align-items-center gap-2">Border width <input type="number" min="0" max="3" className="form-control form-control-sm" style={{width:64}} value={selectedBlock.tableBorderWidth??1} onChange={event=>updateBlock(selectedBlock.id,{tableBorderWidth:clamp(event.target.value,0,3)})}/></label>
+                    </div>
+                    <div className="small text-secondary mt-2">{selectedBlankTableColumns.length} columns · {selectedBlankTableRows.length} rows · Empty headings and cells remain empty on the printed invoice.</div>
                   </div>
                 )}
                 {selectedBlock.type==="items_table"&&(
@@ -1386,24 +1441,37 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
             <section className="invoice-builder-property-card">
               <div className="d-flex justify-content-between align-items-center gap-2 mb-2"><h3 className="mb-0">Selected design</h3><button type="button" className="btn btn-sm btn-light border" onClick={()=>setShowTemplateLibrary(true)}>Browse templates</button></div>
               <p>{activeTemplate.name} · {activeTemplate.blocks.length} elements. Your other saved designs remain unchanged while you edit this one.</p>
+              <div className="invoice-builder-element-capacity">
+                <label htmlFor="invoice-element-capacity">Maximum elements on this design</label>
+                <select id="invoice-element-capacity" className="form-select form-select-sm" value={Math.max(80,Number(activeTemplate.elementLimit)||80)} onChange={event=>updateActive({elementLimit:Number(event.target.value)})}>
+                  {[80,100,120,160,200,250,300].filter(limit=>limit>=activeTemplate.blocks.length||limit===(Number(activeTemplate.elementLimit)||80)).map(limit=><option value={limit} key={limit}>{limit} elements</option>)}
+                </select>
+                <small>Increase this when the design reaches its current capacity. Existing elements are kept.</small>
+              </div>
               <div className="invoice-builder-design-actions"><button type="button" className="btn btn-sm btn-light border" onClick={duplicateTemplate} disabled={localDesign.templates.length>=12}><i className="bi bi-copy me-1"/>Duplicate</button><button type="button" className="btn btn-sm btn-light border" onClick={()=>setConfirmDeleteTemplate(value=>!value)}><i className="bi bi-trash me-1"/>Delete</button><button type="button" className="btn btn-sm btn-primary" onClick={createBlankDesign} disabled={localDesign.templates.length>=12}><i className="bi bi-plus-lg me-1"/>New design</button></div>
               {confirmDeleteTemplate&&<div className="invoice-builder-delete-confirm"><span>Delete “{activeTemplate.name}”?</span><button type="button" className="btn btn-sm btn-danger" onClick={deleteActiveTemplate}>Delete design</button><button type="button" className="btn btn-sm btn-light border" onClick={()=>setConfirmDeleteTemplate(false)}>Keep it</button></div>}
             </section>
             <section className="invoice-builder-property-card invoice-builder-layers">
-              <div className="d-flex justify-content-between align-items-center gap-2 mb-2"><h3 className="mb-0">Elements on this page</h3><small>{activeTemplate.blocks.length}/80</small></div>
+              <div className="d-flex justify-content-between align-items-center gap-2 mb-2"><h3 className="mb-0">Elements on this page</h3><small>{activeTemplate.blocks.length}/{activeTemplate.elementLimit||80}</small></div>
               {activeTemplate.blocks.length===0?<p>Start by adding a field, text, image, divider or accent shape.</p>:<div className="invoice-builder-layer-list">{activeTemplate.blocks.slice().reverse().map(block=><div className={selectedBlockId===block.id?"is-selected":""} key={block.id}><button type="button" className="invoice-builder-layer-select" onClick={()=>setSelectedBlockId(block.id)}><i className={"bi "+(block.type==="field"?"bi-braces":block.type==="items_table"?"bi-table":block.type==="image"||block.type==="logo"?"bi-image":block.type==="shape"?"bi-square":block.type==="divider"?"bi-dash":"bi-fonts")}/><span>{block.label||block.text||block.type.replace("_"," ")}</span></button><button type="button" className="invoice-builder-layer-visibility" title={block.visible===false?"Show element":"Hide element"} onClick={()=>updateBlock(block.id,{visible:block.visible===false})}><i className={"bi "+(block.visible===false?"bi-eye-slash":"bi-eye")}/></button></div>)}</div>}
             </section>
           </aside>
         </div>
         <footer className="invoice-builder-footer">
-          <div><strong>{activeTemplate.blocks.length} elements</strong><span> · Your existing invoice data and calculations stay unchanged.</span></div>
+          <div><strong>{activeTemplate.blocks.length} / {activeTemplate.elementLimit||80} elements used</strong><span> · Your existing invoice data and calculations stay unchanged.</span></div>
         </footer>
       </div>
       {showTemplateLibrary&&<div className="invoice-builder-template-modal" role="dialog" aria-modal="true" aria-label="Professional invoice templates">
         <div className="invoice-builder-template-dialog">
           <header><div><strong>Professional invoice templates</strong><small>Choose a ready-made layout. Every field, colour and position can be changed afterwards.</small></div><button type="button" className="btn btn-light border" onClick={()=>setShowTemplateLibrary(false)} aria-label="Close templates"><i className="bi bi-x-lg"/></button></header>
-          <div className="invoice-builder-template-intro"><span><i className="bi bi-stars me-1"/>8 ready-to-customize designs</span><button type="button" className="btn btn-sm btn-outline-primary" onClick={createBlankDesign}><i className="bi bi-plus-lg me-1"/>Start with a blank page</button></div>
-          <div className="invoice-builder-template-grid">{INVOICE_DESIGN_PRESETS.map(preset=><article className="invoice-builder-template-card" key={preset.key}>
+          <div className="invoice-builder-template-intro"><span><i className="bi bi-stars me-1"/>14 industry-ready invoice designs</span><button type="button" className="btn btn-sm btn-outline-primary" onClick={createBlankDesign}><i className="bi bi-plus-lg me-1"/>Start with a blank page</button></div>
+          <div className="invoice-builder-template-filters">
+            <input type="search" className="form-control form-control-sm" value={templateSearch} onChange={event=>setTemplateSearch(event.target.value)} placeholder="Search by industry or template name" aria-label="Search invoice templates"/>
+            <select className="form-select form-select-sm" value={templateCategory} onChange={event=>setTemplateCategory(event.target.value)} aria-label="Filter templates by industry">
+              <option>All industries</option>{Array.from(new Set(INVOICE_DESIGN_PRESETS.map(preset=>preset.category))).map(category=><option value={category} key={category}>{category}</option>)}
+            </select>
+          </div>
+          <div className="invoice-builder-template-grid">{INVOICE_DESIGN_PRESETS.filter(preset=>(templateCategory==="All industries"||preset.category===templateCategory)&&(!templateSearch.trim()||(preset.name+" "+preset.category+" "+preset.description).toLowerCase().includes(templateSearch.trim().toLowerCase()))).map(preset=><article className="invoice-builder-template-card" key={preset.key}>
             {renderTemplateThumbnail(preset)}
             <div className="invoice-builder-template-card-copy"><div><strong>{preset.name}</strong><small>{preset.description}</small></div><span className="invoice-builder-template-category">{preset.category}</span></div>
             <button type="button" className="btn btn-sm btn-primary w-100" onClick={()=>chooseTemplate(preset.key)}>Use this design</button>

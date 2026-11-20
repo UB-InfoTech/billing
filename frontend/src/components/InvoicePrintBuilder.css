@@ -378,3 +378,35 @@
 @media(max-width:760px){.invoice-builder-blank-table-columns{grid-template-columns:1fr}.invoice-builder-blank-table-actions>*{flex:1 1 auto}}
 
 .invoice-builder-custom-text-preview{display:flex;width:100%;height:100%;white-space:pre-wrap;overflow-wrap:anywhere}
+
+
+/* Industry template gallery and no-code blank-grid controls */
+.invoice-builder-template-filters{display:flex;align-items:center;gap:9px;flex-wrap:wrap;width:100%;padding:8px 20px 4px}
+.invoice-builder-template-filters input{flex:1 1 220px;min-width:150px;max-width:320px}
+.invoice-builder-template-filters select{flex:0 1 230px;min-width:170px}
+.invoice-builder-template-intro{flex-wrap:wrap}
+.invoice-builder-template-card-copy{min-height:78px}
+.invoice-builder-template-card-copy small{font-size:10px;line-height:1.45}
+.invoice-builder-template-card .invoice-builder-template-category{max-width:120px;white-space:normal;text-align:center}
+.invoice-builder-template-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.invoice-builder-template-thumb{background:linear-gradient(135deg,#fff 0%,#fafbfd 100%)}
+.invoice-builder-element-capacity{display:grid;gap:5px;margin-top:12px;padding:10px;border:1px solid #dce6f0;border-radius:9px;background:#f8fbfe}
+.invoice-builder-element-capacity label{margin:0;color:#40566f;font-size:10px;font-weight:800}
+.invoice-builder-element-capacity small{color:#77889b;font-size:9px;line-height:1.45}
+.invoice-builder-element-capacity .form-select{font-size:11px}
+.invoice-builder-blank-table-counts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.invoice-builder-blank-table-counts label{display:grid;gap:4px;color:#52677f;font-size:10px;font-weight:750}
+.invoice-builder-blank-table-column[draggable=true]{cursor:grab}
+.invoice-builder-blank-table-column[draggable=true]:active{cursor:grabbing}
+.invoice-builder-blank-table-grid td input{width:100%;min-width:75px}
+.invoice-builder-blank-table-grid th{white-space:nowrap}
+.invoice-builder-blank-table-paste-hint{margin:8px 0 0;color:#71839a;font-size:9px;line-height:1.45}
+.invoice-builder-table-style-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.invoice-builder-table-style-grid label{display:grid;gap:4px;color:#64778e;font-size:9px;font-weight:700}
+@media(max-width:1050px){.invoice-builder-template-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){
+ .invoice-builder-template-filters{padding:8px 12px}
+ .invoice-builder-template-filters input,.invoice-builder-template-filters select{max-width:none;flex:1 1 100%}
+ .invoice-builder-template-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .invoice-builder-blank-table-counts{grid-template-columns:1fr 1fr}
+}

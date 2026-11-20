@@ -532,7 +532,7 @@ test("invoice print margins are sanitized, persisted and reflected by the print 
 
  assert.match(html,/class="design-blank-table"/);
  assert.ok(html.includes(">Material</th>"));
- assert.ok(html.includes(">Cotton fabric</td>"));
+ assert.ok(html.includes(">Cotton fabric</span>"));
  assert.match(html,/text-decoration:underline/);
  assert.match(html,/text-transform:uppercase/);
  assert.match(html,/line-height:1\.8/);

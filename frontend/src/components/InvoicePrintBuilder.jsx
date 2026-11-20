@@ -980,8 +980,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
           </div>
           <div className="invoice-builder-top-actions">
             <span className="invoice-builder-save-status">{localDesign.enabled?"Custom design active":"Current print design unchanged"}</span>
-            <button type="button" className="btn btn-light border" onClick={onClose}>Close</button>
-            <button type="button" className="btn btn-primary" disabled={saving||uploading} onClick={()=>onSave?.({...localDesign,enabled:true})}>{saving?<><span className="spinner-border spinner-border-sm me-2"/>Saving</>:"Save design"}</button>
+            
+            <button type="button" className="btn btn-primary" disabled={saving||uploading} title="Save this design and make it your active invoice design" onClick={()=>onSave?.({...localDesign,enabled:true})}>{saving?<><span className="spinner-border spinner-border-sm me-2"/>Saving</>:"Save & use design"}</button>
           </div>
         </header>
         <nav className="invoice-builder-steps" aria-label="Invoice design steps">
@@ -1299,7 +1299,6 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         </div>
         <footer className="invoice-builder-footer">
           <div><strong>{activeTemplate.blocks.length} elements</strong><span> · Your existing invoice data and calculations stay unchanged.</span></div>
-          <div><button type="button" className="btn btn-light border" onClick={onClose}>Cancel</button><button type="button" className="btn btn-primary" disabled={saving} onClick={()=>onSave?.({...localDesign,enabled:true})}>{saving?"Saving...":"Save and use design"}</button></div>
         </footer>
       </div>
       {showTemplateLibrary&&<div className="invoice-builder-template-modal" role="dialog" aria-modal="true" aria-label="Professional invoice templates">

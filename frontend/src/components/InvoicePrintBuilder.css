@@ -68,9 +68,8 @@
 .invoice-builder-preset-preview{display:block;width:100%;aspect-ratio:3/4;border:1px solid #dce3eb;background:linear-gradient(#dfe8f2 12%,#fff 12% 35%,#e9eef4 35% 36%,#fff 36% 68%,#e9eef4 68% 69%,#fff 69%)}
 .invoice-builder-preset-preview.classic{background:linear-gradient(#e7e7e7 15%,#fff 15% 30%,#e7e7e7 30% 31%,#fff 31% 70%,#e7e7e7 70% 71%,#fff 71%)}
 .invoice-builder-preset-preview.modern{background:linear-gradient(110deg,#244a7b 0 28%,#fff 28% 45%,#edf3fb 45% 46%,#fff 46% 72%,#edf3fb 72% 73%,#fff 73%)}
-.invoice-builder-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:58px;padding:9px 18px;border-top:1px solid #dce3eb;background:#fff;color:#6d7d90;font-size:11px}
+.invoice-builder-footer{display:flex;align-items:center;justify-content:flex-start;gap:12px;min-height:58px;padding:9px 18px;border-top:1px solid #dce3eb;background:#fff;color:#6d7d90;font-size:11px}
 .invoice-builder-footer strong{color:#34485f}
-.invoice-builder-footer>div:last-child{display:flex;align-items:center;gap:8px}
 @media(max-width:1100px){
  .invoice-builder-workspace{grid-template-columns:210px minmax(360px,1fr)}
  .invoice-builder-properties{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border-top:1px solid #dce3eb;border-left:0;max-height:260px}
@@ -97,8 +96,7 @@
  .invoice-builder-page.is-landscape{width:840px;min-width:840px}
  .invoice-builder-canvas-footer{align-items:flex-start;flex-wrap:wrap;padding:8px 10px}
  .invoice-builder-footer{align-items:flex-start;flex-direction:column;padding:9px 12px}
- .invoice-builder-footer>div:last-child{width:100%;justify-content:flex-end}
-}
+ }
 @media(prefers-reduced-motion:reduce){.invoice-builder-block,.invoice-builder-palette button{transition:none!important}}
 
 .invoice-builder-pagination-hint{color:#61748a;font-size:10px;text-align:right}

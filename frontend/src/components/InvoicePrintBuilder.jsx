@@ -488,15 +488,26 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   };
   const addBlock=(type,fieldKey,position,dimensions={},extra={})=>{
     if(activeTemplate.blocks.length>=80){setError("This design can contain up to 80 elements. Remove an unused item before adding another.");return;}
-    const label=type==="field"?(FIELD_LABELS[fieldKey]||"Invoice field"):type==="items_table"?"Invoice items":type==="totals"?"Invoice totals":type==="text"?"Text":type==="divider"?"Divider":type==="shape"?"Accent shape":type==="image"?"Image":"Business logo";
+    const label=type==="field"?(FIELD_LABELS[fieldKey]||"Invoice field"):type==="items_table"?"Invoice items":type==="blank_table"?"Blank table":type==="totals"?"Invoice totals":type==="text"?"Text":type==="divider"?"Divider":type==="shape"?"Accent shape":type==="image"?"Image":"Business logo";
     const id=createId("block");
-    const width=dimensions.w??(type==="items_table"?55:type==="totals"?28:type==="logo"?15:30);
-    const height=dimensions.h??(type==="items_table"?18:type==="totals"?16:type==="logo"?12:5);
+    const width=dimensions.w??(type==="items_table"||type==="blank_table"?55:type==="totals"?28:type==="logo"?15:30);
+    const height=dimensions.h??(type==="items_table"?18:type==="blank_table"?16:type==="totals"?16:type==="logo"?12:5);
     const x=clamp(position?.x??34,0,100-width);
     const y=clamp(position?.y??40,0,100-height);
     const newBlock=makeBlock(id,type,fieldKey,label,x,y,width,height,{showLabel:type==="field"?!activeTemplate.background?.url:false,...extra});
     if(type==="text")newBlock.text="Your text";
     if(type==="items_table")newBlock.fontSize=8;
+    if(type==="blank_table"){
+      newBlock.fontSize=8;
+      newBlock.tableColumns=[
+        {id:"description",label:"Description",width:48},
+        {id:"quantity",label:"Qty",width:12},
+        {id:"rate",label:"Rate",width:20},
+        {id:"amount",label:"Amount",width:20}
+      ];
+      newBlock.tableRows=Array.from({length:3},()=>["","","",""]);
+      newBlock.tableShowHeader=true;
+    }
     updateActive({blocks:type==="shape"?[newBlock,...activeTemplate.blocks]:[...activeTemplate.blocks,newBlock]});
     setSelectedBlockId(id);
   };
@@ -925,10 +936,45 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     updateSelectedTableColumns([...selectedTableColumns,{...option,order:selectedTableColumns.length}]);
   };
 
+  const selectedBlankTableColumns=selectedBlock?.type==="blank_table"?(selectedBlock.tableColumns||[]):[];
+  const selectedBlankTableRows=selectedBlock?.type==="blank_table"?(selectedBlock.tableRows||[]):[];
+  const updateBlankTableColumns=columns=>{
+    const rows=selectedBlankTableRows.map(row=>columns.map((_,index)=>String(row?.[index]??"")));
+    updateBlock(selectedBlock.id,{tableColumns:columns,tableRows:rows});
+  };
+  const updateBlankTableColumn=(index,patch)=>{
+    updateBlankTableColumns(selectedBlankTableColumns.map((column,columnIndex)=>columnIndex===index?{...column,...patch}:column));
+  };
+  const updateBlankTableCell=(rowIndex,columnIndex,value)=>{
+    const rows=selectedBlankTableRows.map(row=>row.slice());
+    if(rows[rowIndex])rows[rowIndex][columnIndex]=value;
+    updateBlock(selectedBlock.id,{tableRows:rows});
+  };
+  const addBlankTableColumn=()=>{
+    if(selectedBlankTableColumns.length>=10)return;
+    const nextIndex=selectedBlankTableColumns.length+1;
+    const oldWidth=selectedBlankTableColumns.reduce((sum,column)=>sum+Number(column.width||0),0);
+    const columns=selectedBlankTableColumns.map(column=>({...column,width:Number(column.width||0)*0.85}));
+    columns.push({id:createId("column"),label:"Column "+nextIndex,width:Math.max(5,100-oldWidth*0.85)});
+    updateBlankTableColumns(columns);
+  };
+  const removeBlankTableColumn=index=>{
+    if(selectedBlankTableColumns.length<=1)return;
+    updateBlankTableColumns(selectedBlankTableColumns.filter((_,columnIndex)=>columnIndex!==index));
+  };
+  const addBlankTableRow=()=>{
+    if(selectedBlankTableRows.length>=30)return;
+    updateBlock(selectedBlock.id,{tableRows:[...selectedBlankTableRows,selectedBlankTableColumns.map(()=>"")]});
+  };
+  const removeBlankTableRow=()=>{
+    if(selectedBlankTableRows.length<=1)return;
+    updateBlock(selectedBlock.id,{tableRows:selectedBlankTableRows.slice(0,-1)});
+  };
+
   const renderBlockContent=block=>{
     if(block.type==="shape")return null;
     if(block.type==="image")return <img className="invoice-builder-imported-image" style={{objectFit:block.imageFit||"contain"}} src={block.imageUrl} alt={block.label||"Imported invoice image"}/>;
-    if(block.type==="text")return <span>{block.text||block.label}</span>;
+    if(block.type==="text")return <span className="invoice-builder-custom-text-preview" style={{alignItems:block.verticalAlign==="middle"?"center":block.verticalAlign==="bottom"?"flex-end":"flex-start",justifyContent:block.align==="center"?"center":block.align==="right"?"flex-end":"flex-start"}}>{block.text||block.label}</span>;
     if(block.type==="divider")return <div className="invoice-builder-divider-line"/>;
     if(block.type==="logo"){
       const logo=previewInvoice?.logoUrl?(previewInvoice.logoUrl.startsWith("http")?previewInvoice.logoUrl:API+previewInvoice.logoUrl):"";
@@ -964,6 +1010,17 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         <span className="invoice-builder-total">Invoice total <b>{totals.grandTotal}</b></span>
         <span>Paid <b>{totals.paid}</b></span>
         <span>Due <b>{totals.due}</b></span>
+      </div>;
+    }
+    if(block.type==="blank_table"){
+      const columns=Array.isArray(block.tableColumns)?block.tableColumns:[];
+      const rows=Array.isArray(block.tableRows)?block.tableRows:[];
+      return <div className="invoice-builder-static-table" style={{color:block.color}}>
+        <table>
+          <colgroup>{columns.map(column=><col key={column.id} style={{width:(column.width||10)+"%"}/>)}</colgroup>
+          {block.tableShowHeader!==false&&<thead><tr>{columns.map(column=><th key={column.id} style={{backgroundColor:block.tableHeaderBackground||"#edf2f7",color:block.tableHeaderColor||"#172335",borderColor:block.tableBorderColor||"#b8c4d1",padding:(block.tableCellPadding??4)+"px"}}>{column.label}</th>)}</tr></thead>}
+          <tbody>{rows.map((row,rowIndex)=><tr key={"row-"+rowIndex}>{columns.map((column,columnIndex)=><td key={column.id} style={{backgroundColor:block.alternateRows!==false&&rowIndex%2?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#ffffff"),borderColor:block.tableBorderColor||"#b8c4d1",padding:(block.tableCellPadding??4)+"px"}}>{row[columnIndex]||" "}</td>)}</tr>)}</tbody>
+        </table>
       </div>;
     }
     const value=previewInvoice?(previewFields[block.fieldKey]||"—"):(SAMPLE_VALUES[block.fieldKey]||block.label||"Invoice field");
@@ -1012,6 +1069,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
             {!filteredFieldGroups.length&&<div className="invoice-builder-field-no-results">No fields match “{fieldSearch}”. Try another name.</div>}
             <div className="invoice-builder-extra-tools">
               <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("items_table","items")}> <i className="bi bi-table me-1"/>Item table</button>
+              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("blank_table","")}> <i className="bi bi-grid-3x3 me-1"/>Blank table</button>
               <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("totals","totals")}> <i className="bi bi-calculator me-1"/>Totals</button>
               <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("text","")}> <i className="bi bi-fonts me-1"/>Text</button>
               <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("divider","")}> <i className="bi bi-dash-lg me-1"/>Divider</button>
@@ -1089,7 +1147,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   </div>
                   <div className="invoice-builder-block-layer">
                     {activeTemplate.blocks.filter(block=>block.visible!==false).map(block=>(
-                      <button type="button" key={block.id} className={"invoice-builder-block "+(selectedBlockId===block.id?"is-selected":"")+(dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,fontStyle:block.italic?"italic":"normal",fontFamily:block.fontFamily||"Arial",textAlign:block.align,color:block.color,backgroundColor:block.backgroundColor||"transparent",border:block.borderWidth?block.borderWidth+"px solid "+(block.borderColor||"#d8e0e9"):undefined,borderRadius:block.borderRadius+"px",padding:block.padding+"px",opacity:block.opacity??1}} onClick={()=>{if(!placingField)setSelectedBlockId(block.id);}} onPointerDown={event=>{if(!placingField)startBlockDrag(event,block);}} aria-label={"Move "+(block.label||"invoice element")}>
+                      <button type="button" key={block.id} className={"invoice-builder-block "+(selectedBlockId===block.id?"is-selected":"")+(dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,fontStyle:block.italic?"italic":"normal",fontFamily:block.fontFamily||"Arial",textAlign:block.align,color:block.color,backgroundColor:block.backgroundColor||"transparent",border:block.borderWidth?block.borderWidth+"px solid "+(block.borderColor||"#d8e0e9"):undefined,borderRadius:block.borderRadius+"px",padding:block.padding+"px",opacity:block.opacity??1,lineHeight:block.lineHeight??1.25,letterSpacing:(block.letterSpacing??0)+"px",textDecoration:block.textDecoration||"none",textTransform:block.textTransform||"none"}} onClick={()=>{if(!placingField)setSelectedBlockId(block.id);}} onPointerDown={event=>{if(!placingField)startBlockDrag(event,block);}} aria-label={"Move "+(block.label||"invoice element")}>
                         {renderBlockContent(block)}
                         {selectedBlockId===block.id&&<span className="invoice-builder-resize-handle" data-resize-handle="true" onPointerDown={event=>startBlockResize(event,block)} aria-hidden="true"/>}
                       </button>
@@ -1212,7 +1270,47 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   <><label className="form-label">What should it show?</label><select className="form-select form-select-sm mb-3" value={selectedBlock.fieldKey} onChange={event=>updateBlock(selectedBlock.id,{fieldKey:event.target.value,label:FIELD_LABELS[event.target.value]||selectedBlock.label})}>{Object.entries(FIELD_LABELS).filter(([key])=>key!=="logo").map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></>
                 )}
                 {selectedBlock.type==="text"&&<><label className="form-label">Text</label><textarea className="form-control form-control-sm mb-3" rows={3} value={selectedBlock.text} onChange={event=>updateBlock(selectedBlock.id,{text:event.target.value})}/></>}
+                {selectedBlock.type==="text"&&<div className="invoice-builder-custom-text-tools">
+                  <h4>Text formatting</h4>
+                  <div className="invoice-builder-number-grid">
+                    <div><label className="form-label">Line spacing</label><input type="number" min="1" max="2.5" step="0.1" className="form-control form-control-sm" value={selectedBlock.lineHeight??1.25} onChange={event=>updateBlock(selectedBlock.id,{lineHeight:clamp(event.target.value,1,2.5)})}/></div>
+                    <div><label className="form-label">Letter spacing (px)</label><input type="number" min="-1" max="8" step="0.25" className="form-control form-control-sm" value={selectedBlock.letterSpacing??0} onChange={event=>updateBlock(selectedBlock.id,{letterSpacing:clamp(event.target.value,-1,8)})}/></div>
+                    <div><label className="form-label">Text decoration</label><select className="form-select form-select-sm" value={selectedBlock.textDecoration||"none"} onChange={event=>updateBlock(selectedBlock.id,{textDecoration:event.target.value})}><option value="none">None</option><option value="underline">Underline</option><option value="line-through">Strike through</option><option value="overline">Overline</option></select></div>
+                    <div><label className="form-label">Letter case</label><select className="form-select form-select-sm" value={selectedBlock.textTransform||"none"} onChange={event=>updateBlock(selectedBlock.id,{textTransform:event.target.value})}><option value="none">As typed</option><option value="uppercase">UPPERCASE</option><option value="lowercase">lowercase</option><option value="capitalize">Capitalize Words</option></select></div>
+                    <div><label className="form-label">Vertical position</label><select className="form-select form-select-sm" value={selectedBlock.verticalAlign||"top"} onChange={event=>updateBlock(selectedBlock.id,{verticalAlign:event.target.value})}><option value="top">Top</option><option value="middle">Middle</option><option value="bottom">Bottom</option></select></div>
+                  </div>
+                </div>}
+
                 <details className="invoice-builder-advanced-controls"><summary><span>More design controls</span><small>Position, size, table columns, colours and text styles</small></summary>
+                {selectedBlock.type==="blank_table"&&(
+                  <div className="invoice-builder-table-editor invoice-builder-blank-table-editor">
+                    <h4>Build your blank table</h4>
+                    <p>Create your own columns and rows for extra details, measurements, approvals or handwritten entries. This table does not change invoice totals.</p>
+                    <div className="invoice-builder-blank-table-columns">
+                      {selectedBlankTableColumns.map((column,index)=>(
+                        <div className="invoice-builder-blank-table-column" key={column.id}>
+                          <label className="small text-secondary">Heading {index+1}</label>
+                          <input className="form-control form-control-sm" value={column.label} maxLength={40} onChange={event=>updateBlankTableColumn(index,{label:event.target.value})}/>
+                          <div className="d-flex align-items-center gap-2 mt-1"><label className="small text-secondary mb-0">Width</label><input className="form-control form-control-sm invoice-builder-column-width" type="number" min="5" max="80" value={Math.round(column.width||10)} onChange={event=>updateBlankTableColumn(index,{width:clamp(event.target.value,5,80)})}/><span className="small text-secondary">%</span></div>
+                          <button type="button" className="btn btn-sm btn-link text-danger p-0 mt-1" onClick={()=>removeBlankTableColumn(index)} disabled={selectedBlankTableColumns.length<=1}>Remove column</button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="invoice-builder-blank-table-actions">
+                      <button type="button" className="btn btn-sm btn-light border" onClick={addBlankTableColumn} disabled={selectedBlankTableColumns.length>=10}><i className="bi bi-plus-lg me-1"/>Add column</button>
+                      <button type="button" className="btn btn-sm btn-light border" onClick={addBlankTableRow} disabled={selectedBlankTableRows.length>=30}><i className="bi bi-plus-lg me-1"/>Add row</button>
+                      <button type="button" className="btn btn-sm btn-light border" onClick={removeBlankTableRow} disabled={selectedBlankTableRows.length<=1}><i className="bi bi-dash-lg me-1"/>Remove last row</button>
+                    </div>
+                    <div className="invoice-builder-blank-table-grid-scroll">
+                      <table className="invoice-builder-blank-table-grid">
+                        <thead><tr>{selectedBlankTableColumns.map(column=><th key={column.id}>{column.label||"Column"}</th>)}</tr></thead>
+                        <tbody>{selectedBlankTableRows.map((row,rowIndex)=><tr key={"row-"+rowIndex}>{selectedBlankTableColumns.map((column,columnIndex)=><td key={column.id}><input aria-label={"Row "+(rowIndex+1)+", "+(column.label||"column")} className="form-control form-control-sm" value={row[columnIndex]||""} maxLength={240} placeholder="Blank cell" onChange={event=>updateBlankTableCell(rowIndex,columnIndex,event.target.value)}/></td>)}</tr>)}</tbody>
+                      </table>
+                    </div>
+                    <div className="form-check form-switch mt-3"><input id="invoice-blank-table-header" className="form-check-input" type="checkbox" checked={selectedBlock.tableShowHeader!==false} onChange={event=>updateBlock(selectedBlock.id,{tableShowHeader:event.target.checked})}/><label className="form-check-label small" htmlFor="invoice-blank-table-header">Show column headings</label></div>
+                    <div className="small text-secondary mt-2">{selectedBlankTableColumns.length} columns · {selectedBlankTableRows.length} rows · Blank cells stay blank on the printed invoice.</div>
+                  </div>
+                )}
                 {selectedBlock.type==="items_table"&&(
                   <div className="invoice-builder-table-editor">
                     <h4>Columns in this table</h4>

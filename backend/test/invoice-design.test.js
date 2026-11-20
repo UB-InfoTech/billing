@@ -692,3 +692,72 @@ test("sample invoice uses the account state code when one is available",()=>{
  assert.equal(order.stateCode,27);
  assert.equal(order.State,"Maharashtra");
 });
+
+ 
+test("blank invoice tables preserve safe editable headings, cells and print styles",async()=>{
+ const design=sanitizeInvoiceDesign({enabled:true,templates:[{id:"blank-table",blocks:[{
+  id:"custom-table",type:"blank_table",label:"Measurements",x:5,y:40,w:90,h:20,
+  tableColumns:[{id:"fabric",label:"Fabric / Design",width:55},{id:"meters",label:"Meters",width:20},{id:"remarks",label:"Remarks",width:25}],
+  tableRows:[["Cotton floral","12","Urgent"],["","", ""]],
+  tableShowHeader:true,tableHeaderBackground:"#123456",tableHeaderColor:"#ffffff",tableBorderColor:"#abcdef",tableCellPadding:5
+ }]}]});
+ const table=design.templates[0].blocks[0];
+ assert.equal(table.type,"blank_table");
+ assert.deepEqual(table.tableColumns.map(column=>column.label),["Fabric / Design","Meters","Remarks"]);
+ assert.deepEqual(table.tableRows,[["Cotton floral","12","Urgent"],["","",""]]);
+ assert.equal(table.tableShowHeader,true);
+ assert.equal(table.tableHeaderBackground,"#123456");
+ assert.equal(table.tableCellPadding,5);
+});
+test("blank invoice table sanitization bounds columns, rows and cell text",()=>{
+ const unsafe=sanitizeInvoiceDesign({templates:[{id:"limited",blocks:[{
+  id:"static-grid",type:"blank_table",
+  tableColumns:Array.from({length:14},(_,index)=>({id:"c"+index,label:"Column "+index,width:20})),
+  tableRows:Array.from({length:40},()=>Array.from({length:14},()=>"x".repeat(500)))
+ }]}]});
+ const table=unsafe.templates[0].blocks[0];
+ assert.equal(table.tableColumns.length,10);
+ assert.equal(table.tableRows.length,30);
+ assert.equal(table.tableRows[0].length,10);
+ assert.equal(table.tableRows[0][0].length,240);
+ assert.ok(Math.abs(table.tableColumns.reduce((sum,column)=>sum+column.width,0)-100)<0.1);
+});
+test("custom text styling is sanitized and survives invoice design saves",()=>{
+ const design=sanitizeInvoiceDesign({templates:[{id:"text-style",blocks:[{
+  id:"note",type:"text",text:"Delivery instructions\nHandle with care",
+  lineHeight:1.8,letterSpacing:2.5,textDecoration:"underline",textTransform:"uppercase",verticalAlign:"middle"
+ }]}]});
+ const note=design.templates[0].blocks[0];
+ assert.equal(note.text,"Delivery instructions\nHandle with care");
+ assert.equal(note.lineHeight,1.8);
+ assert.equal(note.letterSpacing,2.5);
+ assert.equal(note.textDecoration,"underline");
+ assert.equal(note.textTransform,"uppercase");
+ assert.equal(note.verticalAlign,"middle");
+ const safe=sanitizeInvoiceDesign({templates:[{id:"unsafe",blocks:[{id:"note",type:"text",text:"Safe",lineHeight:9,letterSpacing:99,textDecoration:"blink",textTransform:"insert",verticalAlign:"sideways"}]}]});
+ const safeNote=safe.templates[0].blocks[0];
+ assert.equal(safeNote.lineHeight,2.5);
+ assert.equal(safeNote.letterSpacing,8);
+ assert.equal(safeNote.textDecoration,"none");
+ assert.equal(safeNote.textTransform,"none");
+ assert.equal(safeNote.verticalAlign,"top");
+});
+test("professional built-in templates include ready-to-print customer, invoice, tax, payment and terms sections",()=>{
+ const {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate}=require("../../frontend/src/utils/invoiceTemplateLibrary.js");
+ assert.equal(INVOICE_DESIGN_PRESETS.length,8);
+ for(const preset of INVOICE_DESIGN_PRESETS){
+  const template=createInvoiceDesignTemplate("test-"+preset.key,preset.key);
+  const fields=new Set(template.blocks.filter(block=>block.type==="field").map(block=>block.fieldKey));
+  assert.ok(fields.has("company_name"),preset.key+" has business name");
+  assert.ok(fields.has("customer_name"),preset.key+" has customer name");
+  assert.ok(fields.has("invoice_no"),preset.key+" has invoice number");
+  assert.ok(fields.has("invoice_date"),preset.key+" has invoice date");
+  assert.ok(fields.has("due_date"),preset.key+" has due date");
+  assert.ok(fields.has("amount_words"),preset.key+" has amount in words");
+  assert.ok(fields.has("terms"),preset.key+" has terms");
+  assert.ok(fields.has("bank_details"),preset.key+" has bank details");
+  assert.ok(template.blocks.some(block=>block.type==="items_table"),preset.key+" has invoice item table");
+  assert.ok(template.blocks.some(block=>block.type==="totals"),preset.key+" has invoice totals");
+  assert.ok(template.blocks.filter(block=>block.visible!==false).every(block=>block.x>=0&&block.y>=0&&block.x+block.w<=100.001&&block.y+block.h<=100.001),preset.key+" stays on the page");
+ }
+});

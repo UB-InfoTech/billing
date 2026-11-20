@@ -1,5 +1,5 @@
 const PAGE_SIZES=new Set(["A4","A5","Letter"]);
-const BLOCK_TYPES=new Set(["field","text","items_table","totals","logo","divider","shape","image"]);
+const BLOCK_TYPES=new Set(["field","text","items_table","blank_table","totals","logo","divider","shape","image"]);
 const TEMPLATE_KEYS=new Set(["clean","modern","classic","classic-gst","elegant","compact","retail","premium","minimal","blank","imported","html-import"]);
 const FONT_FAMILIES=new Set(["Arial","Helvetica","Georgia","Times New Roman","Verdana","Tahoma"]);
 const FIELD_KEYS=new Set([
@@ -64,6 +64,31 @@ function sanitizeTableColumns(columns){
   return safe;
 }
 
+function sanitizeBlankTableColumns(columns){
+  const source=Array.isArray(columns)?columns.slice(0,10):[];
+  const cleaned=source.map((column,index)=>({
+    id:safeId(column?.id)||"column-"+(index+1),
+    label:cleanString(column?.label,40,"Column "+(index+1))||"Column "+(index+1),
+    width:clamp(column?.width,5,80,[48,12,20,20][index]||15)
+  }));
+  const safe=cleaned.length?cleaned:[
+    {id:"description",label:"Description",width:48},
+    {id:"quantity",label:"Qty",width:12},
+    {id:"rate",label:"Rate",width:20},
+    {id:"amount",label:"Amount",width:20}
+  ];
+  const total=safe.reduce((sum,column)=>sum+column.width,0)||safe.length;
+  return safe.map(column=>({...column,width:Math.max(1,Math.round(column.width/total*1000)/10)}));
+}
+
+function sanitizeBlankTableRows(rows,columnCount){
+  const safeRows=Array.isArray(rows)?rows.slice(0,30):[];
+  const result=safeRows.map(row=>Array.from({length:columnCount},(_,index)=>
+    cleanString(Array.isArray(row)?row[index]:"",240)
+  ));
+  return result.length?result:[Array.from({length:columnCount},()=>"")];
+}
+
 function sanitizeBlock(block,index,hasBackground=false){
   if(!block||typeof block!=="object"||!BLOCK_TYPES.has(block.type))return null;
   const id=safeId(block.id)||"block-"+(index+1);
@@ -81,6 +106,11 @@ function sanitizeBlock(block,index,hasBackground=false){
     imageUrl:block.type==="image"?safeImage(block.imageUrl):"",
     imageFit:block.type==="image"&&["contain","cover","fill"].includes(block.imageFit)?block.imageFit:"contain",
     ...(block.type==="items_table"&&Array.isArray(block.columns)?{columns:sanitizeTableColumns(block.columns)}:{}),
+    ...(block.type==="blank_table"?{
+      tableColumns:sanitizeBlankTableColumns(block.tableColumns),
+      tableRows:sanitizeBlankTableRows(block.tableRows,sanitizeBlankTableColumns(block.tableColumns).length),
+      tableShowHeader:block.tableShowHeader!==false
+    }:{}),
     tableHeaderBackground:safeBackground(block.tableHeaderBackground||"#edf2f7"),
     tableHeaderColor:safeColor(block.tableHeaderColor||"#172335"),
     tableRowBackground:safeBackground(block.tableRowBackground||"#ffffff"),
@@ -101,6 +131,11 @@ function sanitizeBlock(block,index,hasBackground=false){
     padding:clamp(block.padding,0,16,1),
     fontFamily:FONT_FAMILIES.has(block.fontFamily)?block.fontFamily:"Arial",
     italic:block.italic===true,
+    lineHeight:clamp(block.lineHeight,1,2.5,1.25),
+    letterSpacing:clamp(block.letterSpacing,-1,8,0),
+    textDecoration:["none","underline","line-through","overline"].includes(block.textDecoration)?block.textDecoration:"none",
+    textTransform:["none","uppercase","lowercase","capitalize"].includes(block.textTransform)?block.textTransform:"none",
+    verticalAlign:["top","middle","bottom"].includes(block.verticalAlign)?block.verticalAlign:"top",
     opacity:clamp(block.opacity,0.1,1,1),
     showLabel:block.type==="field"?(block.showLabel===undefined?!hasBackground:block.showLabel!==false):false,
     visible:block.visible!==false

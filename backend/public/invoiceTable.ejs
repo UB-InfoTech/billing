@@ -73,6 +73,13 @@
     .design-totals{width:100%;font-size:9px}
     .design-totals div{display:flex;justify-content:space-between;gap:8px;padding:3px 1px;border-bottom:1px solid #e5eaf0}
     .design-totals .grand{font-size:12px;font-weight:900;border-top:1.5px solid #475569}
+    .design-blank-table{width:100%;height:100%;overflow:hidden}
+    .design-blank-table table{width:100%;height:100%;border-collapse:collapse;table-layout:fixed}
+    .design-blank-table th,.design-blank-table td{border:1px solid #b8c4d1;padding:4px;overflow-wrap:anywhere;vertical-align:middle}
+    .design-blank-table th{font-weight:800;text-align:center}
+    .design-blank-table td{height:1px}
+    .design-custom-text{display:flex;width:100%;height:100%;white-space:pre-wrap;overflow-wrap:anywhere}
+    .design-custom-text>span{display:block;width:100%;}
     @media print{body{print-color-adjust:exact;-webkit-print-color-adjust:exact}.invoice{max-width:none}.design-sheet{margin:0;break-after:page;page-break-after:always}.design-sheet.is-last-page{break-after:auto;page-break-after:auto}}
     @media screen{.design-sheet{margin-bottom:8mm;box-shadow:0 0 0 1px #d8e0e9}.design-sheet.is-last-page{margin-bottom:0}}
 
@@ -135,10 +142,11 @@
     <% } %>
     <div class="design-content-area">
     <% page.blocks.forEach(block=>{ %>
-      <div class="design-block" data-block-id="<%= block.id %>" data-block-type="<%= block.type %>" style="left:<%= block.x %>%;top:<%= block.y %>%;width:<%= block.w %>%;height:<%= block.h %>%;overflow:<%= block.type==="items_table"||block.type==="totals"?"visible":"hidden" %>;font-size:<%= block.fontSize %>px;font-weight:<%= block.bold?700:400 %>;font-style:<%= block.italic?"italic":"normal" %>;font-family:<%= block.fontFamily||"Arial" %>;text-align:<%= block.align %>;color:<%= block.color %>;background-color:<%= block.backgroundColor||"transparent" %>;border:<%= Number(block.borderWidth||0) %>px solid <%= block.borderColor||"#d8e0e9" %>;border-radius:<%= Number(block.borderRadius||0) %>px;padding:<%= Number(block.padding||0) %>px;opacity:<%= Number(block.opacity||1) %>">
+      <div class="design-block" data-block-id="<%= block.id %>" data-block-type="<%= block.type %>" style="left:<%= block.x %>%;top:<%= block.y %>%;width:<%= block.w %>%;height:<%= block.h %>%;overflow:<%= block.type==="items_table"||block.type==="totals"?"visible":"hidden" %>;font-size:<%= block.fontSize %>px;font-weight:<%= block.bold?700:400 %>;font-style:<%= block.italic?"italic":"normal" %>;font-family:<%= block.fontFamily||"Arial" %>;text-align:<%= block.align %>;line-height:<%= Number(block.lineHeight||1.25) %>;letter-spacing:<%= Number(block.letterSpacing||0) %>px;text-decoration:<%= block.textDecoration||"none" %>;text-transform:<%= block.textTransform||"none" %>;color:<%= block.color %>;background-color:<%= block.backgroundColor||"transparent" %>;border:<%= Number(block.borderWidth||0) %>px solid <%= block.borderColor||"#d8e0e9" %>;border-radius:<%= Number(block.borderRadius||0) %>px;padding:<%= Number(block.padding||0) %>px;opacity:<%= Number(block.opacity||1) %>">
         <% if(block.type==="shape"){ %>
         <% }else if(block.type==="image"){ %><img src="<%= block.imageUrl %>" alt="<%= block.label||"Imported image" %>" style="display:block;width:100%;height:100%;object-fit:<%= block.imageFit||"contain" %>">
-        <% }else if(block.type==="text"){ %><%= block.text||block.label %>
+        <% }else if(block.type==="text"){ %>
+          <div class="design-custom-text" style="align-items:<%= block.verticalAlign==="middle"?"center":block.verticalAlign==="bottom"?"flex-end":"flex-start" %>;justify-content:<%= block.align==="center"?"center":block.align==="right"?"flex-end":"flex-start" %>"><span><%= block.text||block.label %></span></div>
         <% }else if(block.type==="divider"){ %><div style="width:100%;border-top:1px solid currentColor;margin-top:3px"></div>
         <% }else if(block.type==="logo"){ %>
           <% if(profileLogoUrl){ %><img src="<%= profileLogoUrl %>" alt="Business logo" style="width:100%;height:100%;object-fit:contain"><% } %>
@@ -155,6 +163,23 @@
               <tbody>
                 <% (page.rows||[]).forEach((entry,rowIndex)=>{ const row={...entry.item,_index:entry.itemNumber}; const rowBackground=block.alternateRows!==false&&(Number(entry.itemNumber||rowIndex+1)-1)%2===1?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#ffffff"); %>
                   <tr data-item-number="<%= Number(entry.itemNumber||rowIndex+1) %>" data-item-label="<%= String(entry.item?.orderName||"") %>" style="height:<%= Number(entry.rowHeightMm||9).toFixed(2) %>mm"><% tableColumns.forEach(column=>{ %><td style="background:<%= rowBackground %>;border-color:<%= block.tableBorderColor||"#b8c4d1" %>;border-width:<%= Number(block.tableBorderWidth??1) %>px;padding:<%= Number(block.tableCellPadding??4) %>px"><span class="design-cell-text"><%= itemValue(row,column) %></span></td><% }) %></tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% }else if(block.type==="blank_table"){ 
+          const blankColumns=Array.isArray(block.tableColumns)?block.tableColumns:[];
+          const blankRows=Array.isArray(block.tableRows)?block.tableRows:[];
+        %>
+          <div class="design-blank-table" style="font-size:<%= Number(block.fontSize||8) %>px;color:<%= block.color %>">
+            <table>
+              <colgroup><% blankColumns.forEach(column=>{ %><col style="width:<%= Number(column.width||10) %>%"><% }) %></colgroup>
+              <% if(block.tableShowHeader!==false){ %>
+                <thead><tr><% blankColumns.forEach(column=>{ %><th style="background:<%= block.tableHeaderBackground||"#edf2f7" %>;color:<%= block.tableHeaderColor||"#172335" %>;border-color:<%= block.tableBorderColor||"#b8c4d1" %>;border-width:<%= Number(block.tableBorderWidth??1) %>px;padding:<%= Number(block.tableCellPadding??4) %>px"><%= column.label %></th><% }) %></tr></thead>
+              <% } %>
+              <tbody>
+                <% blankRows.forEach((row,rowIndex)=>{ %>
+                  <tr><% blankColumns.forEach((column,columnIndex)=>{ const cellValue=Array.isArray(row)?row[columnIndex]:""; const rowBackground=block.alternateRows!==false&&rowIndex%2===1?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#ffffff"); %><td style="background:<%= rowBackground %>;border-color:<%= block.tableBorderColor||"#b8c4d1" %>;border-width:<%= Number(block.tableBorderWidth??1) %>px;padding:<%= Number(block.tableCellPadding??4) %>px"><%= cellValue||"" %></td><% }) %></tr>
                 <% }) %>
               </tbody>
             </table>

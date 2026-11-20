@@ -756,8 +756,8 @@ test("custom text styling is sanitized and survives invoice design saves",()=>{
  assert.equal(safeNote.textTransform,"none");
  assert.equal(safeNote.verticalAlign,"top");
 });
-test("professional built-in templates include ready-to-print customer, invoice, tax, payment and terms sections",()=>{
- const {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate}=require("../../frontend/src/utils/invoiceTemplateLibrary.js");
+test("professional built-in templates include ready-to-print customer, invoice, tax, payment and terms sections",async()=>{
+ const {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate}=await import("../../frontend/src/utils/invoiceTemplateLibrary.js");
  assert.equal(INVOICE_DESIGN_PRESETS.length,8);
  for(const preset of INVOICE_DESIGN_PRESETS){
   const template=createInvoiceDesignTemplate("test-"+preset.key,preset.key);

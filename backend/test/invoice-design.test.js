@@ -607,3 +607,31 @@ test("multi-page invoice pagination retains original line numbering and moves to
  assert.ok(pages[pages.length-1].blocks.some(block=>block.type==="totals"));
  assert.ok(pages[pages.length-1].blocks.some(block=>block.id==="signature"));
 });
+
+
+test("browser-measured invoice print check detects clipped text, overflowing rows, page overflow and missing images",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const result=analyzeRenderedInvoiceMetrics({pages:[{
+  pageNumber:1,width:800,height:1100,blocks:[
+   {id:"address",type:"field",bounds:{left:20,top:30,right:220,bottom:65},contentHeight:58,clientHeight:35,rows:[],images:[]},
+   {id:"items",type:"items_table",bounds:{left:20,top:200,right:780,bottom:500},contentHeight:350,clientHeight:300,rows:[{itemNumber:7,label:"Long fabric description",bottom:525}],images:[]},
+   {id:"logo",type:"image",bounds:{left:810,top:10,right:860,bottom:60},contentHeight:0,clientHeight:0,rows:[],images:[{broken:true,alt:"Business logo"}]}
+  ]
+ }]});
+ assert.equal(result.pageCount,1);
+ assert.equal(result.hasErrors,true);
+ assert.ok(result.warnings.some(warning=>warning.title==="Text or totals may be clipped"));
+ assert.ok(result.warnings.some(warning=>warning.title==="An item row exceeds the table area"&&warning.itemNumber===7));
+ assert.ok(result.warnings.some(warning=>warning.title==="Element extends beyond the paper"));
+ assert.ok(result.warnings.some(warning=>warning.title==="An image could not be loaded"));
+});
+test("browser-measured invoice print check reports a clean multi-page layout",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const result=analyzeRenderedInvoiceMetrics({pages:[
+  {pageNumber:1,width:800,height:1100,blocks:[{id:"items",type:"items_table",bounds:{left:20,top:100,right:780,bottom:900},contentHeight:800,clientHeight:800,rows:[{itemNumber:1,label:"Shirt",bottom:400}],images:[]}]},
+  {pageNumber:2,width:800,height:1100,blocks:[{id:"totals",type:"totals",bounds:{left:600,top:900,right:780,bottom:1050},contentHeight:100,clientHeight:150,rows:[],images:[]}]}
+ ]});
+ assert.equal(result.pageCount,2);
+ assert.deepEqual(result.warnings,[]);
+ assert.equal(result.hasErrors,false);
+});

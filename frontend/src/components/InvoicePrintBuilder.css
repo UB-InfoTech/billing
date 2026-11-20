@@ -349,3 +349,17 @@
 .invoice-builder-margin-grid label{display:grid;gap:3px;color:#66788e;font-size:10px;font-weight:700}
 .invoice-builder-margin-popover small{display:block;margin-top:9px;color:#78889b;font-size:10px;line-height:1.45}
 @media(max-width:760px){.invoice-builder-margin-popover{right:auto;left:0}}
+
+
+.invoice-builder-print-preview-content{display:flex;flex-direction:column;gap:8px}
+.invoice-builder-print-preview-content iframe{flex:1 1 auto;min-height:0}
+.invoice-builder-rendered-audit{flex:0 0 auto;max-height:142px;overflow:auto;padding:9px 12px;border:1px solid #cfe7d8;border-radius:8px;background:#f2fbf5;color:#275c3d}
+.invoice-builder-rendered-audit.has-warnings{border-color:#f0d7a4;background:#fff9ec;color:#624c22}
+.invoice-builder-rendered-audit>strong{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:800}
+.invoice-builder-rendered-audit>strong i{font-size:13px}
+.invoice-builder-rendered-audit ul{margin:6px 0 0;padding-left:20px;font-size:10px;line-height:1.45}
+.invoice-builder-rendered-audit li+li{margin-top:3px}
+@media(max-width:650px){
+ .invoice-builder-rendered-audit{max-height:120px;padding:8px 10px}
+ .invoice-builder-rendered-audit ul{font-size:9px}
+}

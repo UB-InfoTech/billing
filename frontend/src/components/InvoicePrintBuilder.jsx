@@ -5,6 +5,7 @@ import {buildInvoiceSmartLayout,scanImportedInvoiceLayout} from "../utils/invoic
 import {inferOcrValueBox} from "../utils/invoiceOcrMapping.js";
 import {analyzeInvoiceLayout,applySafeInvoiceLayoutFixes} from "../utils/invoiceLayoutQuality.js";
 import {estimateInvoiceTextOverflow,getInvoiceMarginWarnings,getInvoicePrintGeometry} from "../utils/invoicePrintFit.js";
+import {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics} from "../utils/invoiceRenderedPrintCheck.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
@@ -124,6 +125,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [printPreviewHtml,setPrintPreviewHtml]=useState("");
   const [printPreviewLoading,setPrintPreviewLoading]=useState(false);
   const [printPreviewReady,setPrintPreviewReady]=useState(false);
+  const [printPreviewAudit,setPrintPreviewAudit]=useState(null);
   const [printPreviewError,setPrintPreviewError]=useState("");
   const canvasRef=useRef(null);
   const printPreviewFrameRef=useRef(null);
@@ -177,6 +179,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setPrintPreviewHtml("");
     setPrintPreviewOpen(false);
     setPrintPreviewReady(false);
+    setPrintPreviewAudit(null);
     setPreviewError("");
     const requestId=++previewRequestRef.current;
     if(!id){
@@ -204,6 +207,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       return;
     }
     setPrintPreviewLoading(true);
+    setPrintPreviewAudit(null);
+    setPrintPreviewReady(false);
     setPrintPreviewError("");
     try{
       const response=await axios.post(
@@ -235,12 +240,34 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const closeActualPrintPreview=()=>{
     setPrintPreviewOpen(false);
     setPrintPreviewReady(false);
+    setPrintPreviewAudit(null);
   };
 
-  const handleActualPreviewLoad=event=>{
+  const handleActualPreviewLoad=async event=>{
     const frame=event.currentTarget;
-    const documentHtml=frame.contentDocument?.documentElement?.innerHTML||"";
-    if(frame.contentWindow?.location?.href==="about:srcdoc"&&documentHtml.trim())setPrintPreviewReady(true);
+    const previewDocument=frame.contentDocument;
+    const documentHtml=previewDocument?.documentElement?.innerHTML||"";
+    if(frame.contentWindow?.location?.href!=="about:srcdoc"||!documentHtml.trim())return;
+
+    setPrintPreviewReady(false);
+    setPrintPreviewAudit(null);
+    try{
+      // Wait for fonts and image decoding so measurements reflect the finished preview.
+      try{await previewDocument.fonts?.ready;}catch(_fontError){}
+      await Promise.all(Array.from(previewDocument.images||[]).map(image=>
+        typeof image.decode==="function"?image.decode().catch(()=>undefined):Promise.resolve()
+      ));
+      const previewWindow=frame.contentWindow;
+      if(previewWindow?.requestAnimationFrame){
+        await new Promise(resolve=>previewWindow.requestAnimationFrame(()=>previewWindow.requestAnimationFrame(resolve)));
+      }
+      const measurements=measureRenderedInvoiceDocument(previewDocument);
+      setPrintPreviewAudit(analyzeRenderedInvoiceMetrics(measurements));
+      setPrintPreviewReady(true);
+    }catch(_auditError){
+      setPrintPreviewError("The invoice loaded, but its layout could not be measured. Close the preview and try again.");
+      setPrintPreviewReady(false);
+    }
   };
 
   const printActualInvoice=()=>{
@@ -297,6 +324,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setPrintPreviewHtml("");
     setPrintPreviewOpen(false);
     setPrintPreviewReady(false);
+    setPrintPreviewAudit(null);
     onChange?.(next);
   };
   const pushHistory=snapshot=>{
@@ -1208,12 +1236,20 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 sandbox="allow-same-origin allow-modals"
                 onLoad={handleActualPreviewLoad}
               />
+              {printPreviewAudit&&(
+                <aside className={"invoice-builder-rendered-audit "+(printPreviewAudit.warnings.length?"has-warnings":"is-clear")} role="status" aria-live="polite">
+                  <strong><i className={"bi "+(printPreviewAudit.warnings.length?"bi-exclamation-triangle":"bi-check-circle")}/>{printPreviewAudit.pageCount} page{printPreviewAudit.pageCount===1?"":"s"} measured · {printPreviewAudit.warnings.length?printPreviewAudit.warnings.length+" issue"+(printPreviewAudit.warnings.length===1?"":"s")+" to review":"No visible clipping detected"}</strong>
+                  {printPreviewAudit.warnings.length>0&&(
+                    <ul>{printPreviewAudit.warnings.slice(0,8).map((issue,index)=><li key={issue.id||index}><b>{issue.title}</b> — {issue.detail}</li>)}</ul>
+                  )}
+                </aside>
+              )}
             </div>
             <footer className="invoice-builder-print-preview-footer">
-              <span aria-live="polite">{printPreviewReady?"Invoice preview is ready. Review page breaks before printing.":"Loading invoice layout and images…"}</span>
+              <span aria-live="polite">{printPreviewReady?(printPreviewAudit?.pageCount||0)+" page(s) checked in this browser. Review any findings before printing.":"Loading fonts, images and invoice layout…"}</span>
               <div>
                 <button type="button" className="btn btn-light border" onClick={closeActualPrintPreview}>Back to designer</button>
-                <button type="button" className="btn btn-primary" onClick={printActualInvoice} disabled={!printPreviewReady} title={printPreviewReady?"Print the loaded invoice":"Wait for the invoice preview to finish loading"}><i className="bi bi-printer me-1"/>{printPreviewReady?"Print invoice":"Preparing print…"}</button>
+                <button type="button" className="btn btn-primary" onClick={printActualInvoice} disabled={!printPreviewReady} title={printPreviewReady?"Print the measured invoice preview":"Wait for the browser layout check to finish"}><i className="bi bi-printer me-1"/>{printPreviewReady?"Print invoice":"Checking print…"}</button>
               </div>
             </footer>
           </div>

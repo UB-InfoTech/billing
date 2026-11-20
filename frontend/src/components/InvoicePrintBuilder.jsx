@@ -1017,7 +1017,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       const rows=Array.isArray(block.tableRows)?block.tableRows:[];
       return <div className="invoice-builder-static-table" style={{color:block.color}}>
         <table>
-          <colgroup>{columns.map(column=><col key={column.id} style={{width:(column.width||10)+"%"}/>)}</colgroup>
+          <colgroup>{columns.map(column=><col key={column.id} style={{width:(column.width||10)+"%"}} />)}</colgroup>
           {block.tableShowHeader!==false&&<thead><tr>{columns.map(column=><th key={column.id} style={{backgroundColor:block.tableHeaderBackground||"#edf2f7",color:block.tableHeaderColor||"#172335",borderColor:block.tableBorderColor||"#b8c4d1",padding:(block.tableCellPadding??4)+"px"}}>{column.label}</th>)}</tr></thead>}
           <tbody>{rows.map((row,rowIndex)=><tr key={"row-"+rowIndex}>{columns.map((column,columnIndex)=><td key={column.id} style={{backgroundColor:block.alternateRows!==false&&rowIndex%2?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#ffffff"),borderColor:block.tableBorderColor||"#b8c4d1",padding:(block.tableCellPadding??4)+"px"}}>{row[columnIndex]||" "}</td>)}</tr>)}</tbody>
         </table>

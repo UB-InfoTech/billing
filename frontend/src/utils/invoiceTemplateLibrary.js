@@ -82,7 +82,6 @@ function createInvoiceDesignTemplate(id,key="clean"){
 
   const titleY=band?24:style.header==="center"?24:23;
   blocks.push(text("invoice-heading",key==="classic-gst"?"TAX INVOICE":"TAX INVOICE",6,titleY,48,5,{fontSize:compact?11:13,bold:true,color:style.accent}));
-  blocks.push(text("bill-to-heading","BILL TO",7,30,46,2.5,{fontSize:7.5,bold:true,color:style.accent}));
   blocks.push(shape("customer-panel",5,29,53,18,style.soft,{borderColor:style.border,borderWidth:0.35,borderRadius:key==="minimal"?0:2}));
   blocks.push(shape("invoice-panel",60,29,35,18,key==="minimal"?"#ffffff":"#f8fafc",{borderColor:style.border,borderWidth:0.35,borderRadius:key==="minimal"?0:2}));
   // Reinsert headings after panels so text remains above their backgrounds.

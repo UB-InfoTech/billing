@@ -169,11 +169,11 @@ function createInvoiceDesignTemplate(id,key="modern-business"){
     ["challan-no","challan_no"],
     ["eway-bill","eway_bill"]
   ];
-  metaRows.forEach(([id,key],index=>{
-    blocks.push(field(id,key,64.3,34.4+index*2.35,29,2.2,{
+  metaRows.forEach(([fieldId,fieldKey],index)=>{
+    blocks.push(field(fieldId,fieldKey,64.3,34.4+index*2.35,29,2.2,{
       fontSize:8.9,color:preset.deep,bold:index===0
     }));
-  }));
+  });
 
   const caption=preset.category==="Services"?"SERVICES PROVIDED":
     preset.category==="Transport & logistics"?"GOODS / CONSIGNMENT DETAILS":

@@ -264,6 +264,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const referenceReady=Boolean(activeTemplate.background?.url);
   const designChosen=referenceReady||activeTemplate.templateKey!=="blank";
   const liveFieldCount=activeTemplate.blocks.filter(block=>block.visible!==false&&["field","items_table","totals","logo"].includes(block.type)).length;
+  const designWarnings=useMemo(()=>{const blocks=activeTemplate.blocks.filter(block=>block.visible!==false);const issues=[];blocks.forEach(block=>{if(block.x<0||block.y<0||block.x+block.w>100||block.y+block.h>100)issues.push({severity:"error",title:"Element outside page",detail:(block.label||block.type)+" extends beyond the printable page."});if(block.w<3||block.h<2)issues.push({severity:"warning",title:"Element may be too small",detail:(block.label||block.type)+" may be hard to read when printed."});if(block.type==="items_table"){const cols=(block.columns||previewColumns).filter(column=>column.visible!==false);if(cols.length&&cols.reduce((sum,column)=>sum+Number(column.width||0),0)>100)issues.push({severity:"warning",title:"Item table columns exceed 100%",detail:"Visible column widths may overflow the table."});}});for(let i=0;i<blocks.length;i++)for(let j=i+1;j<blocks.length;j++){const a=blocks[i],b=blocks[j];if(a.type==="shape"||b.type==="shape"||a.type==="divider"||b.type==="divider")continue;const overlapX=Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x),overlapY=Math.min(a.y+a.h,b.y+b.h)-Math.max(a.y,b.y);if(overlapX>1&&overlapY>1&&overlapX*overlapY>Math.min(a.w*a.h,b.w*b.h)*.18)issues.push({severity:"warning",title:"Possible element overlap",detail:(a.label||a.type)+" overlaps "+(b.label||b.type)+". Check the actual print preview."});}return issues;},[activeTemplate.blocks,previewColumns]);
   const applyDesign=next=>{
     currentDesignRef.current=next;
     setLocalDesign(next);
@@ -914,6 +915,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 {!previewRecordId&&<small className="invoice-builder-preview-help">Sample values are shown. Create an invoice to check the real print output.</small>}
               </div>
               <div className="invoice-builder-page-settings">
+                <button type="button" className={"btn btn-sm "+(designWarnings.length?"btn-outline-warning":"btn-light border")} onClick={()=>setPrintPreviewOpen(false)} title="Review potential print-layout issues"><i className="bi bi-clipboard-check me-1"/>Print check {designWarnings.length?("(" +designWarnings.length+")"):"✓"}</button>
                 <label>Paper</label><select value={activeTemplate.pageSize} onChange={event=>setPageSize(event.target.value)}><option value="A4">A4</option><option value="A5">A5</option><option value="Letter">Letter</option></select>
                 <select aria-label="Page orientation" value={activeTemplate.orientation} onChange={event=>updateActive({orientation:event.target.value})}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>
                 <button type="button" className={"btn btn-sm "+(showGrid?"btn-primary":"btn-light border")} onClick={()=>setShowGrid(value=>!value)} aria-pressed={showGrid} title="Show a 2% alignment grid"><i className="bi bi-grid-3x3 me-1"/>Grid</button>
@@ -921,6 +923,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               </div>
             </div>
 
+            {designWarnings.length>0&&<div className="invoice-builder-print-check" role="status"><strong>Layout check · {designWarnings.length} issue{designWarnings.length===1?"":"s"} to review</strong><ul>{designWarnings.slice(0,8).map((issue,index)=><li key={index}><span className={issue.severity==="error"?"text-danger":"text-warning"}>{issue.title}</span> — {issue.detail}</li>)}</ul><small>Overlap warnings are suggestions. Confirm the final result using Actual print.</small></div>}
             <div className="invoice-builder-canvas-scroll">
               <div className={"invoice-builder-page "+(activeTemplate.orientation==="landscape"?"is-landscape":"")} style={{aspectRatio:activeTemplate.orientation==="landscape"?"1.414 / 1":String(canvasRatio).replace("/"," / ")}}>
                 <div className="invoice-builder-canvas" ref={canvasRef} onDragOver={event=>event.preventDefault()} onDrop={handlePaletteDrop} onPointerMove={moveBlock} onPointerUp={finishBlockDrag} onPointerCancel={finishBlockDrag}>

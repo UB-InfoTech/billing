@@ -1112,12 +1112,13 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               <div className="invoice-builder-empty-property"><i className="bi bi-cursor"/>Select an item on the page to edit it.</div>
             ):(
               <section className="invoice-builder-property-card">
-                <div className="d-flex justify-content-between align-items-center gap-2 mb-3"><h3 className="mb-0">Selected item</h3><button type="button" className="btn btn-sm btn-outline-danger" onClick={removeBlock} title="Remove item"><i className="bi bi-trash"/></button></div>
+                <div className="d-flex justify-content-between align-items-center gap-2 mb-2"><h3 className="mb-0">Quick edits</h3><button type="button" className="btn btn-sm btn-outline-danger" onClick={removeBlock} title="Remove item"><i className="bi bi-trash"/></button></div><p className="invoice-builder-quick-help">Choose what this item shows here. Open the extra controls only when you need to change its position or appearance.</p>
                 <label className="form-label">Name</label><input className="form-control form-control-sm mb-3" value={selectedBlock.label} onChange={event=>updateBlock(selectedBlock.id,{label:event.target.value})}/>
                 {selectedBlock.type==="field"&&(
                   <><label className="form-label">What should it show?</label><select className="form-select form-select-sm mb-3" value={selectedBlock.fieldKey} onChange={event=>updateBlock(selectedBlock.id,{fieldKey:event.target.value,label:FIELD_LABELS[event.target.value]||selectedBlock.label})}>{Object.entries(FIELD_LABELS).filter(([key])=>key!=="logo").map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></>
                 )}
                 {selectedBlock.type==="text"&&<><label className="form-label">Text</label><textarea className="form-control form-control-sm mb-3" rows={3} value={selectedBlock.text} onChange={event=>updateBlock(selectedBlock.id,{text:event.target.value})}/></>}
+                <details className="invoice-builder-advanced-controls"><summary><span>More design controls</span><small>Position, size, table columns, colours and text styles</small></summary>
                 {selectedBlock.type==="items_table"&&(
                   <div className="invoice-builder-table-editor">
                     <h4>Columns in this table</h4>
@@ -1187,6 +1188,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 <div className="mt-3"><label className="form-label d-flex justify-content-between"><span>Transparency</span><span>{Math.round((selectedBlock.opacity??1)*100)}%</span></label><input className="form-range" type="range" min="0.1" max="1" step="0.05" value={selectedBlock.opacity??1} onChange={event=>updateBlock(selectedBlock.id,{opacity:Number(event.target.value)})}/></div>
                 <div className="form-check form-switch mt-2"><input id="invoice-block-italic" className="form-check-input" type="checkbox" checked={selectedBlock.italic===true} onChange={event=>updateBlock(selectedBlock.id,{italic:event.target.checked})}/><label className="form-check-label" htmlFor="invoice-block-italic">Italic text</label></div>
                 <div className="form-check form-switch mt-2"><input id="invoice-block-visible" className="form-check-input" type="checkbox" checked={selectedBlock.visible!==false} onChange={event=>updateBlock(selectedBlock.id,{visible:event.target.checked})}/><label className="form-check-label" htmlFor="invoice-block-visible">Show on invoice</label></div>
+                </details>
               </section>
             )}
             <section className="invoice-builder-property-card">
@@ -1240,7 +1242,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 <aside className={"invoice-builder-rendered-audit "+(printPreviewAudit.warnings.length?"has-warnings":"is-clear")} role="status" aria-live="polite">
                   <strong><i className={"bi "+(printPreviewAudit.warnings.length?"bi-exclamation-triangle":"bi-check-circle")}/>{printPreviewAudit.pageCount} page{printPreviewAudit.pageCount===1?"":"s"} measured · {printPreviewAudit.warnings.length?printPreviewAudit.warnings.length+" issue"+(printPreviewAudit.warnings.length===1?"":"s")+" to review":"No visible clipping detected"}</strong>
                   {printPreviewAudit.warnings.length>0&&(
-                    <ul>{printPreviewAudit.warnings.slice(0,8).map((issue,index)=><li key={issue.id||index}><b>{issue.title}</b> — {issue.detail}</li>)}</ul>
+                    <ul>{printPreviewAudit.warnings.slice(0,8).map((issue,index)=><li key={issue.id||index}><div><b>{issue.title}</b> — {issue.detail}</div>{issue.blockId&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{setSelectedBlockId(issue.blockId);closeActualPrintPreview();}}>Edit this element</button>}</li>)}</ul>
                   )}
                 </aside>
               )}

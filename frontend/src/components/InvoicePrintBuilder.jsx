@@ -253,7 +253,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setPrintPreviewAudit(null);
     try{
       // Wait for fonts and image decoding so measurements reflect the finished preview.
-      try{await previewDocument.fonts?.ready;}catch(_fontError){}
+      try{await previewDocument.fonts?.ready;}catch(_fontError){/* Font readiness is best-effort; continue with image and layout checks. */}
       await Promise.all(Array.from(previewDocument.images||[]).map(image=>
         typeof image.decode==="function"?image.decode().catch(()=>undefined):Promise.resolve()
       ));

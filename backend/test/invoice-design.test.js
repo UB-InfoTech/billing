@@ -7,6 +7,7 @@ const {createDefaultInvoiceDesign,sanitizeInvoiceDesign}=require("../utils/invoi
 const {hasInvoiceBackgroundSignature}=require("../utils/invoiceBackground");
 const {buildInvoiceDesignPages,getInvoiceRowsPerPage}=require("../utils/invoiceDesignPagination");
 const {buildInvoicePrintPreview}=require("../utils/invoicePrintPreview");
+const {buildSampleInvoiceOrder}=require("../utils/invoiceSampleData");
 
 test("smart invoice layout scan finds a repeated table grid and builds editable field suggestions",async()=>{
   const {findTableRegion,buildInvoiceSmartLayout}=await import("../../frontend/src/utils/invoiceLayoutScanner.js");
@@ -665,4 +666,29 @@ test("browser invoice measurement extracts page, block, row and image geometry",
  assert.equal(measured.pages[0].blocks[0].rows[0].itemNumber,3);
  assert.equal(measured.pages[0].blocks[0].rows[0].label,"Cotton fabric");
  assert.equal(measured.pages[0].blocks[0].images[0].broken,true);
+});
+
+ 
+test("sample invoice data creates a balanced preview without requiring a saved order",()=>{
+ const order=buildSampleInvoiceOrder({ownerId:"64b000000000000000000001",stateCode:24,state:"Gujarat"});
+ const itemSubtotal=order.subOrders.reduce((sum,item)=>sum+Number(item.quantity||0)*Number(item.unitPrice||0),0);
+ assert.equal(order.orderNumber,"SAMPLE-INV-001");
+ assert.equal(order.createdBy,"64b000000000000000000001");
+ assert.equal(order.subOrders.length,2);
+ assert.equal(itemSubtotal,10000);
+ assert.equal(order.discountAmount,500);
+ assert.equal(order.totalCost,9500);
+ assert.equal(order.taxPercentage,18);
+ assert.equal(order.taxAmount,1710);
+ assert.equal(order.totalAmount,11210);
+ assert.equal(order.paidAmount+order.dueAmount,order.totalAmount);
+ assert.equal(order.paymentStatus,"Partial");
+ assert.equal(order.stateCode,24);
+ assert.equal(order.State,"Gujarat");
+ assert.ok(order.orderDate instanceof Date);
+});
+test("sample invoice uses the account state code when one is available",()=>{
+ const order=buildSampleInvoiceOrder({ownerId:"sample-owner",stateCode:"27",state:"Maharashtra"});
+ assert.equal(order.stateCode,27);
+ assert.equal(order.State,"Maharashtra");
 });

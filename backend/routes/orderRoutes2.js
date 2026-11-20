@@ -15,6 +15,7 @@ const {synchronizeInvoiceStock,rollbackStockMovements}=require("../utils/stockMo
 const InvoiceConfiguration=require("../models/InvoiceConfiguration");
 const {sanitizeInvoiceDesign}=require("../utils/invoiceDesign");
 const {buildInvoiceDesignPages}=require("../utils/invoiceDesignPagination");
+const {buildSampleInvoiceOrder}=require("../utils/invoiceSampleData");
 const PaymentLog=require("../models/PaymentLog2");
 const auth=require("../middleware/auth");
 const {syncClientDataSafely,getInvoiceRevenue}=require("../utils/syncClientData");
@@ -1470,6 +1471,22 @@ async function renderInvoice(order,res,request,designOverride){
     return res.type("html").send(renderSimpleInvoiceHtml({order,profile,client}));
   }
 }
+
+router.post("/sample-invoice-preview",auth,async(req,res)=>{
+  try{
+    if(!req.body?.design||typeof req.body.design!=="object"||Array.isArray(req.body.design)){
+      return res.status(400).json({message:"Choose a valid invoice design to preview."});
+    }
+    const ownerId=userId(req);
+    const profile=await Profile.findOne({createdBy:String(ownerId)}).select("stateCode state").lean()||{};
+    const sampleOrder=buildSampleInvoiceOrder({ownerId,stateCode:profile.stateCode,state:profile.state});
+    // This synthetic order is rendered only; no Order or Payment document is created.
+    await renderInvoice(sampleOrder,res,req,req.body.design);
+  }catch(error){
+    console.error("Sample invoice design preview failed:",error);
+    return res.status(500).json({message:"Unable to render the sample invoice preview."});
+  }
+});
 
 router.post("/:orderId/invoice-preview",auth,async(req,res)=>{
   try{

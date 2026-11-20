@@ -126,6 +126,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [printPreviewLoading,setPrintPreviewLoading]=useState(false);
   const [printPreviewReady,setPrintPreviewReady]=useState(false);
   const [printPreviewAudit,setPrintPreviewAudit]=useState(null);
+  const [printPreviewIsSample,setPrintPreviewIsSample]=useState(false);
   const [printPreviewError,setPrintPreviewError]=useState("");
   const canvasRef=useRef(null);
   const printPreviewFrameRef=useRef(null);
@@ -180,6 +181,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setPrintPreviewOpen(false);
     setPrintPreviewReady(false);
     setPrintPreviewAudit(null);
+    setPrintPreviewIsSample(false);
     setPreviewError("");
     const requestId=++previewRequestRef.current;
     if(!id){
@@ -202,17 +204,18 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   };
 
   const openActualPrintPreview=async()=>{
-    if(!previewRecordId){
-      setPrintPreviewError("Choose a saved invoice before opening the print preview.");
-      return;
-    }
+    const useSampleInvoice=!previewRecordId;
     setPrintPreviewLoading(true);
     setPrintPreviewAudit(null);
+    setPrintPreviewIsSample(useSampleInvoice);
     setPrintPreviewReady(false);
     setPrintPreviewError("");
     try{
+      const previewPath=useSampleInvoice
+        ?"/api/order/sample-invoice-preview"
+        :"/api/order/"+encodeURIComponent(previewRecordId)+"/invoice-preview";
       const response=await axios.post(
-        API+"/api/order/"+encodeURIComponent(previewRecordId)+"/invoice-preview",
+        API+previewPath,
         {design:{...localDesign,enabled:true}},
         {...auth(),responseType:"text"}
       );
@@ -241,6 +244,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setPrintPreviewOpen(false);
     setPrintPreviewReady(false);
     setPrintPreviewAudit(null);
+    setPrintPreviewIsSample(false);
   };
 
   const handleActualPreviewLoad=async event=>{
@@ -959,11 +963,11 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   {previewRecords.map(record=><option value={record.id} key={record.id}>{record.orderNumber} · {record.companyName}</option>)}
                 </select>
                 <span className={previewInvoice?"is-real":"is-sample"}>{previewLoading?"Loading preview…":previewInvoice?"Saved invoice data":"Sample data"}</span>
-                <button type="button" className="btn btn-sm btn-outline-primary" onClick={openActualPrintPreview} disabled={!previewRecordId||previewLoading||printPreviewLoading} title="Render the current design using the real invoice print template">
+                <button type="button" className="btn btn-sm btn-outline-primary" onClick={openActualPrintPreview} disabled={previewLoading||printPreviewLoading} title={previewRecordId?"Check the selected invoice using the real print template":"Check this design with an unsaved sample invoice"}>
                   {printPreviewLoading?<span className="spinner-border spinner-border-sm me-1"/>:<i className="bi bi-file-earmark-pdf me-1"/>}
-                  {printPreviewLoading?"Preparing…":"Actual print"}
+                  {printPreviewLoading?"Preparing…":"Print check"}
                 </button>
-                {!previewRecordId&&<small className="invoice-builder-preview-help">Sample values are shown. Create an invoice to check the real print output.</small>}
+                {!previewRecordId&&<small className="invoice-builder-preview-help">No invoice needed. Check the design with sample details first; nothing will be saved.</small>}
               </div>
               <div className="invoice-builder-page-settings">
                 <button type="button" className={"btn btn-sm "+(designWarnings.length?"btn-outline-warning":"btn-light border")} onClick={()=>printCheckRef.current?.scrollIntoView({behavior:"smooth",block:"nearest"})} title="Review potential print-layout issues"><i className="bi bi-clipboard-check me-1"/>Print check {designWarnings.length?("(" +designWarnings.length+")"):"✓"}</button>
@@ -1221,12 +1225,12 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         </div>
       </div>}
       {printPreviewOpen&&printPreviewHtml&&(
-        <div className="invoice-builder-print-preview" role="dialog" aria-modal="true" aria-label="Actual invoice print preview">
+        <div className="invoice-builder-print-preview" role="dialog" aria-modal="true" aria-label={printPreviewIsSample?"Sample invoice print preview":"Actual invoice print preview"}>
           <div className="invoice-builder-print-preview-dialog">
             <header className="invoice-builder-print-preview-header">
               <div>
-                <strong>Actual print preview</strong>
-                <small>This uses your current design edits and the selected saved invoice. Nothing is saved or changed.</small>
+                <strong>{printPreviewIsSample?"Sample print preview":"Actual print preview"}</strong>
+                <small>{printPreviewIsSample?"Example customer, item and payment details are used. This sample is not saved and does not create an invoice.":"This uses your current design edits and the selected saved invoice. Nothing is saved or changed."}</small>
               </div>
               <button type="button" className="btn btn-light border" onClick={closeActualPrintPreview} aria-label="Close print preview"><i className="bi bi-x-lg"/></button>
             </header>
@@ -1248,10 +1252,10 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               )}
             </div>
             <footer className="invoice-builder-print-preview-footer">
-              <span aria-live="polite">{printPreviewReady?(printPreviewAudit?.pageCount||0)+" page(s) checked in this browser. Review any findings before printing.":"Loading fonts, images and invoice layout…"}</span>
+              <span aria-live="polite">{!printPreviewReady?"Loading fonts, images and invoice layout…":printPreviewIsSample?"Sample only · printing will not create or save an invoice.":(printPreviewAudit?.pageCount||0)+" page(s) checked in this browser. Review any findings before printing."}</span>
               <div>
                 <button type="button" className="btn btn-light border" onClick={closeActualPrintPreview}>Back to designer</button>
-                <button type="button" className="btn btn-primary" onClick={printActualInvoice} disabled={!printPreviewReady} title={printPreviewReady?"Print the measured invoice preview":"Wait for the browser layout check to finish"}><i className="bi bi-printer me-1"/>{printPreviewReady?"Print invoice":"Checking print…"}</button>
+                <button type="button" className="btn btn-primary" onClick={printActualInvoice} disabled={!printPreviewReady} title={printPreviewReady?(printPreviewIsSample?"Print this sample only":"Print the measured invoice preview"):"Wait for the browser layout check to finish"}><i className="bi bi-printer me-1"/>{!printPreviewReady?"Checking print…":printPreviewIsSample?"Print sample":"Print invoice"}</button>
               </div>
             </footer>
           </div>

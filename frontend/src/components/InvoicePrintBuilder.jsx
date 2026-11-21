@@ -365,7 +365,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         await new Promise(resolve=>previewWindow.requestAnimationFrame(()=>previewWindow.requestAnimationFrame(resolve)));
       }
       const measurements=measureRenderedInvoiceDocument(previewDocument);
-      setPrintPreviewAudit(analyzeRenderedInvoiceMetrics(measurements));
+      setPrintPreviewAudit(analyzeRenderedInvoiceMetrics(measurements,{pageSize:activeTemplate.pageSize,orientation:activeTemplate.orientation}));
       setPrintPreviewReady(true);
     }catch(_auditError){
       setPrintPreviewError("The invoice loaded, but its layout could not be measured. Close the preview and try again.");

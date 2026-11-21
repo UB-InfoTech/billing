@@ -1,0 +1,102 @@
+const test=require("node:test");
+const assert=require("node:assert/strict");
+
+test("actual print audit validates A4 and A5 orientation and dimensions",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const a4=analyzeRenderedInvoiceMetrics({pages:[{pageNumber:1,width:794,height:1123,blocks:[]}]},{pageSize:"A4",orientation:"portrait"});
+ assert.equal(a4.warnings.length,0);
+ const a5Landscape=analyzeRenderedInvoiceMetrics({pages:[{pageNumber:1,width:794,height:559,blocks:[]}]},{pageSize:"A5",orientation:"landscape"});
+ assert.equal(a5Landscape.warnings.length,0);
+ const mismatch=analyzeRenderedInvoiceMetrics({pages:[{pageNumber:1,width:559,height:794,blocks:[]}]},{pageSize:"A4",orientation:"portrait"});
+ assert.ok(mismatch.warnings.some(issue=>issue.id==="page-size-mismatch-1"));
+});
+
+test("actual print audit reports inconsistent page dimensions",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const result=analyzeRenderedInvoiceMetrics({pages:[
+  {pageNumber:1,width:794,height:1123,blocks:[]},
+  {pageNumber:2,width:559,height:794,blocks:[]}
+ ]});
+ assert.ok(result.warnings.some(issue=>issue.id==="inconsistent-page-size-2"));
+});
+
+test("actual print audit checks table headers, horizontal overflow, page boundaries and missing images",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const result=analyzeRenderedInvoiceMetrics({pages:[{
+  pageNumber:1,width:800,height:1100,blocks:[
+   {id:"address",type:"field",bounds:{left:20,top:30,right:220,bottom:65},contentHeight:58,clientHeight:35,rows:[],images:[]},
+   {id:"items",type:"items_table",bounds:{left:20,top:200,right:780,bottom:500},contentHeight:350,clientHeight:300,contentWidth:820,clientWidth:760,headerVisible:false,rows:[{itemNumber:7,label:"Long fabric description",top:220,bottom:525}],images:[]},
+   {id:"logo",type:"image",bounds:{left:810,top:10,right:860,bottom:60},contentHeight:0,clientHeight:0,rows:[],images:[{broken:true,alt:"Business logo"}]}
+  ]
+ }]});
+ assert.equal(result.pageCount,1);
+ assert.equal(result.hasErrors,true);
+ assert.ok(result.warnings.some(issue=>issue.title==="Text or totals may be clipped"));
+ assert.ok(result.warnings.some(issue=>issue.title==="An item row exceeds the table area"&&issue.itemNumber===7));
+ assert.ok(result.warnings.some(issue=>issue.title==="Element extends beyond the paper"));
+ assert.ok(result.warnings.some(issue=>issue.title==="An image could not be loaded"));
+ assert.ok(result.warnings.some(issue=>issue.title==="Item table may be too wide"));
+ assert.ok(result.warnings.some(issue=>issue.title==="Item table heading is not visible"));
+});
+
+test("actual print audit validates multipage item continuity and repeated headings",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const table=(id,rows)=>({id,type:"items_table",bounds:{left:10,top:100,right:780,bottom:900},contentHeight:800,clientHeight:800,contentWidth:770,clientWidth:770,headerVisible:true,rows,images:[]});
+ const result=analyzeRenderedInvoiceMetrics({pages:[
+  {pageNumber:1,width:794,height:1123,blocks:[table("items-1",[{itemNumber:1,label:"A",bottom:250},{itemNumber:2,label:"B",bottom:300}])]},
+  {pageNumber:2,width:794,height:1123,blocks:[table("items-2",[{itemNumber:3,label:"C",bottom:250},{itemNumber:4,label:"D",bottom:300}])]}
+ ]});
+ assert.deepEqual(result.warnings,[]);
+ assert.equal(result.pageCount,2);
+});
+
+test("actual print audit warns about gaps, duplicate rows and pages without a continuing table",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const table=(id,rows)=>({id,type:"items_table",bounds:{left:10,top:100,right:780,bottom:900},contentHeight:800,clientHeight:800,contentWidth:770,clientWidth:770,headerVisible:true,rows,images:[]});
+ const result=analyzeRenderedInvoiceMetrics({pages:[
+  {pageNumber:1,width:794,height:1123,blocks:[table("items-1",[{itemNumber:1,label:"A",bottom:250},{itemNumber:3,label:"C",bottom:300},{itemNumber:3,label:"Duplicate",bottom:350}])]},
+  {pageNumber:2,width:794,height:1123,blocks:[{id:"totals",type:"totals",bounds:{left:600,top:900,right:780,bottom:1050},contentHeight:100,clientHeight:150,rows:[],images:[]}]}
+ ]});
+ assert.ok(result.warnings.some(issue=>issue.title==="Item numbering skips or changes order"));
+ assert.ok(result.warnings.some(issue=>issue.title==="An invoice item is repeated"));
+ assert.ok(result.warnings.some(issue=>issue.title==="Item table is missing from a page"));
+});
+
+test("browser invoice measurement extracts page, block, row and table heading geometry",async()=>{
+ const {measureRenderedInvoiceDocument}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const rect=(left,top,right,bottom)=>({left,top,right,bottom,width:right-left,height:bottom-top});
+ const row={getBoundingClientRect:()=>rect(20,220,780,245),getAttribute:key=>({"data-item-number":"3","data-item-label":"Cotton fabric"}[key]||null)};
+ const header={getBoundingClientRect:()=>rect(20,200,780,220)};
+ const wrapper={querySelector:selector=>selector==="thead"?header:null,querySelectorAll:selector=>selector==="tbody tr"?[row]:[]};
+ const image={complete:true,naturalWidth:0,getAttribute:key=>key==="alt"?"Business logo":null};
+ const block={getBoundingClientRect:()=>rect(20,200,780,500),getAttribute:key=>({"data-block-id":"item-table","data-block-type":"items_table"}[key]||null),querySelector:selector=>selector===".design-items"?wrapper:null,querySelectorAll:selector=>selector==="img"?[image]:[],scrollHeight:300,clientHeight:300,scrollWidth:760,clientWidth:760};
+ const sheet={getBoundingClientRect:()=>rect(0,0,800,1100),querySelectorAll:selector=>selector===".design-block"?[block]:[],clientWidth:800,clientHeight:1100};
+ const documentRef={querySelectorAll:selector=>selector===".design-sheet"?[sheet]:[]};
+ const measured=measureRenderedInvoiceDocument(documentRef);
+ assert.equal(measured.pages.length,1);
+ assert.equal(measured.pages[0].blocks[0].id,"item-table");
+ assert.equal(measured.pages[0].blocks[0].rows[0].itemNumber,3);
+ assert.equal(measured.pages[0].blocks[0].rows[0].label,"Cotton fabric");
+ assert.equal(measured.pages[0].blocks[0].headerVisible,true);
+ assert.equal(measured.pages[0].blocks[0].images[0].broken,true);
+});
+
+test("safe invoice layout checks repair invalid bounds and normalize item-table columns",async()=>{
+ const {analyzeInvoiceLayout,applySafeInvoiceLayoutFixes}=await import("../../frontend/src/utils/invoiceLayoutQuality.js");
+ const blocks=[
+  {id:"out",type:"text",label:"Notes",x:-4,y:5,w:110,h:5},
+  {id:"table",type:"items_table",x:5,y:40,w:90,h:30,columns:[
+   {key:"description",width:70,visible:true},{key:"amount",width:40,visible:true},{key:"hidden",width:20,visible:false}
+  ]}
+ ];
+ const warnings=analyzeInvoiceLayout(blocks);
+ assert.ok(warnings.some(issue=>issue.title==="Element outside page"));
+ assert.ok(warnings.some(issue=>issue.title==="Item table columns exceed 100%"));
+ const fixed=applySafeInvoiceLayoutFixes(blocks);
+ assert.equal(fixed.changed,true);
+ assert.equal(fixed.blocks[0].x,0);
+ assert.equal(fixed.blocks[0].w,100);
+ const visible=fixed.blocks[1].columns.filter(column=>column.visible!==false);
+ assert.ok(Math.abs(visible.reduce((sum,column)=>sum+column.width,0)-100)<0.01);
+ assert.equal(fixed.blocks[1].columns[2].visible,false);
+});

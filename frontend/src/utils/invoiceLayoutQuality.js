@@ -9,7 +9,7 @@ function normalizeVisibleColumns(columns){
  const extraTotal=visible.reduce((sum,column)=>sum+Math.max(0,numberOr(column.width,3)-3),0);
  const normalized=visible.map(column=>({
   ...column,
-  width:3+(extraTotal?Math.max(0,numberOr(column.width,3)-3)/extraTotal:distributable/visible.length)
+  width:3+(extraTotal?Math.max(0,numberOr(column.width,3)-3)/extraTotal*distributable:distributable/visible.length)
  }));
  let index=0;
  return columns.map(column=>column.visible===false?column:normalized[index++]);

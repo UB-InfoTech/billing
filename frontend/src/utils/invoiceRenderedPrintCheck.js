@@ -228,15 +228,6 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
     pages.forEach((page,pageIndex)=>{
       const pageNumber=Number(page.pageNumber)||pageIndex+1;
       const tables=(Array.isArray(page.blocks)?page.blocks:[]).filter(block=>block.type==="items_table");
-      if(!tables.length){
-        addWarning(warnings,{
-          id:"missing-item-table-page-"+pageNumber,
-          severity:"warning",
-          title:"Item table is missing from a page",
-          detail:"The invoice continues without an item table on page "+pageNumber+". Check page-break settings.",
-          pageNumber
-        });
-      }
       tables.forEach(table=>{
         const rows=Array.isArray(table.rows)?table.rows:[];
         if(!rows.length&&pages.some(candidate=>(candidate.blocks||[]).some(block=>block.type==="items_table"&&(block.rows||[]).length))){

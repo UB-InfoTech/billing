@@ -50,16 +50,16 @@ test("actual print audit validates multipage item continuity and repeated headin
  assert.equal(result.pageCount,2);
 });
 
-test("actual print audit warns about gaps, duplicate rows and pages without a continuing table",async()=>{
+test("actual print audit warns about gaps, duplicate rows and empty continuation tables",async()=>{
  const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
  const table=(id,rows)=>({id,type:"items_table",bounds:{left:10,top:100,right:780,bottom:900},contentHeight:800,clientHeight:800,contentWidth:770,clientWidth:770,headerVisible:true,rows,images:[]});
  const result=analyzeRenderedInvoiceMetrics({pages:[
   {pageNumber:1,width:794,height:1123,blocks:[table("items-1",[{itemNumber:1,label:"A",bottom:250},{itemNumber:3,label:"C",bottom:300},{itemNumber:3,label:"Duplicate",bottom:350}])]},
-  {pageNumber:2,width:794,height:1123,blocks:[{id:"totals",type:"totals",bounds:{left:600,top:900,right:780,bottom:1050},contentHeight:100,clientHeight:150,rows:[],images:[]}]}
+  {pageNumber:2,width:794,height:1123,blocks:[table("items-2",[])]}
  ]});
  assert.ok(result.warnings.some(issue=>issue.title==="Item numbering skips or changes order"));
  assert.ok(result.warnings.some(issue=>issue.title==="An invoice item is repeated"));
- assert.ok(result.warnings.some(issue=>issue.title==="Item table is missing from a page"));
+ assert.ok(result.warnings.some(issue=>issue.title==="An item-table page is empty"));
 });
 
 test("browser invoice measurement extracts page, block, row and table heading geometry",async()=>{

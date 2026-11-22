@@ -28,6 +28,22 @@ export function measureRenderedInvoiceDocument(documentRef){
         const bounds=getRect(block,sheetRect);
         const type=block.getAttribute("data-block-type")||"";
         const table=block.querySelector(".design-items");
+        const blankTable=block.querySelector(".design-blank-table");
+        const blankTableElement=blankTable?.querySelector?.("table");
+        const blankTableMetrics=blankTable?{
+          wrapper:{
+            scrollWidth:Number(blankTable.scrollWidth)||0,
+            clientWidth:Number(blankTable.clientWidth)||0,
+            scrollHeight:Number(blankTable.scrollHeight)||0,
+            clientHeight:Number(blankTable.clientHeight)||0
+          },
+          table:blankTableElement?{
+            scrollWidth:Number(blankTableElement.scrollWidth)||0,
+            clientWidth:Number(blankTableElement.clientWidth)||0,
+            scrollHeight:Number(blankTableElement.scrollHeight)||0,
+            clientHeight:Number(blankTableElement.clientHeight)||0
+          }:null
+        }:null;
         const header=table?.querySelector?.("thead");
         const rows=table?Array.from(table.querySelectorAll("tbody tr")).map((row,index)=>{
           const rect=getRect(row,sheetRect);
@@ -52,6 +68,7 @@ export function measureRenderedInvoiceDocument(documentRef){
           contentWidth:Number(block.scrollWidth)||0,
           clientWidth:Number(block.clientWidth)||0,
           headerVisible:header?Boolean(header.getBoundingClientRect?.().height>0):undefined,
+          blankTableMetrics,
           rows,
           images
         };
@@ -149,8 +166,32 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
           title:"Text or totals may be clipped",
           detail:blockName+" does not fit its box on page "+pageNumber+". Increase its size or reduce the text size.",
           pageNumber,
-          blockId:block.id
+          blockId:block.id,
+          blockType:block.type
         });
+      }
+      if(block.type==="blank_table"){
+        const metrics=block.blankTableMetrics||{};
+        const wrapper=metrics.wrapper||{};
+        const tableMetrics=metrics.table||{};
+        const wrapperWidthOverflow=Number(wrapper.scrollWidth)>Number(wrapper.clientWidth)+RECT_TOLERANCE_PX;
+        const wrapperHeightOverflow=Number(wrapper.scrollHeight)>Number(wrapper.clientHeight)+RECT_TOLERANCE_PX;
+        const tableWidthOverflow=Number(tableMetrics.scrollWidth)>Number(tableMetrics.clientWidth)+RECT_TOLERANCE_PX;
+        const tableHeightOverflow=Number(tableMetrics.scrollHeight)>Number(tableMetrics.clientHeight)+RECT_TOLERANCE_PX;
+        if(overflowsVertically||overflowsHorizontally||wrapperWidthOverflow||wrapperHeightOverflow||tableWidthOverflow||tableHeightOverflow){
+          const axes=[];
+          if(overflowsHorizontally||wrapperWidthOverflow||tableWidthOverflow)axes.push("width");
+          if(overflowsVertically||wrapperHeightOverflow||tableHeightOverflow)axes.push("height");
+          addWarning(warnings,{
+            id:"blank-table-overflow-"+pageNumber+"-"+block.id,
+            severity:"warning",
+            title:"Blank table content may be clipped",
+            detail:"The blank table exceeds its allotted "+(axes.length?axes.join(" and "):"space")+" on page "+pageNumber+". Reduce the text size, increase the table box or remove unused rows.",
+            pageNumber,
+            blockId:block.id,
+            blockType:block.type
+          });
+        }
       }
       if(block.type==="items_table"&&overflowsHorizontally){
         addWarning(warnings,{
@@ -159,7 +200,8 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
           title:"Item table may be too wide",
           detail:"The item table extends beyond its allotted width on page "+pageNumber+". Review column widths or the page orientation.",
           pageNumber,
-          blockId:block.id
+          blockId:block.id,
+          blockType:block.type
         });
       }
       if(block.type==="items_table"&&block.headerVisible===false){
@@ -182,6 +224,7 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
             detail:"Item "+row.itemNumber+(itemName?" (“"+itemName+"”)":"")+" extends past the item table on page "+pageNumber+". Make the table taller, reduce its text size or widen the description column.",
             pageNumber,
             blockId:block.id,
+            blockType:block.type,
             itemNumber:row.itemNumber
           });
         }

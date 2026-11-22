@@ -52,6 +52,21 @@ export function analyzeInvoiceLayout(blocks=[],defaultColumns=[]){
  return issues;
 }
 
+
+export function reduceInvoiceBlockFontSize(blocks=[],blockId,step=1){
+ const reduction=clamp(numberOr(step,1),0.25,4);
+ let changed=false;
+ const next=(Array.isArray(blocks)?blocks:[]).map(block=>{
+  if(!block||block.id!==blockId)return block;
+  const current=clamp(numberOr(block.fontSize,10),6,48);
+  const nextSize=Math.max(6,Math.round((current-reduction)*10)/10);
+  if(nextSize>=current)return block;
+  changed=true;
+  return {...block,fontSize:nextSize};
+ });
+ return {blocks:next,changed};
+}
+
 export function applySafeInvoiceLayoutFixes(blocks=[],defaultColumns=[]){
  let changed=false;
  const next=(Array.isArray(blocks)?blocks:[]).map(block=>{

@@ -100,3 +100,40 @@ test("safe invoice layout checks repair invalid bounds and normalize item-table 
  assert.ok(Math.abs(visible.reduce((sum,column)=>sum+column.width,0)-100)<0.01);
  assert.equal(fixed.blocks[1].columns[2].visible,false);
 });
+
+
+test("actual print audit detects clipped blank tables and includes safe text-size fixes",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const result=analyzeRenderedInvoiceMetrics({pages:[{pageNumber:1,width:794,height:1123,blocks:[
+  {id:"blank-table",type:"blank_table",bounds:{left:10,top:100,right:500,bottom:300},contentHeight:240,clientHeight:200,contentWidth:520,clientWidth:490,blankTableMetrics:{wrapper:{scrollWidth:520,clientWidth:490,scrollHeight:240,clientHeight:200},table:{scrollWidth:520,clientWidth:490,scrollHeight:240,clientHeight:200}},rows:[],images:[]}
+ ]}]});
+ const warning=result.warnings.find(issue=>issue.title==="Blank table content may be clipped");
+ assert.ok(warning);
+ assert.equal(warning.blockId,"blank-table");
+ assert.equal(warning.blockType,"blank_table");
+});
+
+test("browser invoice measurement captures blank-table wrapper and nested table overflow",async()=>{
+ const {measureRenderedInvoiceDocument}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const rect=(left,top,right,bottom)=>({left,top,right,bottom,width:right-left,height:bottom-top});
+ const nestedTable={scrollWidth:500,clientWidth:400,scrollHeight:300,clientHeight:200};
+ const blankWrapper={scrollWidth:500,clientWidth:400,scrollHeight:300,clientHeight:200,querySelector:selector=>selector==="table"?nestedTable:null};
+ const block={getBoundingClientRect:()=>rect(10,100,400,300),getAttribute:key=>({"data-block-id":"blank","data-block-type":"blank_table"}[key]||null),querySelector:selector=>selector===".design-blank-table"?blankWrapper:null,querySelectorAll:selector=>selector==="img"?[]:[],scrollHeight:300,clientHeight:200,scrollWidth:500,clientWidth:400};
+ const sheet={getBoundingClientRect:()=>rect(0,0,800,1100),querySelectorAll:selector=>selector===".design-block"?[block]:[],clientWidth:800,clientHeight:1100};
+ const measured=measureRenderedInvoiceDocument({querySelectorAll:selector=>selector===".design-sheet"?[sheet]:[]});
+ assert.equal(measured.pages[0].blocks[0].blankTableMetrics.wrapper.scrollHeight,300);
+ assert.equal(measured.pages[0].blocks[0].blankTableMetrics.table.scrollWidth,500);
+});
+
+test("one-click text-fit reduction changes only the target and never below six points",async()=>{
+ const {reduceInvoiceBlockFontSize}=await import("../../frontend/src/utils/invoiceLayoutQuality.js");
+ const blocks=[{id:"notes",fontSize:10,text:"Keep content"},{id:"small",fontSize:6},{id:"other",fontSize:12}];
+ const reduced=reduceInvoiceBlockFontSize(blocks,"notes",1);
+ assert.equal(reduced.changed,true);
+ assert.equal(reduced.blocks[0].fontSize,9);
+ assert.equal(reduced.blocks[1],blocks[1]);
+ assert.equal(reduced.blocks[2],blocks[2]);
+ const min=reduceInvoiceBlockFontSize([{id:"notes",fontSize:6}],"notes",1);
+ assert.equal(min.changed,false);
+ assert.equal(min.blocks[0].fontSize,6);
+});

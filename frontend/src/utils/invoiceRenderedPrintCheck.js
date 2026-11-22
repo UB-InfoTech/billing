@@ -236,6 +236,7 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
             detail:"Item "+row.itemNumber+" extends beyond the paper on page "+pageNumber+". Adjust the table or page layout.",
             pageNumber,
             blockId:block.id,
+            blockType:block.type,
             itemNumber:row.itemNumber
           });
         }

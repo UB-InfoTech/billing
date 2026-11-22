@@ -137,3 +137,15 @@ test("one-click text-fit reduction changes only the target and never below six p
  assert.equal(min.changed,false);
  assert.equal(min.blocks[0].fontSize,6);
 });
+
+
+test("actual print audit tags item rows extending beyond paper for safe text sizing",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const result=analyzeRenderedInvoiceMetrics({pages:[{pageNumber:1,width:794,height:800,blocks:[
+  {id:"items",type:"items_table",bounds:{left:10,top:100,right:780,bottom:750},contentHeight:650,clientHeight:650,contentWidth:770,clientWidth:770,headerVisible:true,rows:[{itemNumber:1,label:"Oversized row",bottom:810}],images:[]}
+ ]}]});
+ const warning=result.warnings.find(issue=>issue.title==="An item row extends beyond the page");
+ assert.ok(warning);
+ assert.equal(warning.blockType,"items_table");
+ assert.equal(warning.itemNumber,1);
+});

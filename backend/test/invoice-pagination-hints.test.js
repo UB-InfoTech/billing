@@ -42,11 +42,21 @@ test("totals on the final item page are not warned",()=>{
  assert.deepEqual(result,[]);
 });
 
+test("totals beside an item row are not treated as an overlap",()=>{
+ const result=analyzeInvoicePagination([
+  {pageNumber:1,blocks:[
+   {id:"items",type:"items_table",rows:[{itemNumber:1,left:10,right:500,top:200,bottom:320}]},
+   {id:"totals",type:"totals",bounds:{left:510,right:780,top:250,bottom:420}}
+  ]}
+ ]);
+ assert.ok(!result.some(issue=>issue.title==="The totals section overlaps invoice items"));
+});
+
 test("totals overlapping the last item row are reported without changing layout",()=>{
  const result=analyzeInvoicePagination([
   {pageNumber:1,blocks:[
-   {id:"items",type:"items_table",rows:[{itemNumber:1,bottom:320}]},
-   {id:"totals",type:"totals",bounds:{top:300}}
+   {id:"items",type:"items_table",rows:[{itemNumber:1,left:10,right:780,top:200,bottom:320}]},
+   {id:"totals",type:"totals",bounds:{left:10,right:780,top:300,bottom:420}}
   ]}
  ]);
  const warning=result.find(issue=>issue.id==="totals-overlap-items-1-totals");

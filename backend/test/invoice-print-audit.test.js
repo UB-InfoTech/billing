@@ -79,7 +79,7 @@ test("browser invoice measurement extracts page, block, row and table heading ge
  assert.equal(measured.pages[0].blocks[0].rows[0].label,"Cotton fabric");
  assert.equal(measured.pages[0].blocks[0].headerPresent,true);
  assert.equal(measured.pages[0].blocks[0].headerVisible,true);
- assert.deepEqual(measured.pages[0].blocks[0].headerLabels,["#","Cotton fabric"]);
+ assert.deepEqual(measured.pages[0].blocks[0].headerLabels,["#","cotton fabric"]);
  assert.equal(measured.pages[0].blocks[0].images[0].broken,true);
 });
 

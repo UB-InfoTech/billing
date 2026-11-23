@@ -39,8 +39,22 @@ export function estimateInvoiceTextOverflow(blocks=[],values={},options={}){
  });
  return warnings;
 }
+const PRINT_SAFE_MARGIN_MM=4;
 export function getInvoiceMarginWarnings(pageSize,orientation,printMargins={}){
  const geometry=getInvoicePrintGeometry(pageSize,orientation,printMargins);
- if(geometry.contentWidthMm/geometry.widthMm<0.68||geometry.contentHeightMm/geometry.heightMm<0.68)return [{severity:"warning",title:"Print margins are very large",detail:"The printable area is unusually small. Reduce the margins or check the selected paper size.",fixable:false}];
- return [];
+ const keys=["top","right","bottom","left"];
+ const invalid=keys.filter(key=>printMargins[key]!==undefined&&(!Number.isFinite(Number(printMargins[key]))||Number(printMargins[key])<0||Number(printMargins[key])>25));
+ const warnings=[];
+ if(invalid.length){
+  warnings.push({severity:"warning",id:"invalid-print-margin",title:"One or more margin values are outside the allowed range",detail:"The "+invalid.join(", ")+" margin values must be between 0 and 25 mm. They are normalized for layout measurement.",fixable:false});
+ }
+ const belowSafe=keys.filter(key=>geometry.margins[key]<PRINT_SAFE_MARGIN_MM);
+ if(belowSafe.length){
+  const labels={top:"Top",right:"Right",bottom:"Bottom",left:"Left"};
+  warnings.push({severity:"warning",id:"printer-safe-margin",title:"Some margins are below 4 mm",detail:belowSafe.map(key=>labels[key]).join(", ")+" margin"+(belowSafe.length===1?" is":"s are")+" below a common printer-safe distance. Content near these edges may be clipped on printers that cannot print borderlessly.",fixable:false,recommendedMargins:{top:4,right:4,bottom:4,left:4}});
+ }
+ if(geometry.contentWidthMm/geometry.widthMm<0.68||geometry.contentHeightMm/geometry.heightMm<0.68){
+  warnings.push({severity:"warning",id:"large-print-margins",title:"Print margins are very large",detail:"The printable area is unusually small. Reduce the margins or check the selected paper size.",fixable:false});
+ }
+ return warnings;
 }

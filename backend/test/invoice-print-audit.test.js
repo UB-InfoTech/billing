@@ -149,3 +149,39 @@ test("actual print audit tags item rows extending beyond paper for safe text siz
  assert.equal(warning.blockType,"items_table");
  assert.equal(warning.itemNumber,1);
 });
+
+ 
+test("margin estimator recommends printer-safe margins and warns about a reduced A5 printable area",async()=>{
+ const {getInvoiceMarginWarnings}=await import("../../frontend/src/utils/invoicePrintFit.js");
+ const unsafe=getInvoiceMarginWarnings("A4","portrait",{top:0,right:2,bottom:0,left:3});
+ const edge=unsafe.find(issue=>issue.id==="printer-safe-margin");
+ assert.ok(edge);
+ assert.deepEqual(edge.recommendedMargins,{top:4,right:4,bottom:4,left:4});
+ const safe=getInvoiceMarginWarnings("A4","portrait",{top:4,right:4,bottom:4,left:4});
+ assert.ok(!safe.some(issue=>issue.id==="printer-safe-margin"));
+ const narrow=getInvoiceMarginWarnings("A5","portrait",{top:25,right:25,bottom:25,left:25});
+ assert.ok(narrow.some(issue=>issue.id==="large-print-margins"));
+});
+
+test("actual preview audit detects elements crossing configured printer-safe margins",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const result=analyzeRenderedInvoiceMetrics({pages:[{pageNumber:1,width:794,height:1123,blocks:[
+  {id:"notes",type:"text",bounds:{left:5,top:5,right:789,bottom:1118},contentHeight:0,clientHeight:0,contentWidth:0,clientWidth:0,rows:[],images:[]}
+ ]}]},{pageSize:"A4",orientation:"portrait",printMargins:{top:4,right:4,bottom:4,left:4}});
+ const warning=result.warnings.find(issue=>issue.title==="Element overlaps the printer-safe margin");
+ assert.ok(warning);
+ assert.equal(warning.blockId,"notes");
+ assert.deepEqual(warning.edges,["left","top","right","bottom"]);
+});
+
+test("actual preview audit accepts blocks inside configured margin area and flags item rows entering it",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const safe=analyzeRenderedInvoiceMetrics({pages:[{pageNumber:1,width:794,height:1123,blocks:[
+  {id:"notes",type:"text",bounds:{left:16,top:16,right:778,bottom:1107},contentHeight:0,clientHeight:0,contentWidth:0,clientWidth:0,rows:[],images:[]}
+ ]}]},{pageSize:"A4",orientation:"portrait",printMargins:{top:4,right:4,bottom:4,left:4}});
+ assert.ok(!safe.warnings.some(issue=>issue.title==="Element overlaps the printer-safe margin"));
+ const table=analyzeRenderedInvoiceMetrics({pages:[{pageNumber:1,width:794,height:1123,blocks:[
+  {id:"items",type:"items_table",bounds:{left:16,top:16,right:778,bottom:1107},contentHeight:0,clientHeight:0,contentWidth:0,clientWidth:0,headerVisible:true,rows:[{itemNumber:5,label:"Long row",top:100,bottom:1115}],images:[]}
+ ]}]},{pageSize:"A4",orientation:"portrait",printMargins:{top:4,right:4,bottom:4,left:4}});
+ assert.ok(table.warnings.some(issue=>issue.title==="An item row enters the printer-safe margin"&&issue.itemNumber===5));
+});

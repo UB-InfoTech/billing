@@ -12,9 +12,9 @@ export function analyzeInvoicePagination(pages = []) {
   }));
   normalized.forEach((page, index) => {
     if (page.rows.length !== 1 || normalized.length < 2) return;
-    const adjacentHasItems = [normalized[index - 1], normalized[index + 1]]
-      .some(adjacent => adjacent?.rows.length > 0);
-    if (!adjacentHasItems) return;
+    const previousHasItems = normalized[index - 1]?.rows.length > 0;
+    const nextHasItems = normalized[index + 1]?.rows.length > 0;
+    if (!previousHasItems || !nextHasItems) return;
     const row = page.rows[0];
     warnings.push({
       id: "single-item-page-" + page.pageNumber,

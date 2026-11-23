@@ -242,6 +242,22 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
         });
       }
       (Array.isArray(block.rows)?block.rows:[]).forEach(row=>{
+        const rowHeight=Number(row.height)||Math.max(0,Number(row.bottom)-Number(row.top));
+        const usablePageHeight=pageHeight-(safeMarginPx?(safeMarginPx.top+safeMarginPx.bottom):0);
+        if(pageHeight&&rowHeight>usablePageHeight+RECT_TOLERANCE_PX){
+          addWarning(warnings,{
+            id:"oversized-item-row-"+pageNumber+"-"+block.id+"-"+row.itemNumber,
+            severity:"error",
+            title:"An item row cannot fit on a page",
+            detail:"Item "+row.itemNumber+(row.label?" (\u201c"+row.label+"\u201d)":"")+" is taller than the usable page area. Shorten its content, reduce its row text size or split the description across separate fields before printing.",
+            pageNumber,
+            blockId:block.id,
+            blockType:block.type,
+            itemNumber:row.itemNumber,
+            rowHeight,
+            usablePageHeight
+          });
+        }
         if(bounds&&Number(row.bottom)>Number(bounds.bottom)+RECT_TOLERANCE_PX){
           const itemName=String(row.label||"").trim();
           addWarning(warnings,{

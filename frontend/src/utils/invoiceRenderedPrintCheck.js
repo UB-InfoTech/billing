@@ -107,8 +107,10 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
       detail:"The preview loaded, but no custom invoice page was found. Check the selected design and preview again."
     });
   }
-  const pageSpec=expectedPage.pageSize?expectedPage:measurements.expectedPage||{};
+  const pageSpec=expectedPage&&Object.keys(expectedPage).length?expectedPage:measurements.expectedPage||{};
   const expected=expectedPageDimensions(pageSpec.pageSize,pageSpec.orientation||"portrait");
+  const printMargins=pageSpec.printMargins||{};
+  const marginAuditEnabled=["top","right","bottom","left"].some(key=>printMargins[key]!==undefined);
   const firstPage=pages[0];
   pages.forEach((page,pageIndex)=>{
     const pageNumber=Number(page.pageNumber)||pageIndex+1;
@@ -142,6 +144,12 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
     }
     const pageBlocks=Array.isArray(page.blocks)?page.blocks:[];
     const itemTables=pageBlocks.filter(block=>block.type==="items_table");
+    const safeMarginPx=marginAuditEnabled?{
+      top:Math.max(4,Number(printMargins.top)||0)*96/25.4,
+      right:Math.max(4,Number(printMargins.right)||0)*96/25.4,
+      bottom:Math.max(4,Number(printMargins.bottom)||0)*96/25.4,
+      left:Math.max(4,Number(printMargins.left)||0)*96/25.4
+    }:null;
     pageBlocks.forEach(block=>{
       const bounds=block.bounds||{};
       const blockName=block.label||block.id||"Invoice element";
@@ -156,6 +164,25 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
           pageNumber,
           blockId:block.id
         });
+      }
+      if(safeMarginPx&&pageWidth&&pageHeight&&bounds&&!["shape","divider"].includes(block.type)){
+        const edges=[];
+        if(Number(bounds.left)<safeMarginPx.left-RECT_TOLERANCE_PX)edges.push("left");
+        if(Number(bounds.top)<safeMarginPx.top-RECT_TOLERANCE_PX)edges.push("top");
+        if(Number(bounds.right)>pageWidth-safeMarginPx.right+RECT_TOLERANCE_PX)edges.push("right");
+        if(Number(bounds.bottom)>pageHeight-safeMarginPx.bottom+RECT_TOLERANCE_PX)edges.push("bottom");
+        if(edges.length){
+          addWarning(warnings,{
+            id:"print-margin-overflow-"+pageNumber+"-"+block.id,
+            severity:"warning",
+            title:"Element overlaps the printer-safe margin",
+            detail:blockName+" enters the "+edges.join(", ")+" edge area on page "+pageNumber+". Move it inward or use the recommended 4 mm margins.",
+            pageNumber,
+            blockId:block.id,
+            blockType:block.type,
+            edges
+          });
+        }
       }
       const overflowsVertically=Number(block.contentHeight)>Number(block.clientHeight)+RECT_TOLERANCE_PX;
       const overflowsHorizontally=Number(block.contentWidth)>Number(block.clientWidth)+RECT_TOLERANCE_PX;
@@ -226,6 +253,22 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
             blockId:block.id,
             blockType:block.type,
             itemNumber:row.itemNumber
+          });
+        }
+        if(safeMarginPx&&pageHeight&&(Number(row.top)<safeMarginPx.top-RECT_TOLERANCE_PX||Number(row.bottom)>pageHeight-safeMarginPx.bottom+RECT_TOLERANCE_PX)){
+          const marginEdges=[];
+          if(Number(row.top)<safeMarginPx.top-RECT_TOLERANCE_PX)marginEdges.push("top");
+          if(Number(row.bottom)>pageHeight-safeMarginPx.bottom+RECT_TOLERANCE_PX)marginEdges.push("bottom");
+          addWarning(warnings,{
+            id:"item-row-margin-"+pageNumber+"-"+block.id+"-"+row.itemNumber,
+            severity:"warning",
+            title:"An item row enters the printer-safe margin",
+            detail:"Item "+row.itemNumber+" is too close to the "+marginEdges.join(" or ")+" edge on page "+pageNumber+". Adjust the table or page margins.",
+            pageNumber,
+            blockId:block.id,
+            blockType:block.type,
+            itemNumber:row.itemNumber,
+            edges:marginEdges
           });
         }
         if(pageHeight&&Number(row.bottom)>pageHeight+RECT_TOLERANCE_PX){

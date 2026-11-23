@@ -190,7 +190,7 @@ test("actual preview audit accepts blocks inside configured margin area and flag
 test("actual print audit detects an item row taller than the usable page and ignores normal rows",async()=>{
  const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
  const result=analyzeRenderedInvoiceMetrics({pages:[{pageNumber:1,width:794,height:1123,blocks:[
-  {id:"items",type:"items_table",bounds:{left:10,top:100,right:780,bottom:900},contentHeight:800,clientHeight:800,contentWidth:770,clientWidth:770,headerVisible:true,rows:[{itemNumber:1,label:"Normal",top:110,bottom:160,height:50},{itemNumber:2,label:"Very long description",top:170,bottom:1200,height:1030}],images:[]}
+  {id:"items",type:"items_table",bounds:{left:10,top:100,right:780,bottom:900},contentHeight:800,clientHeight:800,contentWidth:770,clientWidth:770,headerVisible:true,rows:[{itemNumber:1,label:"Normal",top:110,bottom:160,height:50},{itemNumber:2,label:"Very long description",top:170,bottom:1220,height:1120}],images:[]}
  ]}]},{pageSize:"A4",orientation:"portrait",printMargins:{top:4,bottom:4,left:4,right:4}});
  const warning=result.warnings.find(issue=>issue.id==="oversized-item-row-1-items-2");
  assert.ok(warning);

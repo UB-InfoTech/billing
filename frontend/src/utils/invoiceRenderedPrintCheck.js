@@ -69,7 +69,7 @@ export function measureRenderedInvoiceDocument(documentRef){
           clientWidth:Number(block.clientWidth)||0,
           headerPresent:table?Boolean(header):undefined,
           headerVisible:table?Boolean(header?.getBoundingClientRect?.().height>0):undefined,
-          headerLabels:header?Array.from(header.querySelectorAll?.("th")||[]).map(cell=>String(cell.textContent||"").replace(/\\s+/g," ").trim()):[],
+          headerLabels:header?Array.from(header.querySelectorAll?.("th")||[]).map(cell=>String(cell.textContent||"").replace(/\s+/g," ").trim()):[],
           blankTableMetrics,
           rows,
           images

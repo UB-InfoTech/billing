@@ -27,7 +27,7 @@ test("totals section before the final item page receives a placement warning",()
   page(1,[{itemNumber:1}], [{id:"totals-1",type:"totals"}]),
   page(2,[{itemNumber:2},{itemNumber:3}])
  ]);
- const warning=result.find(issue=>issue.id==="totals-before-final-items-1-totals");
+ const warning=result.find(issue=>issue.title==="Invoice totals appear before the final item page"&&issue.blockId==="totals-1");
  assert.ok(warning);
  assert.equal(warning.pageNumber,1);
  assert.equal(warning.blockId,"totals-1");

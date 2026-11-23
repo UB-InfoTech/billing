@@ -58,19 +58,28 @@ export function analyzeInvoicePagination(pages = []) {
   // Also catch a totals block that physically starts before the final item row
   // on the same page. This is a measurement-only warning, never a calculation.
   normalized.forEach(page => {
-    const rowBottoms = page.rows
-      .map(row => Number(row.bottom))
-      .filter(value => Number.isFinite(value) && value > 0);
-    if (!rowBottoms.length) return;
-    const lastRowBottom = Math.max(...rowBottoms);
+    const rowRects = page.rows.map(row => ({
+      left: Number(row.left), top: Number(row.top),
+      right: Number(row.right), bottom: Number(row.bottom)
+    })).filter(rect => Object.values(rect).every(Number.isFinite));
+    if (!rowRects.length) return;
     page.blocks.filter(block => block?.type === "totals").forEach(block => {
-      const totalsTop = Number(block.bounds?.top);
-      if (!Number.isFinite(totalsTop) || totalsTop + 2 >= lastRowBottom) return;
+      const totals = block.bounds || {};
+      const bounds = {
+        left: Number(totals.left), top: Number(totals.top),
+        right: Number(totals.right), bottom: Number(totals.bottom)
+      };
+      if (!Object.values(bounds).every(Number.isFinite)) return;
+      const overlapsItem = rowRects.some(row =>
+        row.left < bounds.right - 2 && row.right > bounds.left + 2 &&
+        row.top < bounds.bottom - 2 && row.bottom > bounds.top + 2
+      );
+      if (!overlapsItem) return;
       warnings.push({
         id: "totals-overlap-items-" + page.pageNumber + "-" + (block.id || "totals"),
         severity: "error",
         title: "The totals section overlaps invoice items",
-        detail: "The totals section begins before the last item row ends on page " + page.pageNumber + ". Reposition the totals section below the item table and review the print preview.",
+        detail: "The totals section physically overlaps an item row on page " + page.pageNumber + ". Reposition the totals section so it does not cover item content, then review the print preview.",
         pageNumber: page.pageNumber,
         blockId: block.id,
         blockType: block.type,

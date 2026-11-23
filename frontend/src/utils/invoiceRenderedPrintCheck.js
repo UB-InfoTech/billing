@@ -50,7 +50,9 @@ export function measureRenderedInvoiceDocument(documentRef){
           return {
             itemNumber:Number(row.getAttribute("data-item-number"))||index+1,
             label:row.getAttribute("data-item-label")||"",
+            left:rect?.left??0,
             top:rect?.top??0,
+            right:rect?.right??0,
             bottom:rect?.bottom??0,
             height:rect?.height??0
           };
@@ -69,7 +71,7 @@ export function measureRenderedInvoiceDocument(documentRef){
           clientWidth:Number(block.clientWidth)||0,
           headerPresent:table?Boolean(header):undefined,
           headerVisible:table?Boolean(header?.getBoundingClientRect?.().height>0):undefined,
-          headerLabels:header?Array.from(header.querySelectorAll?.("th")||[]).map(cell=>String(cell.textContent||"").replace(/\s+/g," ").trim()):[],
+          headerLabels:header?Array.from(header.querySelectorAll?.("th")||[]).map(cell=>String(cell.textContent||"").replace(/\s+/g," ").trim().toLowerCase()):[],
           blankTableMetrics,
           rows,
           images

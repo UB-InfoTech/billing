@@ -6,6 +6,7 @@ import {inferOcrValueBox} from "../utils/invoiceOcrMapping.js";
 import {analyzeInvoiceLayout,applySafeInvoiceLayoutFixes,reduceInvoiceBlockFontSize} from "../utils/invoiceLayoutQuality.js";
 import {estimateInvoiceTextOverflow,getInvoiceMarginWarnings,getInvoicePrintGeometry} from "../utils/invoicePrintFit.js";
 import {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics} from "../utils/invoiceRenderedPrintCheck.js";
+import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
@@ -365,7 +366,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         await new Promise(resolve=>previewWindow.requestAnimationFrame(()=>previewWindow.requestAnimationFrame(resolve)));
       }
       const measurements=measureRenderedInvoiceDocument(previewDocument);
-      setPrintPreviewAudit(analyzeRenderedInvoiceMetrics(measurements,{pageSize:activeTemplate.pageSize,orientation:activeTemplate.orientation,printMargins:activeTemplate.printMargins||{}}));
+      const audit=analyzeRenderedInvoiceMetrics(measurements,{pageSize:activeTemplate.pageSize,orientation:activeTemplate.orientation,printMargins:activeTemplate.printMargins||{}});
+      setPrintPreviewAudit({...audit,warnings:[...audit.warnings,...analyzeInvoicePagination(measurements.pages)]});
       setPrintPreviewReady(true);
     }catch(_auditError){
       setPrintPreviewError("The invoice loaded, but its layout could not be measured. Close the preview and try again.");

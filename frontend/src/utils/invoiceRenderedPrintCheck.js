@@ -50,7 +50,9 @@ export function measureRenderedInvoiceDocument(documentRef){
           return {
             itemNumber:Number(row.getAttribute("data-item-number"))||index+1,
             label:row.getAttribute("data-item-label")||"",
+            left:rect?.left??0,
             top:rect?.top??0,
+            right:rect?.right??0,
             bottom:rect?.bottom??0,
             height:rect?.height??0
           };
@@ -67,7 +69,9 @@ export function measureRenderedInvoiceDocument(documentRef){
           clientHeight:Number(block.clientHeight)||0,
           contentWidth:Number(block.scrollWidth)||0,
           clientWidth:Number(block.clientWidth)||0,
-          headerVisible:header?Boolean(header.getBoundingClientRect?.().height>0):undefined,
+          headerPresent:table?Boolean(header):undefined,
+          headerVisible:table?Boolean(header?.getBoundingClientRect?.().height>0):undefined,
+          headerLabels:header?Array.from(header.querySelectorAll?.("th")||[]).map(cell=>String(cell.textContent||"").replace(/\s+/g," ").trim().toLowerCase()):[],
           blankTableMetrics,
           rows,
           images
@@ -231,12 +235,12 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
           blockType:block.type
         });
       }
-      if(block.type==="items_table"&&block.headerVisible===false){
+      if(block.type==="items_table"&&(block.headerPresent===false||block.headerVisible===false)){
         addWarning(warnings,{
           id:"table-header-missing-"+pageNumber+"-"+block.id,
           severity:"warning",
-          title:"Item table heading is not visible",
-          detail:"The item table heading is missing or hidden on page "+pageNumber+". Check the table layout.",
+          title:block.headerPresent===false?"Item table heading is missing":"Item table heading is not visible",
+          detail:(block.headerPresent===false?"The item table has no heading row on page ":"The item table heading is hidden on page ")+pageNumber+". Check the table layout.",
           pageNumber,
           blockId:block.id
         });
@@ -323,6 +327,28 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
       });
     }
   });
+
+  const tablesWithHeaders=pages.flatMap((page,pageIndex)=>
+    (Array.isArray(page.blocks)?page.blocks:[])
+      .filter(block=>block.type==="items_table"&&Array.isArray(block.headerLabels)&&block.headerLabels.length>0)
+      .map(block=>({pageIndex,pageNumber:Number(page.pageNumber)||pageIndex+1,block,labels:block.headerLabels}))
+  );
+  const firstTableHeader=tablesWithHeaders[0];
+  if(firstTableHeader){
+    tablesWithHeaders.slice(1).forEach(table=>{
+      if(table.pageIndex<=firstTableHeader.pageIndex)return;
+      if(table.labels.length===firstTableHeader.labels.length&&table.labels.every((label,index)=>label===firstTableHeader.labels[index]))return;
+      addWarning(warnings,{
+        id:"continuation-heading-mismatch-"+table.pageNumber+"-"+table.block.id,
+        severity:"warning",
+        title:"Continuation-page headings do not match",
+        detail:"The item-table column headings on page "+table.pageNumber+" differ from the first item-table page. Check that continuation pages repeat the same columns in the same order.",
+        pageNumber:table.pageNumber,
+        blockId:table.block.id,
+        blockType:table.block.type
+      });
+    });
+  }
 
   const anyItemTable=pages.some(page=>(Array.isArray(page.blocks)?page.blocks:[]).some(block=>block.type==="items_table"));
   if(anyItemTable){

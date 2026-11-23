@@ -66,7 +66,7 @@ test("browser invoice measurement extracts page, block, row and table heading ge
  const {measureRenderedInvoiceDocument}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
  const rect=(left,top,right,bottom)=>({left,top,right,bottom,width:right-left,height:bottom-top});
  const row={getBoundingClientRect:()=>rect(20,220,780,245),getAttribute:key=>({"data-item-number":"3","data-item-label":"Cotton fabric"}[key]||null)};
- const header={getBoundingClientRect:()=>rect(20,200,780,220)};
+ const header={getBoundingClientRect:()=>rect(20,200,780,220),querySelectorAll:()=>[{textContent:" # "},{textContent:" Cotton fabric "}]};
  const wrapper={querySelector:selector=>selector==="thead"?header:null,querySelectorAll:selector=>selector==="tbody tr"?[row]:[]};
  const image={complete:true,naturalWidth:0,getAttribute:key=>key==="alt"?"Business logo":null};
  const block={getBoundingClientRect:()=>rect(20,200,780,500),getAttribute:key=>({"data-block-id":"item-table","data-block-type":"items_table"}[key]||null),querySelector:selector=>selector===".design-items"?wrapper:null,querySelectorAll:selector=>selector==="img"?[image]:[],scrollHeight:300,clientHeight:300,scrollWidth:760,clientWidth:760};
@@ -77,8 +77,25 @@ test("browser invoice measurement extracts page, block, row and table heading ge
  assert.equal(measured.pages[0].blocks[0].id,"item-table");
  assert.equal(measured.pages[0].blocks[0].rows[0].itemNumber,3);
  assert.equal(measured.pages[0].blocks[0].rows[0].label,"Cotton fabric");
+ assert.equal(measured.pages[0].blocks[0].headerPresent,true);
  assert.equal(measured.pages[0].blocks[0].headerVisible,true);
+ assert.deepEqual(measured.pages[0].blocks[0].headerLabels,["#","cotton fabric"]);
  assert.equal(measured.pages[0].blocks[0].images[0].broken,true);
+});
+
+test("actual print audit detects missing and inconsistent continuation-page table headings",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const table=(id,labels,headerPresent=true)=>({id,type:"items_table",headerPresent,headerVisible:headerPresent,headerLabels:labels,rows:[],bounds:{left:10,top:100,right:780,bottom:900},contentHeight:0,clientHeight:0,contentWidth:770,clientWidth:770,images:[]});
+ const mismatch=analyzeRenderedInvoiceMetrics({pages:[
+  {pageNumber:1,width:794,height:1123,blocks:[table("items-1",["#","Description","Qty"])]},
+  {pageNumber:2,width:794,height:1123,blocks:[table("items-2",["#","Description","Rate"])]}
+ ]});
+ assert.ok(mismatch.warnings.some(issue=>issue.title==="Continuation-page headings do not match"&&issue.blockId==="items-2"));
+ const missing=analyzeRenderedInvoiceMetrics({pages:[
+  {pageNumber:1,width:794,height:1123,blocks:[table("items-1",["#","Description"])]},
+  {pageNumber:2,width:794,height:1123,blocks:[table("items-2",[],false)]}
+ ]});
+ assert.ok(missing.warnings.some(issue=>issue.title==="Item table heading is missing"&&issue.blockId==="items-2"));
 });
 
 test("safe invoice layout checks repair invalid bounds and normalize item-table columns",async()=>{

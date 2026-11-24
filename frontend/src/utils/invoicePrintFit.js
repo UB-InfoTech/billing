@@ -6,7 +6,19 @@ export function getInvoicePrintGeometry(pageSize="A4",orientation="portrait",pri
  const margins={top:safeMm(printMargins.top),right:safeMm(printMargins.right),bottom:safeMm(printMargins.bottom),left:safeMm(printMargins.left)};
  return {widthMm,heightMm,margins,contentWidthMm:Math.max(1,widthMm-margins.left-margins.right),contentHeightMm:Math.max(1,heightMm-margins.top-margins.bottom)};
 }
-const charUnit=char=>/[ilI.,'’!|:;]/u.test(char)?0.28:/[MW@%₹#&]/u.test(char)?0.82:/\s/u.test(char)?0.3:0.52;
+const FULL_WIDTH_SCRIPT=/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Devanagari}\p{Script=Gujarati}\p{Script=Bengali}\p{Script=Gurmukhi}\p{Script=Tamil}\p{Script=Telugu}\p{Script=Kannada}\p{Script=Malayalam}\p{Script=Sinhala}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+const MEDIUM_WIDTH_SCRIPT=/[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Cyrillic}\p{Script=Greek}]/u;
+const charUnit=char=>{
+ if(/\p{Mark}/u.test(char)||char==="\u200d"||char==="\ufe0e"||char==="\ufe0f"||/\p{Emoji_Modifier}/u.test(char))return 0;
+ if(/\p{Extended_Pictographic}/u.test(char))return 1;
+ if(/\p{Regional_Indicator}/u.test(char))return 0.5;
+ if(/\s/u.test(char))return 0.3;
+ if(/[ilI.,'’!|:;]/u.test(char))return 0.28;
+ if(/[MW@%₹#&]/u.test(char))return 0.82;
+ if(FULL_WIDTH_SCRIPT.test(char))return 0.95;
+ if(MEDIUM_WIDTH_SCRIPT.test(char))return 0.78;
+ return 0.52;
+};
 function estimateLineCount(value,maxUnits){
  let total=0;
  String(value??"").split(/\r?\n/u).forEach(paragraph=>{

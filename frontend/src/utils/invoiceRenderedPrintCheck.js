@@ -91,6 +91,63 @@ function addWarning(warnings,warning){
   if(!warnings.some(item=>item.id===warning.id))warnings.push(warning);
 }
 
+function auditInvoiceItemRowGeometry(table,pageNumber,warnings){
+  const rows=(Array.isArray(table.rows)?table.rows:[]).map((row,index)=>({
+    ...row,
+    itemNumber:Number(row.itemNumber)||index+1,
+    top:Number(row.top),
+    bottom:Number(row.bottom),
+    left:Number(row.left),
+    right:Number(row.right)
+  }));
+  const bounds=table.bounds||{};
+  rows.forEach((row,index)=>{
+    if(Number.isFinite(row.left)&&Number.isFinite(row.right)&&
+      Number.isFinite(Number(bounds.left))&&Number.isFinite(Number(bounds.right))&&
+      (row.left<Number(bounds.left)-RECT_TOLERANCE_PX||row.right>Number(bounds.right)+RECT_TOLERANCE_PX)){
+      addWarning(warnings,{
+        id:"item-row-width-"+pageNumber+"-"+table.id+"-"+row.itemNumber,
+        severity:"error",
+        title:"An item row exceeds the table width",
+        detail:"Item "+row.itemNumber+" extends beyond the item table's left or right edge on page "+pageNumber+". Review the table width and visible column widths.",
+        pageNumber,
+        blockId:table.id,
+        blockType:table.type,
+        itemNumber:row.itemNumber
+      });
+    }
+    if(index===0)return;
+    const previous=rows[index-1];
+    if(![row.top,row.bottom,previous.top,previous.bottom].every(Number.isFinite))return;
+    const overlaps=row.top<previous.bottom-RECT_TOLERANCE_PX&&row.bottom>previous.top+RECT_TOLERANCE_PX;
+    if(overlaps){
+      addWarning(warnings,{
+        id:"item-row-overlap-"+pageNumber+"-"+table.id+"-"+previous.itemNumber+"-"+row.itemNumber,
+        severity:"error",
+        title:"Invoice item rows overlap",
+        detail:"Items "+previous.itemNumber+" and "+row.itemNumber+" overlap on page "+pageNumber+". Check row sizing and the item-table print layout.",
+        pageNumber,
+        blockId:table.id,
+        blockType:table.type,
+        itemNumber:row.itemNumber,
+        previousItemNumber:previous.itemNumber
+      });
+    }else if(row.top<previous.top-RECT_TOLERANCE_PX){
+      addWarning(warnings,{
+        id:"item-row-order-"+pageNumber+"-"+table.id+"-"+previous.itemNumber+"-"+row.itemNumber,
+        severity:"warning",
+        title:"Invoice item rows are out of visual order",
+        detail:"Item "+row.itemNumber+" appears above item "+previous.itemNumber+" on page "+pageNumber+". Check the table's row layout before printing.",
+        pageNumber,
+        blockId:table.id,
+        blockType:table.type,
+        itemNumber:row.itemNumber,
+        previousItemNumber:previous.itemNumber
+      });
+    }
+  });
+}
+
 function expectedPageDimensions(pageSize,orientation){
   const size=PAGE_DIMENSIONS_MM[pageSize];
   if(!size)return null;
@@ -317,6 +374,7 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
         }
       });
     });
+    itemTables.forEach(table=>auditInvoiceItemRowGeometry(table,pageNumber,warnings));
     if(itemTables.length>1){
       addWarning(warnings,{
         id:"multiple-item-tables-"+pageNumber,

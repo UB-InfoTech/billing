@@ -94,10 +94,17 @@ function getInvoiceItemCellValue(item,column,discountRate=0,itemNumber=0){
   }
 }
 
+const FULL_WIDTH_SCRIPT=/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Devanagari}\p{Script=Gujarati}\p{Script=Bengali}\p{Script=Gurmukhi}\p{Script=Tamil}\p{Script=Telugu}\p{Script=Kannada}\p{Script=Malayalam}\p{Script=Sinhala}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u;
+const MEDIUM_WIDTH_SCRIPT=/[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Cyrillic}\p{Script=Greek}]/u;
 function characterWidthUnits(character){
+  if(/\p{Mark}/u.test(character)||character==="\u200d"||character==="\ufe0e"||character==="\ufe0f"||/\p{Emoji_Modifier}/u.test(character))return 0;
+  if(/\p{Extended_Pictographic}/u.test(character))return 1;
+  if(/\p{Regional_Indicator}/u.test(character))return 0.5;
+  if(/\s/u.test(character))return 0.3;
   if(/[ilI.,'’!|:;]/u.test(character))return 0.28;
   if(/[MW@%₹#&]/u.test(character))return 0.82;
-  if(/\s/u.test(character))return 0.3;
+  if(FULL_WIDTH_SCRIPT.test(character))return 0.95;
+  if(MEDIUM_WIDTH_SCRIPT.test(character))return 0.78;
   return 0.52;
 }
 

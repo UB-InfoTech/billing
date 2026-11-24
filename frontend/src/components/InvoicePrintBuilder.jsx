@@ -1170,7 +1170,11 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               </div>
             </div>
 
-            <div ref={printCheckRef} className="invoice-builder-print-check" role="status"><strong>{designWarnings.length?("Layout check · "+designWarnings.length+" issue"+(designWarnings.length===1?"":"s")+" to review"):"Layout check · No estimated issues found"}</strong>{designWarnings.some(issue=>issue.fixable)&&<button type="button" className="btn btn-sm btn-outline-primary mt-2" onClick={()=>{const result=applySafeInvoiceLayoutFixes(activeTemplate.blocks,previewColumns);if(result.changed)updateActive({blocks:result.blocks});}}>Fix safe issues</button>}{designWarnings.length>0?<ul>{designWarnings.slice(0,8).map((issue,index)=><li key={index}><span className={issue.severity==="error"?"text-danger":"text-warning"}>{issue.title}</span> — {issue.detail}</li>)}</ul>:<small>No obvious layout problems were estimated. Confirm the final design in Actual print before printing.</small>}{designWarnings.length>0&&<small>Text-fit checks are estimates. Confirm the final result using Actual print.</small>}</div>
+            <div ref={printCheckRef} className="invoice-builder-print-check" role="status"><strong>{designWarnings.length?("Layout check · "+designWarnings.length+" issue"+(designWarnings.length===1?"":"s")+" to review"):"Layout check · No estimated issues found"}</strong>{designWarnings.some(issue=>issue.fixable)&&<button type="button" className="btn btn-sm btn-outline-primary mt-2" onClick={()=>{const result=applySafeInvoiceLayoutFixes(activeTemplate.blocks,previewColumns);if(result.changed)updateActive({blocks:result.blocks});}}>Fix safe issues</button>}{designWarnings.length>0?<ul>{designWarnings.slice(0,8).map((issue,index)=>{
+                const issueBlock=activeTemplate.blocks.find(block=>block.id===issue.blockId);
+                const canReduceText=issue.title==="Text may overflow its box"&&issueBlock&&issueBlock.visible!==false&&["field","text"].includes(issueBlock.type)&&Number(issueBlock.fontSize||10)>6;
+                return <li key={issue.id||index}><div><span className={issue.severity==="error"?"text-danger":"text-warning"}>{issue.title}</span> — {issue.detail}</div>{canReduceText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{const result=reduceInvoiceBlockFontSize(activeTemplate.blocks,issue.blockId,1);if(result.changed){updateActive({blocks:result.blocks});setSelectedBlockId(issue.blockId);setMessage("Text size reduced by up to 1 pt. Recheck the layout before printing.");}}}>Reduce text size by up to 1 pt</button>}</li>;
+              })}</ul>:<small>No obvious layout problems were estimated. Confirm the final design in Actual print before printing.</small>}{designWarnings.length>0&&<small>Text-fit checks are estimates. Confirm the final result using Actual print.</small>}</div>
             <div className="invoice-builder-canvas-scroll">
               <div className={"invoice-builder-page "+(activeTemplate.orientation==="landscape"?"is-landscape":"")} style={{aspectRatio:activeTemplate.orientation==="landscape"?"1.414 / 1":String(canvasRatio).replace("/"," / ")}}>
                 <div className="invoice-builder-canvas" onDragOver={event=>event.preventDefault()} onDrop={handlePaletteDrop} onPointerMove={moveBlock} onPointerUp={finishBlockDrag} onPointerCancel={finishBlockDrag}>
@@ -1516,6 +1520,11 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   )}
                 </aside>
               )}
+              <div className="invoice-builder-print-settings-note">
+                <strong>Print dialog settings</strong>
+                <span>{activeTemplate.pageSize} · {activeTemplate.orientation==="landscape"?"Landscape":"Portrait"} · Scale 100% · Margins: None · Headers/footers: Off · Background graphics: On</span>
+                <small>These are the design's intended settings. The selected printer may still clip edges; review the measured pages and do a physical test print when changing printers.</small>
+              </div>
             </div>
             <footer className="invoice-builder-print-preview-footer">
               <span aria-live="polite">{!printPreviewReady?"Loading fonts, images and invoice layout…":printPreviewIsSample?"Sample only · printing will not create or save an invoice.":(printPreviewAudit?.pageCount||0)+" page(s) checked in this browser. Review any findings before printing."}</span>

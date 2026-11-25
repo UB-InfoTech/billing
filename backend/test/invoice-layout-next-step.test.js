@@ -1,6 +1,6 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const {estimateInvoiceItemRow}=require("../utils/invoiceDesignPagination");
+const {estimateInvoiceItemRow,buildInvoiceDesignPages}=require("../utils/invoiceDesignPagination");
 
 test("print fit estimation treats Gujarati and Devanagari glyphs conservatively",async()=>{
  const {estimateInvoiceTextOverflow}=await import("../../frontend/src/utils/invoicePrintFit.js");
@@ -50,4 +50,38 @@ test("A4 and A5 portrait and landscape print geometry remains exact",async()=>{
   const geometry=getInvoicePrintGeometry(size,orientation);
   assert.deepEqual([geometry.widthMm,geometry.heightMm],[width,height]);
  });
+});
+
+
+test("multipage invoices keep totals, payment details, terms and signature together on the final page",()=>{
+ const template={
+  pageSize:"A4",
+  orientation:"portrait",
+  printMargins:{top:0,right:0,bottom:0,left:0},
+  blocks:[
+   {id:"company",type:"field",fieldKey:"company_name",x:6,y:5,w:50,h:5,visible:true},
+   {id:"items",type:"items_table",x:6,y:40,w:88,h:35,visible:true,fontSize:8,tableCellPadding:4,tableBorderWidth:1,columns:[{key:"description",label:"Description",width:100,visible:true,order:0}]},
+   {id:"note",type:"text",label:"Page note",text:"Keep on first page",x:6,y:50,w:35,h:4,visible:true},
+   {id:"terms",type:"field",fieldKey:"terms",x:6,y:70,w:45,h:8,visible:true},
+   {id:"words",type:"field",fieldKey:"amount_words",x:6,y:79,w:45,h:5,visible:true},
+   {id:"bank",type:"field",fieldKey:"bank_details",x:6,y:85,w:45,h:5,visible:true},
+   {id:"paid",type:"field",fieldKey:"amount_paid",x:55,y:79,w:35,h:4,visible:true},
+   {id:"due",type:"field",fieldKey:"balance_due",x:55,y:84,w:35,h:4,visible:true},
+   {id:"signature",type:"field",fieldKey:"signature",x:55,y:91,w:35,h:5,visible:true},
+   {id:"totals",type:"totals",x:60,y:78,w:34,h:15,visible:true}
+  ]
+ };
+ const items=Array.from({length:12},(_,index)=>({orderName:"Item "+(index+1)}));
+ const pages=buildInvoiceDesignPages(template,items);
+ assert.equal(pages.length,2);
+ const firstIds=pages[0].blocks.map(block=>block.id);
+ const lastIds=pages[1].blocks.map(block=>block.id);
+ assert.ok(firstIds.includes("company"));
+ assert.ok(firstIds.includes("note"));
+ ["terms","words","bank","paid","due","signature","totals"].forEach(id=>{
+  assert.ok(!firstIds.includes(id),id+" must not appear before the final item page");
+  assert.ok(lastIds.includes(id),id+" must appear on the final page");
+ });
+ assert.ok(pages[0].blocks.some(block=>block.type==="items_table"));
+ assert.ok(pages[1].blocks.some(block=>block.type==="items_table"));
 });

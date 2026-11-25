@@ -1509,11 +1509,11 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               />
               {printPreviewAudit&&(
                 <aside className={"invoice-builder-rendered-audit "+(printPreviewAudit.warnings.length?"has-warnings":"is-clear")} role="status" aria-live="polite">
-                  <strong><i className={"bi "+(printPreviewAudit.warnings.length?"bi-exclamation-triangle":"bi-check-circle")}/>{printPreviewAudit.pageCount} page{printPreviewAudit.pageCount===1?"":"s"} measured · {printPreviewAudit.warnings.length?printPreviewAudit.warnings.length+" issue"+(printPreviewAudit.warnings.length===1?"":"s")+" to review":"No visible clipping detected"}</strong>
+                  <strong><i className={"bi "+(printPreviewAudit.warnings.length?"bi-exclamation-triangle":"bi-check-circle")}/>{printPreviewAudit.pageCount} page{printPreviewAudit.pageCount===1?"":"s"} measured · {printPreviewAudit.warnings.length?printPreviewAudit.warnings.length+" issue"+(printPreviewAudit.warnings.length===1?"":"s")+" to review":"No measured clipping detected"}</strong>
                   {printPreviewAudit.warnings.length>0&&(
                     <ul>{printPreviewAudit.warnings.slice(0,8).map((issue,index)=>{
                     const issueBlock=activeTemplate.blocks.find(block=>block.id===issue.blockId);
-                    const shrinkableWarnings=["Text or totals may be clipped","Item table may be too wide","An item row exceeds the table area","An item row extends beyond the page","Blank table content may be clipped"];
+                    const shrinkableWarnings=["Text or totals may be clipped","Item table may be too wide","An item cell is clipped","An item row exceeds the table area","An item row extends beyond the page","Blank table content may be clipped"];
                     const canReduceText=issueBlock&&issueBlock.visible!==false&&["field","text","totals","blank_table","items_table"].includes(issue.blockType)&&shrinkableWarnings.includes(issue.title)&&Number(issueBlock.fontSize||10)>6;
                     return <li key={issue.id||index}><div><b>{issue.title}</b> — {issue.detail}</div>{issue.blockId&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{setSelectedBlockId(issue.blockId);closeActualPrintPreview();}}>Edit this element</button>}{canReduceText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{const result=reduceInvoiceBlockFontSize(activeTemplate.blocks,issue.blockId,1);if(result.changed){updateActive({blocks:result.blocks});setSelectedBlockId(issue.blockId);setMessage("Text size reduced by up to 1 pt. Recheck the print preview before printing.");}}}>Reduce text size by up to 1 pt</button>}</li>;
                   })}</ul>

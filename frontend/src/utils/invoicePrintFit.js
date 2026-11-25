@@ -57,6 +57,12 @@ export function getInvoiceMarginWarnings(pageSize,orientation,printMargins={}){
  const keys=["top","right","bottom","left"];
  const invalid=keys.filter(key=>printMargins[key]!==undefined&&(!Number.isFinite(Number(printMargins[key]))||Number(printMargins[key])<0||Number(printMargins[key])>25));
  const warnings=[];
+ if(!Object.prototype.hasOwnProperty.call(PAGE_DIMENSIONS_MM,pageSize)){
+  warnings.push({severity:"warning",id:"unsupported-paper-size",title:"Paper size is not supported",detail:"The selected paper size is not A4, A5 or Letter. The preview uses A4 dimensions until a supported size is selected.",fixable:false});
+ }
+ if(!["portrait","landscape"].includes(orientation)){
+  warnings.push({severity:"warning",id:"unsupported-page-orientation",title:"Page orientation is not supported",detail:"Choose Portrait or Landscape so the preview and printed page use the same orientation.",fixable:false});
+ }
  if(invalid.length){
   warnings.push({severity:"warning",id:"invalid-print-margin",title:"One or more margin values are outside the allowed range",detail:"The "+invalid.join(", ")+" margin values must be between 0 and 25 mm. They are normalized for layout measurement.",fixable:false});
  }

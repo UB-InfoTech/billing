@@ -18,6 +18,23 @@ function getRect(element,pageRect){
   };
 }
 
+function getElementStyle(documentRef,element){
+  try{
+    return documentRef?.defaultView?.getComputedStyle?.(element)||null;
+  }catch(_styleError){
+    return null;
+  }
+}
+
+function getCellOverflowAxes(cells){
+  const axes=new Set();
+  cells.forEach(cell=>{
+    if(Number(cell.scrollWidth)>Number(cell.clientWidth)+RECT_TOLERANCE_PX)axes.add("width");
+    if(Number(cell.scrollHeight)>Number(cell.clientHeight)+RECT_TOLERANCE_PX)axes.add("height");
+  });
+  return Array.from(axes);
+}
+
 export function measureRenderedInvoiceDocument(documentRef){
   if(!documentRef?.querySelectorAll)return {pages:[]};
   const sheets=Array.from(documentRef.querySelectorAll(".design-sheet"));
@@ -45,16 +62,24 @@ export function measureRenderedInvoiceDocument(documentRef){
           }:null
         }:null;
         const header=table?.querySelector?.("thead");
+        const headerStyle=header?getElementStyle(documentRef,header):null;
         const rows=table?Array.from(table.querySelectorAll("tbody tr")).map((row,index)=>{
           const rect=getRect(row,sheetRect);
+          const rowStyle=getElementStyle(documentRef,row);
+          const cells=Array.from(row.querySelectorAll?.("th,td")||[]);
           return {
             itemNumber:Number(row.getAttribute("data-item-number"))||index+1,
             label:row.getAttribute("data-item-label")||"",
-            left:rect?.left??0,
-            top:rect?.top??0,
-            right:rect?.right??0,
-            bottom:rect?.bottom??0,
-            height:rect?.height??0
+            geometryAvailable:Boolean(rect&&rect.width>0&&rect.height>0),
+            left:rect?.left??null,
+            top:rect?.top??null,
+            right:rect?.right??null,
+            bottom:rect?.bottom??null,
+            height:rect?.height??null,
+            breakInside:String(rowStyle?.breakInside||"").toLowerCase(),
+            pageBreakInside:String(rowStyle?.pageBreakInside||"").toLowerCase(),
+            cellOverflowAxes:getCellOverflowAxes(cells),
+            cellCount:cells.length
           };
         }):[];
         const images=Array.from(block.querySelectorAll("img")).map(image=>({
@@ -65,6 +90,8 @@ export function measureRenderedInvoiceDocument(documentRef){
           id:block.getAttribute("data-block-id")||("page-"+(pageIndex+1)+"-block-"+(blockIndex+1)),
           type,
           bounds,
+          tablePresent:type==="items_table"?Boolean(table):undefined,
+          headerDisplay:header?String(headerStyle?.display||"").toLowerCase():"",
           contentHeight:Number(block.scrollHeight)||0,
           clientHeight:Number(block.clientHeight)||0,
           contentWidth:Number(block.scrollWidth)||0,
@@ -102,6 +129,7 @@ function auditInvoiceItemRowGeometry(table,pageNumber,warnings){
   }));
   const bounds=table.bounds||{};
   rows.forEach((row,index)=>{
+    if(row.geometryAvailable===false)return;
     if(Number.isFinite(row.left)&&Number.isFinite(row.right)&&
       Number.isFinite(Number(bounds.left))&&Number.isFinite(Number(bounds.right))&&
       (row.left<Number(bounds.left)-RECT_TOLERANCE_PX||row.right>Number(bounds.right)+RECT_TOLERANCE_PX)){
@@ -281,6 +309,28 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
           });
         }
       }
+      if(block.type==="items_table"&&block.tablePresent===false){
+        addWarning(warnings,{
+          id:"item-table-unmeasured-"+pageNumber+"-"+block.id,
+          severity:"error",
+          title:"Item table could not be measured",
+          detail:"The item table on page "+pageNumber+" was not found in the rendered preview. Reopen the preview before printing.",
+          pageNumber,
+          blockId:block.id,
+          blockType:block.type
+        });
+      }
+      if(block.type==="items_table"&&block.headerDisplay&&block.headerDisplay!=="table-header-group"){
+        addWarning(warnings,{
+          id:"table-header-repeat-"+pageNumber+"-"+block.id,
+          severity:"warning",
+          title:"Item headings may not repeat on printed pages",
+          detail:"The item-table heading on page "+pageNumber+" is not configured as a repeating table header. Keep the heading row in the table header group.",
+          pageNumber,
+          blockId:block.id,
+          blockType:block.type
+        });
+      }
       if(block.type==="items_table"&&overflowsHorizontally){
         addWarning(warnings,{
           id:"table-width-overflow-"+pageNumber+"-"+block.id,
@@ -318,6 +368,45 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
             rowHeight,
             usablePageHeight
           });
+        }
+        if(Array.isArray(row.cellOverflowAxes)&&row.cellOverflowAxes.length){
+          addWarning(warnings,{
+            id:"item-cell-overflow-"+pageNumber+"-"+block.id+"-"+row.itemNumber,
+            severity:"error",
+            title:"An item cell is clipped",
+            detail:"Item "+row.itemNumber+" has cell content overflowing its "+row.cellOverflowAxes.join(" and ")+" on page "+pageNumber+". Widen the affected column or shorten the cell text.",
+            pageNumber,
+            blockId:block.id,
+            blockType:block.type,
+            itemNumber:row.itemNumber,
+            axes:row.cellOverflowAxes
+          });
+        }
+        const breakRules=[row.breakInside,row.pageBreakInside].filter(Boolean);
+        if(breakRules.length&&!breakRules.some(value=>value==="avoid"||value==="avoid-page"||value.includes("avoid"))){
+          addWarning(warnings,{
+            id:"item-row-break-"+pageNumber+"-"+block.id+"-"+row.itemNumber,
+            severity:"warning",
+            title:"An item row may split across printed pages",
+            detail:"Item "+row.itemNumber+" does not have a keep-together print rule. Keep break-inside: avoid on item rows so a line item stays on one page.",
+            pageNumber,
+            blockId:block.id,
+            blockType:block.type,
+            itemNumber:row.itemNumber
+          });
+        }
+        if(row.geometryAvailable===false){
+          addWarning(warnings,{
+            id:"item-row-unmeasured-"+pageNumber+"-"+block.id+"-"+row.itemNumber,
+            severity:"warning",
+            title:"An item row could not be measured",
+            detail:"Item "+row.itemNumber+" has no measurable row bounds in the preview. Reopen the actual print preview before printing.",
+            pageNumber,
+            blockId:block.id,
+            blockType:block.type,
+            itemNumber:row.itemNumber
+          });
+          return;
         }
         if(bounds&&Number(row.bottom)>Number(bounds.bottom)+RECT_TOLERANCE_PX){
           const itemName=String(row.label||"").trim();

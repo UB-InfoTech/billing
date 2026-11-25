@@ -216,3 +216,57 @@ test("actual print audit detects an item row taller than the usable page and ign
  assert.ok(warning.usablePageHeight>0);
  assert.ok(!result.warnings.some(issue=>issue.id==="oversized-item-row-1-items-1"));
 });
+
+
+test("browser invoice measurement captures repeating headers, keep-together rows and cell overflow",async()=>{
+ const {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const rect=(left,top,right,bottom)=>({left,top,right,bottom,width:right-left,height:bottom-top});
+ const cell={scrollWidth:180,clientWidth:120,scrollHeight:24,clientHeight:24};
+ const row={
+  getBoundingClientRect:()=>rect(20,220,780,250),
+  getAttribute:key=>({"data-item-number":"4","data-item-label":"Long fabric description"}[key]||null),
+  querySelectorAll:()=>[cell]
+ };
+ const header={getBoundingClientRect:()=>rect(20,200,780,220),querySelectorAll:()=>[{textContent:"Description"}]};
+ const table={querySelector:selector=>selector==="thead"?header:null,querySelectorAll:selector=>selector==="tbody tr"?[row]:[]};
+ const block={getBoundingClientRect:()=>rect(20,200,780,500),getAttribute:key=>({"data-block-id":"items","data-block-type":"items_table"}[key]||null),querySelector:selector=>selector===".design-items"?table:null,querySelectorAll:()=>[],scrollHeight:300,clientHeight:300,scrollWidth:760,clientWidth:760};
+ const sheet={getBoundingClientRect:()=>rect(0,0,800,1100),querySelectorAll:selector=>selector===".design-block"?[block]:[],clientWidth:800,clientHeight:1100};
+ const styles=new Map([[header,{display:"table-header-group"}],[row,{breakInside:"avoid",pageBreakInside:"avoid"}]]);
+ const documentRef={defaultView:{getComputedStyle:element=>styles.get(element)||{}},querySelectorAll:selector=>selector===".design-sheet"?[sheet]:[]};
+ const measured=measureRenderedInvoiceDocument(documentRef);
+ const itemTable=measured.pages[0].blocks[0];
+ assert.equal(itemTable.tablePresent,true);
+ assert.equal(itemTable.headerDisplay,"table-header-group");
+ assert.equal(itemTable.rows[0].breakInside,"avoid");
+ assert.deepEqual(itemTable.rows[0].cellOverflowAxes,["width"]);
+ const audit=analyzeRenderedInvoiceMetrics(measured);
+ assert.ok(audit.warnings.some(issue=>issue.id==="item-cell-overflow-1-items-4"));
+ assert.ok(!audit.warnings.some(issue=>issue.id==="item-row-break-1-items-4"));
+});
+
+test("actual print audit warns when continuation headings or rows are not protected from page splitting",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const result=analyzeRenderedInvoiceMetrics({pages:[{pageNumber:1,width:794,height:1123,blocks:[
+  {id:"items",type:"items_table",tablePresent:true,headerPresent:true,headerVisible:true,headerDisplay:"table-row-group",bounds:{left:10,top:100,right:780,bottom:900},contentHeight:800,clientHeight:800,contentWidth:770,clientWidth:770,rows:[{itemNumber:2,label:"Fabric",top:120,bottom:180,left:10,right:780,breakInside:"auto",pageBreakInside:"auto"}],images:[]}
+ ]}]});
+ assert.ok(result.warnings.some(issue=>issue.id==="table-header-repeat-1-items"));
+ assert.ok(result.warnings.some(issue=>issue.id==="item-row-break-1-items-2"));
+});
+
+test("unmeasured item rows are reported without false page-boundary or overlap errors",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const result=analyzeRenderedInvoiceMetrics({pages:[{pageNumber:1,width:794,height:1123,blocks:[
+  {id:"items",type:"items_table",bounds:{left:10,top:100,right:780,bottom:900},contentHeight:800,clientHeight:800,contentWidth:770,clientWidth:770,headerVisible:true,rows:[{itemNumber:1,label:"Pending",geometryAvailable:false,height:null,cellOverflowAxes:["height"],breakInside:"avoid"}],images:[]}
+ ]}]});
+ assert.ok(result.warnings.some(issue=>issue.id==="item-row-unmeasured-1-items-1"));
+ assert.ok(result.warnings.some(issue=>issue.id==="item-cell-overflow-1-items-1"));
+ assert.ok(!result.warnings.some(issue=>issue.id==="row-page-overflow-1-items-1"));
+ assert.ok(!result.warnings.some(issue=>issue.id==="item-row-width-1-items-1"));
+});
+
+test("print margin checks flag unsupported paper sizes and orientations instead of silently assuming A4 portrait",async()=>{
+ const {getInvoiceMarginWarnings}=await import("../../frontend/src/utils/invoicePrintFit.js");
+ const warnings=getInvoiceMarginWarnings("A3","sideways",{top:4,right:4,bottom:4,left:4});
+ assert.ok(warnings.some(issue=>issue.id==="unsupported-paper-size"));
+ assert.ok(warnings.some(issue=>issue.id==="unsupported-page-orientation"));
+});

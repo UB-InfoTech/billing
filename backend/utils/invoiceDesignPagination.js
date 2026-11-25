@@ -6,6 +6,7 @@ const PAGE_DIMENSIONS_MM={
 const HEADER_HEIGHT_MM=8;
 const MIN_ROW_HEIGHT_MM=9;
 const SAFETY_GAP_MM=3;
+const CLOSING_FIELD_KEYS=new Set(["amount_words","amount_paid","balance_due","bank_details","terms","signature"]);
 const DEFAULT_ITEM_COLUMNS=[
   {key:"sr",label:"Sr",width:5,visible:true,order:0},
   {key:"description",label:"Desc.",width:17,visible:true,order:1},
@@ -210,6 +211,8 @@ function buildInvoiceDesignPages(template={},items=[],options={}){
         if(block.type==="totals")return last;
         const top=Number(block.y)||0;
         const bottom=top+(Number(block.h)||0);
+        const isClosingField=block.type==="field"&&CLOSING_FIELD_KEYS.has(block.fieldKey)&&top>=tableTop-0.5;
+        if(isClosingField)return last;
         const isHeader=bottom<=tableTop+0.5;
         const isFooter=top>=tableBottom-0.5;
         if(isHeader)return true;

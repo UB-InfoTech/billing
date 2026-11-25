@@ -21,7 +21,7 @@ function getRect(element,pageRect){
 function getElementStyle(documentRef,element){
   try{
     return documentRef?.defaultView?.getComputedStyle?.(element)||null;
-  }catch(_styleError){
+  }catch{
     return null;
   }
 }

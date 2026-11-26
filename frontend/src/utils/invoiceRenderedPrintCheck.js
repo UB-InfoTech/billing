@@ -96,6 +96,8 @@ export function measureRenderedInvoiceDocument(documentRef){
         return {
           id:block.getAttribute("data-block-id")||("page-"+(pageIndex+1)+"-block-"+(blockIndex+1)),
           type,
+          fieldKey:block.getAttribute("data-field-key")||"",
+          label:block.getAttribute("data-block-label")||"",
           bounds,
           tablePresent:type==="items_table"?Boolean(table):undefined,
           headerDisplay:header?String(headerStyle?.display||"").toLowerCase():"",

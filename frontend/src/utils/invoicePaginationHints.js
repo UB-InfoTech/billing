@@ -2,6 +2,34 @@
  * Conservative pagination hints for the invoice print preview.
  * These checks are advisory only: they never move rows or alter invoice data.
  */
+const CLOSING_FIELD_KEYS = new Set(["amount_words", "amount_paid", "balance_due", "bank_details", "terms", "signature"]);
+
+function getBlockBounds(block) {
+  const bounds = block?.bounds || {};
+  const rect = {
+    left: Number(bounds.left),
+    top: Number(bounds.top),
+    right: Number(bounds.right),
+    bottom: Number(bounds.bottom)
+  };
+  return Object.values(rect).every(Number.isFinite) ? rect : null;
+}
+
+function isClosingBlock(block) {
+  return block?.type === "totals" ||
+    (block?.type === "field" && CLOSING_FIELD_KEYS.has(block.fieldKey));
+}
+
+function measuredRowHeightMm(row) {
+  const directHeight = Number(row?.height);
+  if (Number.isFinite(directHeight) && directHeight > 0) return directHeight * 25.4 / 96;
+  const top = Number(row?.top);
+  const bottom = Number(row?.bottom);
+  return Number.isFinite(top) && Number.isFinite(bottom) && bottom > top
+    ? (bottom - top) * 25.4 / 96
+    : null;
+}
+
 export function analyzeInvoicePagination(pages = []) {
   const source = Array.isArray(pages) ? pages : [];
   const normalized = source.map((page, index) => {
@@ -10,7 +38,9 @@ export function analyzeInvoicePagination(pages = []) {
     return {
       pageNumber: Number(page?.pageNumber) || index + 1,
       blocks,
+      tables,
       closingOnly: Boolean(page?.closingOnly),
+      itemCapacityMm: Number.isFinite(Number(page?.itemCapacityMm)) ? Number(page.itemCapacityMm) : null,
       reservedClosingSpaceMm: Math.max(0, Number(page?.reservedClosingSpaceMm) || 0),
       rows: tables.flatMap(table => Array.isArray(table.rows) ? table.rows : [])
     };
@@ -66,6 +96,75 @@ export function analyzeInvoicePagination(pages = []) {
         });
       });
     });
+  }
+
+  // Warn when closing areas physically collide. The user remains in control
+  // of all element positions; the builder never repositions custom content.
+  normalized.forEach(page => {
+    const closingBlocks = page.blocks.filter(isClosingBlock).map(block => ({
+      block,
+      bounds: getBlockBounds(block)
+    })).filter(item => item.bounds);
+    for (let first = 0; first < closingBlocks.length; first += 1) {
+      for (let second = first + 1; second < closingBlocks.length; second += 1) {
+        const a = closingBlocks[first];
+        const b = closingBlocks[second];
+        const overlapWidth = Math.min(a.bounds.right, b.bounds.right) - Math.max(a.bounds.left, b.bounds.left);
+        const overlapHeight = Math.min(a.bounds.bottom, b.bounds.bottom) - Math.max(a.bounds.top, b.bounds.top);
+        if (overlapWidth <= 2 || overlapHeight <= 2) continue;
+        const firstName = a.block.label || a.block.fieldKey?.replace(/_/g, " ") || "Totals";
+        const secondName = b.block.label || b.block.fieldKey?.replace(/_/g, " ") || "Closing detail";
+        warnings.push({
+          id: "closing-block-overlap-" + page.pageNumber + "-" + (a.block.id || first) + "-" + (b.block.id || second),
+          severity: "error",
+          title: "Invoice closing sections overlap",
+          detail: firstName + " overlaps " + secondName + " on page " + page.pageNumber + ". Move one of these elements so the amount and payment details remain readable.",
+          pageNumber: page.pageNumber,
+          blockId: a.block.id,
+          relatedBlockId: b.block.id,
+          blockType: a.block.type,
+          fixable: false
+        });
+      }
+    }
+  });
+
+  // Compare actual rendered row heights, not estimates. If the previous
+  // page's last row can fit in the final page's measured spare capacity,
+  // highlight a potential opportunity to reduce empty space.
+  if (finalItemPageIndex > 0) {
+    const finalPage = normalized[finalItemPageIndex];
+    let previousItemPageIndex = finalItemPageIndex - 1;
+    while (previousItemPageIndex >= 0 && !normalized[previousItemPageIndex].rows.length) {
+      previousItemPageIndex -= 1;
+    }
+    const previousPage = normalized[previousItemPageIndex];
+    if (finalPage && previousPage && finalPage.itemCapacityMm !== null && previousPage.rows.length > 1) {
+      const finalHeights = finalPage.rows.map(measuredRowHeightMm);
+      const previousLastRowHeight = measuredRowHeightMm(previousPage.rows[previousPage.rows.length - 1]);
+      if (finalHeights.every(height => Number.isFinite(height)) && Number.isFinite(previousLastRowHeight)) {
+        const renderedFinalHeight = finalHeights.reduce((sum, height) => sum + height, 0);
+        const unusedCapacityMm = finalPage.itemCapacityMm - renderedFinalHeight;
+        if (unusedCapacityMm >= previousLastRowHeight + 1.5) {
+          const table = finalPage.tables[0];
+          const candidateRow = previousPage.rows[previousPage.rows.length - 1];
+          warnings.push({
+            id: "final-page-unused-capacity-" + finalPage.pageNumber,
+            severity: "warning",
+            title: "The final page may have room for another item",
+            detail: "Page " + finalPage.pageNumber + " has about " + unusedCapacityMm.toFixed(1) + " mm of measured item space left. The last row on page " + previousPage.pageNumber + " measures " + previousLastRowHeight.toFixed(1) + " mm and may fit here. Review the preview before changing the table height or spacing.",
+            pageNumber: finalPage.pageNumber,
+            previousItemPageNumber: previousPage.pageNumber,
+            itemNumber: Number(candidateRow.itemNumber) || null,
+            blockId: table?.id,
+            blockType: table?.type || "items_table",
+            unusedCapacityMm: Number(unusedCapacityMm.toFixed(2)),
+            candidateRowHeightMm: Number(previousLastRowHeight.toFixed(2)),
+            fixable: false
+          });
+        }
+      }
+    }
   }
 
   // Also catch a totals block that physically starts before the final item row

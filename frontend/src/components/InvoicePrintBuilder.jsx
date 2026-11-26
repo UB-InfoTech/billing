@@ -195,6 +195,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [alignmentGuides,setAlignmentGuides]=useState({vertical:[],horizontal:[]});
   const [showGrid,setShowGrid]=useState(false);
   const [snapToGrid,setSnapToGrid]=useState(false);
+  const [mobilePanel,setMobilePanel]=useState("design");
+  const [canvasScale,setCanvasScale]=useState(1);
   const [uploading,setUploading]=useState(false);
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
@@ -395,6 +397,17 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     ()=>localDesign.templates.find(template=>template.id===localDesign.activeTemplateId)||localDesign.templates[0]||makeTemplate("clean-default","Clean","clean"),
     [localDesign]
   );
+  useEffect(()=>{
+    const updateCanvasScale=()=>{
+      const isMobile=window.matchMedia?window.matchMedia("(max-width: 760px)").matches:window.innerWidth<=760;
+      const pageWidth=activeTemplate.orientation==="landscape"?1123:794;
+      const availableWidth=Math.max(280,(Number(window.innerWidth)||320)-32);
+      setCanvasScale(isMobile?Math.min(1,availableWidth/pageWidth):1);
+    };
+    updateCanvasScale();
+    window.addEventListener("resize",updateCanvasScale);
+    return ()=>window.removeEventListener("resize",updateCanvasScale);
+  },[activeTemplate.orientation]);
   if(!starterTemplateSnapshotRef.current){
     starterTemplateSnapshotRef.current={id:activeTemplate.id,blocks:JSON.stringify(activeTemplate.blocks)};
   }
@@ -550,6 +563,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const type=fieldKey==="items"?"items_table":fieldKey==="totals"?"totals":fieldKey==="logo"?"logo":"field";
     const dimensions=type==="items_table"?{w:88,h:22}:type==="totals"?{w:32,h:15}:type==="logo"?{w:15,h:12}:{w:30,h:5};
     addBlock(type,fieldKey,findOpenPalettePosition(dimensions.w,dimensions.h),dimensions);
+    setMobilePanel("design");
   };
 
   const applySmartLayout=()=>{
@@ -925,6 +939,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const canvasRatio=activeTemplate.orientation==="landscape"
     ?(activeTemplate.pageSize==="Letter"?1.294:1.414)
     :(activeTemplate.pageSize==="Letter"?0.773:0.707);
+  const basePageWidth=activeTemplate.orientation==="landscape"?1123:794;
   const backgroundUrl=activeTemplate.background?.url?API+activeTemplate.background.url:"";
   const previewItems=previewInvoice?.items||[
     {sr:"1",description:"Sample product",quantity:"2",unitPrice:"500.00",amount:"1000.00",qtyUnit:"PCS"},
@@ -1093,7 +1108,12 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         {previewError&&<div className="alert alert-warning m-3 mb-0">{previewError} You can continue with sample data.</div>}
         {printPreviewError&&<div className="alert alert-warning m-3 mb-0">{printPreviewError}<button type="button" className="btn-close float-end" aria-label="Dismiss" onClick={()=>setPrintPreviewError("")}/></div>}
         {message&&<div className="alert alert-info m-3 mb-0">{message}<button type="button" className="btn-close float-end" aria-label="Dismiss" onClick={()=>setMessage("")}/></div>}
-        <div className="invoice-builder-workspace">
+        <div className={"invoice-builder-workspace mobile-panel-"+mobilePanel}>
+          <nav className="invoice-builder-mobile-tabs" aria-label="Invoice editor panels">
+            <button type="button" className={mobilePanel==="fields"?"is-active":""} aria-pressed={mobilePanel==="fields"} onClick={()=>setMobilePanel("fields")}><i className="bi bi-plus-square me-1"/>Fields</button>
+            <button type="button" className={mobilePanel==="design"?"is-active":""} aria-pressed={mobilePanel==="design"} onClick={()=>setMobilePanel("design")}><i className="bi bi-file-earmark me-1"/>Page</button>
+            <button type="button" className={mobilePanel==="settings"?"is-active":""} aria-pressed={mobilePanel==="settings"} onClick={()=>setMobilePanel("settings")}><i className="bi bi-sliders me-1"/>Settings</button>
+          </nav>
           <aside className="invoice-builder-sidebar invoice-builder-fields">
             <div className="invoice-builder-panel-heading"><strong>Add to invoice</strong><small>Drag a field onto the page or tap to add it</small></div>
             <div className="invoice-builder-field-search"><i className="bi bi-search"/><input type="search" className="form-control form-control-sm" value={fieldSearch} onChange={event=>setFieldSearch(event.target.value)} placeholder="Find an invoice field…" aria-label="Find an invoice field"/>{fieldSearch&&<button type="button" onClick={()=>setFieldSearch("")} aria-label="Clear field search"><i className="bi bi-x-lg"/></button>}</div>
@@ -1176,7 +1196,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 return <li key={issue.id||index}><div><span className={issue.severity==="error"?"text-danger":"text-warning"}>{issue.title}</span> — {issue.detail}</div>{canReduceText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{const result=reduceInvoiceBlockFontSize(activeTemplate.blocks,issue.blockId,1);if(result.changed){updateActive({blocks:result.blocks});setSelectedBlockId(issue.blockId);setMessage("Text size reduced by up to 1 pt. Recheck the layout before printing.");}}}>Reduce text size by up to 1 pt</button>}</li>;
               })}</ul>:<small>No obvious layout problems were estimated. Confirm the final design in Actual print before printing.</small>}{designWarnings.length>0&&<small>Text-fit checks are estimates. Confirm the final result using Actual print.</small>}</div>
             <div className="invoice-builder-canvas-scroll">
-              <div className={"invoice-builder-page "+(activeTemplate.orientation==="landscape"?"is-landscape":"")} style={{aspectRatio:activeTemplate.orientation==="landscape"?"1.414 / 1":String(canvasRatio).replace("/"," / ")}}>
+              <div className="invoice-builder-page-frame" style={{width:Math.round(basePageWidth*canvasScale)+"px",aspectRatio:String(canvasRatio)}}>
+                <div className={"invoice-builder-page "+(activeTemplate.orientation==="landscape"?"is-landscape":"")} style={{width:basePageWidth+"px",minWidth:basePageWidth+"px",maxWidth:"none",height:"100%",aspectRatio:String(canvasRatio),transform:"scale("+canvasScale+")",transformOrigin:"top left"}}>
                 <div className="invoice-builder-canvas" onDragOver={event=>event.preventDefault()} onDrop={handlePaletteDrop} onPointerMove={moveBlock} onPointerUp={finishBlockDrag} onPointerCancel={finishBlockDrag}>
                   {highlightedOcrLine?.box&&<div className="invoice-builder-ocr-highlight is-label" style={{left:highlightedOcrLine.box.x+"%",top:highlightedOcrLine.box.y+"%",width:highlightedOcrLine.box.w+"%",height:Math.max(2,highlightedOcrLine.box.h)+"%"}}><span>Matched text</span></div>}
                   {highlightedOcrLine?.valueBox&&<div className={"invoice-builder-ocr-highlight is-target "+(highlightedOcrLine.valueBox.kind==="estimated"?"is-estimated":"")} style={{left:highlightedOcrLine.valueBox.x+"%",top:highlightedOcrLine.valueBox.y+"%",width:highlightedOcrLine.valueBox.w+"%",height:highlightedOcrLine.valueBox.h+"%"}}><span>{highlightedOcrLine.valueBox.kind==="estimated"?"Suggested space":"Live field position"}</span></div>}
@@ -1203,6 +1224,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   </div>
                   {activeTemplate.background?.url&&<div className="invoice-builder-reference-hint">Reference background · {activeTemplate.background.type.toUpperCase()}</div>}
                 </div>
+              </div>
               </div>
             </div>
             <div className="invoice-builder-canvas-footer">

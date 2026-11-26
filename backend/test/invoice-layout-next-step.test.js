@@ -327,3 +327,41 @@ test("moving closing fields above the item table does not create an unnecessary 
  assert.deepEqual(pages.flatMap(page=>page.rows.map(row=>row.itemNumber)),items.map((_,index)=>index+1));
 });
 
+
+
+test("actual print pagination hints detect overlapping closing sections but allow side-by-side details",async()=>{
+ const {analyzeInvoicePagination}=await import("../../frontend/src/utils/invoicePaginationHints.js");
+ const warnings=analyzeInvoicePagination([{pageNumber:2,blocks:[
+  {id:"totals",type:"totals",bounds:{left:420,top:760,right:760,bottom:900}},
+  {id:"terms",type:"field",fieldKey:"terms",label:"Terms",bounds:{left:600,top:820,right:780,bottom:940}},
+  {id:"paid",type:"field",fieldKey:"amount_paid",label:"Amount paid",bounds:{left:100,top:820,right:280,bottom:860}},
+  {id:"bank",type:"field",fieldKey:"bank_details",label:"Bank details",bounds:{left:300,top:820,right:500,bottom:860}}
+ ]}]);
+ const collision=warnings.find(issue=>issue.id==="closing-block-overlap-2-totals-terms");
+ assert.ok(collision);
+ assert.equal(collision.severity,"error");
+ assert.equal(collision.blockId,"totals");
+ assert.equal(collision.relatedBlockId,"terms");
+ assert.ok(!warnings.some(issue=>issue.id==="closing-block-overlap-2-paid-bank"));
+});
+
+test("actual final-page measurements flag only rows that can safely fit in unused space",async()=>{
+ const {analyzeInvoicePagination}=await import("../../frontend/src/utils/invoicePaginationHints.js");
+ const px=mm=>mm*96/25.4;
+ const page=(pageNumber,capacity,heights)=>({pageNumber,itemCapacityMm:capacity,blocks:[{
+  id:"items",type:"items_table",rows:heights.map((height,index)=>({itemNumber:height.number||index+1,height:px(height.value||height)}))
+ }]});
+ const canFit=analyzeInvoicePagination([
+  page(1,40,[{value:10,number:1},{value:12,number:2}]),
+  page(2,30,[{value:10,number:3}])
+ ]);
+ const hint=canFit.find(issue=>issue.id==="final-page-unused-capacity-2");
+ assert.ok(hint);
+ assert.equal(hint.itemNumber,2);
+ assert.ok(hint.unusedCapacityMm>=hint.candidateRowHeightMm+1.5);
+ const cannotFit=analyzeInvoicePagination([
+  page(1,40,[{value:10,number:1},{value:12,number:2}]),
+  page(2,15,[{value:10,number:3}])
+ ]);
+ assert.ok(!cannotFit.some(issue=>issue.id==="final-page-unused-capacity-2"));
+});

@@ -442,3 +442,79 @@
 .invoice-builder-page-inspector-item b{color:#40566f;font-size:10px}
 .invoice-builder-page-inspector-item span{color:#53677e;font-size:9px;line-height:1.35}
 .invoice-builder-page-inspector-item small{color:#71839a;font-size:8px;line-height:1.35}
+
+
+/* Mobile invoice editor: panel navigation and a fit-to-screen page canvas */
+.invoice-builder-mobile-tabs{display:none}
+.invoice-builder-page-frame{position:relative;flex:0 0 auto}
+@media(max-width:760px){
+ .invoice-builder-overlay,.invoice-builder-app{width:100%;max-width:100vw;min-width:0}
+ .invoice-builder-app{height:100%;overflow:hidden}
+ .invoice-builder-topbar{flex:0 0 auto;min-height:54px;gap:8px;padding:7px 9px}
+ .invoice-builder-brand{min-width:0;gap:6px}
+ .invoice-builder-brand>div{max-width:42vw}
+ .invoice-builder-brand strong{font-size:12px;line-height:1.2}
+ .invoice-builder-brand .btn,.invoice-builder-top-actions .btn{min-height:34px;padding:6px 8px;font-size:10px;white-space:nowrap}
+ .invoice-builder-top-actions{flex:0 0 auto}
+ .invoice-builder-top-actions .btn{max-width:145px;overflow:hidden;text-overflow:ellipsis}
+ .invoice-builder-steps{flex:0 0 auto;gap:5px;padding:7px 8px}
+ .invoice-builder-steps>div{justify-content:center;gap:5px;padding:5px 4px}
+ .invoice-builder-steps>div>span{width:22px;height:22px;flex-basis:22px;font-size:10px}
+ .invoice-builder-steps>div>div{gap:0}
+ .invoice-builder-steps strong{font-size:9px;text-align:center}
+ .invoice-builder-steps small{display:none}
+ .invoice-builder-workspace{display:flex;flex:1 1 auto;flex-direction:column;gap:0;min-height:0;overflow:hidden}
+ .invoice-builder-mobile-tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));flex:0 0 auto;gap:5px;padding:6px 8px;border-bottom:1px solid #dce3eb;background:#fff}
+ .invoice-builder-mobile-tabs button{display:flex;align-items:center;justify-content:center;min-width:0;min-height:40px;padding:7px 5px;border:1px solid #e1e7ee;border-radius:8px;background:#f8fafc;color:#52657b;font-size:11px;font-weight:700;touch-action:manipulation}
+ .invoice-builder-mobile-tabs button.is-active{border-color:#8fb6e0;background:#eaf3fd;color:#225d96}
+ .invoice-builder-sidebar,.invoice-builder-center{width:100%;max-width:100%;min-width:0;min-height:0}
+ .invoice-builder-fields,.invoice-builder-properties{flex:1 1 auto;max-height:none;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain}
+ .invoice-builder-center{flex:1 1 auto;overflow:hidden}
+ .invoice-builder-workspace.mobile-panel-fields .invoice-builder-center,
+ .invoice-builder-workspace.mobile-panel-fields .invoice-builder-properties,
+ .invoice-builder-workspace.mobile-panel-design .invoice-builder-fields,
+ .invoice-builder-workspace.mobile-panel-design .invoice-builder-properties,
+ .invoice-builder-workspace.mobile-panel-settings .invoice-builder-fields,
+ .invoice-builder-workspace.mobile-panel-settings .invoice-builder-center{display:none!important}
+ .invoice-builder-workspace.mobile-panel-fields .invoice-builder-fields,
+ .invoice-builder-workspace.mobile-panel-settings .invoice-builder-properties{display:block;flex:1 1 auto;min-height:0}
+ .invoice-builder-workspace.mobile-panel-design .invoice-builder-center{display:flex;flex:1 1 auto;min-height:0}
+ .invoice-builder-toolbar,.invoice-builder-designbar{width:100%;align-items:flex-start;flex-wrap:wrap;gap:7px;padding:8px}
+ .invoice-builder-templates{display:flex;width:100%;flex-wrap:wrap;gap:6px}
+ .invoice-builder-templates select{width:auto;max-width:none;min-width:0;flex:1 1 120px}
+ .invoice-builder-toolbar-actions{display:flex;width:100%;margin:0;justify-content:flex-start;gap:5px}
+ .invoice-builder-toolbar-actions .btn{min-height:32px;padding:5px 7px;font-size:10px}
+ .invoice-builder-name{width:100%;flex:1 1 100%}
+ .invoice-builder-name input{width:auto;flex:1 1 auto}
+ .invoice-builder-preview-select{width:100%;gap:6px}
+ .invoice-builder-preview-select select{width:auto;min-width:0;max-width:none;flex:1 1 140px}
+ .invoice-builder-preview-select .btn{min-height:32px}
+ .invoice-builder-preview-help{width:100%;white-space:normal}
+ .invoice-builder-page-settings{width:100%;gap:5px;justify-content:flex-start}
+ .invoice-builder-page-settings select{min-width:0;max-width:100%;flex:0 1 auto}
+ .invoice-builder-page-settings .btn{min-height:31px;padding:5px 7px;font-size:10px}
+ .invoice-builder-margin-settings{position:static}
+ .invoice-builder-margin-popover{right:0;left:0;width:min(100%,320px);max-width:calc(100vw - 24px)}
+ .invoice-builder-print-check{max-height:145px;overflow:auto;margin:0 8px 6px;padding:8px;font-size:10px}
+ .invoice-builder-canvas-scroll{display:flex;justify-content:center;align-items:flex-start;flex:1 1 auto;min-height:0;width:100%;overflow:auto;padding:12px 8px 16px;overscroll-behavior:contain}
+ .invoice-builder-page-frame{margin:0 auto}
+ .invoice-builder-page,.invoice-builder-page.is-landscape{position:absolute;top:0;left:0;max-width:none;min-width:0}
+ .invoice-builder-page .invoice-builder-block{max-width:none}
+ .invoice-builder-resize-handle{width:34px;height:34px;right:0;bottom:0;border-width:3px}
+ .invoice-builder-canvas-footer{flex:0 0 auto;gap:6px;padding:7px 9px;font-size:9px}
+ .invoice-builder-canvas-footer span:first-child{line-height:1.35}
+ .invoice-builder-pagination-hint{font-size:9px}
+ .invoice-builder-property-card{margin:8px;padding:11px}
+ .invoice-builder-field-group{padding:10px 10px 6px}
+ .invoice-builder-field-search{margin:8px 10px 4px}
+ .invoice-builder-palette{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+ .invoice-builder-palette button{min-height:42px;padding:7px;font-size:10px}
+ .invoice-builder-extra-tools{grid-template-columns:repeat(2,minmax(0,1fr));padding:10px}
+ .invoice-builder-footer{flex:0 0 auto;min-height:0;gap:3px;padding:7px 10px;font-size:9px}
+ .invoice-builder-footer>div{overflow-wrap:anywhere}
+ .invoice-builder-print-preview-content{display:flex;flex-direction:column;overflow:auto}
+ .invoice-builder-print-preview-content iframe{flex:1 0 62vh;min-height:360px}
+ .invoice-builder-rendered-audit{flex:0 0 auto}
+ .invoice-builder-print-preview-footer>div{flex-wrap:wrap}
+ .invoice-builder-print-preview-footer .btn{min-height:38px}
+}

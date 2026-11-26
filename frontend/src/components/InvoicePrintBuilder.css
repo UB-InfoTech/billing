@@ -518,3 +518,13 @@
  .invoice-builder-print-preview-footer>div{flex-wrap:wrap}
  .invoice-builder-print-preview-footer .btn{min-height:38px}
 }
+
+.invoice-builder-mobile-zoom{display:none}
+@media(max-width:760px){
+ .invoice-builder-canvas-scroll{justify-content:flex-start}
+ .invoice-builder-page-frame{margin:0 auto}
+ .invoice-builder-mobile-zoom{display:flex;align-items:center;justify-content:center;gap:4px;flex:0 0 auto}
+ .invoice-builder-mobile-zoom button{display:grid;place-items:center;min-width:30px;min-height:30px;padding:3px 7px;border:1px solid #dce3eb;border-radius:6px;background:#fff;color:#40566e;font-size:10px;font-weight:700;touch-action:manipulation}
+ .invoice-builder-mobile-zoom button:disabled{opacity:.4}
+ .invoice-builder-mobile-zoom span{min-width:38px;text-align:center;color:#52657b;font-size:10px;font-variant-numeric:tabular-nums}
+}

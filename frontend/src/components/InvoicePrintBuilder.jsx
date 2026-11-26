@@ -197,6 +197,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [snapToGrid,setSnapToGrid]=useState(false);
   const [mobilePanel,setMobilePanel]=useState("design");
   const [canvasScale,setCanvasScale]=useState(1);
+  const [canvasZoom,setCanvasZoom]=useState(1);
   const [uploading,setUploading]=useState(false);
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
@@ -940,6 +941,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     ?(activeTemplate.pageSize==="Letter"?1.294:1.414)
     :(activeTemplate.pageSize==="Letter"?0.773:0.707);
   const basePageWidth=activeTemplate.orientation==="landscape"?1123:794;
+  const effectiveCanvasScale=canvasScale*canvasZoom;
   const backgroundUrl=activeTemplate.background?.url?API+activeTemplate.background.url:"";
   const previewItems=previewInvoice?.items||[
     {sr:"1",description:"Sample product",quantity:"2",unitPrice:"500.00",amount:"1000.00",qtyUnit:"PCS"},
@@ -1196,8 +1198,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 return <li key={issue.id||index}><div><span className={issue.severity==="error"?"text-danger":"text-warning"}>{issue.title}</span> — {issue.detail}</div>{canReduceText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{const result=reduceInvoiceBlockFontSize(activeTemplate.blocks,issue.blockId,1);if(result.changed){updateActive({blocks:result.blocks});setSelectedBlockId(issue.blockId);setMessage("Text size reduced by up to 1 pt. Recheck the layout before printing.");}}}>Reduce text size by up to 1 pt</button>}</li>;
               })}</ul>:<small>No obvious layout problems were estimated. Confirm the final design in Actual print before printing.</small>}{designWarnings.length>0&&<small>Text-fit checks are estimates. Confirm the final result using Actual print.</small>}</div>
             <div className="invoice-builder-canvas-scroll">
-              <div className="invoice-builder-page-frame" style={{width:Math.round(basePageWidth*canvasScale)+"px",aspectRatio:String(canvasRatio)}}>
-                <div className={"invoice-builder-page "+(activeTemplate.orientation==="landscape"?"is-landscape":"")} style={{width:basePageWidth+"px",minWidth:basePageWidth+"px",maxWidth:"none",height:"100%",aspectRatio:String(canvasRatio),transform:"scale("+canvasScale+")",transformOrigin:"top left"}}>
+              <div className="invoice-builder-page-frame" style={{width:Math.round(basePageWidth*effectiveCanvasScale)+"px",aspectRatio:String(canvasRatio)}}>
+                <div className={"invoice-builder-page "+(activeTemplate.orientation==="landscape"?"is-landscape":"")} style={{width:basePageWidth+"px",minWidth:basePageWidth+"px",maxWidth:"none",height:"100%",aspectRatio:String(canvasRatio),transform:"scale("+effectiveCanvasScale+")",transformOrigin:"top left"}}>
                 <div className="invoice-builder-canvas" onDragOver={event=>event.preventDefault()} onDrop={handlePaletteDrop} onPointerMove={moveBlock} onPointerUp={finishBlockDrag} onPointerCancel={finishBlockDrag}>
                   {highlightedOcrLine?.box&&<div className="invoice-builder-ocr-highlight is-label" style={{left:highlightedOcrLine.box.x+"%",top:highlightedOcrLine.box.y+"%",width:highlightedOcrLine.box.w+"%",height:Math.max(2,highlightedOcrLine.box.h)+"%"}}><span>Matched text</span></div>}
                   {highlightedOcrLine?.valueBox&&<div className={"invoice-builder-ocr-highlight is-target "+(highlightedOcrLine.valueBox.kind==="estimated"?"is-estimated":"")} style={{left:highlightedOcrLine.valueBox.x+"%",top:highlightedOcrLine.valueBox.y+"%",width:highlightedOcrLine.valueBox.w+"%",height:highlightedOcrLine.valueBox.h+"%"}}><span>{highlightedOcrLine.valueBox.kind==="estimated"?"Suggested space":"Live field position"}</span></div>}
@@ -1228,7 +1230,14 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               </div>
             </div>
             <div className="invoice-builder-canvas-footer">
-              <span><i className="bi bi-arrows-move me-1"/>Drag to position · Arrow keys nudge (Shift for larger steps) · Select to edit.</span><span className="invoice-builder-pagination-hint">Long invoices continue automatically. Headings repeat and totals move to the final page.</span>
+              <span><i className="bi bi-arrows-move me-1"/>Drag to position · Arrow keys nudge (Shift for larger steps) · Select to edit.</span>
+              <div className="invoice-builder-mobile-zoom" aria-label="Page zoom controls">
+                <button type="button" aria-label="Zoom out" onClick={()=>setCanvasZoom(value=>Math.max(1,Math.round((value-0.25)*100)/100))} disabled={canvasZoom<=1}><i className="bi bi-dash-lg"/></button>
+                <span>{Math.round(canvasZoom*100)}%</span>
+                <button type="button" aria-label="Zoom in" onClick={()=>setCanvasZoom(value=>Math.min(3,Math.round((value+0.25)*100)/100))} disabled={canvasZoom>=3}><i className="bi bi-plus-lg"/></button>
+                <button type="button" onClick={()=>setCanvasZoom(1)}>Fit</button>
+              </div>
+              <span className="invoice-builder-pagination-hint">Long invoices continue automatically. Headings repeat and totals move to the final page.</span>
               {activeTemplate.background?.url&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>updateActive({background:{...activeTemplate.background,visible:activeTemplate.background.visible===false}})}>{activeTemplate.background.visible===false?"Show reference":"Hide reference"}</button>}
             </div>
           </main>

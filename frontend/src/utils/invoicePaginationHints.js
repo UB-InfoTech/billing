@@ -10,6 +10,8 @@ export function analyzeInvoicePagination(pages = []) {
     return {
       pageNumber: Number(page?.pageNumber) || index + 1,
       blocks,
+      closingOnly: Boolean(page?.closingOnly),
+      reservedClosingSpaceMm: Math.max(0, Number(page?.reservedClosingSpaceMm) || 0),
       rows: tables.flatMap(table => Array.isArray(table.rows) ? table.rows : [])
     };
   });
@@ -28,6 +30,17 @@ export function analyzeInvoicePagination(pages = []) {
       detail: "Page " + page.pageNumber + " contains a single item row between populated item-table pages. Consider adjusting the table height or spacing if the invoice layout allows.",
       pageNumber: page.pageNumber,
       itemNumber: Number(row.itemNumber) || null,
+      fixable: false
+    });
+  });
+
+  normalized.filter(page => page.closingOnly).forEach(page => {
+    warnings.push({
+      id: "closing-only-page-" + page.pageNumber,
+      severity: "warning",
+      title: "Closing details need their own page",
+      detail: "A totals or closing section overlaps the item-table area. The print layout has kept every item row intact and placed the closing details on a separate final page. Move the closing elements below the item table to reduce the page count.",
+      pageNumber: page.pageNumber,
       fixable: false
     });
   });

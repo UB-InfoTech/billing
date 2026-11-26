@@ -26,6 +26,13 @@ function getElementStyle(documentRef,element){
   }
 }
 
+function readOptionalNumberAttribute(element,name){
+  const raw=element?.getAttribute?.(name);
+  if(raw===null||raw===undefined||String(raw).trim()==="")return null;
+  const value=Number(raw);
+  return Number.isFinite(value)?value:null;
+}
+
 function getCellOverflowAxes(cells){
   const axes=new Set();
   cells.forEach(cell=>{
@@ -105,7 +112,11 @@ export function measureRenderedInvoiceDocument(documentRef){
         };
       });
       return {
-        pageNumber:pageIndex+1,
+        pageNumber:readOptionalNumberAttribute(sheet,"data-page-number")||pageIndex+1,
+        itemCount:readOptionalNumberAttribute(sheet,"data-page-item-count"),
+        itemCapacityMm:readOptionalNumberAttribute(sheet,"data-page-item-capacity-mm"),
+        reservedClosingSpaceMm:readOptionalNumberAttribute(sheet,"data-page-closing-reserved-mm"),
+        closingOnly:sheet.getAttribute?.("data-page-closing-only")==="true",
         width:Number(sheet.clientWidth)||sheetRect.width,
         height:Number(sheet.clientHeight)||sheetRect.height,
         blocks
@@ -548,7 +559,13 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
       });
     });
   }
-  return {pageCount:pages.length,warnings,hasErrors:warnings.some(warning=>warning.severity==="error")};
+  const pageLayouts=pages.map((page,index)=>{
+    const blocks=Array.isArray(page.blocks)?page.blocks:[];
+    const measuredItemCount=blocks.reduce((sum,block)=>sum+(Array.isArray(block.rows)?block.rows.length:0),0);
+    const itemCount=page.itemCount===null||page.itemCount===undefined?measuredItemCount:Math.max(0,Number(page.itemCount)||0);
+    return {pageNumber:Number(page.pageNumber)||index+1,itemCount,itemCapacityMm:page.itemCapacityMm===null||page.itemCapacityMm===undefined?null:Number(page.itemCapacityMm),reservedClosingSpaceMm:Math.max(0,Number(page.reservedClosingSpaceMm)||0),closingOnly:Boolean(page.closingOnly)};
+  });
+  return {pageCount:pages.length,warnings,hasErrors:warnings.some(warning=>warning.severity==="error"),pageLayouts};
 }
 
 export function checkRenderedInvoiceDocument(documentRef,expectedPage={}){

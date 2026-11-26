@@ -85,3 +85,85 @@ test("multipage invoices keep totals, payment details, terms and signature toget
  assert.ok(pages[0].blocks.some(block=>block.type==="items_table"));
  assert.ok(pages[1].blocks.some(block=>block.type==="items_table"));
 });
+
+
+function makeClosingReservationTemplate(){
+ const table={id:"items",type:"items_table",x:6,y:20,w:88,h:60,visible:true,fontSize:8,tableCellPadding:4,tableBorderWidth:1,columns:[{key:"description",label:"Description",width:100,visible:true,order:0}]};
+ const totals={id:"totals",type:"totals",x:60,y:65,w:34,h:15,visible:true};
+ return {pageSize:"A4",orientation:"portrait",printMargins:{top:0,right:0,bottom:0,left:0},blocks:[table,totals]};
+}
+
+test("final-page closing overlap reserves item-table space and balances the last item page",()=>{
+ const template=makeClosingReservationTemplate();
+ const items=Array.from({length:24},(_,index)=>({orderName:"Item "+(index+1)}));
+ const pages=buildInvoiceDesignPages(template,items);
+ assert.equal(pages.length,2);
+ assert.ok(pages[1].reservedClosingSpaceMm>0);
+ assert.ok(pages[1].itemCapacityMm<pages[0].itemCapacityMm);
+ assert.ok(pages[1].rowHeightTotalMm<=pages[1].itemCapacityMm+0.01);
+ assert.ok(pages[0].rows.length>6);
+ assert.ok(pages[1].rows.length>6);
+ assert.ok(pages[1].blocks.some(block=>block.id==="totals"));
+ assert.ok(!pages[0].blocks.some(block=>block.id==="totals"));
+ const itemNumbers=pages.flatMap(page=>page.rows.map(row=>row.itemNumber));
+ assert.deepEqual(itemNumbers,items.map((_,index)=>index+1));
+});
+
+test("closing blocks beside the item table do not reserve unnecessary table height",()=>{
+ const template=makeClosingReservationTemplate();
+ template.blocks[0].w=60;
+ template.blocks[1].x=70;
+ template.blocks[1].w=24;
+ const items=Array.from({length:20},(_,index)=>({orderName:"Item "+(index+1)}));
+ const pages=buildInvoiceDesignPages(template,items);
+ assert.equal(pages.length,2);
+ assert.equal(pages[1].reservedClosingSpaceMm,0);
+ assert.ok(pages[0].rows.length>2);
+ assert.ok(pages[1].rows.length>2);
+ assert.deepEqual(pages.flatMap(page=>page.rows.map(row=>row.itemNumber)),items.map((_,index)=>index+1));
+});
+
+test("a closing block covering the item-table area creates a closing-only page without duplicating rows",()=>{
+ const template=makeClosingReservationTemplate();
+ template.blocks[1]={id:"totals",type:"totals",x:6,y:20,w:88,h:60,visible:true};
+ const items=[{orderName:"First item"},{orderName:"Second item"}];
+ const pages=buildInvoiceDesignPages(template,items);
+ assert.equal(pages.length,2);
+ assert.deepEqual(pages[0].rows.map(row=>row.itemNumber),[1,2]);
+ assert.equal(pages[1].rows.length,0);
+ assert.equal(pages[1].closingOnly,true);
+ assert.ok(!pages[1].blocks.some(block=>block.type==="items_table"));
+ assert.ok(pages[1].blocks.some(block=>block.type==="totals"));
+ assert.deepEqual(pages.flatMap(page=>page.rows.map(row=>row.itemNumber)),[1,2]);
+});
+
+test("rendered print audit exposes page-by-page item counts and reserved closing space",async()=>{
+ const {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const rect={left:0,top:0,right:794,bottom:1123,width:794,height:1123};
+ const sheet={
+  getBoundingClientRect:()=>rect,
+  getAttribute:name=>({
+   "data-page-number":"2",
+   "data-page-item-count":"7",
+   "data-page-item-capacity-mm":"119.65",
+   "data-page-closing-reserved-mm":"47.55",
+   "data-page-closing-only":"false"
+  }[name]??null),
+  querySelectorAll:()=>[],
+  clientWidth:794,
+  clientHeight:1123
+ };
+ const documentRef={querySelectorAll:selector=>selector===".design-sheet"?[sheet]:[]};
+ const measured=measureRenderedInvoiceDocument(documentRef);
+ const audit=analyzeRenderedInvoiceMetrics(measured,{pageSize:"A4",orientation:"portrait"});
+ assert.deepEqual(audit.pageLayouts,[{pageNumber:2,itemCount:7,itemCapacityMm:119.65,reservedClosingSpaceMm:47.55,closingOnly:false}]);
+});
+
+test("pagination hints explain when closing details safely require a dedicated final page",async()=>{
+ const {analyzeInvoicePagination}=await import("../../frontend/src/utils/invoicePaginationHints.js");
+ const warnings=analyzeInvoicePagination([
+  {pageNumber:1,blocks:[{type:"items_table",rows:[{itemNumber:1}]}]},
+  {pageNumber:2,closingOnly:true,blocks:[{type:"totals",rows:[]}]}
+ ]);
+ assert.ok(warnings.some(issue=>issue.id==="closing-only-page-2"&&issue.severity==="warning"));
+});

@@ -161,72 +161,146 @@ function getInvoiceRowsPerPage(template={}){
   )));
 }
 
-function buildInvoiceDesignPages(template={},items=[],options={}){
-  const visibleBlocks=(Array.isArray(template.blocks)?template.blocks:[]).filter(
-    block=>block&&block.visible!==false
+function isFinalPageOnlyBlock(block,itemTable){
+  if(!block||!itemTable)return false;
+  if(block.type==="totals")return true;
+  const tableTop=Number(itemTable.y)||0;
+  const tableBottom=tableTop+(Number(itemTable.h)||0);
+  const top=Number(block.y)||0;
+  const isClosingField=block.type==="field"&&CLOSING_FIELD_KEYS.has(block.fieldKey)&&top>=tableTop-0.5;
+  return isClosingField||top>=tableBottom-0.5;
+}
+
+function getFinalPageClosingLayout(itemTable,blocks,metrics){
+  if(!itemTable||!metrics)return {reservedClosingSpaceMm:0,closingBlockIds:[]};
+  const tableLeft=Number(itemTable.x)||0;
+  const tableRight=tableLeft+(Number(itemTable.w)||0);
+  const tableTop=Number(itemTable.y)||0;
+  const tableBottom=tableTop+(Number(itemTable.h)||0);
+  const tableHeightMm=metrics.tableHeightMm;
+  const contentHeightMm=metrics.printableHeightMm;
+  const closingBlocks=(Array.isArray(blocks)?blocks:[]).filter(block=>
+    block.id!==itemTable.id&&isFinalPageOnlyBlock(block,itemTable)
   );
+  let reservedClosingSpaceMm=0;
+  closingBlocks.forEach(block=>{
+    const left=Number(block.x)||0;
+    const right=left+(Number(block.w)||0);
+    if(left>=tableRight-0.5||right<=tableLeft+0.5)return;
+    const top=Number(block.y)||0;
+    const bottom=top+(Number(block.h)||0);
+    const overlapStart=Math.max(tableTop,top);
+    const overlapEnd=Math.min(tableBottom,bottom);
+    if(overlapEnd<=overlapStart)return;
+    const startOffsetMm=(overlapStart-tableTop)*contentHeightMm/100;
+    const reservedFromStart=Math.min(tableHeightMm,Math.max(0,tableHeightMm-startOffsetMm+SAFETY_GAP_MM));
+    reservedClosingSpaceMm=Math.max(reservedClosingSpaceMm,reservedFromStart);
+  });
+  return {reservedClosingSpaceMm,closingBlockIds:closingBlocks.map(block=>block.id).filter(Boolean)};
+}
+
+function balanceFinalPageRows(pages,finalCapacityMm){
+  if(!Array.isArray(pages)||pages.length<2)return pages;
+  const previous=pages[pages.length-2],last=pages[pages.length-1];
+  if(!previous?.length||!last?.length)return pages;
+  let previousHeight=previous.reduce((sum,row)=>sum+row.rowHeightMm,0);
+  let lastHeight=last.reduce((sum,row)=>sum+row.rowHeightMm,0);
+  while(previous.length>1){
+    const candidate=previous[previous.length-1];
+    const candidateHeight=Number(candidate.rowHeightMm)||MIN_ROW_HEIGHT_MM;
+    if(lastHeight+candidateHeight>finalCapacityMm+0.01)break;
+    const currentGap=Math.abs(previousHeight-lastHeight);
+    const nextGap=Math.abs((previousHeight-candidateHeight)-(lastHeight+candidateHeight));
+    if(nextGap>=currentGap)break;
+    previous.pop();last.unshift(candidate);
+    previousHeight-=candidateHeight;lastHeight+=candidateHeight;
+  }
+  return pages;
+}
+
+function paginateInvoiceRows(rows,normalCapacityMm,finalCapacityMm,hasClosingReservation){
+  if(!rows.length)return [[]];
+  const pages=[];
+  let cursor=0;
+  while(cursor<rows.length){
+    const remaining=rows.slice(cursor);
+    const remainingHeight=remaining.reduce((sum,row)=>sum+row.rowHeightMm,0);
+    if(remainingHeight<=finalCapacityMm+0.01){
+      pages.push(remaining);cursor=rows.length;break;
+    }
+    let take=0,usedHeight=0;
+    while(cursor+take<rows.length){
+      const row=rows[cursor+take],nextHeight=usedHeight+row.rowHeightMm;
+      if(nextHeight>normalCapacityMm+0.01){
+        if(take===0){row.exceedsTableArea=true;take=1;}
+        break;
+      }
+      usedHeight=nextHeight;take+=1;
+    }
+    if(take===0){rows[cursor].exceedsTableArea=true;take=1;}
+    if(cursor+take===rows.length&&hasClosingReservation){
+      let finalStart=rows.length,finalHeight=0;
+      while(finalStart>cursor){
+        const candidateHeight=Number(rows[finalStart-1].rowHeightMm)||MIN_ROW_HEIGHT_MM;
+        if(finalHeight+candidateHeight>finalCapacityMm+0.01)break;
+        finalStart-=1;finalHeight+=candidateHeight;
+      }
+      if(finalStart>cursor&&finalStart<rows.length)take=finalStart-cursor;
+      else{pages.push(rows.slice(cursor));cursor=rows.length;pages.push([]);break;}
+    }
+    pages.push(rows.slice(cursor,cursor+take));cursor+=take;
+  }
+  if(!pages.length)pages.push([]);
+  return balanceFinalPageRows(pages,finalCapacityMm);
+}
+
+function buildInvoiceDesignPages(template={},items=[],options={}){
+  const visibleBlocks=(Array.isArray(template.blocks)?template.blocks:[]).filter(block=>block&&block.visible!==false);
   const tableMetrics=getInvoiceTableMetrics(template);
   const itemTable=tableMetrics?.table||null;
   const sourceItems=Array.isArray(items)?items:[];
   const columns=itemTable?getColumns(itemTable,options):[];
+  const closingLayout=getFinalPageClosingLayout(itemTable,visibleBlocks,tableMetrics);
+  const normalCapacityMm=tableMetrics?Math.max(0,tableMetrics.tableHeightMm-HEADER_HEIGHT_MM-SAFETY_GAP_MM):null;
+  const finalCapacityMm=tableMetrics?Math.max(0,normalCapacityMm-closingLayout.reservedClosingSpaceMm):null;
   const pageRows=[];
   if(!itemTable||!sourceItems.length){
-    pageRows.push(sourceItems.map((item,index)=>({
-      item,itemNumber:index+1,rowHeightMm:MIN_ROW_HEIGHT_MM,estimatedLines:1
-    })));
+    pageRows.push(sourceItems.map((item,index)=>({item,itemNumber:index+1,rowHeightMm:MIN_ROW_HEIGHT_MM,estimatedLines:1})));
   }else{
-    let currentRows=[];
-    let usedHeight=HEADER_HEIGHT_MM;
-    sourceItems.forEach((item,index)=>{
+    const estimatedRows=sourceItems.map((item,index)=>{
       const estimate=estimateInvoiceItemRow(item,columns,tableMetrics,itemTable,options,index+1);
-      const wouldExceed=usedHeight+estimate.rowHeightMm+SAFETY_GAP_MM>tableMetrics.tableHeightMm;
-      if(currentRows.length&&wouldExceed){
-        pageRows.push(currentRows);
-        currentRows=[];
-        usedHeight=HEADER_HEIGHT_MM;
-      }
-      currentRows.push({
-        item,
-        itemNumber:index+1,
-        rowHeightMm:estimate.rowHeightMm,
-        estimatedLines:estimate.lineCount,
+      return {
+        item,itemNumber:index+1,rowHeightMm:estimate.rowHeightMm,estimatedLines:estimate.lineCount,
         exceedsTableArea:HEADER_HEIGHT_MM+estimate.rowHeightMm+SAFETY_GAP_MM>tableMetrics.tableHeightMm
-      });
-      usedHeight+=estimate.rowHeightMm;
+      };
     });
-    if(currentRows.length)pageRows.push(currentRows);
+    pageRows.push(...paginateInvoiceRows(estimatedRows,normalCapacityMm,finalCapacityMm,closingLayout.reservedClosingSpaceMm>0));
   }
   if(!pageRows.length)pageRows.push([]);
-
   const pageCount=pageRows.length;
   return pageRows.map((rows,pageIndex)=>{
-    const first=pageIndex===0;
-    const last=pageIndex===pageCount-1;
+    const first=pageIndex===0,last=pageIndex===pageCount-1;
     let pageBlocks=visibleBlocks;
     if(itemTable&&pageCount>1){
-      const tableTop=Number(itemTable.y)||0;
-      const tableBottom=tableTop+(Number(itemTable.h)||0);
+      const tableTop=Number(itemTable.y)||0,tableBottom=tableTop+(Number(itemTable.h)||0);
       pageBlocks=visibleBlocks.filter(block=>{
-        if(block.type==="items_table")return true;
-        if(block.type==="totals")return last;
-        const top=Number(block.y)||0;
-        const bottom=top+(Number(block.h)||0);
-        const isClosingField=block.type==="field"&&CLOSING_FIELD_KEYS.has(block.fieldKey)&&top>=tableTop-0.5;
-        if(isClosingField)return last;
-        const isHeader=bottom<=tableTop+0.5;
-        const isFooter=top>=tableBottom-0.5;
-        if(isHeader)return true;
-        if(isFooter)return last;
+        if(block.type==="items_table")return rows.length>0||sourceItems.length===0;
+        if(isFinalPageOnlyBlock(block,itemTable))return last;
+        const top=Number(block.y)||0,bottom=top+(Number(block.h)||0);
+        if(bottom<=tableTop+0.5)return true;
+        if(top>=tableBottom-0.5)return last;
         return first;
       });
     }
+    const closingOnly=Boolean(itemTable&&sourceItems.length&&last&&!rows.length&&closingLayout.closingBlockIds.length);
     return {
-      pageNumber:pageIndex+1,
-      totalPages:pageCount,
-      rows,
+      pageNumber:pageIndex+1,totalPages:pageCount,rows,
       rowHeightTotalMm:rows.reduce((sum,row)=>sum+row.rowHeightMm,0),
       tableHeightMm:tableMetrics?.tableHeightMm||null,
-      blocks:pageBlocks
+      itemCapacityMm:last?finalCapacityMm:normalCapacityMm,
+      reservedClosingSpaceMm:last?closingLayout.reservedClosingSpaceMm:0,
+      closingBlockIds:last?closingLayout.closingBlockIds:[],
+      closingOnly,blocks:pageBlocks
     };
   });
 }

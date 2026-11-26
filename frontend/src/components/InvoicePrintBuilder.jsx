@@ -1510,6 +1510,20 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               {printPreviewAudit&&(
                 <aside className={"invoice-builder-rendered-audit "+(printPreviewAudit.warnings.length?"has-warnings":"is-clear")} role="status" aria-live="polite">
                   <strong><i className={"bi "+(printPreviewAudit.warnings.length?"bi-exclamation-triangle":"bi-check-circle")}/>{printPreviewAudit.pageCount} page{printPreviewAudit.pageCount===1?"":"s"} measured · {printPreviewAudit.warnings.length?printPreviewAudit.warnings.length+" issue"+(printPreviewAudit.warnings.length===1?"":"s")+" to review":"No measured clipping detected"}</strong>
+                  {printPreviewAudit.pageLayouts?.length>0&&(
+                    <div className="invoice-builder-page-inspector">
+                      <strong>Page-by-page layout</strong>
+                      <div className="invoice-builder-page-inspector-list">
+                        {printPreviewAudit.pageLayouts.map(page=>(
+                          <div className="invoice-builder-page-inspector-item" key={page.pageNumber}>
+                            <b>Page {page.pageNumber}</b>
+                            <span>{page.closingOnly?"Closing details only":page.itemCount+" item row"+(page.itemCount===1?"":"s")}</span>
+                            {page.reservedClosingSpaceMm>0.5&&<small>Reserves {page.reservedClosingSpaceMm.toFixed(1)} mm for closing details</small>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {printPreviewAudit.warnings.length>0&&(
                     <ul>{printPreviewAudit.warnings.slice(0,8).map((issue,index)=>{
                     const issueBlock=activeTemplate.blocks.find(block=>block.id===issue.blockId);

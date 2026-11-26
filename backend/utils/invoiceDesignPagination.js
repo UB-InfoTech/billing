@@ -164,10 +164,12 @@ function getInvoiceRowsPerPage(template={}){
 function isFinalPageOnlyBlock(block,itemTable){
   if(!block||!itemTable)return false;
   if(block.type==="totals")return true;
-  const tableTop=Number(itemTable.y)||0;
-  const tableBottom=tableTop+(Number(itemTable.h)||0);
+  const tableBottom=(Number(itemTable.y)||0)+(Number(itemTable.h)||0);
   const top=Number(block.y)||0;
-  const isClosingField=block.type==="field"&&CLOSING_FIELD_KEYS.has(block.fieldKey)&&top>=tableTop-0.5;
+  // These are invoice-closing details, not repeating header fields. Keep them
+  // with totals and the signature on the last page even when the user placed
+  // them above the item table. Their coordinates remain user-controlled.
+  const isClosingField=block.type==="field"&&CLOSING_FIELD_KEYS.has(block.fieldKey);
   return isClosingField||top>=tableBottom-0.5;
 }
 

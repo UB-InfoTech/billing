@@ -267,3 +267,57 @@ test("page item-count audit tolerates previews without allocation metadata",asyn
  assert.ok(!result.warnings.some(issue=>issue.id==="page-item-count-mismatch-1"));
 });
 
+test("all invoice closing fields stay together on the final page even when placed above the item table",()=>{
+ const template={
+  pageSize:"A4",
+  orientation:"portrait",
+  printMargins:{top:0,right:0,bottom:0,left:0},
+  blocks:[
+   {id:"company",type:"field",fieldKey:"company_name",x:6,y:4,w:50,h:4,visible:true},
+   {id:"invoice-number",type:"field",fieldKey:"invoice_no",x:6,y:9,w:50,h:4,visible:true},
+   {id:"amount-words",type:"field",fieldKey:"amount_words",x:6,y:14,w:50,h:4,visible:true},
+   {id:"paid",type:"field",fieldKey:"amount_paid",x:6,y:19,w:30,h:4,visible:true},
+   {id:"due",type:"field",fieldKey:"balance_due",x:38,y:19,w:30,h:4,visible:true},
+   {id:"bank",type:"field",fieldKey:"bank_details",x:6,y:24,w:50,h:4,visible:true},
+   {id:"terms",type:"field",fieldKey:"terms",x:6,y:29,w:50,h:4,visible:true},
+   {id:"signature",type:"field",fieldKey:"signature",x:60,y:29,w:34,h:4,visible:true},
+   {id:"items",type:"items_table",x:6,y:40,w:88,h:33,visible:true,fontSize:8,tableCellPadding:4,tableBorderWidth:1,columns:[{key:"description",label:"Description",width:100,visible:true,order:0}]},
+   {id:"totals",type:"totals",x:61,y:78,w:33,h:15,visible:true}
+  ]
+ };
+ const items=Array.from({length:25},(_,index)=>({orderName:"Product "+(index+1)}));
+ const pages=buildInvoiceDesignPages(template,items);
+ assert.equal(pages.length,3);
+ assert.deepEqual(pages.map(page=>page.rows.length),[9,8,8]);
+ const firstIds=pages[0].blocks.map(block=>block.id);
+ const middleIds=pages[1].blocks.map(block=>block.id);
+ const finalIds=pages[2].blocks.map(block=>block.id);
+ ["amount-words","paid","due","bank","terms","signature","totals"].forEach(id=>{
+  assert.ok(!firstIds.includes(id),id+" must not repeat on the first page");
+  assert.ok(!middleIds.includes(id),id+" must not repeat on continuation pages");
+  assert.ok(finalIds.includes(id),id+" must appear together on the final page");
+ });
+ ["company","invoice-number"].forEach(id=>{
+  assert.ok(firstIds.includes(id));
+  assert.ok(middleIds.includes(id));
+  assert.ok(finalIds.includes(id));
+ });
+ assert.equal(pages[2].reservedClosingSpaceMm,0);
+ assert.deepEqual(pages.flatMap(page=>page.rows.map(row=>row.itemNumber)),items.map((_,index)=>index+1));
+});
+
+test("moving closing fields above the item table does not create an unnecessary closing-only page",()=>{
+ const template=makeClosingReservationTemplate();
+ template.blocks.push(
+  {id:"words",type:"field",fieldKey:"amount_words",x:6,y:4,w:50,h:4,visible:true},
+  {id:"bank",type:"field",fieldKey:"bank_details",x:6,y:9,w:50,h:4,visible:true},
+  {id:"signature",type:"field",fieldKey:"signature",x:60,y:9,w:34,h:4,visible:true}
+ );
+ const items=Array.from({length:12},(_,index)=>({orderName:"Item "+(index+1)}));
+ const pages=buildInvoiceDesignPages(template,items);
+ assert.equal(pages.length,2);
+ assert.ok(!pages.some(page=>page.closingOnly));
+ assert.equal(pages[1].reservedClosingSpaceMm,0);
+ assert.deepEqual(pages.flatMap(page=>page.rows.map(row=>row.itemNumber)),items.map((_,index)=>index+1));
+});
+

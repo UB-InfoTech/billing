@@ -156,10 +156,18 @@ function renderTemplateThumbnail(preset){
           const samples={sr:"01",designNumber:"ST-240",description:"Premium fabric / product",hsnCode:"5208",quantity:"12",qtyUnit:"MTR",cut:"5.5",MTR:"66",shortPcs:"2",unitPrice:"₹ 450",amount:"₹ 29,700",discount:"5%",taxable:"₹ 28,215"};
           const gridColumns=columns.map(column=>Math.max(1,Number(column.width)||1)+"fr").join(" ")||"1fr";
           content=(
-            <div className="template-thumb-items">
-              <div className="template-thumb-items-head" style={{gridTemplateColumns:gridColumns}}>{columns.map(column=><span key={column.key}>{column.label}</span>)}</div>
+            <div className="template-thumb-items" style={{borderColor:block.tableBorderColor||preset.border}}>
+              <div
+                className="template-thumb-items-head"
+                style={{
+                  gridTemplateColumns,
+                  backgroundColor:block.tableHeaderBackground||preset.accent,
+                  color:block.tableHeaderColor||"#ffffff",
+                  borderBottomColor:block.tableBorderColor||preset.border
+                }}
+              >{columns.map(column=><span key={column.key}>{column.label}</span>)}</div>
               {["Premium cotton fabric","Embroidered work"].map((label,rowIndex)=>(
-                <div className="template-thumb-items-row" key={label} style={{gridTemplateColumns:gridColumns,backgroundColor:rowIndex%2?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#fff")}}>
+                <div className="template-thumb-items-row" key={label} style={{gridTemplateColumns:gridColumns,backgroundColor:rowIndex%2?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#fff"),borderBottomColor:block.tableBorderColor||preset.border}}>
                   {columns.map(column=><span key={column.key}>{column.key==="description"?label:(samples[column.key]||"—")}</span>)}
                 </div>
               ))}
@@ -169,9 +177,14 @@ function renderTemplateThumbnail(preset){
           content=(
             <div className="template-thumb-totals">
               <div><span>Subtotal</span><b>₹ 10,000</b></div>
-              <div><span>Discount</span><b>₹ 500</b></div>
-              <div><span>Tax</span><b>₹ 1,710</b></div>
-              <div className="template-thumb-total-final"><span>Total</span><b>₹ 11,210</b></div>
+              <div><span>Discount</span><b>− ₹ 500</b></div>
+              <div><span>Taxable value</span><b>₹ 9,500</b></div>
+              <div><span>CGST</span><b>₹ 855</b></div>
+              <div><span>SGST</span><b>₹ 855</b></div>
+              <div><span>Round off</span><b>₹ 0</b></div>
+              <div className="template-thumb-total-final"><span>Invoice total</span><b>₹ 11,210</b></div>
+              <div><span>Paid</span><b>₹ 5,000</b></div>
+              <div><span>Due</span><b>₹ 6,210</b></div>
             </div>
           );
         }else if(block.type==="logo"){

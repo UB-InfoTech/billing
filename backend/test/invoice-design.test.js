@@ -770,6 +770,8 @@ test("professional built-in templates include complete, readable business and in
   assert.ok(field("customer_name").fontSize>=11,preset.key+" has readable customer name");
   assert.ok(field("invoice_title").fontSize>=17,preset.key+" has readable invoice title");
   assert.ok(table.fontSize>=(preset.pageSize==="A5"?8.4:9),preset.key+" has readable item text");
+  assert.ok(table.y<=46,preset.key+" starts the item table high enough to leave more room for billable rows");
+  assert.ok(table.h>=(preset.pageSize==="A5"?26:preset.orientation==="landscape"?31:33),preset.key+" reserves a generous item-table area");
   assert.ok(Math.abs(table.columns.reduce((sum,column)=>sum+column.width,0)-100)<0.1,preset.key+" item columns use the full table width");
   assert.ok(template.blocks.some(block=>block.type==="totals"),preset.key+" has invoice totals");
   assert.ok(template.blocks.filter(block=>block.visible!==false).every(block=>block.x>=0&&block.y>=0&&block.x+block.w<=100.001&&block.y+block.h<=100.001),preset.key+" stays on the page");

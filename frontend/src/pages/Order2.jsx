@@ -69,6 +69,7 @@ function Order2() {
     });
    
     const [showModal, setShowModal] = useState(false);
+    const [invoiceFormStep,setInvoiceFormStep]=useState("details");
     const [statusModal, setStatusModal] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [showEwayBillModal, setShowEwayBillModal] = useState(false);
@@ -81,6 +82,11 @@ function Order2() {
     const [searchParams,setSearchParams]=useSearchParams();
     const [crmPrefillClientId,setCrmPrefillClientId]=useState("");
     const [crmPrefillProductId,setCrmPrefillProductId]=useState("");
+
+    const goToInvoiceFormStep=step=>{
+        setInvoiceFormStep(step);
+        document.getElementById("invoice-step-"+step)?.scrollIntoView({behavior:"smooth",block:"start"});
+    };
 
     useEffect(()=>{
         const customize=searchParams.get("customize");
@@ -2551,7 +2557,24 @@ const styles = {
                             <div className="modal-body p-4 invoice-create-body">
                                 <form className="invoice-form-workspace" onSubmit={handleSubmit} noValidate>
                                     {invoiceFormError&&<div className="alert alert-danger d-flex gap-2 align-items-start" role="alert"><i className="bi bi-exclamation-circle-fill mt-1"></i><div>{invoiceFormError}</div></div>}
-                                    <section className="invoice-configured-fields">
+                                    <nav className="invoice-mobile-step-nav" aria-label="Invoice form steps">
+                                        {[
+                                            ["details","1","Details"],
+                                            ["items","2","Items"],
+                                            ["review","3","Review"]
+                                        ].map(([step,number,label])=>(
+                                            <button
+                                                key={step}
+                                                type="button"
+                                                className={invoiceFormStep===step?"is-active":""}
+                                                aria-current={invoiceFormStep===step?"step":undefined}
+                                                onClick={()=>goToInvoiceFormStep(step)}
+                                            >
+                                                <span>{number}</span>{label}
+                                            </button>
+                                        ))}
+                                    </nav>
+                                    <section id="invoice-step-details" className="invoice-configured-fields">
                                         <div className="invoice-configured-heading">
                                             <span className="invoice-step-number">1</span>
                                             <div>
@@ -2613,7 +2636,7 @@ const styles = {
 
                                     <div className="row g-3">
                                         <div className="col-12">
-                                            <section className="card border-0 shadow-sm">
+                                            <section id="invoice-step-items" className="card border-0 shadow-sm">
                                                 <div className="card-header bg-white d-flex align-items-center justify-content-between py-3">
                                                     <div className="d-flex align-items-center gap-2">
                                                         <i className="bi bi-box-seam text-primary"></i>
@@ -2679,7 +2702,7 @@ const styles = {
                                         </div>
                                     </div>
 
-                                    <div className="card border-0 shadow-sm mt-3">
+                                    <div id="invoice-step-review" className="card border-0 shadow-sm mt-3">
                                         <div className="card-body p-4">
                                             <div className="row g-3 align-items-center">
                                                 <div className="col-md-7">

@@ -183,6 +183,8 @@ export default function DynamicTable({
   footer,
   autoOpenSettings=false,
   allowCustomFields=true,
+  mobileCardView=false,
+  mobilePrimaryColumnKey="",
 }){
   const [draft,setDraft]=useState(()=>cloneColumns(columns));
   const [customValues,setCustomValues]=useState({});
@@ -1023,7 +1025,7 @@ export default function DynamicTable({
 
       {error&&<div className="alert alert-warning py-2">{error}</div>}
 
-      <div className={wrapperClassName}>
+      <div className={`${wrapperClassName}${mobileCardView?" dynamic-table-mobile-cards":""}`}>
         <table className={className}>
           <thead className="table-light">
             <tr>
@@ -1058,20 +1060,20 @@ export default function DynamicTable({
           </thead>
           <tbody>
             {loading?(
-              <tr>
+              <tr className="dynamic-table-empty-row">
                 <td colSpan={(selectable?1:0)+visibleColumns.length+(actionColumn?1:0)} className="text-center py-5">
                   <span className="spinner-border spinner-border-sm me-2"/>Loading...
                 </td>
               </tr>
             ):rows.length===0?(
-              <tr>
+              <tr className="dynamic-table-empty-row">
                 <td colSpan={(selectable?1:0)+visibleColumns.length+(actionColumn?1:0)} className="text-center py-5 text-muted">{emptyText}</td>
               </tr>
             ):(
               rows.map((row,index)=>(
                 <tr key={getRowKey(row,index)} className={rowClassName?.(row,index)||""}>
                   {selectable&&(
-                    <td>
+                    <td className="dynamic-table-select-cell" data-label="Select">
                       <input
                         type="checkbox"
                         checked={selectedIds.includes(String(getRowKey(row,index)))}
@@ -1083,12 +1085,14 @@ export default function DynamicTable({
                   {visibleColumns.map(column=>(
                     <td
                       key={column.key}
+                      data-label={column.label}
+                      data-primary={column.key===(mobilePrimaryColumnKey||visibleColumns[0]?.key)?"true":undefined}
                       style={column.width?{width:`${(column.width/12)*100}%`}:undefined}
                     >
                       {cellText(column,row,index)}
                     </td>
                   ))}
-                  {actionColumn&&<td className="text-end">{actionColumn.render(row,index)}</td>}
+                  {actionColumn&&<td className="text-end dynamic-table-actions-cell" data-label={actionColumn.label||"Actions"}>{actionColumn.render(row,index)}</td>}
                 </tr>
               ))
             )}

@@ -1970,6 +1970,8 @@ const styles = {
                     {/* Table */}
                     <DynamicTable
                         tableKey="orders.list"
+                        mobileCardView
+                        mobilePrimaryColumnKey="orderNumber"
                         autoOpenSettings={tableCustomizeRequested}
                         rows={currentOrders}
                         loading={loadingOrders}

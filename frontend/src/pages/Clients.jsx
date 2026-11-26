@@ -684,6 +684,8 @@ function Clients() {
             <DynamicTable
               autoOpenSettings={tableCustomizeRequested}
               tableKey="clients.list"
+              mobileCardView
+              mobilePrimaryColumnKey="companyName"
               rows={pagedClientRows}
               loading={loading}
               emptyText={clientsLoadError?"Customer records could not be loaded. Try again above.":hasActiveClientFilters?"No customers match these filters. Use Clear filters to see everyone.":"No customers yet. Add a customer so their details are ready when you create an invoice."}

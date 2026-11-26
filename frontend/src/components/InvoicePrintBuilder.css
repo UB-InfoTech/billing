@@ -681,3 +681,94 @@
   .invoice-builder-template-card-preview{height:125px}
   .invoice-builder-template-card-top span:last-child{display:none}
 }
+
+
+/* Phone-first invoice builder and template chooser refinements. */
+@media(max-width:760px){
+  .invoice-builder-topbar{min-height:60px;align-items:center;gap:8px;padding:8px 10px}
+  .invoice-builder-brand .btn,.invoice-builder-top-actions .btn{min-height:40px;padding:7px 10px;font-size:11px}
+  .invoice-builder-top-actions .btn-primary{font-weight:750}
+  .invoice-builder-steps{gap:7px;padding:8px 9px}
+  .invoice-builder-steps>div{min-width:0;min-height:36px;border-radius:8px;background:#f8fafc}
+  .invoice-builder-mobile-tabs{gap:7px;padding:8px 10px}
+  .invoice-builder-mobile-tabs button{min-height:44px;border-radius:10px;font-size:12px;font-weight:750}
+  .invoice-builder-mobile-tabs button i{font-size:14px}
+  .invoice-builder-toolbar,.invoice-builder-designbar{gap:9px;padding:10px}
+  .invoice-builder-toolbar .btn,.invoice-builder-designbar .btn,.invoice-builder-page-settings .btn{min-height:38px;font-size:11px}
+  .invoice-builder-preview-select select,.invoice-builder-templates select{min-height:38px;font-size:12px}
+  .invoice-builder-palette button{min-height:46px;padding:8px 9px;border-color:#e7edf3;background:#fff;font-size:11px}
+  .invoice-builder-property-card{border-radius:12px}
+  .invoice-builder-property-card .form-control,.invoice-builder-property-card .form-select{min-height:40px;font-size:14px}
+  .invoice-builder-canvas-footer{min-height:48px;padding:8px 10px}
+}
+@media(max-width:560px){
+  .invoice-builder-topbar{align-items:flex-start}
+  .invoice-builder-brand{flex:1 1 auto}
+  .invoice-builder-brand>div{max-width:36vw}
+  .invoice-builder-brand strong{font-size:12px}
+  .invoice-builder-top-actions{flex:0 0 auto}
+  .invoice-builder-top-actions .btn{min-height:38px;padding:6px 8px;font-size:10px}
+  .invoice-builder-mobile-tabs button{min-height:46px;font-size:12px}
+  .invoice-builder-toolbar{align-items:stretch}
+  .invoice-builder-templates{display:grid;grid-template-columns:auto minmax(0,1fr);width:100%;align-items:center}
+  .invoice-builder-templates select{width:100%;min-width:0;max-width:none}
+  .invoice-builder-toolbar-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;margin:0;gap:7px}
+  .invoice-builder-toolbar-actions>.btn,.invoice-builder-toolbar-actions>label{display:flex;align-items:center;justify-content:center;min-width:0;min-height:40px;margin:0!important;padding:7px 6px;font-size:10px;text-align:center;white-space:normal}
+  .invoice-builder-designbar{display:flex;flex-direction:column;align-items:stretch}
+  .invoice-builder-name{display:grid;grid-template-columns:auto minmax(0,1fr);width:100%}
+  .invoice-builder-name input{width:100%;min-height:38px;font-size:13px}
+  .invoice-builder-preview-select{display:grid;grid-template-columns:auto minmax(0,1fr);width:100%}
+  .invoice-builder-preview-select select{width:100%;min-width:0;max-width:none}
+  .invoice-builder-preview-select>span,.invoice-builder-preview-select>.btn,.invoice-builder-preview-help{grid-column:1/-1}
+  .invoice-builder-page-settings{display:flex;flex-wrap:wrap;gap:7px;width:100%;padding-top:8px;border-top:1px solid #e8edf3}
+  .invoice-builder-page-settings>select{flex:1 1 90px;min-height:38px}
+  .invoice-builder-print-check{max-height:125px;margin:0 8px 6px}
+  .invoice-builder-canvas-footer>span:first-child{flex:1 1 100%}
+  .invoice-builder-canvas-footer .invoice-builder-mobile-zoom{margin-left:auto}
+
+  .invoice-builder-template-dialog{height:100dvh;max-height:100dvh}
+  .invoice-builder-template-header{align-items:flex-start;gap:10px;padding:13px 14px}
+  .invoice-builder-template-header strong{font-size:17px;line-height:1.25}
+  .invoice-builder-template-header small{font-size:11px;line-height:1.4}
+  .invoice-builder-template-intro{align-items:flex-start;gap:8px;padding:10px 14px}
+  .invoice-builder-template-intro>div strong{font-size:12px}
+  .invoice-builder-template-intro>div span{font-size:10px;line-height:1.35}
+  .invoice-builder-template-intro>.btn{min-height:38px;max-width:145px;font-size:10px;white-space:normal}
+  .invoice-builder-template-filters{padding:10px 12px}
+  .invoice-builder-template-search{min-height:44px}
+  .invoice-builder-template-search input{min-height:42px;font-size:16px}
+  .invoice-builder-template-categories button{min-height:36px;padding:7px 11px;font-size:10px}
+  .invoice-builder-template-browser{display:flex;flex-direction:column;min-height:0}
+  .invoice-builder-template-results{flex:1 1 auto;min-height:110px;padding:9px 11px 12px}
+  .invoice-builder-template-results-heading{margin-bottom:9px}
+  .invoice-builder-template-results-heading strong{font-size:11px}
+  .invoice-builder-template-results-heading small{display:block;font-size:9px}
+  .invoice-builder-template-grid{grid-template-columns:minmax(0,1fr);gap:8px}
+  .invoice-builder-template-card{display:grid;grid-template-columns:88px minmax(0,1fr);grid-template-rows:auto 1fr;align-items:center;column-gap:11px;row-gap:4px;min-height:126px;padding:8px;border-radius:11px}
+  .invoice-builder-template-card-top{grid-column:2;grid-row:1;justify-content:flex-start;margin:0}
+  .invoice-builder-template-card-top span{padding:4px 7px;font-size:9px}
+  .invoice-builder-template-card-preview{grid-column:1;grid-row:1/span 2;height:108px;padding:5px}
+  .invoice-builder-template-card-copy{grid-column:2;grid-row:2;align-self:start;gap:4px;padding:0}
+  .invoice-builder-template-card-copy strong{font-size:12px;line-height:1.3}
+  .invoice-builder-template-card-copy small{font-size:10px}
+  .invoice-builder-template-card.is-selected{box-shadow:0 0 0 2px rgba(52,123,183,.14),0 4px 12px rgba(31,61,94,.06)}
+  .invoice-builder-template-detail{display:grid;grid-template-columns:76px minmax(0,1fr);grid-template-rows:auto auto auto auto;flex:0 0 auto;gap:5px 10px;max-height:none;overflow:visible;padding:10px 12px;border-top:1px solid #dce5ee;border-left:0}
+  .invoice-builder-template-detail-heading{grid-column:2;grid-row:1;gap:2px}
+  .invoice-builder-template-detail-heading strong{font-size:12px;line-height:1.25}
+  .invoice-builder-template-detail-heading small{font-size:9px}
+  .invoice-builder-template-detail-preview{grid-column:1;grid-row:1/span 4;height:122px;padding:4px}
+  .invoice-builder-template-detail>p{display:block;grid-column:2;grid-row:2;max-height:30px;overflow:hidden;font-size:9px;line-height:1.4}
+  .invoice-builder-template-specs{display:grid;grid-column:2;grid-row:3;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+  .invoice-builder-template-specs span{min-width:0;padding:5px 6px;font-size:8px;line-height:1.25}
+  .invoice-builder-template-specs span:nth-child(3){grid-column:1/-1}
+  .invoice-builder-template-use{grid-column:2;grid-row:4;min-height:38px;margin:0;font-size:11px}
+  .invoice-builder-template-footer{gap:8px;padding:9px 12px calc(9px + env(safe-area-inset-bottom))}
+  .invoice-builder-template-footer small{max-width:none;font-size:9px;line-height:1.35}
+}
+@media(max-width:380px){
+  .invoice-builder-template-card{grid-template-columns:76px minmax(0,1fr);column-gap:8px;min-height:118px}
+  .invoice-builder-template-card-preview{height:100px}
+  .invoice-builder-template-detail{grid-template-columns:68px minmax(0,1fr);gap:4px 8px}
+  .invoice-builder-template-detail-preview{height:116px}
+  .invoice-builder-template-specs span{font-size:7.5px}
+}

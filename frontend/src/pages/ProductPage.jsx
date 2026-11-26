@@ -445,6 +445,7 @@ export default function ProductPage(){
 
           <DynamicTable
             tableKey="products.list"
+            mobileCardView
             autoOpenSettings={tableCustomizeRequested}
             rows={products}
             getRowKey={product=>product._id}

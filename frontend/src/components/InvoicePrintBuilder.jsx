@@ -160,7 +160,7 @@ function renderTemplateThumbnail(preset){
               <div
                 className="template-thumb-items-head"
                 style={{
-                  gridTemplateColumns,
+                  gridTemplateColumns:gridColumns,
                   backgroundColor:block.tableHeaderBackground||preset.accent,
                   color:block.tableHeaderColor||"#ffffff",
                   borderBottomColor:block.tableBorderColor||preset.border

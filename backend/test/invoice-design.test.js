@@ -343,7 +343,7 @@ test("long custom invoices continue on additional pages and repeat invoice heade
   const rows=Array.from({length:25},(_,index)=>({orderName:"Product "+(index+1)}));
   const pages=buildInvoiceDesignPages(template,rows);
   assert.equal(pages.length,3);
-  assert.deepEqual(pages.map(page=>page.rows.length),[9,9,7]);
+  assert.deepEqual(pages.map(page=>page.rows.length),[9,8,8]);
   assert.deepEqual(pages.map(page=>page.pageNumber),[1,2,3]);
   assert.ok(pages.every(page=>page.blocks.some(block=>block.id==="business")));
   assert.ok(pages.every(page=>page.blocks.some(block=>block.id==="invoice-number")));

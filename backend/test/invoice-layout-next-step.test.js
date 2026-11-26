@@ -308,6 +308,7 @@ test("all invoice closing fields stay together on the final page even when place
 
 test("moving closing fields above the item table does not create an unnecessary closing-only page",()=>{
  const template=makeClosingReservationTemplate();
+ const baseline=buildInvoiceDesignPages(template,Array.from({length:20},(_,index)=>({orderName:"Item "+(index+1)})));
  template.blocks.push(
   {id:"words",type:"field",fieldKey:"amount_words",x:6,y:4,w:50,h:4,visible:true},
   {id:"bank",type:"field",fieldKey:"bank_details",x:6,y:9,w:50,h:4,visible:true},
@@ -315,9 +316,10 @@ test("moving closing fields above the item table does not create an unnecessary 
  );
  const items=Array.from({length:20},(_,index)=>({orderName:"Item "+(index+1)}));
  const pages=buildInvoiceDesignPages(template,items);
+ assert.equal(pages.length,baseline.length);
  assert.equal(pages.length,2);
  assert.ok(!pages.some(page=>page.closingOnly));
- assert.equal(pages[1].reservedClosingSpaceMm,0);
+ assert.equal(pages[1].reservedClosingSpaceMm,baseline[1].reservedClosingSpaceMm);
  ["words","bank","signature"].forEach(id=>{
   assert.ok(!pages[0].blocks.some(block=>block.id===id),id+" must not repeat on the item continuation page");
   assert.ok(pages[1].blocks.some(block=>block.id===id),id+" must be grouped on the final page");

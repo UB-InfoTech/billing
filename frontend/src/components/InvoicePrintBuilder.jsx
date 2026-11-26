@@ -217,6 +217,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [showTemplateLibrary,setShowTemplateLibrary]=useState(false);
   const [templateSearch,setTemplateSearch]=useState("");
   const [templateCategory,setTemplateCategory]=useState("All industries");
+  const [selectedTemplateKey,setSelectedTemplateKey]=useState("modern-business");
   const [confirmDeleteTemplate,setConfirmDeleteTemplate]=useState(false);
   const [htmlImporting,setHtmlImporting]=useState(false);
   const [previewRecords,setPreviewRecords]=useState([]);
@@ -398,6 +399,15 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     ()=>localDesign.templates.find(template=>template.id===localDesign.activeTemplateId)||localDesign.templates[0]||makeTemplate("clean-default","Clean","clean"),
     [localDesign]
   );
+  const visibleTemplatePresets=INVOICE_DESIGN_PRESETS.filter(preset=>(templateCategory==="All industries"||preset.category===templateCategory)&&(!templateSearch.trim()||(preset.name+" "+preset.category+" "+preset.description).toLowerCase().includes(templateSearch.trim().toLowerCase())));
+  const selectedTemplatePreset=visibleTemplatePresets.find(preset=>preset.key===selectedTemplateKey)||visibleTemplatePresets[0]||null;
+  const openTemplateLibrary=()=>{
+    const currentPreset=INVOICE_DESIGN_PRESETS.find(preset=>preset.key===activeTemplate.templateKey);
+    setTemplateSearch("");
+    setTemplateCategory("All industries");
+    setSelectedTemplateKey(currentPreset?.key||"modern-business");
+    setShowTemplateLibrary(true);
+  };
   useEffect(()=>{
     const updateCanvasScale=()=>{
       const isMobile=window.matchMedia?window.matchMedia("(max-width: 760px)").matches:window.innerWidth<=760;
@@ -1157,7 +1167,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 <button type="button" className="btn btn-sm btn-light border" onClick={deleteActiveTemplate} title="Delete this design"><i className="bi bi-trash"/></button>
               </div>
               <div className="invoice-builder-toolbar-actions">
-                <button type="button" className="btn btn-sm btn-light border" onClick={()=>setShowTemplateLibrary(true)}><i className="bi bi-grid me-1"/>Templates</button>
+                <button type="button" className="btn btn-sm btn-light border" onClick={openTemplateLibrary}><i className="bi bi-grid me-1"/>Templates</button>
                 <label className="btn btn-sm btn-light border mb-0" htmlFor="invoice-html-import"><i className="bi bi-code-slash me-1"/>{htmlImporting?"Reading HTML…":"Import HTML"}</label>
                 <input ref={htmlImportRef} id="invoice-html-import" type="file" accept=".html,.htm,text/html" hidden onChange={event=>handleHtmlUpload(event.target.files?.[0])}/>
                 <label className="btn btn-sm btn-light border mb-0" htmlFor="invoice-design-import"><i className="bi bi-upload me-1"/>{uploading?"Importing…":"Import PDF / image"}</label>
@@ -1480,7 +1490,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               </section>
             )}
             <section className="invoice-builder-property-card">
-              <div className="d-flex justify-content-between align-items-center gap-2 mb-2"><h3 className="mb-0">Selected design</h3><button type="button" className="btn btn-sm btn-light border" onClick={()=>setShowTemplateLibrary(true)}>Browse templates</button></div>
+              <div className="d-flex justify-content-between align-items-center gap-2 mb-2"><h3 className="mb-0">Selected design</h3><button type="button" className="btn btn-sm btn-light border" onClick={openTemplateLibrary}>Browse templates</button></div>
               <p>{activeTemplate.name} · {activeTemplate.blocks.length} elements. Your other saved designs remain unchanged while you edit this one.</p>
               <div className="invoice-builder-element-capacity">
                 <label htmlFor="invoice-element-capacity">Maximum elements on this design</label>
@@ -1504,20 +1514,93 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       </div>
       {showTemplateLibrary&&<div className="invoice-builder-template-modal" role="dialog" aria-modal="true" aria-label="Professional invoice templates">
         <div className="invoice-builder-template-dialog">
-          <header><div><strong>Professional invoice templates</strong><small>Choose a ready-made layout. Every field, colour and position can be changed afterwards.</small></div><button type="button" className="btn btn-light border" onClick={()=>setShowTemplateLibrary(false)} aria-label="Close templates"><i className="bi bi-x-lg"/></button></header>
-          <div className="invoice-builder-template-intro"><span><i className="bi bi-stars me-1"/>14 industry-ready invoice designs</span><button type="button" className="btn btn-sm btn-outline-primary" onClick={createBlankDesign}><i className="bi bi-plus-lg me-1"/>Start with a blank page</button></div>
-          <div className="invoice-builder-template-filters">
-            <input type="search" className="form-control form-control-sm" value={templateSearch} onChange={event=>setTemplateSearch(event.target.value)} placeholder="Search by industry or template name" aria-label="Search invoice templates"/>
-            <select className="form-select form-select-sm" value={templateCategory} onChange={event=>setTemplateCategory(event.target.value)} aria-label="Filter templates by industry">
-              <option>All industries</option>{Array.from(new Set(INVOICE_DESIGN_PRESETS.map(preset=>preset.category))).map(category=><option value={category} key={category}>{category}</option>)}
-            </select>
+          <header className="invoice-builder-template-header">
+            <div>
+              <span className="invoice-builder-template-eyebrow">INVOICE DESIGN LIBRARY</span>
+              <strong>Choose a professional invoice</strong>
+              <small>Preview the complete page before selecting. Your existing designs will stay safe.</small>
+            </div>
+            <button type="button" className="btn btn-light border" onClick={()=>setShowTemplateLibrary(false)} aria-label="Close templates"><i className="bi bi-x-lg"/></button>
+          </header>
+          <div className="invoice-builder-template-intro">
+            <div><strong>{INVOICE_DESIGN_PRESETS.length} ready-to-use designs</strong><span>Built for real business documents and Indian GST billing.</span></div>
+            <button type="button" className="btn btn-outline-primary" onClick={createBlankDesign}><i className="bi bi-plus-lg me-1"/>Start with a blank page</button>
           </div>
-          <div className="invoice-builder-template-grid">{INVOICE_DESIGN_PRESETS.filter(preset=>(templateCategory==="All industries"||preset.category===templateCategory)&&(!templateSearch.trim()||(preset.name+" "+preset.category+" "+preset.description).toLowerCase().includes(templateSearch.trim().toLowerCase()))).map(preset=><article className="invoice-builder-template-card" key={preset.key}>
-            {renderTemplateThumbnail(preset)}
-            <div className="invoice-builder-template-card-copy"><div><strong>{preset.name}</strong><small>{preset.description}</small></div><span className="invoice-builder-template-category">{preset.category}</span></div>
-            <button type="button" className="btn btn-sm btn-primary w-100" onClick={()=>chooseTemplate(preset.key)}>Use this design</button>
-          </article>)}</div>
-          <footer><small>Choosing a template creates a new design. Your current design is kept.</small><button type="button" className="btn btn-light border" onClick={()=>setShowTemplateLibrary(false)}>Close</button></footer>
+          <div className="invoice-builder-template-filters">
+            <label className="invoice-builder-template-search">
+              <i className="bi bi-search" aria-hidden="true"/>
+              <input type="search" value={templateSearch} onChange={event=>setTemplateSearch(event.target.value)} placeholder="Search by business type or design" aria-label="Search invoice templates"/>
+              {templateSearch&&<button type="button" onClick={()=>setTemplateSearch("")} aria-label="Clear search"><i className="bi bi-x-lg"/></button>}
+            </label>
+            <div className="invoice-builder-template-categories" role="group" aria-label="Filter templates by industry">
+              {["All industries",...Array.from(new Set(INVOICE_DESIGN_PRESETS.map(preset=>preset.category)))].map(category=>(
+                <button type="button" key={category} className={templateCategory===category?"is-active":""} aria-pressed={templateCategory===category} onClick={()=>setTemplateCategory(category)}>{category}</button>
+              ))}
+            </div>
+          </div>
+          <div className="invoice-builder-template-browser">
+            <div className="invoice-builder-template-results">
+              <div className="invoice-builder-template-results-heading">
+                <strong>{visibleTemplatePresets.length} {visibleTemplatePresets.length===1?"design":"designs"} found</strong>
+                <small>Select a design to see a larger preview</small>
+              </div>
+              {visibleTemplatePresets.length?(
+                <div className="invoice-builder-template-grid">
+                  {visibleTemplatePresets.map(preset=>(
+                    <article
+                      key={preset.key}
+                      className={"invoice-builder-template-card "+(selectedTemplatePreset?.key===preset.key?"is-selected":"")}
+                      role="button"
+                      tabIndex={0}
+                      aria-pressed={selectedTemplatePreset?.key===preset.key}
+                      onClick={()=>setSelectedTemplateKey(preset.key)}
+                      onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();setSelectedTemplateKey(preset.key);}}}
+                    >
+                      <div className="invoice-builder-template-card-top">
+                        <span>{preset.pageSize||"A4"}</span>
+                        <span>{preset.orientation==="landscape"?"Landscape":"Portrait"}</span>
+                      </div>
+                      <div className="invoice-builder-template-card-preview">{renderTemplateThumbnail(preset)}</div>
+                      <div className="invoice-builder-template-card-copy">
+                        <strong>{preset.name}</strong>
+                        <small>{preset.category}</small>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ):(
+                <div className="invoice-builder-template-empty">
+                  <i className="bi bi-search"/>
+                  <strong>No matching designs</strong>
+                  <span>Try another search or choose a different industry.</span>
+                  <button type="button" className="btn btn-sm btn-light border" onClick={()=>{setTemplateSearch("");setTemplateCategory("All industries");}}>Clear filters</button>
+                </div>
+              )}
+            </div>
+            {selectedTemplatePreset&&(
+              <aside className="invoice-builder-template-detail">
+                <div className="invoice-builder-template-detail-heading">
+                  <span className="invoice-builder-template-eyebrow">SELECTED DESIGN</span>
+                  <strong>{selectedTemplatePreset.name}</strong>
+                  <small>{selectedTemplatePreset.category}</small>
+                </div>
+                <div className="invoice-builder-template-detail-preview">{renderTemplateThumbnail(selectedTemplatePreset)}</div>
+                <p>{selectedTemplatePreset.description}</p>
+                <div className="invoice-builder-template-specs">
+                  <span><i className="bi bi-file-earmark" aria-hidden="true"/>{selectedTemplatePreset.pageSize||"A4"} paper</span>
+                  <span><i className="bi bi-arrows-angle-expand" aria-hidden="true"/>{selectedTemplatePreset.orientation==="landscape"?"Landscape":"Portrait"}</span>
+                  <span><i className="bi bi-list-columns" aria-hidden="true"}>{selectedTemplatePreset.columns.filter(column=>column.visible!==false).length} item columns</span>
+                </div>
+                <button type="button" className="btn btn-primary invoice-builder-template-use" onClick={()=>chooseTemplate(selectedTemplatePreset.key)}>
+                  Use this design <i className="bi bi-arrow-right ms-1"/>
+                </button>
+              </aside>
+            )}
+          </div>
+          <footer className="invoice-builder-template-footer">
+            <small>Your current design is not changed until you select “Use this design”.</small>
+            <button type="button" className="btn btn-light border" onClick={()=>setShowTemplateLibrary(false)}>Close</button>
+          </footer>
         </div>
       </div>}
       {printPreviewOpen&&printPreviewHtml&&(

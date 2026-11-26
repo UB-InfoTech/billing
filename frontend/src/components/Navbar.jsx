@@ -5,7 +5,6 @@ import {NavLink,useLocation,useNavigate} from "react-router-dom";
 
 const MENU_ITEMS=MODULE_CATALOG;
 const LEGACY_DEFAULT_LABELS={orders:"Bills",clients:"Clients"};
-
 const NAV_GROUPS=[
   {key:"overview",label:"Overview",keys:["dashboard"]},
   {key:"sales",label:"Sales & customers",keys:["orders","clients","deals","follow-ups","sales-performance"]},
@@ -14,15 +13,7 @@ const NAV_GROUPS=[
   {key:"insights",label:"Reports & calendar",keys:["analytics","calendar"]},
   {key:"business",label:"Business setup",keys:["organization-profile","settings"]}
 ];
-
 const navGroupFor=key=>NAV_GROUPS.find(group=>group.keys.includes(key))||{key:"other",label:"More",keys:[]};
-
-const CREATE_ACTIONS=[
-  {label:"New invoice",description:"Create a customer bill",icon:"bi-receipt",to:"/orders?action=new"},
-  {label:"Add customer",description:"Save a customer or company",icon:"bi-person-plus",to:"/clients?action=new"},
-  {label:"Add expense",description:"Record a business expense",icon:"bi-wallet2",to:"/add-expense"},
-  {label:"Record purchase",description:"Receive stock from a supplier",icon:"bi-cart-plus",to:"/purchases?action=new"}
-];
 
 export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}){
   const navigate=useNavigate();
@@ -30,8 +21,6 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
   const [userName,setUserName]=useState("");
   const [menuItems,setMenuItems]=useState(MENU_ITEMS);
   const [pageSearch,setPageSearch]=useState("");
-  const [quickCreateOpen,setQuickCreateOpen]=useState(false);
-  const [expandedGroups,setExpandedGroups]=useState(()=>new Set(["sales"]));
 
   useEffect(()=>{
     try{
@@ -64,7 +53,7 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
             return {...fallback,label:!savedLabel||isOldDefault?fallback.label:savedLabel};
           });
 
-        // Keep newer modules available to businesses whose saved menus predate them.
+        // Keep new modules visible for businesses with older saved menus.
         const afterKey=key=>{
           const index=next.findIndex(item=>item.key===key);
           return index<0?next.length:index+1;
@@ -81,7 +70,6 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
         addMissing("purchases",()=>afterKey("suppliers"));
         addMissing("financial-recovery",()=>next.length);
         addMissing("organization-profile",()=>next.length);
-
         if(next.length)setMenuItems(next);
       }catch{
         if(!cancelled)setMenuItems(MENU_ITEMS);
@@ -95,24 +83,11 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
     const sectionMap=new Map();
     menuItems.forEach((item,index)=>{
       const group=navGroupFor(item.key);
-      if(!sectionMap.has(group.key)){
-        sectionMap.set(group.key,{...group,firstIndex:index,items:[]});
-      }
+      if(!sectionMap.has(group.key))sectionMap.set(group.key,{...group,firstIndex:index,items:[]});
       sectionMap.get(group.key).items.push(item);
     });
     return Array.from(sectionMap.values()).sort((a,b)=>a.firstIndex-b.firstIndex);
   },[menuItems]);
-
-  const activeGroup=useMemo(()=>{
-    if(location.pathname==="/")return "overview";
-    const activeItem=menuItems.find(item=>location.pathname===item.route||location.pathname.startsWith(item.route+"/"));
-    return activeItem?navGroupFor(activeItem.key).key:null;
-  },[location.pathname,menuItems]);
-
-  useEffect(()=>{
-    if(!activeGroup)return;
-    setExpandedGroups(previous=>previous.has(activeGroup)?previous:new Set([...previous,activeGroup]));
-  },[activeGroup]);
 
   const filteredSections=useMemo(()=>{
     const query=pageSearch.trim().toLowerCase();
@@ -124,47 +99,25 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
 
   const closeMobile=()=>{
     setMobileOpen(false);
-    setQuickCreateOpen(false);
+    setPageSearch("");
   };
-
-  const toggleGroup=key=>{
-    setExpandedGroups(previous=>{
-      const next=new Set(previous);
-      if(next.has(key))next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
   const handleLogout=()=>{
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     navigate("/login");
     closeMobile();
   };
-
-  useEffect(()=>{
-    if(!quickCreateOpen)return undefined;
-    const handleKeyDown=event=>{
-      if(event.key==="Escape")setQuickCreateOpen(false);
-    };
-    window.addEventListener("keydown",handleKeyDown);
-    return()=>window.removeEventListener("keydown",handleKeyDown);
-  },[quickCreateOpen]);
-
-  useEffect(()=>{
-    setQuickCreateOpen(false);
-  },[location.pathname]);
+  const createInvoice=()=>{
+    navigate("/orders?action=new");
+    closeMobile();
+  };
 
   useEffect(()=>{
     if(!mobileOpen)return undefined;
     const previousOverflow=document.body.style.overflow;
     document.body.style.overflow="hidden";
     const handleKeyDown=event=>{
-      if(event.key==="Escape"){
-        setMobileOpen(false);
-        setQuickCreateOpen(false);
-      }
+      if(event.key==="Escape")setMobileOpen(false);
     };
     window.addEventListener("keydown",handleKeyDown);
     return()=>{
@@ -173,38 +126,46 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
     };
   },[mobileOpen,setMobileOpen]);
 
+  useEffect(()=>{
+    setMobileOpen(false);
+  },[location.pathname,setMobileOpen]);
+
   const compactNavigation=collapsed&&!mobileOpen;
-  const openCreateAction=to=>{
-    navigate(to);
-    setQuickCreateOpen(false);
-    closeMobile();
-  };
+  const isMoreActive=!["/","/dashboard","/orders","/clients","/products"].some(route=>
+    route==="/"
+      ?location.pathname==="/"
+      :location.pathname===route||location.pathname.startsWith(route+"/")
+  );
 
   return(
     <>
-      <button
-        type="button"
-        className="sidebar-mobile-toggle btn btn-primary shadow-sm"
-        onClick={()=>setMobileOpen(true)}
-        aria-label="Open navigation"
-        aria-expanded={mobileOpen}
-        aria-controls="main-sidebar"
-      >
-        <i className="bi bi-list"></i>
-      </button>
-
-      {mobileOpen&&(
+      <header className="mobile-appbar">
         <button
           type="button"
-          className="sidebar-backdrop"
-          onClick={closeMobile}
-          aria-label="Close navigation"
-        />
+          className="sidebar-mobile-toggle"
+          onClick={()=>setMobileOpen(true)}
+          aria-label="Open navigation"
+          aria-expanded={mobileOpen}
+          aria-controls="main-sidebar"
+        >
+          <i className="bi bi-list" aria-hidden="true"/>
+        </button>
+        <NavLink to="/dashboard" className="mobile-appbar-brand" onClick={closeMobile}>
+          <span className="mobile-appbar-mark"><i className="bi bi-grid-1x2-fill"/></span>
+          <span><strong>Billing</strong><small>Business workspace</small></span>
+        </NavLink>
+        <button type="button" className="mobile-appbar-create" onClick={createInvoice}>
+          <i className="bi bi-plus-lg" aria-hidden="true"/><span>New invoice</span>
+        </button>
+      </header>
+
+      {mobileOpen&&(
+        <button type="button" className="sidebar-backdrop" onClick={closeMobile} aria-label="Close navigation"/>
       )}
 
       <aside id="main-sidebar" className={"app-sidebar "+(collapsed?"is-collapsed ":"")+(mobileOpen?"is-mobile-open":"")}>
         <div className="sidebar-brand">
-          <div className="sidebar-brand-mark"><i className="bi bi-grid-1x2-fill"></i></div>
+          <div className="sidebar-brand-mark"><i className="bi bi-grid-1x2-fill"/></div>
           <div className="sidebar-brand-text">
             <div className="fw-bold">Billing</div>
             <div className="small text-secondary">Simple business workspace</div>
@@ -216,37 +177,18 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
             title={collapsed?"Expand sidebar":"Collapse sidebar"}
             aria-label={collapsed?"Expand sidebar":"Collapse sidebar"}
           >
-            <i className={"bi "+(collapsed?"bi-layout-sidebar-inset":"bi-layout-sidebar")}></i>
+            <i className={"bi "+(collapsed?"bi-layout-sidebar-inset":"bi-layout-sidebar")}/>
           </button>
           <button type="button" className="sidebar-mobile-close btn btn-sm" onClick={closeMobile} aria-label="Close navigation">
-            <i className="bi bi-x-lg"></i>
+            <i className="bi bi-x-lg"/>
           </button>
         </div>
 
         <div className="sidebar-quick-create-wrap ux-sidebar-create-wrap">
-          <button
-            type="button"
-            className="sidebar-quick-create"
-            onClick={()=>setQuickCreateOpen(previous=>!previous)}
-            title="Create a new record"
-            aria-haspopup="menu"
-            aria-expanded={quickCreateOpen}
-            aria-controls="ux-create-menu"
-          >
-            <i className="bi bi-plus-lg"></i>
-            <span>New</span>
-            <i className="bi bi-chevron-down ux-create-chevron"></i>
+          <button type="button" className="sidebar-quick-create" onClick={createInvoice} title="Create a new invoice">
+            <i className="bi bi-plus-lg" aria-hidden="true"/>
+            <span>New invoice</span>
           </button>
-          {quickCreateOpen&&(
-            <div className="ux-create-menu" id="ux-create-menu" role="menu" aria-label="Create new">
-              {CREATE_ACTIONS.map(action=>(
-                <button type="button" role="menuitem" key={action.to} onClick={()=>openCreateAction(action.to)}>
-                  <span className="ux-create-menu-icon"><i className={"bi "+action.icon}></i></span>
-                  <span className="ux-create-menu-copy"><strong>{action.label}</strong><small>{action.description}</small></span>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         <div className="sidebar-scroll">
@@ -262,7 +204,7 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
                   aria-label={item.label}
                   className={({isActive})=>"sidebar-nav-link "+(isActive||(item.key==="dashboard"&&location.pathname==="/")?"active":"")}
                 >
-                  <span className="sidebar-nav-icon"><i className={"bi "+item.icon}></i></span>
+                  <span className="sidebar-nav-icon"><i className={"bi "+item.icon}/></span>
                   <span className="sidebar-nav-label">{item.label}</span>
                 </NavLink>
               ))}
@@ -270,7 +212,7 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
           ):(
             <>
               <label className="ux-sidebar-search" htmlFor="ux-sidebar-page-search">
-                <i className="bi bi-search" aria-hidden="true"></i>
+                <i className="bi bi-search" aria-hidden="true"/>
                 <input
                   id="ux-sidebar-page-search"
                   type="search"
@@ -279,42 +221,29 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
                   placeholder="Find a page"
                   autoComplete="off"
                 />
-                {pageSearch&&<button type="button" onClick={()=>setPageSearch("")} aria-label="Clear page search"><i className="bi bi-x"></i></button>}
+                {pageSearch&&<button type="button" onClick={()=>setPageSearch("")} aria-label="Clear page search"><i className="bi bi-x"/></button>}
               </label>
               <nav className="nav flex-column" aria-label="Main navigation">
-                {filteredSections.map(section=>{
-                  const isOpen=pageSearch.trim()!==""||expandedGroups.has(section.key);
-                  return(
-                    <section className="ux-sidebar-section" key={section.key}>
-                      <button
-                        type="button"
-                        className="ux-sidebar-section-toggle"
-                        onClick={()=>toggleGroup(section.key)}
-                        aria-expanded={isOpen}
-                      >
-                        <span>{section.label}</span>
-                        <i className={"bi "+(isOpen?"bi-chevron-up":"bi-chevron-down")} aria-hidden="true"></i>
-                      </button>
-                      {isOpen&&(
-                        <div className="ux-sidebar-section-links">
-                          {section.items.map(item=>(
-                            <NavLink
-                              key={item.key}
-                              to={item.route}
-                              end={item.key==="dashboard"}
-                              onClick={()=>{setPageSearch("");closeMobile();}}
-                              title={item.label}
-                              className={({isActive})=>"sidebar-nav-link "+(isActive||(item.key==="dashboard"&&location.pathname==="/")?"active":"")}
-                            >
-                              <span className="sidebar-nav-icon"><i className={"bi "+item.icon}></i></span>
-                              <span className="sidebar-nav-label">{item.label}</span>
-                            </NavLink>
-                          ))}
-                        </div>
-                      )}
-                    </section>
-                  );
-                })}
+                {filteredSections.map(section=>(
+                  <section className="ux-sidebar-section" key={section.key}>
+                    <div className="ux-sidebar-section-heading">{section.label}</div>
+                    <div className="ux-sidebar-section-links">
+                      {section.items.map(item=>(
+                        <NavLink
+                          key={item.key}
+                          to={item.route}
+                          end={item.key==="dashboard"}
+                          onClick={closeMobile}
+                          title={item.label}
+                          className={({isActive})=>"sidebar-nav-link "+(isActive||(item.key==="dashboard"&&location.pathname==="/")?"active":"")}
+                        >
+                          <span className="sidebar-nav-icon"><i className={"bi "+item.icon}/></span>
+                          <span className="sidebar-nav-label">{item.label}</span>
+                        </NavLink>
+                      ))}
+                    </div>
+                  </section>
+                ))}
                 {!filteredSections.length&&(
                   <div className="ux-sidebar-no-results">
                     No pages match “{pageSearch}”.
@@ -328,22 +257,40 @@ export default function Navbar({collapsed,setCollapsed,mobileOpen,setMobileOpen}
 
         <div className="sidebar-footer">
           <NavLink to="/settings?section=navigation" className="sidebar-customize-link" onClick={closeMobile} title="Customize your menu">
-            <i className="bi bi-sliders2" aria-hidden="true"></i>
+            <i className="bi bi-sliders2" aria-hidden="true"/>
             <span>Customize menu</span>
           </NavLink>
           <div className="sidebar-user">
-            <div className="sidebar-user-avatar"><i className="bi bi-person"></i></div>
+            <div className="sidebar-user-avatar"><i className="bi bi-person"/></div>
             <div className="sidebar-user-copy">
               <div className="fw-semibold text-truncate">{userName||"Administrator"}</div>
               <div className="small text-white-50">Signed in</div>
             </div>
           </div>
           <button type="button" className="sidebar-logout" onClick={handleLogout} title="Logout">
-            <i className="bi bi-box-arrow-right"></i>
+            <i className="bi bi-box-arrow-right"/>
             <span>Logout</span>
           </button>
         </div>
       </aside>
+
+      <nav className="mobile-bottom-nav" aria-label="Quick navigation">
+        <NavLink to="/dashboard" end className={({isActive})=>"mobile-bottom-nav-link "+(isActive?"active":"")} onClick={closeMobile}>
+          <i className="bi bi-house-door" aria-hidden="true"/><span>Home</span>
+        </NavLink>
+        <NavLink to="/orders" className={({isActive})=>"mobile-bottom-nav-link "+(isActive?"active":"")} onClick={closeMobile}>
+          <i className="bi bi-receipt" aria-hidden="true"/><span>Invoices</span>
+        </NavLink>
+        <NavLink to="/clients" className={({isActive})=>"mobile-bottom-nav-link "+(isActive?"active":"")} onClick={closeMobile}>
+          <i className="bi bi-people" aria-hidden="true"/><span>Customers</span>
+        </NavLink>
+        <NavLink to="/products" className={({isActive})=>"mobile-bottom-nav-link "+(isActive?"active":"")} onClick={closeMobile}>
+          <i className="bi bi-box-seam" aria-hidden="true"/><span>Products</span>
+        </NavLink>
+        <button type="button" className={"mobile-bottom-nav-link "+(isMoreActive?"active":"")} onClick={()=>setMobileOpen(true)} aria-expanded={mobileOpen}>
+          <i className="bi bi-grid" aria-hidden="true"/><span>More</span>
+        </button>
+      </nav>
     </>
   );
 }

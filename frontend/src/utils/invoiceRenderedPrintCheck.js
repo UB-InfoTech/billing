@@ -244,6 +244,48 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
     }
     const pageBlocks=Array.isArray(page.blocks)?page.blocks:[];
     const itemTables=pageBlocks.filter(block=>block.type==="items_table");
+    const measuredItemCount=itemTables.reduce((sum,table)=>sum+(Array.isArray(table.rows)?table.rows.length:0),0);
+    const expectedItemCount=page.itemCount===null||page.itemCount===undefined?null:Math.max(0,Number(page.itemCount)||0);
+    if(expectedItemCount!==null&&measuredItemCount!==expectedItemCount){
+      const table=itemTables[0];
+      addWarning(warnings,{
+        id:"page-item-count-mismatch-"+pageNumber,
+        severity:"error",
+        title:"Rendered item rows do not match the page plan",
+        detail:"Page "+pageNumber+" was allocated "+expectedItemCount+" item row"+(expectedItemCount===1?"":"s")+", but "+measuredItemCount+" row"+(measuredItemCount===1?"":"s")+" appeared in the rendered item table. Check the page break and reopen the actual print preview.",
+        pageNumber,
+        blockId:table?.id,
+        blockType:table?.type||"items_table",
+        expectedItemCount,
+        measuredItemCount
+      });
+    }
+    const itemCapacityMm=page.itemCapacityMm===null||page.itemCapacityMm===undefined?null:Number(page.itemCapacityMm);
+    if(Number.isFinite(itemCapacityMm)&&itemTables.length===1){
+      const table=itemTables[0];
+      const rows=Array.isArray(table.rows)?table.rows:[];
+      const allRowsMeasured=rows.length>0&&rows.every(row=>
+        row.geometryAvailable!==false&&Number.isFinite(Number(row.height))&&Number(row.height)>0
+      );
+      if(allRowsMeasured){
+        const renderedHeightMm=rows.reduce((sum,row)=>sum+Number(row.height)*25.4/96,0);
+        const capacityToleranceMm=1.5;
+        if(renderedHeightMm>itemCapacityMm+capacityToleranceMm){
+          addWarning(warnings,{
+            id:"item-page-capacity-overflow-"+pageNumber+"-"+table.id,
+            severity:"error",
+            title:"Invoice items exceed their allocated page space",
+            detail:"The rendered item rows on page "+pageNumber+" use "+renderedHeightMm.toFixed(1)+" mm, but only "+itemCapacityMm.toFixed(1)+" mm was reserved after the table heading, print gap and closing details. Reduce the item-table text size or review the description column, then check the actual print preview again.",
+            pageNumber,
+            blockId:table.id,
+            blockType:table.type,
+            renderedHeightMm:Number(renderedHeightMm.toFixed(2)),
+            itemCapacityMm,
+            overflowMm:Number((renderedHeightMm-itemCapacityMm).toFixed(2))
+          });
+        }
+      }
+    }
     const safeMarginPx=marginAuditEnabled?{
       top:Math.max(4,Number(printMargins.top)||0)*96/25.4,
       right:Math.max(4,Number(printMargins.right)||0)*96/25.4,

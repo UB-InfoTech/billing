@@ -167,3 +167,103 @@ test("pagination hints explain when closing details safely require a dedicated f
  ]);
  assert.ok(warnings.some(issue=>issue.id==="closing-only-page-2"&&issue.severity==="warning"));
 });
+
+test("actual print audit detects item rows that overflow the reserved final-page capacity",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const result=analyzeRenderedInvoiceMetrics({pages:[{
+  pageNumber:2,
+  width:794,
+  height:1123,
+  itemCount:2,
+  itemCapacityMm:25,
+  reservedClosingSpaceMm:40,
+  blocks:[{
+   id:"items",
+   type:"items_table",
+   bounds:{left:10,top:100,right:780,bottom:900},
+   contentHeight:180,
+   clientHeight:180,
+   contentWidth:770,
+   clientWidth:770,
+   headerPresent:true,
+   headerVisible:true,
+   rows:[
+    {itemNumber:4,label:"Long item",geometryAvailable:true,top:120,bottom:175,left:10,right:780,height:55,cellOverflowAxes:[],breakInside:"avoid",pageBreakInside:"avoid"},
+    {itemNumber:5,label:"Another item",geometryAvailable:true,top:175,bottom:230,left:10,right:780,height:55,cellOverflowAxes:[],breakInside:"avoid",pageBreakInside:"avoid"}
+   ],
+   images:[]
+  }]
+ }]});
+ const warning=result.warnings.find(issue=>issue.id==="item-page-capacity-overflow-2-items");
+ assert.ok(warning);
+ assert.equal(warning.severity,"error");
+ assert.equal(warning.blockId,"items");
+ assert.equal(warning.blockType,"items_table");
+ assert.ok(warning.overflowMm>0);
+});
+
+test("actual print audit does not report page-capacity overflow when rendered rows fit",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const result=analyzeRenderedInvoiceMetrics({pages:[{
+  pageNumber:1,
+  width:794,
+  height:1123,
+  itemCount:2,
+  itemCapacityMm:35,
+  blocks:[{
+   id:"items",
+   type:"items_table",
+   bounds:{left:10,top:100,right:780,bottom:900},
+   contentHeight:180,
+   clientHeight:180,
+   contentWidth:770,
+   clientWidth:770,
+   headerPresent:true,
+   headerVisible:true,
+   rows:[
+    {itemNumber:1,label:"One",geometryAvailable:true,top:120,bottom:170,left:10,right:780,height:50,cellOverflowAxes:[],breakInside:"avoid",pageBreakInside:"avoid"},
+    {itemNumber:2,label:"Two",geometryAvailable:true,top:170,bottom:220,left:10,right:780,height:50,cellOverflowAxes:[],breakInside:"avoid",pageBreakInside:"avoid"}
+   ],
+   images:[]
+  }]
+ }]});
+ assert.ok(!result.warnings.some(issue=>issue.id==="item-page-capacity-overflow-1-items"));
+ assert.ok(!result.warnings.some(issue=>issue.id==="page-item-count-mismatch-1"));
+});
+
+test("actual print audit detects a page whose planned item rows are missing from the rendered table",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const result=analyzeRenderedInvoiceMetrics({pages:[{
+  pageNumber:3,
+  width:794,
+  height:1123,
+  itemCount:2,
+  itemCapacityMm:60,
+  blocks:[{
+   id:"items",
+   type:"items_table",
+   bounds:{left:10,top:100,right:780,bottom:900},
+   headerPresent:true,
+   headerVisible:true,
+   rows:[{itemNumber:5,label:"Only one row",geometryAvailable:true,top:120,bottom:150,left:10,right:780,height:30,cellOverflowAxes:[]}],
+   images:[]
+  }]
+ }]});
+ const warning=result.warnings.find(issue=>issue.id==="page-item-count-mismatch-3");
+ assert.ok(warning);
+ assert.equal(warning.severity,"error");
+ assert.equal(warning.expectedItemCount,2);
+ assert.equal(warning.measuredItemCount,1);
+});
+
+test("page item-count audit tolerates previews without allocation metadata",async()=>{
+ const {analyzeRenderedInvoiceMetrics}=await import("../../frontend/src/utils/invoiceRenderedPrintCheck.js");
+ const result=analyzeRenderedInvoiceMetrics({pages:[{
+  pageNumber:1,
+  width:794,
+  height:1123,
+  blocks:[{id:"items",type:"items_table",bounds:{left:10,top:100,right:780,bottom:900},rows:[{itemNumber:1,top:120,bottom:150,left:10,right:780,height:30,geometryAvailable:true}],images:[]}]
+ }]});
+ assert.ok(!result.warnings.some(issue=>issue.id==="page-item-count-mismatch-1"));
+});
+

@@ -1589,7 +1589,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 <div className="invoice-builder-template-specs">
                   <span><i className="bi bi-file-earmark" aria-hidden="true"/>{selectedTemplatePreset.pageSize||"A4"} paper</span>
                   <span><i className="bi bi-arrows-angle-expand" aria-hidden="true"/>{selectedTemplatePreset.orientation==="landscape"?"Landscape":"Portrait"}</span>
-                  <span><i className="bi bi-list-columns" aria-hidden="true"}>{selectedTemplatePreset.columns.filter(column=>column.visible!==false).length} item columns</span>
+                  <span><i className="bi bi-list-columns" aria-hidden="true"/>{selectedTemplatePreset.columns.filter(column=>column.visible!==false).length} item columns</span>
                 </div>
                 <button type="button" className="btn btn-primary invoice-builder-template-use" onClick={()=>chooseTemplate(selectedTemplatePreset.key)}>
                   Use this design <i className="bi bi-arrow-right ms-1"/>

@@ -313,11 +313,15 @@ test("moving closing fields above the item table does not create an unnecessary 
   {id:"bank",type:"field",fieldKey:"bank_details",x:6,y:9,w:50,h:4,visible:true},
   {id:"signature",type:"field",fieldKey:"signature",x:60,y:9,w:34,h:4,visible:true}
  );
- const items=Array.from({length:12},(_,index)=>({orderName:"Item "+(index+1)}));
+ const items=Array.from({length:20},(_,index)=>({orderName:"Item "+(index+1)}));
  const pages=buildInvoiceDesignPages(template,items);
  assert.equal(pages.length,2);
  assert.ok(!pages.some(page=>page.closingOnly));
  assert.equal(pages[1].reservedClosingSpaceMm,0);
+ ["words","bank","signature"].forEach(id=>{
+  assert.ok(!pages[0].blocks.some(block=>block.id===id),id+" must not repeat on the item continuation page");
+  assert.ok(pages[1].blocks.some(block=>block.id===id),id+" must be grouped on the final page");
+ });
  assert.deepEqual(pages.flatMap(page=>page.rows.map(row=>row.itemNumber)),items.map((_,index)=>index+1));
 });
 

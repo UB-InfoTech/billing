@@ -103,6 +103,7 @@ function Order2() {
             setCrmPrefillProductId(productId||"");
             const newSubOrders=[emptyOrderItem()];
             setShowModal(true);
+            setInvoiceFormStep("details");
             setEditingOrder(null);
             setInvoiceFormError("");
             setOrdersMessage("");
@@ -964,6 +965,7 @@ function Order2() {
         setInvoiceFormError("");
         setOrdersMessage("");
         setEditingOrder(order);
+        setInvoiceFormStep("details");
         const configuredOrder=buildConfiguredDefaults(hydrateConfiguredValues(order,orderFormConfig.fields),orderFormConfig.fields);
         const configuredItems=(order.subOrders||[]).map(item=>buildConfiguredDefaults(hydrateConfiguredValues(item,orderItemConfig.fields),orderItemConfig.fields));
         setSubOrders(configuredItems.map(item=>({...item,customFields:{...(item.customFields||{})}})));
@@ -1865,6 +1867,7 @@ const styles = {
                     const newSubOrders=[emptyOrderItem()];
                     const nextOrder={...emptyOrder(),subOrders:newSubOrders};
                     setShowModal(true);
+                    setInvoiceFormStep("details");
                     setEditingOrder(null);
                     setInvoiceFormError("");
                     setOrdersMessage("");

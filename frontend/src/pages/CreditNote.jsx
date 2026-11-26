@@ -970,6 +970,7 @@ export default function CreditNote() {
 
                                                         <DynamicTable
                                 tableKey="credit-notes.list"
+                                mobileCardView
                                 autoOpenSettings={searchParams.get("customize")==="list"}
                                 rows={creditNotes}
                                 getRowKey={note=>note._id}

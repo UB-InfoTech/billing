@@ -279,6 +279,7 @@ export default function Purchases(){
     </div>
     <DynamicTable
      tableKey="purchases.list"
+      mobileCardView
      rows={purchases}
      getRowKey={item=>item._id}
      loading={loading}

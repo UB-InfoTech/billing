@@ -277,6 +277,7 @@ export default function Expenses(){
       <div className="d-flex justify-content-between align-items-center small text-secondary mb-2"><span>Showing {expenses.length} on this page · {pagination.total} matching expense{pagination.total===1?"":"s"}</span><span>Amounts in INR (₹)</span></div>
       <DynamicTable
         tableKey="expenses.list"
+        mobileCardView
         autoOpenSettings={tableCustomizeRequested}
         rows={expenses}
         getRowKey={expense=>expense._id}

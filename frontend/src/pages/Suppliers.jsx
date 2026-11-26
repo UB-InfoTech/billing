@@ -154,6 +154,7 @@ export default function Suppliers(){
     </div>
     <DynamicTable
      tableKey="suppliers.list"
+      mobileCardView
      rows={suppliers}
      getRowKey={supplier=>supplier._id}
      loading={loading}

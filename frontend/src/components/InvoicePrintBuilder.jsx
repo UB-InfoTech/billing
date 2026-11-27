@@ -445,18 +445,6 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     ()=>localDesign.templates.find(template=>template.id===localDesign.activeTemplateId)||localDesign.templates[0]||makeTemplate("clean-default","Clean","clean"),
     [localDesign]
   );
-  useEffect(()=>{
-    if(layoutPlanPreview&&(layoutPlanPreview.baseSnapshot!==JSON.stringify(activeTemplate.blocks)||layoutPlanPreview.suggestionsSnapshot!==JSON.stringify(layoutOptimizationSuggestions))){
-      setLayoutPlanPreview(null);
-    }
-  },[layoutPlanPreview,activeTemplate,layoutOptimizationSuggestions]);
-  useEffect(()=>{
-    if(renderedLayoutPlanPreview&&
-      (renderedLayoutPlanPreview.baseSnapshot!==JSON.stringify(activeTemplate.blocks)||
-       renderedLayoutPlanPreview.suggestionsSnapshot!==JSON.stringify(renderedLayoutOptimizationSuggestions))){
-      setRenderedLayoutPlanPreview(null);
-    }
-  },[renderedLayoutPlanPreview,activeTemplate.blocks,renderedLayoutOptimizationSuggestions]);
   const printPageNavigation=buildInvoicePageNavigation(printPreviewAudit?.pageLayouts,printPreviewAudit?.warnings);
   const visibleTemplatePresets=INVOICE_DESIGN_PRESETS.filter(preset=>(templateCategory==="All industries"||preset.category===templateCategory)&&(!templateSearch.trim()||(preset.name+" "+preset.category+" "+preset.description).toLowerCase().includes(templateSearch.trim().toLowerCase())));
   const selectedTemplatePreset=visibleTemplatePresets.find(preset=>preset.key===selectedTemplateKey)||visibleTemplatePresets[0]||null;
@@ -511,6 +499,19 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     ...layoutOptimizationSuggestions,
     ...buildInvoiceRenderedLayoutOptimizationSuggestions(activeTemplate.blocks,printPreviewAudit?.warnings||[],previewColumns)
   ],[activeTemplate.blocks,layoutOptimizationSuggestions,printPreviewAudit?.warnings,previewColumns]);
+  useEffect(()=>{
+    if(layoutPlanPreview&&(layoutPlanPreview.baseSnapshot!==JSON.stringify(activeTemplate.blocks)||layoutPlanPreview.suggestionsSnapshot!==JSON.stringify(layoutOptimizationSuggestions))){
+      setLayoutPlanPreview(null);
+    }
+  },[layoutPlanPreview,activeTemplate,layoutOptimizationSuggestions]);
+  useEffect(()=>{
+    if(renderedLayoutPlanPreview&&
+      (renderedLayoutPlanPreview.baseSnapshot!==JSON.stringify(activeTemplate.blocks)||
+       renderedLayoutPlanPreview.suggestionsSnapshot!==JSON.stringify(renderedLayoutOptimizationSuggestions))){
+      setRenderedLayoutPlanPreview(null);
+    }
+  },[renderedLayoutPlanPreview,activeTemplate.blocks,renderedLayoutOptimizationSuggestions]);
+
   const applyDesign=next=>{
     currentDesignRef.current=next;
     setLocalDesign(next);

@@ -22,6 +22,10 @@ test("item-row pagination reserves additional height for Gujarati descriptions",
  const gujaratiRow=estimateInvoiceItemRow(gujarati,table.columns,metrics,table,{},1);
  assert.ok(gujaratiRow.rowHeightMm>latinRow.rowHeightMm);
  assert.ok(gujaratiRow.lineCount>latinRow.lineCount);
+ assert.equal(gujaratiRow.columnEstimates[0].key,"description");
+ assert.equal(gujaratiRow.columnEstimates[0].label,"description");
+ assert.equal(gujaratiRow.columnEstimates[0].estimatedLines,gujaratiRow.lineCount);
+ assert.ok(gujaratiRow.columnEstimates[0].availableWidthMm>0);
 });
 
 test("rendered print audit catches overlapping, reordered and over-wide item rows",async()=>{

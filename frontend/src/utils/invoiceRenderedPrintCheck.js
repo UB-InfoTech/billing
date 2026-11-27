@@ -117,6 +117,7 @@ export function measureRenderedInvoiceDocument(documentRef){
         pageNumber:readOptionalNumberAttribute(sheet,"data-page-number")||pageIndex+1,
         itemCount:readOptionalNumberAttribute(sheet,"data-page-item-count"),
         itemCapacityMm:readOptionalNumberAttribute(sheet,"data-page-item-capacity-mm"),
+        estimatedItemRowHeightMm:readOptionalNumberAttribute(sheet,"data-page-row-height-estimate-mm"),
         reservedClosingSpaceMm:readOptionalNumberAttribute(sheet,"data-page-closing-reserved-mm"),
         closingOnly:sheet.getAttribute?.("data-page-closing-only")==="true",
         width:Number(sheet.clientWidth)||sheetRect.width,
@@ -280,6 +281,28 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
       );
       if(allRowsMeasured){
         const renderedHeightMm=rows.reduce((sum,row)=>sum+Number(row.height)*25.4/96,0);
+        const estimatedHeightMm=page.estimatedItemRowHeightMm===null||page.estimatedItemRowHeightMm===undefined
+          ?null:Number(page.estimatedItemRowHeightMm);
+        if(Number.isFinite(estimatedHeightMm)&&estimatedHeightMm>0){
+          const estimateDifferenceMm=renderedHeightMm-estimatedHeightMm;
+          const meaningfulDriftMm=Math.max(2,estimatedHeightMm*0.2);
+          if(Math.abs(estimateDifferenceMm)>meaningfulDriftMm){
+            const direction=estimateDifferenceMm>0?"taller":"shorter";
+            addWarning(warnings,{
+              id:"item-row-height-estimate-drift-"+pageNumber+"-"+table.id,
+              severity:"warning",
+              title:"Rendered item heights differ from the page estimate",
+              detail:"The actual preview measures the item rows on page "+pageNumber+" at "+renderedHeightMm.toFixed(1)+" mm, "+Math.abs(estimateDifferenceMm).toFixed(1)+" mm "+direction+" than the planner estimate of "+estimatedHeightMm.toFixed(1)+" mm. The actual preview measurement takes priority. Check long descriptions, loaded fonts and item-column widths before relying on automatic page distribution.",
+              pageNumber,
+              blockId:table.id,
+              blockType:table.type,
+              renderedHeightMm:Number(renderedHeightMm.toFixed(2)),
+              estimatedHeightMm:Number(estimatedHeightMm.toFixed(2)),
+              driftMm:Number(estimateDifferenceMm.toFixed(2)),
+              driftPercent:Number((estimateDifferenceMm/estimatedHeightMm*100).toFixed(1))
+            });
+          }
+        }
         const capacityToleranceMm=1.5;
         if(renderedHeightMm>itemCapacityMm+capacityToleranceMm){
           addWarning(warnings,{
@@ -616,7 +639,27 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
     const blocks=Array.isArray(page.blocks)?page.blocks:[];
     const measuredItemCount=blocks.reduce((sum,block)=>sum+(Array.isArray(block.rows)?block.rows.length:0),0);
     const itemCount=page.itemCount===null||page.itemCount===undefined?measuredItemCount:Math.max(0,Number(page.itemCount)||0);
-    return {pageNumber:Number(page.pageNumber)||index+1,itemCount,itemCapacityMm:page.itemCapacityMm===null||page.itemCapacityMm===undefined?null:Number(page.itemCapacityMm),reservedClosingSpaceMm:Math.max(0,Number(page.reservedClosingSpaceMm)||0),closingOnly:Boolean(page.closingOnly)};
+    const itemTable=blocks.find(block=>block.type==="items_table");
+    const rows=Array.isArray(itemTable?.rows)?itemTable.rows:[];
+    const rowsFullyMeasured=rows.length>0&&rows.every(row=>
+      row.geometryAvailable!==false&&Number.isFinite(Number(row.height))&&Number(row.height)>0
+    );
+    const renderedItemHeightMm=rowsFullyMeasured
+      ?Number((rows.reduce((sum,row)=>sum+Number(row.height),0)*25.4/96).toFixed(2))
+      :null;
+    const itemCapacityMm=page.itemCapacityMm===null||page.itemCapacityMm===undefined?null:Number(page.itemCapacityMm);
+    const itemSpaceUsedPercent=renderedItemHeightMm!==null&&Number.isFinite(itemCapacityMm)&&itemCapacityMm>0
+      ?Math.round(renderedItemHeightMm/itemCapacityMm*100)
+      :null;
+    return {
+      pageNumber:Number(page.pageNumber)||index+1,
+      itemCount,
+      itemCapacityMm:Number.isFinite(itemCapacityMm)?itemCapacityMm:null,
+      renderedItemHeightMm,
+      itemSpaceUsedPercent,
+      reservedClosingSpaceMm:Math.max(0,Number(page.reservedClosingSpaceMm)||0),
+      closingOnly:Boolean(page.closingOnly)
+    };
   });
   return {pageCount:pages.length,warnings,hasErrors:warnings.some(warning=>warning.severity==="error"),pageLayouts};
 }

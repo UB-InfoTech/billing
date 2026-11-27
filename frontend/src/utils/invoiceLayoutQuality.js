@@ -289,8 +289,6 @@ export function buildInvoiceColumnOptimizationPreview(block,issue,defaultColumns
  * This prevents stale suggestions from overwriting newer user edits.
  */
 
- * This prevents stale suggestions from overwriting newer user edits.
- */
 export function applyInvoiceLayoutOptimizationSuggestion(blocks=[],suggestion,defaultColumns=[]) {
  const source=Array.isArray(blocks)?blocks:[];
  if(!suggestion?.blockId)return {blocks:source,changed:false,reason:"Suggestion is incomplete."};

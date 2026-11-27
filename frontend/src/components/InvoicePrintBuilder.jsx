@@ -1798,7 +1798,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                         <div><strong>Coordinated layout optimizer</strong><small>{renderedLayoutOptimizationSuggestions.length} safe change(s) based on this rendered preview</small></div>
                         <button type="button" className="btn btn-sm btn-outline-primary" onClick={openRenderedLayoutPlanPreview}>Review combined fixes</button>
                       </div>
-                      <p>Checks item-column wrapping, table text size, available table height and totals placement together. Page count is recalculated when you reopen the print check.</p>
+                      <p>Uses measured item-row height and closing-section collisions to suggest safe column, text, table-space or closing-element changes. Page count and clipping are rechecked when you reopen Actual print.</p>
                       {renderedLayoutPlanPreview&&(
                         <div className="invoice-builder-coordinated-review">
                           <div className="invoice-builder-layout-plan-review-heading">

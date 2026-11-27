@@ -74,9 +74,34 @@ export function measureRenderedInvoiceDocument(documentRef){
           const rect=getRect(row,sheetRect);
           const rowStyle=getElementStyle(documentRef,row);
           const cells=Array.from(row.querySelectorAll?.("th,td")||[]);
+          const cellMeasurements=cells.map(cell=>{
+            const textElement=cell.querySelector?.(".design-cell-text")||cell;
+            const textRect=textElement?.getBoundingClientRect?.();
+            const textStyle=getElementStyle(documentRef,textElement);
+            const fontSizePx=Number.parseFloat(textStyle?.fontSize)||0;
+            const parsedLineHeight=Number.parseFloat(textStyle?.lineHeight);
+            const lineHeightPx=Number.isFinite(parsedLineHeight)&&parsedLineHeight>0
+              ?parsedLineHeight:fontSizePx>0?fontSizePx*1.2:0;
+            const textHeightPx=Number(textRect?.height)||0;
+            const hasContent=String(textElement?.textContent||"").trim().length>0;
+            return {
+              columnKey:cell.getAttribute?.("data-column-key")||"",
+              columnLabel:cell.getAttribute?.("data-column-label")||"",
+              estimatedLines:readOptionalNumberAttribute(cell,"data-estimated-lines"),
+              actualLines:hasContent&&textHeightPx>0&&lineHeightPx>0
+                ?Math.max(1,Math.round(textHeightPx/lineHeightPx)):null,
+              textHeightPx,
+              lineHeightPx,
+              widthPx:Number(cell.getBoundingClientRect?.().width)||Number(cell.clientWidth)||0,
+              textLength:String(textElement?.textContent||"").trim().length,
+              hasContent
+            };
+          });
           return {
             itemNumber:Number(row.getAttribute("data-item-number"))||index+1,
             label:row.getAttribute("data-item-label")||"",
+            estimatedHeightMm:readOptionalNumberAttribute(row,"data-estimated-height-mm"),
+            estimatedLines:readOptionalNumberAttribute(row,"data-estimated-lines"),
             geometryAvailable:Boolean(rect&&rect.width>0&&rect.height>0),
             left:rect?.left??null,
             top:rect?.top??null,
@@ -86,6 +111,7 @@ export function measureRenderedInvoiceDocument(documentRef){
             breakInside:String(rowStyle?.breakInside||"").toLowerCase(),
             pageBreakInside:String(rowStyle?.pageBreakInside||"").toLowerCase(),
             cellOverflowAxes:getCellOverflowAxes(cells),
+            cells:cellMeasurements,
             cellCount:cells.length
           };
         }):[];
@@ -132,6 +158,48 @@ function addWarning(warnings,warning){
   if(!warnings.some(item=>item.id===warning.id))warnings.push(warning);
 }
 
+function auditInvoiceItemRowHeightEstimate(row,table,pageNumber,warnings){
+  const estimatedHeightMm=Number(row.estimatedHeightMm);
+  const renderedHeightMm=Number(row.height)*25.4/96;
+  if(!Number.isFinite(estimatedHeightMm)||estimatedHeightMm<=0||
+    !Number.isFinite(renderedHeightMm)||renderedHeightMm<=0)return;
+
+  const heightDifferenceMm=renderedHeightMm-estimatedHeightMm;
+  const meaningfulDriftMm=Math.max(1.5,estimatedHeightMm*0.2);
+  if(heightDifferenceMm<=meaningfulDriftMm)return;
+
+  const columnDrivers=(Array.isArray(row.cells)?row.cells:[])
+    .filter(cell=>cell?.hasContent&&Number.isFinite(Number(cell.estimatedLines))&&
+      Number.isFinite(Number(cell.actualLines))&&Number(cell.actualLines)>Number(cell.estimatedLines))
+    .sort((a,b)=>(Number(b.actualLines)-Number(b.estimatedLines))-(Number(a.actualLines)-Number(a.estimatedLines)));
+  const driver=columnDrivers[0];
+  const itemName=String(row.label||"").trim();
+  const columnDetail=driver
+    ?" The "+(driver.columnLabel||"item detail")+" column wraps to "+driver.actualLines+" lines instead of the "+driver.estimatedLines+" estimated."
+    :" No single column explains the extra height; check the item-table font size, line spacing and cell padding.";
+  const recommendation=driver
+    ?" Widen that column, shorten this item's value or reduce the item-table text size."
+    :" Review the row's text size and cell spacing, then inspect its column widths.";
+
+  addWarning(warnings,{
+    id:"item-row-height-estimate-"+pageNumber+"-"+table.id+"-"+row.itemNumber,
+    severity:"warning",
+    title:"An invoice item row is taller than planned",
+    detail:"Item "+row.itemNumber+(itemName?" (“"+itemName+"”)":"")+" measures "+renderedHeightMm.toFixed(1)+" mm, compared with "+estimatedHeightMm.toFixed(1)+" mm planned."+columnDetail+recommendation,
+    pageNumber,
+    blockId:table.id,
+    blockType:table.type,
+    itemNumber:row.itemNumber,
+    renderedHeightMm:Number(renderedHeightMm.toFixed(2)),
+    estimatedHeightMm:Number(estimatedHeightMm.toFixed(2)),
+    driftMm:Number(heightDifferenceMm.toFixed(2)),
+    columnKey:driver?.columnKey||null,
+    columnLabel:driver?.columnLabel||null,
+    estimatedLines:driver?Number(driver.estimatedLines):null,
+    actualLines:driver?Number(driver.actualLines):null
+  });
+}
+
 function auditInvoiceItemRowGeometry(table,pageNumber,warnings){
   const rows=(Array.isArray(table.rows)?table.rows:[]).map((row,index)=>({
     ...row,
@@ -144,6 +212,7 @@ function auditInvoiceItemRowGeometry(table,pageNumber,warnings){
   const bounds=table.bounds||{};
   rows.forEach((row,index)=>{
     if(row.geometryAvailable===false)return;
+    auditInvoiceItemRowHeightEstimate(row,table,pageNumber,warnings);
     if(Number.isFinite(row.left)&&Number.isFinite(row.right)&&
       Number.isFinite(Number(bounds.left))&&Number.isFinite(Number(bounds.right))&&
       (row.left<Number(bounds.left)-RECT_TOLERANCE_PX||row.right>Number(bounds.right)+RECT_TOLERANCE_PX)){

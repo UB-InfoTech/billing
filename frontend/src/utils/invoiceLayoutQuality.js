@@ -193,7 +193,102 @@ export function buildInvoiceLayoutOptimizationSuggestions(blocks=[],defaultColum
 }
 
 /**
+ * Build a reversible width preview for a single measured item-column wrapping issue.
+ * The suggestion is deliberately limited to tables whose visible widths already
+ * total 100%, so it never silently normalizes unrelated column settings.
+ */
+export function buildInvoiceColumnOptimizationPreview(block,issue,defaultColumns=[]) {
+ if(!block||block.type!=="items_table"||!block.id||
+   !issue?.columnKey||!Number.isFinite(Number(issue.actualLines))||
+   !Number.isFinite(Number(issue.estimatedLines))||
+   Number(issue.actualLines)<=Number(issue.estimatedLines)||Number(issue.estimatedLines)<1){
+  return null;
+ }
+ const source=Array.isArray(block.columns)&&block.columns.length?block.columns:(Array.isArray(defaultColumns)?defaultColumns:[]);
+ const visibleIndexes=source.map((column,index)=>column&&column.visible!==false?index:-1).filter(index=>index>=0);
+ const targetIndex=source.findIndex(column=>column?.key===issue.columnKey);
+ if(targetIndex<0||source[targetIndex]?.visible===false||visibleIndexes.length<2)return null;
+ const widths=visibleIndexes.map(index=>Number(source[index]?.width));
+ if(!widths.every(width=>Number.isFinite(width)&&width>=3))return null;
+ const visibleTotal=widths.reduce((sum,width)=>sum+width,0);
+ if(Math.abs(visibleTotal-100)>1)return null;
+
+ const currentWidth=Number(source[targetIndex].width);
+ const lineRatio=Number(issue.actualLines)/Number(issue.estimatedLines);
+ const desiredWidth=Math.min(70,Math.max(currentWidth+1,currentWidth*lineRatio));
+ const donorIndexes=visibleIndexes.filter(index=>index!==targetIndex&&Number(source[index].width)>3.001);
+ const totalDonorSlack=donorIndexes.reduce((sum,index)=>sum+Number(source[index].width)-3,0);
+ const availableIncrease=Math.min(desiredWidth-currentWidth,totalDonorSlack);
+ if(!Number.isFinite(availableIncrease)||availableIncrease<1)return null;
+
+ const nextColumns=source.map(column=>column?{...column}:column);
+ let remaining=Number(availableIncrease.toFixed(2));
+ let allocated=0;
+ donorIndexes.forEach((index,position)=>{
+  const slack=Number(source[index].width)-3;
+  const reduction=position===donorIndexes.length-1
+    ?remaining
+    :Math.min(slack,Number((availableIncrease*slack/totalDonorSlack).toFixed(2)));
+  const nextWidth=Math.max(3,Number((Number(source[index].width)-reduction).toFixed(2)));
+  const actualReduction=Number((Number(source[index].width)-nextWidth).toFixed(2));
+  nextColumns[index]={...source[index],width:nextWidth};
+  allocated=Number((allocated+actualReduction).toFixed(2));
+  remaining=Number((availableIncrease-allocated).toFixed(2));
+ });
+ const targetNextWidth=Number((currentWidth+allocated).toFixed(2));
+ if(targetNextWidth<=currentWidth||targetNextWidth>70)return null;
+ nextColumns[targetIndex]={...source[targetIndex],width:targetNextWidth};
+
+ const visibleWidthAfter=visibleIndexes.reduce((sum,index)=>sum+Number(nextColumns[index].width),0);
+ const correction=Number((100-visibleWidthAfter).toFixed(2));
+ if(Math.abs(correction)>0.001){
+  const lastDonor=donorIndexes[donorIndexes.length-1];
+  if(lastDonor===undefined||Number(nextColumns[lastDonor].width)+correction<3)return null;
+  nextColumns[lastDonor]={...nextColumns[lastDonor],width:Number((Number(nextColumns[lastDonor].width)+correction).toFixed(2))};
+ }
+ const finalTotal=visibleIndexes.reduce((sum,index)=>sum+Number(nextColumns[index].width),0);
+ if(Math.abs(finalTotal-100)>0.01||visibleIndexes.some(index=>Number(nextColumns[index].width)<3))return null;
+
+ const changedColumns=visibleIndexes
+  .filter(index=>!sameNumber(source[index].width,nextColumns[index].width))
+  .map(index=>({
+   key:String(source[index].key||""),
+   label:String(source[index].label||source[index].key||"Item detail"),
+   beforeWidth:Number(source[index].width),
+   afterWidth:Number(nextColumns[index].width),
+   change:Number((Number(nextColumns[index].width)-Number(source[index].width)).toFixed(2))
+  }));
+ if(!changedColumns.some(column=>column.key===issue.columnKey&&column.change>0))return null;
+
+ const suggestion={
+  id:"optimize-column-"+block.id+"-"+issue.columnKey,
+  action:"optimize-item-column",
+  blockId:block.id,
+  targetColumnKey:issue.columnKey,
+  title:"Give "+(source[targetIndex].label||issue.columnLabel||"this column")+" more room",
+  detail:"Increase this column from "+currentWidth.toFixed(1)+"% to "+targetNextWidth.toFixed(1)+"%, sharing the width reduction across other visible columns. Hidden columns and column order stay unchanged.",
+  expectedColumns:source.map(column=>column?{...column}:column),
+  nextColumns
+ };
+ return {
+  suggestion,
+  targetColumnKey:issue.columnKey,
+  targetColumnLabel:String(source[targetIndex].label||issue.columnLabel||"Item detail"),
+  beforeColumns:source.map(column=>column?{...column}:column),
+  afterColumns:nextColumns.map(column=>column?{...column}:column),
+  changedColumns,
+  currentTargetWidth:currentWidth,
+  suggestedTargetWidth:targetNextWidth,
+  visibleTotalBefore:Number(visibleTotal.toFixed(2)),
+  visibleTotalAfter:Number(finalTotal.toFixed(2))
+ };
+}
+
+/**
  * Apply one suggestion only while its original values still match.
+ * This prevents stale suggestions from overwriting newer user edits.
+ */
+
  * This prevents stale suggestions from overwriting newer user edits.
  */
 export function applyInvoiceLayoutOptimizationSuggestion(blocks=[],suggestion,defaultColumns=[]) {
@@ -225,6 +320,28 @@ export function applyInvoiceLayoutOptimizationSuggestion(blocks=[],suggestion,de
   }))return {blocks:source,changed:false,reason:"The item columns changed after this suggestion was created."};
   if(!Array.isArray(suggestion.nextColumns)||suggestion.nextColumns.length!==columns.length)return {blocks:source,changed:false,reason:"The suggested column layout is invalid."};
   patch={columns:suggestion.nextColumns.map((column,columnIndex)=>column?.visible===false?columns[columnIndex]:{...columns[columnIndex],width:Number(column.width)})};
+ }else if(suggestion.action==="optimize-item-column"){
+  if(current.type!=="items_table")return {blocks:source,changed:false,reason:"This is no longer an item table."};
+  const columns=Array.isArray(current.columns)&&current.columns.length?current.columns:defaultColumns;
+  const expected=suggestion.expectedColumns||[];
+  if(!Array.isArray(columns)||columns.length!==expected.length||columns.some((column,columnIndex)=>{
+   const original=expected[columnIndex];
+   return !column||!original||column.key!==original.key||column.visible!==original.visible||!sameNumber(column.width,original.width);
+  }))return {blocks:source,changed:false,reason:"The item columns changed after this preview was created."};
+  const nextColumns=suggestion.nextColumns;
+  if(!Array.isArray(nextColumns)||nextColumns.length!==columns.length||
+    nextColumns.some((column,columnIndex)=>!column||column.key!==columns[columnIndex]?.key||
+      column.visible!==columns[columnIndex]?.visible||
+      !Number.isFinite(Number(column.width))||
+      (column.visible!==false&&Number(column.width)<3))) {
+   return {blocks:source,changed:false,reason:"The suggested column widths are invalid."};
+  }
+  const visibleTotal=nextColumns.filter(column=>column.visible!==false).reduce((sum,column)=>sum+Number(column.width),0);
+  if(Math.abs(visibleTotal-100)>0.01)return {blocks:source,changed:false,reason:"The suggested visible columns do not fit the table width."};
+  patch={columns:nextColumns.map((column,columnIndex)=>({
+   ...columns[columnIndex],
+   width:column.visible===false?columns[columnIndex].width:Number(column.width)
+  }))};
  }else if(suggestion.action==="fit-text"){
   const currentSize=Number(current.fontSize||10);
   if(current.visible===false||!["field","text"].includes(current.type)||!sameNumber(currentSize,suggestion.expectedFontSize)||

@@ -3,7 +3,7 @@ import axios from "axios";
 import "./InvoicePrintBuilder.css";
 import {buildInvoiceSmartLayout,scanImportedInvoiceLayout} from "../utils/invoiceLayoutScanner.js";
 import {inferOcrValueBox} from "../utils/invoiceOcrMapping.js";
-import {analyzeInvoiceLayout,buildInvoiceLayoutOptimizationSuggestions,buildInvoiceColumnOptimizationPreview,applyInvoiceLayoutOptimizationSuggestion,applyInvoiceLayoutOptimizationPlan,reduceInvoiceBlockFontSize} from "../utils/invoiceLayoutQuality.js";
+import {analyzeInvoiceLayout,buildInvoiceLayoutOptimizationSuggestions,buildInvoiceLayoutOptimizationPlanPreview,buildInvoiceColumnOptimizationPreview,applyInvoiceLayoutOptimizationSuggestion,reduceInvoiceBlockFontSize} from "../utils/invoiceLayoutQuality.js";
 import {estimateInvoiceTextOverflow,getInvoiceMarginWarnings,getInvoicePrintGeometry} from "../utils/invoicePrintFit.js";
 import {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics} from "../utils/invoiceRenderedPrintCheck.js";
 import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
@@ -220,6 +220,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [layoutScan,setLayoutScan]=useState(null);
   const [layoutScanLoading,setLayoutScanLoading]=useState(false);
   const [layoutScanError,setLayoutScanError]=useState("");
+  const [layoutPlanPreview,setLayoutPlanPreview]=useState(null);
   const [importedFile,setImportedFile]=useState(null);
   const [ocrScan,setOcrScan]=useState(null);
   const [ocrLoading,setOcrLoading]=useState(false);
@@ -574,17 +575,39 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       return;
     }
     updateActive({blocks:result.blocks});
+    setLayoutPlanPreview(null);
     setSelectedBlockId(suggestion.blockId);
     setMessage("Applied: "+suggestion.title+". Use Undo to restore the previous layout.");
   };
-  const applyAllLayoutSuggestions=()=>{
-    const result=applyInvoiceLayoutOptimizationPlan(activeTemplate.blocks,layoutOptimizationSuggestions,previewColumns);
-    if(!result.changed){
-      setMessage("No safe layout changes could be applied. Review the current elements.");
+  const openLayoutPlanPreview=()=>{
+    const preview=buildInvoiceLayoutOptimizationPlanPreview(activeTemplate.blocks,layoutOptimizationSuggestions,previewColumns);
+    if(!preview||!preview.appliedCount){
+      setLayoutPlanPreview(null);
+      setMessage("No safe layout changes are ready to review. Check the current design suggestions.");
       return;
     }
-    updateActive({blocks:result.blocks});
-    setMessage(result.appliedCount+" safe layout suggestion(s) applied in one step. Use Undo to restore the previous layout.");
+    setLayoutPlanPreview(preview);
+  };
+  const applyLayoutPlanPreview=()=>{
+    if(!layoutPlanPreview)return;
+    if(layoutPlanPreview.baseSnapshot!==JSON.stringify(activeTemplate.blocks)){
+      setLayoutPlanPreview(null);
+      setMessage("The design changed while this review was open. Review the latest suggestions before applying.");
+      return;
+    }
+    if(!layoutPlanPreview.appliedCount||!layoutPlanPreview.changes.length){
+      setLayoutPlanPreview(null);
+      setMessage("There are no safe changes to apply.");
+      return;
+    }
+    updateActive({blocks:layoutPlanPreview.blocks});
+    setSelectedBlockId(layoutPlanPreview.changes[0].blockId||selectedBlockId);
+    const appliedCount=layoutPlanPreview.appliedCount;
+    const skippedCount=layoutPlanPreview.skippedCount;
+    setLayoutPlanPreview(null);
+    setMessage(appliedCount+" reviewed layout change(s) applied in one step."+
+      (skippedCount?" "+skippedCount+" suggestion(s) were skipped.":"")+
+      " Use Undo to restore the previous design.");
   };
   const openColumnOptimizationPreview=issue=>{
     const block=activeTemplate.blocks.find(item=>item.id===issue?.blockId);
@@ -1296,7 +1319,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               </div>
             </div>
 
-            <div ref={printCheckRef} className="invoice-builder-print-check" role="status"><strong>{designWarnings.length?("Layout check · "+designWarnings.length+" issue"+(designWarnings.length===1?"":"s")+" to review"):"Layout check · No estimated issues found"}</strong>{layoutOptimizationSuggestions.length>0&&<section className="invoice-builder-optimization"><div className="invoice-builder-optimization-heading"><div><strong>Layout assistant</strong><small>{layoutOptimizationSuggestions.length} safe suggestion(s) available · changes can be undone</small></div><button type="button" className="btn btn-sm btn-primary" onClick={applyAllLayoutSuggestions}>Apply all</button></div><ul>{layoutOptimizationSuggestions.map(suggestion=><li key={suggestion.id}><div><b>{suggestion.title}</b><small>{suggestion.detail}</small></div><button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>applyLayoutSuggestion(suggestion)}>Apply</button></li>)}</ul></section>}{designWarnings.length>0?<ul>{designWarnings.slice(0,8).map((issue,index)=>{
+            <div ref={printCheckRef} className="invoice-builder-print-check" role="status"><strong>{designWarnings.length?("Layout check · "+designWarnings.length+" issue"+(designWarnings.length===1?"":"s")+" to review"):"Layout check · No estimated issues found"}</strong>{layoutOptimizationSuggestions.length>0&&<section className="invoice-builder-optimization"><div className="invoice-builder-optimization-heading"><div><strong>Layout assistant</strong><small>{layoutOptimizationSuggestions.length} safe suggestion(s) available · review before applying</small></div><button type="button" className="btn btn-sm btn-primary" onClick={openLayoutPlanPreview}>Review changes</button></div><ul>{layoutOptimizationSuggestions.map(suggestion=><li key={suggestion.id}><div><b>{suggestion.title}</b><small>{suggestion.detail}</small></div><button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>applyLayoutSuggestion(suggestion)}>Apply</button></li>)}</ul>{layoutPlanPreview&&<div className="invoice-builder-layout-plan-review" aria-live="polite"><div className="invoice-builder-layout-plan-review-heading"><div><strong>Review the combined changes</strong><small>{layoutPlanPreview.appliedCount} ready to apply{layoutPlanPreview.skippedCount?" · "+layoutPlanPreview.skippedCount+" skipped":""}</small></div><button type="button" className="btn btn-sm btn-light border" onClick={()=>setLayoutPlanPreview(null)}>Close</button></div>{layoutPlanPreview.changes.length>0?<ul>{layoutPlanPreview.changes.map(change=><li key={change.id}><div><b>{change.title}</b><small>{change.summary}</small></div></li>)}</ul>:<small>No changes are available in this review.</small>}{layoutPlanPreview.skippedCount>0&&<small className="invoice-builder-layout-plan-note">Skipped suggestions could not be applied safely. Your design will not be changed by those suggestions.</small>}<div className="invoice-builder-layout-plan-actions"><button type="button" className="btn btn-sm btn-light border" onClick={()=>setLayoutPlanPreview(null)}>Keep current design</button><button type="button" className="btn btn-sm btn-primary" onClick={applyLayoutPlanPreview} disabled={!layoutPlanPreview.appliedCount}>Apply reviewed changes</button></div></div>}</section>}{designWarnings.length>0?<ul>{designWarnings.slice(0,8).map((issue,index)=>{
                 const issueBlock=activeTemplate.blocks.find(block=>block.id===issue.blockId);
                 const canFitText=issue.fixAction==="fit-text"&&issueBlock&&issueBlock.visible!==false&&["field","text"].includes(issueBlock.type)&&Number(issue.suggestedFontSize)>=6&&Number(issue.suggestedFontSize)<Number(issueBlock.fontSize||10);
                 const canSetSafeMargins=issue.fixAction==="set-printer-safe-margins"&&issue.recommendedMargins;

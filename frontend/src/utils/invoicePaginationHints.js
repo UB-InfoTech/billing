@@ -6,6 +6,8 @@ const CLOSING_FIELD_KEYS = new Set(["amount_words", "amount_paid", "balance_due"
 
 function getBlockBounds(block) {
   const bounds = block?.bounds || {};
+  const keys = ["left", "top", "right", "bottom"];
+  if (!keys.every(key => bounds[key] !== null && bounds[key] !== undefined && bounds[key] !== "")) return null;
   const rect = {
     left: Number(bounds.left),
     top: Number(bounds.top),
@@ -40,7 +42,9 @@ export function analyzeInvoicePagination(pages = []) {
       blocks,
       tables,
       closingOnly: Boolean(page?.closingOnly),
-      itemCapacityMm: Number.isFinite(Number(page?.itemCapacityMm)) ? Number(page.itemCapacityMm) : null,
+      itemCapacityMm: page?.itemCapacityMm === null || page?.itemCapacityMm === undefined || page?.itemCapacityMm === ""
+        ? null
+        : Number.isFinite(Number(page.itemCapacityMm)) ? Number(page.itemCapacityMm) : null,
       reservedClosingSpaceMm: Math.max(0, Number(page?.reservedClosingSpaceMm) || 0),
       rows: tables.flatMap(table => Array.isArray(table.rows) ? table.rows : [])
     };

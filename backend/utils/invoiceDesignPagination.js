@@ -139,18 +139,24 @@ function estimateInvoiceItemRow(item,columns,metrics,table,options={},itemNumber
   const lineHeightMm=fontSize*1.2*25.4/96;
   const borderMm=Math.max(0.5,clamp(table.tableBorderWidth,0,3,1)*25.4/96);
   let maxLines=1;
-  columns.forEach(column=>{
+  const columnEstimates=columns.map(column=>{
     const widthPercent=clamp(column.width,3,100,8);
     const cellWidthMm=metrics.tableWidthMm*widthPercent/100;
     const usableWidthMm=Math.max(2,cellWidthMm-paddingMm*2-borderMm);
     const availableUnits=(usableWidthMm*96/25.4)/fontSize;
     const value=getInvoiceItemCellValue(item,column,options.discountRate,itemNumber);
-    const lines=estimateWrappedLineCount(value,availableUnits);
-    maxLines=Math.max(maxLines,lines);
+    const estimatedLines=estimateWrappedLineCount(value,availableUnits);
+    maxLines=Math.max(maxLines,estimatedLines);
+    return {
+      key:String(column.key||""),
+      label:String(column.label||column.key||"Item detail"),
+      estimatedLines,
+      availableWidthMm:Number(cellWidthMm.toFixed(2))
+    };
   });
   const contentHeightMm=maxLines*lineHeightMm+paddingMm*2+borderMm;
   const rowHeightMm=Math.max(MIN_ROW_HEIGHT_MM,Math.ceil(contentHeightMm*4)/4);
-  return {rowHeightMm,lineCount:maxLines};
+  return {rowHeightMm,lineCount:maxLines,columnEstimates};
 }
 
 function getInvoiceRowsPerPage(template={}){

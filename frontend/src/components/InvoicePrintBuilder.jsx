@@ -243,6 +243,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [printPreviewLoading,setPrintPreviewLoading]=useState(false);
   const [printPreviewReady,setPrintPreviewReady]=useState(false);
   const [printPreviewAudit,setPrintPreviewAudit]=useState(null);
+  const [showAllPrintWarnings,setShowAllPrintWarnings]=useState(false);
   const [printPreviewIsSample,setPrintPreviewIsSample]=useState(false);
   const [printPreviewError,setPrintPreviewError]=useState("");
   const canvasRef=useRef(null);
@@ -298,6 +299,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setPrintPreviewOpen(false);
     setPrintPreviewReady(false);
     setPrintPreviewAudit(null);
+    setShowAllPrintWarnings(false);
     setPrintPreviewIsSample(false);
     setPreviewError("");
     const requestId=++previewRequestRef.current;
@@ -324,6 +326,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const useSampleInvoice=!previewRecordId;
     setPrintPreviewLoading(true);
     setPrintPreviewAudit(null);
+    setShowAllPrintWarnings(false);
     setPrintPreviewIsSample(useSampleInvoice);
     setPrintPreviewReady(false);
     setPrintPreviewError("");
@@ -361,6 +364,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setPrintPreviewOpen(false);
     setPrintPreviewReady(false);
     setPrintPreviewAudit(null);
+    setShowAllPrintWarnings(false);
     setPrintPreviewIsSample(false);
   };
 
@@ -368,7 +372,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const frame=event.currentTarget;
     const previewDocument=frame.contentDocument;
     const documentHtml=previewDocument?.documentElement?.innerHTML||"";
-    if(frame.contentWindow?.location?.href!=="about:srcdoc"||!documentHtml.trim())return;
+    if(!previewDocument||!documentHtml.trim())return;
 
     setPrintPreviewReady(false);
     setPrintPreviewAudit(null);
@@ -384,7 +388,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       }
       const measurements=measureRenderedInvoiceDocument(previewDocument);
       const audit=analyzeRenderedInvoiceMetrics(measurements,{pageSize:activeTemplate.pageSize,orientation:activeTemplate.orientation,printMargins:activeTemplate.printMargins||{}});
-      setPrintPreviewAudit({...audit,warnings:[...audit.warnings,...analyzeInvoicePagination(measurements.pages)]});
+      const warnings=[...audit.warnings,...analyzeInvoicePagination(measurements.pages)];
+      setPrintPreviewAudit({...audit,warnings,hasErrors:warnings.some(issue=>issue.severity==="error")});
       setPrintPreviewReady(true);
     }catch(_auditError){
       setPrintPreviewError("The invoice loaded, but its layout could not be measured. Close the preview and try again.");
@@ -394,7 +399,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
 
   const printActualInvoice=()=>{
     const frameWindow=printPreviewFrameRef.current?.contentWindow;
-    if(!frameWindow||!printPreviewReady)return;
+    if(!frameWindow||!printPreviewReady||!printPreviewAudit?.pageCount||printPreviewAudit?.hasErrors)return;
     frameWindow.focus();
     frameWindow.print();
   };
@@ -1217,8 +1222,10 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
 
             <div ref={printCheckRef} className="invoice-builder-print-check" role="status"><strong>{designWarnings.length?("Layout check · "+designWarnings.length+" issue"+(designWarnings.length===1?"":"s")+" to review"):"Layout check · No estimated issues found"}</strong>{designWarnings.some(issue=>issue.fixable)&&<button type="button" className="btn btn-sm btn-outline-primary mt-2" onClick={()=>{const result=applySafeInvoiceLayoutFixes(activeTemplate.blocks,previewColumns);if(result.changed)updateActive({blocks:result.blocks});}}>Fix safe issues</button>}{designWarnings.length>0?<ul>{designWarnings.slice(0,8).map((issue,index)=>{
                 const issueBlock=activeTemplate.blocks.find(block=>block.id===issue.blockId);
-                const canReduceText=issue.title==="Text may overflow its box"&&issueBlock&&issueBlock.visible!==false&&["field","text"].includes(issueBlock.type)&&Number(issueBlock.fontSize||10)>6;
-                return <li key={issue.id||index}><div><span className={issue.severity==="error"?"text-danger":"text-warning"}>{issue.title}</span> — {issue.detail}</div>{canReduceText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{const result=reduceInvoiceBlockFontSize(activeTemplate.blocks,issue.blockId,1);if(result.changed){updateActive({blocks:result.blocks});setSelectedBlockId(issue.blockId);setMessage("Text size reduced by up to 1 pt. Recheck the layout before printing.");}}}>Reduce text size by up to 1 pt</button>}</li>;
+                const canFitText=issue.fixAction==="fit-text"&&issueBlock&&issueBlock.visible!==false&&["field","text"].includes(issueBlock.type)&&Number(issue.suggestedFontSize)>=6&&Number(issue.suggestedFontSize)<Number(issueBlock.fontSize||10);
+                const canSetSafeMargins=issue.fixAction==="set-printer-safe-margins"&&issue.recommendedMargins;
+                const canNormalizeMargins=issue.fixAction==="normalize-print-margins"&&issue.normalizedMargins;
+                return <li key={issue.id||index}><div><span className={issue.severity==="error"?"text-danger":"text-warning"}>{issue.title}</span> — {issue.detail}</div>{canFitText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{updateBlock(issue.blockId,{fontSize:issue.suggestedFontSize});setSelectedBlockId(issue.blockId);setMessage("Text size adjusted to "+issue.suggestedFontSize+" px. Recheck the actual print preview.");}}>Fit text to box · {issue.suggestedFontSize} px</button>}{canSetSafeMargins&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{updateActive({printMargins:issue.recommendedMargins});setMessage("Applied 4 mm printer-safe design margins. Recheck the actual print preview.");}}>Set 4 mm safe margins</button>}{canNormalizeMargins&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{updateActive({printMargins:issue.normalizedMargins});setMessage("Margin values normalized to the supported 0–25 mm range.");}}>Normalize margins</button>}</li>;
               })}</ul>:<small>No obvious layout problems were estimated. Confirm the final design in Actual print before printing.</small>}{designWarnings.length>0&&<small>Text-fit checks are estimates. Confirm the final result using Actual print.</small>}</div>
             <div className="invoice-builder-canvas-scroll">
               <div className="invoice-builder-page-frame" style={{width:Math.round(basePageWidth*effectiveCanvasScale)+"px",aspectRatio:String(canvasRatio)}}>
@@ -1636,7 +1643,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               />
               {printPreviewAudit&&(
                 <aside className={"invoice-builder-rendered-audit "+(printPreviewAudit.warnings.length?"has-warnings":"is-clear")} role="status" aria-live="polite">
-                  <strong><i className={"bi "+(printPreviewAudit.warnings.length?"bi-exclamation-triangle":"bi-check-circle")}/>{printPreviewAudit.pageCount} page{printPreviewAudit.pageCount===1?"":"s"} measured · {printPreviewAudit.warnings.length?printPreviewAudit.warnings.length+" issue"+(printPreviewAudit.warnings.length===1?"":"s")+" to review":"No measured clipping detected"}</strong>
+                  <strong><i className={"bi "+(printPreviewAudit.hasErrors?"bi-x-circle":printPreviewAudit.warnings.length?"bi-exclamation-triangle":"bi-check-circle")}/>{printPreviewAudit.pageCount} page{printPreviewAudit.pageCount===1?"":"s"} measured · {printPreviewAudit.hasErrors?printPreviewAudit.warnings.filter(issue=>issue.severity==="error").length+" critical issue(s) blocking print":printPreviewAudit.warnings.length?printPreviewAudit.warnings.length+" issue"+(printPreviewAudit.warnings.length===1?"":"s")+" to review":"No measured clipping detected"}</strong>
                   {printPreviewAudit.pageLayouts?.length>0&&(
                     <div className="invoice-builder-page-inspector">
                       <strong>Page-by-page layout</strong>
@@ -1652,26 +1659,30 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                     </div>
                   )}
                   {printPreviewAudit.warnings.length>0&&(
-                    <ul>{printPreviewAudit.warnings.slice(0,8).map((issue,index)=>{
+                    <>
+                    <ul>{(showAllPrintWarnings?printPreviewAudit.warnings:printPreviewAudit.warnings.slice(0,8)).map((issue,index)=>{
                     const issueBlock=activeTemplate.blocks.find(block=>block.id===issue.blockId);
                     const shrinkableWarnings=["Text or totals may be clipped","Item table may be too wide","An item cell is clipped","An item row exceeds the table area","An item row extends beyond the page","Blank table content may be clipped","Invoice items exceed their allocated page space"];
                     const canReduceText=issueBlock&&issueBlock.visible!==false&&["field","text","totals","blank_table","items_table"].includes(issue.blockType)&&shrinkableWarnings.includes(issue.title)&&Number(issueBlock.fontSize||10)>6;
                     return <li key={issue.id||index}><div><b>{issue.title}</b> — {issue.detail}</div>{issue.blockId&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{setSelectedBlockId(issue.blockId);closeActualPrintPreview();}}>Edit this element</button>}{canReduceText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{const result=reduceInvoiceBlockFontSize(activeTemplate.blocks,issue.blockId,1);if(result.changed){updateActive({blocks:result.blocks});setSelectedBlockId(issue.blockId);setMessage("Text size reduced by up to 1 pt. Recheck the print preview before printing.");}}}>Reduce text size by up to 1 pt</button>}</li>;
                   })}</ul>
+                    {printPreviewAudit.warnings.length>8&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>setShowAllPrintWarnings(value=>!value)}>{showAllPrintWarnings?"Show fewer issues":"Show all "+printPreviewAudit.warnings.length+" issues"}</button>}
+                    </>
                   )}
                 </aside>
               )}
               <div className="invoice-builder-print-settings-note">
                 <strong>Print dialog settings</strong>
-                <span>{activeTemplate.pageSize} · {activeTemplate.orientation==="landscape"?"Landscape":"Portrait"} · Scale 100% · Margins: None · Headers/footers: Off · Background graphics: On</span>
+                <span>{activeTemplate.pageSize} · {activeTemplate.orientation==="landscape"?"Landscape":"Portrait"} · Scale 100% · Browser margins: None · Headers/footers: Off · Background graphics: On</span>
+                <small>Design safe area: Top {printMargins.top??0} mm · Right {printMargins.right??0} mm · Bottom {printMargins.bottom??0} mm · Left {printMargins.left??0} mm. These margins are built into the invoice layout; keep browser margins set to None.</small>
                 <small>These are the design's intended settings. The selected printer may still clip edges; review the measured pages and do a physical test print when changing printers.</small>
               </div>
             </div>
             <footer className="invoice-builder-print-preview-footer">
-              <span aria-live="polite">{!printPreviewReady?"Loading fonts, images and invoice layout…":printPreviewIsSample?"Sample only · printing will not create or save an invoice.":(printPreviewAudit?.pageCount||0)+" page(s) checked in this browser. Review any findings before printing."}</span>
+              <span aria-live="polite">{!printPreviewReady?"Loading fonts, images and invoice layout…":!printPreviewAudit?.pageCount?"No printable pages were measured. Printing is paused.":printPreviewAudit.hasErrors?"Printing is paused until the critical layout issues above are corrected.":printPreviewIsSample?"Sample only · printing will not create or save an invoice.":printPreviewAudit.pageCount+" page(s) checked in this browser. Review any findings before printing."}</span>
               <div>
                 <button type="button" className="btn btn-light border" onClick={closeActualPrintPreview}>Back to designer</button>
-                <button type="button" className="btn btn-primary" onClick={printActualInvoice} disabled={!printPreviewReady} title={printPreviewReady?(printPreviewIsSample?"Print this sample only":"Print the measured invoice preview"):"Wait for the browser layout check to finish"}><i className="bi bi-printer me-1"/>{!printPreviewReady?"Checking print…":printPreviewIsSample?"Print sample":"Print invoice"}</button>
+                <button type="button" className="btn btn-primary" onClick={printActualInvoice} disabled={!printPreviewReady||!printPreviewAudit?.pageCount||printPreviewAudit?.hasErrors} title={!printPreviewReady?"Wait for the browser layout check to finish":!printPreviewAudit?.pageCount?"The invoice page could not be measured":printPreviewAudit?.hasErrors?"Resolve critical layout issues before printing":printPreviewIsSample?"Print this sample only":"Print the measured invoice preview"}><i className="bi bi-printer me-1"/>{!printPreviewReady?"Checking print…":!printPreviewAudit?.pageCount?"Preview unavailable":printPreviewAudit?.hasErrors?"Resolve layout issues":printPreviewIsSample?"Print sample":"Print invoice"}</button>
               </div>
             </footer>
           </div>

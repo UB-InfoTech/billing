@@ -201,21 +201,76 @@ function getFinalPageClosingLayout(itemTable,blocks,metrics){
   return {reservedClosingSpaceMm,closingBlockIds:closingBlocks.map(block=>block.id).filter(Boolean)};
 }
 
-function balanceFinalPageRows(pages,finalCapacityMm){
+function getInvoicePageRowsHeight(rows){
+  return (Array.isArray(rows)?rows:[]).reduce((sum,row)=>
+    sum+Math.max(0,Number(row?.rowHeightMm)||MIN_ROW_HEIGHT_MM),0
+  );
+}
+
+/**
+ * Rebalance all adjacent item pages by printable-area utilization.
+ * Rows only move forward from the end of one page to the start of the next,
+ * so invoice order is preserved. The final item page uses its reduced closing
+ * capacity when closing blocks share the table area. If a separate closing-only
+ * page is required, all preceding item pages use normal table capacity.
+ */
+function balanceInvoicePageRows(pages,normalCapacityMm,finalCapacityMm,hasClosingReservation){
   if(!Array.isArray(pages)||pages.length<2)return pages;
-  const previous=pages[pages.length-2],last=pages[pages.length-1];
-  if(!previous?.length||!last?.length)return pages;
-  let previousHeight=previous.reduce((sum,row)=>sum+row.rowHeightMm,0);
-  let lastHeight=last.reduce((sum,row)=>sum+row.rowHeightMm,0);
-  while(previous.length>1){
-    const candidate=previous[previous.length-1];
-    const candidateHeight=Number(candidate.rowHeightMm)||MIN_ROW_HEIGHT_MM;
-    if(lastHeight+candidateHeight>finalCapacityMm+0.01)break;
-    const currentGap=Math.abs(previousHeight-lastHeight);
-    const nextGap=Math.abs((previousHeight-candidateHeight)-(lastHeight+candidateHeight));
-    if(nextGap>=currentGap)break;
-    previous.pop();last.unshift(candidate);
-    previousHeight-=candidateHeight;lastHeight+=candidateHeight;
+
+  const hasTrailingClosingOnlyPage=Boolean(
+    hasClosingReservation&&pages[pages.length-1]?.length===0
+  );
+  const itemPageCount=hasTrailingClosingOnlyPage?pages.length-1:pages.length;
+  if(itemPageCount<2)return pages;
+
+  const capacities=Array.from({length:itemPageCount},(_,index)=>{
+    const isFinalItemPage=index===itemPageCount-1;
+    return isFinalItemPage&&!hasTrailingClosingOnlyPage&&hasClosingReservation
+      ?Math.max(0,Number(finalCapacityMm)||0)
+      :Math.max(0,Number(normalCapacityMm)||0);
+  });
+  if(capacities.some(capacity=>capacity<=0))return pages;
+
+  const totalRows=pages.slice(0,itemPageCount).reduce((sum,page)=>sum+page.length,0);
+  const maximumMoves=Math.max(1,totalRows*itemPageCount);
+  let moves=0;
+  let changed=true;
+
+  // Repeat left-to-right sweeps. Earlier pages can release rows after a later
+  // boundary has been balanced, allowing three or more pages to converge.
+  while(changed&&moves<maximumMoves){
+    changed=false;
+    for(let pageIndex=0;pageIndex<itemPageCount-1;pageIndex++){
+      const previous=pages[pageIndex];
+      const next=pages[pageIndex+1];
+      if(!Array.isArray(previous)||!Array.isArray(next)||previous.length<=1)continue;
+
+      const previousCapacity=capacities[pageIndex];
+      const nextCapacity=capacities[pageIndex+1];
+      let previousHeight=getInvoicePageRowsHeight(previous);
+      let nextHeight=getInvoicePageRowsHeight(next);
+
+      while(previous.length>1&&moves<maximumMoves){
+        const candidate=previous[previous.length-1];
+        const candidateHeight=Math.max(0,Number(candidate?.rowHeightMm)||MIN_ROW_HEIGHT_MM);
+        if(candidate?.exceedsTableArea)break;
+        if(nextHeight+candidateHeight>nextCapacity+0.01)break;
+
+        const beforeGap=Math.abs(previousHeight/previousCapacity-nextHeight/nextCapacity);
+        const afterGap=Math.abs(
+          (previousHeight-candidateHeight)/previousCapacity-
+          (nextHeight+candidateHeight)/nextCapacity
+        );
+        if(afterGap>=beforeGap-0.000001)break;
+
+        previous.pop();
+        next.unshift(candidate);
+        previousHeight-=candidateHeight;
+        nextHeight+=candidateHeight;
+        changed=true;
+        moves+=1;
+      }
+    }
   }
   return pages;
 }
@@ -253,7 +308,7 @@ function paginateInvoiceRows(rows,normalCapacityMm,finalCapacityMm,hasClosingRes
     pages.push(rows.slice(cursor,cursor+take));cursor+=take;
   }
   if(!pages.length)pages.push([]);
-  return balanceFinalPageRows(pages,finalCapacityMm);
+  return balanceInvoicePageRows(pages,normalCapacityMm,finalCapacityMm,hasClosingReservation);
 }
 
 function buildInvoiceDesignPages(template={},items=[],options={}){

@@ -365,3 +365,57 @@ test("actual final-page measurements flag only rows that can safely fit in unuse
  ]);
  assert.ok(!cannotFit.some(issue=>issue.id==="final-page-unused-capacity-2"));
 });
+
+
+test("three-or-more-page item tables balance measured row space across every page",()=>{
+ const template={
+  pageSize:"A4",
+  orientation:"portrait",
+  printMargins:{top:0,right:0,bottom:0,left:0},
+  blocks:[{
+   id:"items",type:"items_table",x:6,y:20,w:88,h:60,visible:true,
+   fontSize:8,tableCellPadding:4,tableBorderWidth:1,
+   columns:[{key:"description",label:"Description",width:100,visible:true,order:0}]
+  }]
+ };
+ const items=Array.from({length:43},(_,index)=>({orderName:"Item "+(index+1)}));
+ const pages=buildInvoiceDesignPages(template,items);
+ assert.equal(pages.length,3);
+
+ const itemNumbers=pages.flatMap(page=>page.rows.map(row=>row.itemNumber));
+ assert.deepEqual(itemNumbers,items.map((_,index)=>index+1));
+
+ const utilization=pages.map(page=>{
+  assert.ok(page.rowHeightTotalMm<=page.itemCapacityMm+0.01);
+  return page.rowHeightTotalMm/page.itemCapacityMm;
+ });
+ assert.ok(Math.max(...utilization)-Math.min(...utilization)<0.08,
+  "all item pages should have similar printable-area utilization");
+ assert.ok(pages.every(page=>page.rows.length>0));
+});
+
+test("multi-page balancing uses normal capacity before a separate closing-only page",()=>{
+ const template={
+  pageSize:"A4",
+  orientation:"portrait",
+  printMargins:{top:0,right:0,bottom:0,left:0},
+  blocks:[
+   {id:"items",type:"items_table",x:6,y:20,w:88,h:60,visible:true,fontSize:8,tableCellPadding:4,tableBorderWidth:1,columns:[{key:"description",label:"Description",width:100,visible:true,order:0}]},
+   {id:"totals",type:"totals",x:6,y:20,w:88,h:60,visible:true}
+  ]
+ };
+ const items=Array.from({length:43},(_,index)=>({orderName:"Item "+(index+1)}));
+ const pages=buildInvoiceDesignPages(template,items);
+ assert.equal(pages.length,4);
+ assert.equal(pages[3].closingOnly,true);
+ assert.equal(pages[3].rows.length,0);
+
+ const itemPages=pages.slice(0,-1);
+ assert.ok(itemPages.every(page=>page.itemCapacityMm===itemPages[0].itemCapacityMm));
+ const rowNumbers=itemPages.flatMap(page=>page.rows.map(row=>row.itemNumber));
+ assert.deepEqual(rowNumbers,items.map((_,index)=>index+1));
+
+ const utilization=itemPages.map(page=>page.rowHeightTotalMm/page.itemCapacityMm);
+ assert.ok(Math.max(...utilization)-Math.min(...utilization)<0.08,
+  "item pages should balance independently of the final closing-only page");
+});

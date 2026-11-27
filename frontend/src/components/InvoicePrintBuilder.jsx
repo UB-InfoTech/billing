@@ -372,7 +372,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const frame=event.currentTarget;
     const previewDocument=frame.contentDocument;
     const documentHtml=previewDocument?.documentElement?.innerHTML||"";
-    if(frame.contentWindow?.location?.href!=="about:srcdoc"||!documentHtml.trim())return;
+    if(!previewDocument||!documentHtml.trim())return;
 
     setPrintPreviewReady(false);
     setPrintPreviewAudit(null);

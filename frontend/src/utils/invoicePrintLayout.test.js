@@ -800,10 +800,14 @@ test("rendered layout optimizer reduces table font only when no safe column widt
     estimatedLines: 1,
     actualLines: 2
   }];
-  const suggestions = buildInvoiceRenderedLayoutOptimizationSuggestions([table], warnings);
+  const reservedSpaceBlocks = [
+    table,
+    { id: "footer", type: "text", x: 0, y: 52, w: 100, h: 10 }
+  ];
+  const suggestions = buildInvoiceRenderedLayoutOptimizationSuggestions(reservedSpaceBlocks, warnings);
   assert.equal(suggestions.length, 1);
   assert.equal(suggestions[0].action, "fit-item-table-text");
-  const applied = applyInvoiceLayoutOptimizationSuggestion([table], suggestions[0]);
+  const applied = applyInvoiceLayoutOptimizationSuggestion(reservedSpaceBlocks, suggestions[0]);
   assert.equal(applied.changed, true);
   assert.equal(applied.blocks[0].fontSize, 7);
   assert.equal(table.fontSize, 8);

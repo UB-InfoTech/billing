@@ -314,16 +314,16 @@ test("layout assistant normalizes visible item columns and preserves hidden colu
   assert.equal(updated[1].key, "amount");
 });
 
-test("layout assistant offers text fitting only for a current visible text element", () => {
+test("layout assistant offers text fitting for visible text blocks and ignores hidden or non-text elements", () => {
   const blocks = [
     { id: "address", type: "text", text: "Long address", fontSize: 16, visible: true },
     { id: "hidden", type: "text", text: "Hidden", fontSize: 16, visible: false },
-    { id: "gst", type: "field", fieldKey: "gst", fontSize: 12, visible: true }
+    { id: "logo", type: "logo", fieldKey: "logo", fontSize: 12, visible: true }
   ];
   const suggestions = buildInvoiceLayoutOptimizationSuggestions(blocks, [], [
     { fixAction: "fit-text", blockId: "address", suggestedFontSize: 9 },
     { fixAction: "fit-text", blockId: "hidden", suggestedFontSize: 9 },
-    { fixAction: "fit-text", blockId: "gst", suggestedFontSize: 9 }
+    { fixAction: "fit-text", blockId: "logo", suggestedFontSize: 9 }
   ]);
   assert.equal(suggestions.length, 1);
   assert.equal(suggestions[0].action, "fit-text");

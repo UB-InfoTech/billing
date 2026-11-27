@@ -111,6 +111,7 @@ export function measureRenderedInvoiceDocument(documentRef){
             breakInside:String(rowStyle?.breakInside||"").toLowerCase(),
             pageBreakInside:String(rowStyle?.pageBreakInside||"").toLowerCase(),
             cellOverflowAxes:getCellOverflowAxes(cells),
+            cells:cellMeasurements,
             cellCount:cells.length
           };
         }):[];

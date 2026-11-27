@@ -223,6 +223,62 @@ test("actual print audit catches missing item rows and clipped cells", () => {
   assert.ok(audit.warnings.some(issue => issue.id === "item-row-break-1-items-1"));
 });
 
+test("actual preview compares measured item height with the planner estimate and reports page usage", () => {
+  const audit = analyzeRenderedInvoiceMetrics({
+    pages: [{
+      pageNumber: 1,
+      width: 793.7,
+      height: 1122.5,
+      itemCount: 2,
+      itemCapacityMm: 100,
+      estimatedItemRowHeightMm: 10,
+      blocks: [{
+        id: "items",
+        type: "items_table",
+        tablePresent: true,
+        headerPresent: true,
+        headerVisible: true,
+        headerDisplay: "table-header-group",
+        bounds: { left: 0, top: 0, right: 700, bottom: 600 },
+        rows: [
+          { itemNumber: 1, geometryAvailable: true, left: 0, top: 20, right: 700, bottom: 50, height: 30, cellOverflowAxes: [] },
+          { itemNumber: 2, geometryAvailable: true, left: 0, top: 50, right: 700, bottom: 80, height: 30, cellOverflowAxes: [] }
+        ]
+      }]
+    }]
+  }, { pageSize: "A4", orientation: "portrait" });
+
+  const drift = audit.warnings.find(issue => issue.id === "item-row-height-estimate-drift-1-items");
+  assert.ok(drift);
+  assert.equal(drift.severity, "warning");
+  assert.ok(drift.renderedHeightMm > drift.estimatedHeightMm);
+  assert.match(drift.detail, /actual preview measurement takes priority/i);
+  assert.equal(audit.pageLayouts[0].renderedItemHeightMm, 15.88);
+  assert.equal(audit.pageLayouts[0].itemSpaceUsedPercent, 16);
+  assert.equal(audit.pageLayouts[0].itemCapacityMm, 100);
+});
+
+test("small planner-to-preview height differences do not create noisy warnings", () => {
+  const audit = analyzeRenderedInvoiceMetrics({
+    pages: [{
+      pageNumber: 1,
+      width: 793.7,
+      height: 1122.5,
+      itemCount: 1,
+      itemCapacityMm: 100,
+      estimatedItemRowHeightMm: 10,
+      blocks: [{
+        id: "items",
+        type: "items_table",
+        bounds: { left: 0, top: 0, right: 700, bottom: 500 },
+        rows: [{ itemNumber: 1, geometryAvailable: true, left: 0, top: 10, right: 700, bottom: 47, height: 37, cellOverflowAxes: [] }]
+      }]
+    }]
+  }, { pageSize: "A4", orientation: "portrait" });
+
+  assert.equal(audit.warnings.some(issue => issue.id === "item-row-height-estimate-drift-1-items"), false);
+});
+
 test("layout analysis reports overlapping elements without proposing an unsafe move", () => {
   const warnings = analyzeInvoiceLayout([
     { id: "one", type: "field", label: "Customer", x: 10, y: 10, w: 30, h: 10 },
@@ -248,9 +304,25 @@ test("page navigation groups page-specific warnings without counting global warn
   ]);
 
   assert.deepEqual(pages, [
-    { pageNumber: 1, itemCount: 8, closingOnly: false, reservedClosingSpaceMm: 0, errorCount: 0, warningCount: 1, issueCount: 1 },
-    { pageNumber: 2, itemCount: 2, closingOnly: false, reservedClosingSpaceMm: 24, errorCount: 1, warningCount: 1, issueCount: 2 },
-    { pageNumber: 3, itemCount: 0, closingOnly: true, reservedClosingSpaceMm: 0, errorCount: 0, warningCount: 0, issueCount: 0 }
+    { pageNumber: 1, itemCount: 8, closingOnly: false, reservedClosingSpaceMm: 0, itemCapacityMm: null, renderedItemHeightMm: null, itemSpaceUsedPercent: null, errorCount: 0, warningCount: 1, issueCount: 1 },
+    { pageNumber: 2, itemCount: 2, closingOnly: false, reservedClosingSpaceMm: 24, itemCapacityMm: null, renderedItemHeightMm: null, itemSpaceUsedPercent: null, errorCount: 1, warningCount: 1, issueCount: 2 },
+    { pageNumber: 3, itemCount: 0, closingOnly: true, reservedClosingSpaceMm: 0, itemCapacityMm: null, renderedItemHeightMm: null, itemSpaceUsedPercent: null, errorCount: 0, warningCount: 0, issueCount: 0 }
+  ]);
+});
+
+test("page navigation passes through measured row height and capacity without inventing missing values", async () => {
+  const { buildInvoicePageNavigation } = await import("./invoicePreviewNavigation.js");
+  const pages = buildInvoicePageNavigation([
+    { pageNumber: 1, itemCount: 4, itemCapacityMm: 40, renderedItemHeightMm: 30, itemSpaceUsedPercent: 75 },
+    { pageNumber: 2, itemCount: 0, closingOnly: true, itemCapacityMm: null, renderedItemHeightMm: null, itemSpaceUsedPercent: null }
+  ]);
+  assert.deepEqual(pages.map(page => ({
+    itemCapacityMm: page.itemCapacityMm,
+    renderedItemHeightMm: page.renderedItemHeightMm,
+    itemSpaceUsedPercent: page.itemSpaceUsedPercent
+  })), [
+    { itemCapacityMm: 40, renderedItemHeightMm: 30, itemSpaceUsedPercent: 75 },
+    { itemCapacityMm: null, renderedItemHeightMm: null, itemSpaceUsedPercent: null }
   ]);
 });
 
@@ -258,8 +330,8 @@ test("page navigation tolerates missing page data and malformed warnings", async
   const { buildInvoicePageNavigation } = await import("./invoicePreviewNavigation.js");
   assert.deepEqual(buildInvoicePageNavigation(null, null), []);
   assert.deepEqual(buildInvoicePageNavigation([{}, { pageNumber: "4", itemCount: -3 }], [null, { pageNumber: 4, severity: "error" }]), [
-    { pageNumber: 1, itemCount: 0, closingOnly: false, reservedClosingSpaceMm: 0, errorCount: 0, warningCount: 0, issueCount: 0 },
-    { pageNumber: 4, itemCount: 0, closingOnly: false, reservedClosingSpaceMm: 0, errorCount: 1, warningCount: 0, issueCount: 1 }
+    { pageNumber: 1, itemCount: 0, closingOnly: false, reservedClosingSpaceMm: 0, itemCapacityMm: null, renderedItemHeightMm: null, itemSpaceUsedPercent: null, errorCount: 0, warningCount: 0, issueCount: 0 },
+    { pageNumber: 4, itemCount: 0, closingOnly: false, reservedClosingSpaceMm: 0, itemCapacityMm: null, renderedItemHeightMm: null, itemSpaceUsedPercent: null, errorCount: 1, warningCount: 0, issueCount: 1 }
   ]);
 });
 

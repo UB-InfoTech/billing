@@ -7,6 +7,7 @@ import {analyzeInvoiceLayout,applySafeInvoiceLayoutFixes,reduceInvoiceBlockFontS
 import {estimateInvoiceTextOverflow,getInvoiceMarginWarnings,getInvoicePrintGeometry} from "../utils/invoicePrintFit.js";
 import {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics} from "../utils/invoiceRenderedPrintCheck.js";
 import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
+import {buildInvoicePageNavigation} from "../utils/invoicePreviewNavigation.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
@@ -397,6 +398,28 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     }
   };
 
+  const jumpToPrintPage=pageNumber=>{
+    const previewDocument=printPreviewFrameRef.current?.contentDocument;
+    const sheets=Array.from(previewDocument?.querySelectorAll?.(".design-sheet")||[]);
+    const target=sheets.find((sheet,index)=>{
+      const measuredNumber=Number(sheet.getAttribute("data-page-number"));
+      return measuredNumber>0?measuredNumber===Number(pageNumber):index+1===Number(pageNumber);
+    });
+    if(!target)return;
+    let navigationStyle=previewDocument.querySelector("style[data-invoice-page-navigation]");
+    if(!navigationStyle){
+      navigationStyle=previewDocument.createElement("style");
+      navigationStyle.setAttribute("data-invoice-page-navigation","true");
+      navigationStyle.textContent=".design-sheet.invoice-preview-page-highlight{outline:3px solid #2876c7!important;outline-offset:3px!important}";
+      previewDocument.head?.appendChild(navigationStyle);
+    }
+    sheets.forEach(sheet=>sheet.classList.remove("invoice-preview-page-highlight"));
+    target.classList.add("invoice-preview-page-highlight");
+    target.scrollIntoView?.({behavior:"smooth",block:"start"});
+    if(!target.hasAttribute("tabindex"))target.setAttribute("tabindex","-1");
+    target.focus?.({preventScroll:true});
+  };
+
   const printActualInvoice=()=>{
     const frameWindow=printPreviewFrameRef.current?.contentWindow;
     if(!frameWindow||!printPreviewReady||!printPreviewAudit?.pageCount||printPreviewAudit?.hasErrors)return;
@@ -417,6 +440,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     ()=>localDesign.templates.find(template=>template.id===localDesign.activeTemplateId)||localDesign.templates[0]||makeTemplate("clean-default","Clean","clean"),
     [localDesign]
   );
+  const printPageNavigation=buildInvoicePageNavigation(printPreviewAudit?.pageLayouts,printPreviewAudit?.warnings);
   const visibleTemplatePresets=INVOICE_DESIGN_PRESETS.filter(preset=>(templateCategory==="All industries"||preset.category===templateCategory)&&(!templateSearch.trim()||(preset.name+" "+preset.category+" "+preset.description).toLowerCase().includes(templateSearch.trim().toLowerCase())));
   const selectedTemplatePreset=visibleTemplatePresets.find(preset=>preset.key===selectedTemplateKey)||visibleTemplatePresets[0]||null;
   const openTemplateLibrary=()=>{
@@ -1648,11 +1672,14 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                     <div className="invoice-builder-page-inspector">
                       <strong>Page-by-page layout</strong>
                       <div className="invoice-builder-page-inspector-list">
-                        {printPreviewAudit.pageLayouts.map(page=>(
+                        {printPageNavigation.map(page=>(
                           <div className="invoice-builder-page-inspector-item" key={page.pageNumber}>
-                            <b>Page {page.pageNumber}</b>
-                            <span>{page.closingOnly?"Closing details only":page.itemCount+" item row"+(page.itemCount===1?"":"s")}</span>
+                            <div><b>Page {page.pageNumber}</b><span>{page.closingOnly?"Closing details only":page.itemCount+" item row"+(page.itemCount===1?"":"s")}</span></div>
                             {page.reservedClosingSpaceMm>0.5&&<small>Reserves {page.reservedClosingSpaceMm.toFixed(1)} mm for closing details</small>}
+                            <div className="d-flex align-items-center justify-content-between gap-2">
+                              <small className={page.errorCount?"text-danger":page.warningCount?"text-warning":"text-success"}>{page.errorCount?page.errorCount+" critical":page.warningCount?page.warningCount+" warning(s)":"No page issues"}{page.errorCount&&page.warningCount?" · "+page.warningCount+" warning(s)":""}</small>
+                              <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>jumpToPrintPage(page.pageNumber)} aria-label={"View invoice page "+page.pageNumber}>View page</button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1664,7 +1691,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                     const issueBlock=activeTemplate.blocks.find(block=>block.id===issue.blockId);
                     const shrinkableWarnings=["Text or totals may be clipped","Item table may be too wide","An item cell is clipped","An item row exceeds the table area","An item row extends beyond the page","Blank table content may be clipped","Invoice items exceed their allocated page space"];
                     const canReduceText=issueBlock&&issueBlock.visible!==false&&["field","text","totals","blank_table","items_table"].includes(issue.blockType)&&shrinkableWarnings.includes(issue.title)&&Number(issueBlock.fontSize||10)>6;
-                    return <li key={issue.id||index}><div><b>{issue.title}</b> — {issue.detail}</div>{issue.blockId&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{setSelectedBlockId(issue.blockId);closeActualPrintPreview();}}>Edit this element</button>}{canReduceText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{const result=reduceInvoiceBlockFontSize(activeTemplate.blocks,issue.blockId,1);if(result.changed){updateActive({blocks:result.blocks});setSelectedBlockId(issue.blockId);setMessage("Text size reduced by up to 1 pt. Recheck the print preview before printing.");}}}>Reduce text size by up to 1 pt</button>}</li>;
+                    return <li key={issue.id||index}><div><b>{issue.title}</b> — {issue.detail}</div>{Number(issue.pageNumber)>0&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>jumpToPrintPage(issue.pageNumber)}>View page {issue.pageNumber}</button>}{issue.blockId&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{setSelectedBlockId(issue.blockId);closeActualPrintPreview();}}>Edit this element</button>}{canReduceText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{const result=reduceInvoiceBlockFontSize(activeTemplate.blocks,issue.blockId,1);if(result.changed){updateActive({blocks:result.blocks});setSelectedBlockId(issue.blockId);setMessage("Text size reduced by up to 1 pt. Recheck the print preview before printing.");}}}>Reduce text size by up to 1 pt</button>}</li>;
                   })}</ul>
                     {printPreviewAudit.warnings.length>8&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>setShowAllPrintWarnings(value=>!value)}>{showAllPrintWarnings?"Show fewer issues":"Show all "+printPreviewAudit.warnings.length+" issues"}</button>}
                     </>

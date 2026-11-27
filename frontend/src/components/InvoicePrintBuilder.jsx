@@ -3,7 +3,7 @@ import axios from "axios";
 import "./InvoicePrintBuilder.css";
 import {buildInvoiceSmartLayout,scanImportedInvoiceLayout} from "../utils/invoiceLayoutScanner.js";
 import {inferOcrValueBox} from "../utils/invoiceOcrMapping.js";
-import {analyzeInvoiceLayout,applySafeInvoiceLayoutFixes,reduceInvoiceBlockFontSize} from "../utils/invoiceLayoutQuality.js";
+import {analyzeInvoiceLayout,buildInvoiceLayoutOptimizationSuggestions,applyInvoiceLayoutOptimizationSuggestion,applyInvoiceLayoutOptimizationPlan,reduceInvoiceBlockFontSize} from "../utils/invoiceLayoutQuality.js";
 import {estimateInvoiceTextOverflow,getInvoiceMarginWarnings,getInvoicePrintGeometry} from "../utils/invoicePrintFit.js";
 import {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics} from "../utils/invoiceRenderedPrintCheck.js";
 import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
@@ -489,6 +489,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     ...estimateInvoiceTextOverflow(activeTemplate.blocks,previewFields,{pageSize:activeTemplate.pageSize,orientation:activeTemplate.orientation,printMargins}),
     ...getInvoiceMarginWarnings(activeTemplate.pageSize,activeTemplate.orientation,printMargins)
   ],[activeTemplate.blocks,activeTemplate.pageSize,activeTemplate.orientation,previewColumns,previewFields,printMargins]);
+  const layoutOptimizationSuggestions=useMemo(()=>buildInvoiceLayoutOptimizationSuggestions(activeTemplate.blocks,previewColumns,designWarnings),[activeTemplate.blocks,previewColumns,designWarnings]);
   const applyDesign=next=>{
     currentDesignRef.current=next;
     setLocalDesign(next);
@@ -562,6 +563,26 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   };
   const updateBlock=(blockId,patch,options={})=>{
     updateActive({blocks:activeTemplate.blocks.map(block=>block.id===blockId?{...block,...patch}:block)},options);
+  };
+
+  const applyLayoutSuggestion=suggestion=>{
+    const result=applyInvoiceLayoutOptimizationSuggestion(activeTemplate.blocks,suggestion,previewColumns);
+    if(!result.changed){
+      setMessage(result.reason||"This suggestion is no longer applicable. Review the layout again.");
+      return;
+    }
+    updateActive({blocks:result.blocks});
+    setSelectedBlockId(suggestion.blockId);
+    setMessage("Applied: "+suggestion.title+". Use Undo to restore the previous layout.");
+  };
+  const applyAllLayoutSuggestions=()=>{
+    const result=applyInvoiceLayoutOptimizationPlan(activeTemplate.blocks,layoutOptimizationSuggestions,previewColumns);
+    if(!result.changed){
+      setMessage("No safe layout changes could be applied. Review the current elements.");
+      return;
+    }
+    updateActive({blocks:result.blocks});
+    setMessage(result.appliedCount+" safe layout suggestion(s) applied in one step. Use Undo to restore the previous layout.");
   };
   const addBlock=(type,fieldKey,position,dimensions={},extra={})=>{
     const elementLimit=Math.min(300,Math.max(80,Number(activeTemplate.elementLimit)||80));
@@ -1244,7 +1265,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               </div>
             </div>
 
-            <div ref={printCheckRef} className="invoice-builder-print-check" role="status"><strong>{designWarnings.length?("Layout check · "+designWarnings.length+" issue"+(designWarnings.length===1?"":"s")+" to review"):"Layout check · No estimated issues found"}</strong>{designWarnings.some(issue=>issue.fixable)&&<button type="button" className="btn btn-sm btn-outline-primary mt-2" onClick={()=>{const result=applySafeInvoiceLayoutFixes(activeTemplate.blocks,previewColumns);if(result.changed)updateActive({blocks:result.blocks});}}>Fix safe issues</button>}{designWarnings.length>0?<ul>{designWarnings.slice(0,8).map((issue,index)=>{
+            <div ref={printCheckRef} className="invoice-builder-print-check" role="status"><strong>{designWarnings.length?("Layout check · "+designWarnings.length+" issue"+(designWarnings.length===1?"":"s")+" to review"):"Layout check · No estimated issues found"}</strong>{layoutOptimizationSuggestions.length>0&&<section className="invoice-builder-optimization"><div className="invoice-builder-optimization-heading"><div><strong>Layout assistant</strong><small>{layoutOptimizationSuggestions.length} safe suggestion(s) available · changes can be undone</small></div><button type="button" className="btn btn-sm btn-primary" onClick={applyAllLayoutSuggestions}>Apply all</button></div><ul>{layoutOptimizationSuggestions.map(suggestion=><li key={suggestion.id}><div><b>{suggestion.title}</b><small>{suggestion.detail}</small></div><button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>applyLayoutSuggestion(suggestion)}>Apply</button></li>)}</ul></section>}{designWarnings.length>0?<ul>{designWarnings.slice(0,8).map((issue,index)=>{
                 const issueBlock=activeTemplate.blocks.find(block=>block.id===issue.blockId);
                 const canFitText=issue.fixAction==="fit-text"&&issueBlock&&issueBlock.visible!==false&&["field","text"].includes(issueBlock.type)&&Number(issue.suggestedFontSize)>=6&&Number(issue.suggestedFontSize)<Number(issueBlock.fontSize||10);
                 const canSetSafeMargins=issue.fixAction==="set-printer-safe-margins"&&issue.recommendedMargins;

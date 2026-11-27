@@ -444,10 +444,10 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     [localDesign]
   );
   useEffect(()=>{
-    if(layoutPlanPreview&&layoutPlanPreview.baseSnapshot!==JSON.stringify(activeTemplate.blocks)){
+    if(layoutPlanPreview&&(layoutPlanPreview.baseSnapshot!==JSON.stringify(activeTemplate.blocks)||layoutPlanPreview.suggestionsSnapshot!==JSON.stringify(layoutOptimizationSuggestions))){
       setLayoutPlanPreview(null);
     }
-  },[layoutPlanPreview,activeTemplate.blocks]);
+  },[layoutPlanPreview,activeTemplate,layoutOptimizationSuggestions]);
   const printPageNavigation=buildInvoicePageNavigation(printPreviewAudit?.pageLayouts,printPreviewAudit?.warnings);
   const visibleTemplatePresets=INVOICE_DESIGN_PRESETS.filter(preset=>(templateCategory==="All industries"||preset.category===templateCategory)&&(!templateSearch.trim()||(preset.name+" "+preset.category+" "+preset.description).toLowerCase().includes(templateSearch.trim().toLowerCase())));
   const selectedTemplatePreset=visibleTemplatePresets.find(preset=>preset.key===selectedTemplateKey)||visibleTemplatePresets[0]||null;
@@ -595,7 +595,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   };
   const applyLayoutPlanPreview=()=>{
     if(!layoutPlanPreview)return;
-    if(layoutPlanPreview.baseSnapshot!==JSON.stringify(activeTemplate.blocks)){
+    if(layoutPlanPreview.baseSnapshot!==JSON.stringify(activeTemplate.blocks)||layoutPlanPreview.suggestionsSnapshot!==JSON.stringify(layoutOptimizationSuggestions)){
       setLayoutPlanPreview(null);
       setMessage("The design changed while this review was open. Review the latest suggestions before applying.");
       return;

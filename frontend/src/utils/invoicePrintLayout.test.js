@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { analyzeInvoiceLayout, applySafeInvoiceLayoutFixes, buildInvoiceLayoutOptimizationSuggestions, applyInvoiceLayoutOptimizationSuggestion, applyInvoiceLayoutOptimizationPlan } from "./invoiceLayoutQuality.js";
 import { analyzeInvoicePagination } from "./invoicePaginationHints.js";
-import { analyzeRenderedInvoiceMetrics } from "./invoiceRenderedPrintCheck.js";
+import { analyzeRenderedInvoiceMetrics, measureRenderedInvoiceDocument } from "./invoiceRenderedPrintCheck.js";
 import {
   estimateInvoiceTextOverflow,
   getInvoiceMarginWarnings,
@@ -277,6 +277,156 @@ test("small planner-to-preview height differences do not create noisy warnings",
   }, { pageSize: "A4", orientation: "portrait" });
 
   assert.equal(audit.warnings.some(issue => issue.id === "item-row-height-estimate-drift-1-items"), false);
+});
+
+test("rendered invoice measurements identify each cell's estimated and actual wrapped lines", () => {
+  const makeRect = (width, height, top = 0, left = 0) => ({
+    left, top, right: left + width, bottom: top + height, width, height
+  });
+  const textElement = {
+    textContent: "A long fabric description that wraps",
+    getBoundingClientRect: () => makeRect(120, 36, 20, 20)
+  };
+  const cell = {
+    scrollWidth: 120, clientWidth: 120, scrollHeight: 36, clientHeight: 36,
+    getAttribute: name => ({
+      "data-column-key": "description",
+      "data-column-label": "Description",
+      "data-estimated-lines": "1"
+    }[name] ?? null),
+    querySelector: () => textElement,
+    getBoundingClientRect: () => makeRect(130, 40, 18, 15)
+  };
+  const row = {
+    scrollWidth: 130, clientWidth: 130, scrollHeight: 60, clientHeight: 60,
+    getAttribute: name => ({
+      "data-item-number": "4",
+      "data-item-label": "Printed fabric",
+      "data-estimated-height-mm": "9",
+      "data-estimated-lines": "1"
+    }[name] ?? null),
+    getBoundingClientRect: () => makeRect(130, 60, 18, 15),
+    querySelectorAll: () => [cell]
+  };
+  const table = {
+    querySelector: () => null,
+    querySelectorAll: selector => selector === "tbody tr" ? [row] : []
+  };
+  const block = {
+    scrollWidth: 130, clientWidth: 130, scrollHeight: 100, clientHeight: 100,
+    getAttribute: name => ({
+      "data-block-id": "items",
+      "data-block-type": "items_table",
+      "data-block-label": "Items"
+    }[name] ?? null),
+    getBoundingClientRect: () => makeRect(500, 400, 100, 20),
+    querySelector: selector => selector === ".design-items" ? table : null,
+    querySelectorAll: () => []
+  };
+  const sheet = {
+    clientWidth: 794, clientHeight: 1123,
+    getBoundingClientRect: () => makeRect(794, 1123),
+    getAttribute: name => ({
+      "data-page-number": "1",
+      "data-page-item-count": "1",
+      "data-page-item-capacity-mm": "50",
+      "data-page-row-height-estimate-mm": "9",
+      "data-page-closing-reserved-mm": "0",
+      "data-page-closing-only": "false"
+    }[name] ?? null),
+    querySelectorAll: selector => selector === ".design-block" ? [block] : []
+  };
+  const documentRef = {
+    querySelectorAll: selector => selector === ".design-sheet" ? [sheet] : [],
+    defaultView: {
+      getComputedStyle: element => element === textElement
+        ? { fontSize: "10px", lineHeight: "12px" }
+        : { breakInside: "avoid", pageBreakInside: "avoid" }
+    }
+  };
+
+  const measured = measureRenderedInvoiceDocument(documentRef);
+  const measuredCell = measured.pages[0].blocks[0].rows[0].cells[0];
+  assert.equal(measured.pages[0].blocks[0].rows[0].estimatedHeightMm, 9);
+  assert.equal(measuredCell.columnKey, "description");
+  assert.equal(measuredCell.columnLabel, "Description");
+  assert.equal(measuredCell.estimatedLines, 1);
+  assert.equal(measuredCell.actualLines, 3);
+});
+
+test("tall item-row warnings name the row and the column that wrapped more than estimated", () => {
+  const audit = analyzeRenderedInvoiceMetrics({
+    pages: [{
+      pageNumber: 2,
+      width: 793.7,
+      height: 1122.5,
+      itemCount: 1,
+      itemCapacityMm: 80,
+      estimatedItemRowHeightMm: 9,
+      blocks: [{
+        id: "items",
+        type: "items_table",
+        tablePresent: true,
+        bounds: { left: 0, top: 0, right: 700, bottom: 600 },
+        rows: [{
+          itemNumber: 7,
+          label: "Printed fabric",
+          geometryAvailable: true,
+          left: 0, top: 20, right: 700, bottom: 80,
+          height: 60,
+          estimatedHeightMm: 9,
+          breakInside: "avoid",
+          cellOverflowAxes: [],
+          cells: [{
+            columnKey: "description",
+            columnLabel: "Description",
+            estimatedLines: 1,
+            actualLines: 3,
+            hasContent: true
+          }]
+        }]
+      }]
+    }]
+  }, { pageSize: "A4", orientation: "portrait" });
+
+  const issue = audit.warnings.find(item => item.id === "item-row-height-estimate-2-items-7");
+  assert.ok(issue);
+  assert.equal(issue.title, "An invoice item row is taller than planned");
+  assert.equal(issue.itemNumber, 7);
+  assert.equal(issue.columnKey, "description");
+  assert.equal(issue.columnLabel, "Description");
+  assert.equal(issue.estimatedLines, 1);
+  assert.equal(issue.actualLines, 3);
+  assert.match(issue.detail, /Item 7/);
+  assert.match(issue.detail, /Description column wraps to 3 lines instead of the 1 estimated/);
+  assert.match(issue.detail, /Widen that column/);
+});
+
+test("tall item-row warnings still give a useful fallback when no single cell is responsible", () => {
+  const audit = analyzeRenderedInvoiceMetrics({
+    pages: [{
+      pageNumber: 1,
+      width: 793.7,
+      height: 1122.5,
+      blocks: [{
+        id: "items",
+        type: "items_table",
+        bounds: { left: 0, top: 0, right: 700, bottom: 600 },
+        rows: [{
+          itemNumber: 2,
+          geometryAvailable: true,
+          top: 20, bottom: 80, left: 0, right: 700,
+          height: 60,
+          estimatedHeightMm: 9,
+          cells: []
+        }]
+      }]
+    }]
+  });
+  const issue = audit.warnings.find(item => item.id === "item-row-height-estimate-1-items-2");
+  assert.ok(issue);
+  assert.equal(issue.columnKey, null);
+  assert.match(issue.detail, /font size, line spacing and cell padding/);
 });
 
 test("layout analysis reports overlapping elements without proposing an unsafe move", () => {

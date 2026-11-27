@@ -414,6 +414,21 @@ test("actual print audit checks table text readability and heading-to-row typogr
   assert.equal(mismatch.bodyFontSizePx,5.8);
 });
 
+
+test("actual print audit detects uneven cell spacing and vertical alignment within a row",()=>{
+  const audit=analyzeRenderedInvoiceMetrics({
+    pages:[{pageNumber:1,width:793.7,height:1122.5,blocks:[{
+      id:"items",type:"items_table",
+      rows:[{itemNumber:3,cells:[
+        {columnKey:"description",columnLabel:"Description",hasContent:true,fontSizePx:9,textAlign:"left",verticalAlign:"middle",paddingTopPx:4,paddingRightPx:4,paddingBottomPx:4,paddingLeftPx:4},
+        {columnKey:"amount",columnLabel:"Amount",hasContent:true,fontSizePx:9,textAlign:"right",verticalAlign:"top",paddingTopPx:9,paddingRightPx:4,paddingBottomPx:9,paddingLeftPx:4}
+      ]}]
+    }]}]
+  });
+  assert.ok(audit.warnings.some(issue=>issue.id==="table-cell-spacing-inconsistent-1-items-3"));
+  assert.ok(audit.warnings.some(issue=>issue.id==="table-cell-vertical-alignment-1-items-3"));
+});
+
 test("tall item-row warnings name the row and the column that wrapped more than estimated", () => {
   const audit = analyzeRenderedInvoiceMetrics({
     pages: [{

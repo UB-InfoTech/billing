@@ -72,6 +72,18 @@ export function measureRenderedInvoiceDocument(documentRef){
         }:null;
         const header=table?.querySelector?.("thead");
         const headerStyle=header?getElementStyle(documentRef,header):null;
+        const headerCells=header?Array.from(header.querySelectorAll?.("th")||[]).map((cell,index)=>{
+          const style=getElementStyle(documentRef,cell);
+          const text=String(cell.textContent||"").replace(/\s+/g," ").trim();
+          return {
+            columnIndex:index,
+            label:text,
+            fontSizePx:Number.parseFloat(style?.fontSize)||0,
+            fontFamily:String(style?.fontFamily||""),
+            fontWeight:String(style?.fontWeight||""),
+            textAlign:String(style?.textAlign||"").toLowerCase()
+          };
+        }):[];
         const rows=table?Array.from(table.querySelectorAll("tbody tr")).map((row,index)=>{
           const rect=getRect(row,sheetRect);
           const rowStyle=getElementStyle(documentRef,row);
@@ -79,6 +91,7 @@ export function measureRenderedInvoiceDocument(documentRef){
           const cellMeasurements=cells.map(cell=>{
             const textElement=cell.querySelector?.(".design-cell-text")||cell;
             const textRect=textElement?.getBoundingClientRect?.();
+            const cellStyle=getElementStyle(documentRef,cell);
             const textStyle=getElementStyle(documentRef,textElement);
             const fontSizePx=Number.parseFloat(textStyle?.fontSize)||0;
             const parsedLineHeight=Number.parseFloat(textStyle?.lineHeight);
@@ -89,11 +102,21 @@ export function measureRenderedInvoiceDocument(documentRef){
             return {
               columnKey:cell.getAttribute?.("data-column-key")||"",
               columnLabel:cell.getAttribute?.("data-column-label")||"",
+              columnIndex:cells.indexOf(cell),
               estimatedLines:readOptionalNumberAttribute(cell,"data-estimated-lines"),
               actualLines:hasContent&&textHeightPx>0&&lineHeightPx>0
                 ?Math.max(1,Math.round(textHeightPx/lineHeightPx)):null,
               textHeightPx,
               lineHeightPx,
+              fontSizePx,
+              fontFamily:String(textStyle?.fontFamily||""),
+              fontWeight:String(textStyle?.fontWeight||""),
+              textAlign:String(cellStyle?.textAlign||"").toLowerCase(),
+              verticalAlign:String(cellStyle?.verticalAlign||"").toLowerCase(),
+              paddingTopPx:Number.parseFloat(cellStyle?.paddingTop)||0,
+              paddingRightPx:Number.parseFloat(cellStyle?.paddingRight)||0,
+              paddingBottomPx:Number.parseFloat(cellStyle?.paddingBottom)||0,
+              paddingLeftPx:Number.parseFloat(cellStyle?.paddingLeft)||0,
               widthPx:Number(cell.getBoundingClientRect?.().width)||Number(cell.clientWidth)||0,
               textLength:String(textElement?.textContent||"").trim().length,
               hasContent
@@ -136,7 +159,8 @@ export function measureRenderedInvoiceDocument(documentRef){
           clientWidth:Number(block.clientWidth)||0,
           headerPresent:table?Boolean(header):undefined,
           headerVisible:table?Boolean(header?.getBoundingClientRect?.().height>0):undefined,
-          headerLabels:header?Array.from(header.querySelectorAll?.("th")||[]).map(cell=>String(cell.textContent||"").replace(/\s+/g," ").trim().toLowerCase()):[],
+          headerLabels:headerCells.map(cell=>cell.label.toLowerCase()),
+          headerCells,
           blankTableMetrics,
           rows,
           images
@@ -321,6 +345,132 @@ function auditInvoiceRowsAgainstClosingBlocks(table,pageBlocks,pageNumber,page,w
       });
     });
   });
+}
+
+const RIGHT_ALIGNED_ITEM_COLUMNS=new Set(["unitPrice","amount","taxable"]);
+const CENTER_ALIGNED_ITEM_COLUMNS=new Set(["sr","hsnCode","quantity","qtyUnit","cut","MTR","shortPcs","discount"]);
+
+function normalizeCellAlignment(value){
+  const alignment=String(value||"").trim().toLowerCase();
+  if(alignment==="start")return "left";
+  if(alignment==="end")return "right";
+  return alignment;
+}
+
+function auditInvoiceTableFormatting(table,pageNumber,warnings){
+  const rows=Array.isArray(table?.rows)?table.rows:[];
+  const columns=new Map();
+  rows.forEach((row,rowIndex)=>{
+    const cells=Array.isArray(row?.cells)?row.cells:[];
+    const populated=cells.filter(cell=>cell?.hasContent&&Number(cell.fontSizePx)>0);
+    const rowFontSizes=populated.map(cell=>Number(cell.fontSizePx));
+    const itemNumber=Number(row.itemNumber)||rowIndex+1;
+    const measuredSpacing=cells.filter(cell=>[
+      cell?.paddingTopPx,cell?.paddingRightPx,cell?.paddingBottomPx,cell?.paddingLeftPx
+    ].every(value=>Number.isFinite(Number(value))));
+    if(measuredSpacing.length>1){
+      const vertical=c=>((Number(c.paddingTopPx)+Number(c.paddingBottomPx))/2);
+      const horizontal=c=>((Number(c.paddingLeftPx)+Number(c.paddingRightPx))/2);
+      const verticalValues=measuredSpacing.map(vertical);
+      const horizontalValues=measuredSpacing.map(horizontal);
+      const verticalSpread=Math.max(...verticalValues)-Math.min(...verticalValues);
+      const horizontalSpread=Math.max(...horizontalValues)-Math.min(...horizontalValues);
+      if(verticalSpread>1.5||horizontalSpread>1.5){
+        addWarning(warnings,{
+          id:"table-cell-spacing-inconsistent-"+pageNumber+"-"+table.id+"-"+itemNumber,
+          severity:"warning",
+          title:"Spacing varies across an item row",
+          detail:"The cells in item "+itemNumber+" have noticeably different inner spacing. Review the table cell padding so each column has a consistent, balanced appearance.",
+          pageNumber,blockId:table.id,blockType:table.type,itemNumber,
+          verticalPaddingSpreadPx:Number(verticalSpread.toFixed(2)),
+          horizontalPaddingSpreadPx:Number(horizontalSpread.toFixed(2))
+        });
+      }
+    }
+    const misalignedCell=cells.find(cell=>cell?.verticalAlign&&cell.verticalAlign!=="middle");
+    if(misalignedCell){
+      addWarning(warnings,{
+        id:"table-cell-vertical-alignment-"+pageNumber+"-"+table.id+"-"+itemNumber,
+        severity:"warning",
+        title:"Text is not vertically centered in an item row",
+        detail:"At least one cell in item "+itemNumber+" is not vertically centered. Centering text within the row makes wrapped descriptions and numeric values easier to scan.",
+        pageNumber,blockId:table.id,blockType:table.type,itemNumber,
+        columnKey:misalignedCell.columnKey||null,
+        verticalAlign:misalignedCell.verticalAlign
+      });
+    }
+    if(rowFontSizes.length>1&&Math.max(...rowFontSizes)-Math.min(...rowFontSizes)>1.25){
+      addWarning(warnings,{
+        id:"table-row-font-inconsistent-"+pageNumber+"-"+table.id+"-"+itemNumber,
+        severity:"warning",
+        title:"Text sizes vary within an item row",
+        detail:"The text in item "+itemNumber+" uses noticeably different sizes across its columns. Check the table formatting so each line item is easy to scan.",
+        pageNumber,blockId:table.id,blockType:table.type,itemNumber
+      });
+    }
+    const smallCell=populated.filter(cell=>Number(cell.fontSizePx)<6.5)
+      .sort((a,b)=>Number(a.fontSizePx)-Number(b.fontSizePx))[0];
+    if(smallCell){
+      addWarning(warnings,{
+        id:"table-small-text-"+pageNumber+"-"+table.id+"-"+itemNumber,
+        severity:"warning",
+        title:"Item text may be too small to read clearly",
+        detail:"Item "+itemNumber+" uses "+Number(smallCell.fontSizePx).toFixed(1)+" px text in the "+(smallCell.columnLabel||"item detail")+" column. Increase the item-table text size or give that row more room before printing.",
+        pageNumber,blockId:table.id,blockType:table.type,itemNumber,
+        columnKey:smallCell.columnKey||null,
+        fontSizePx:Number(Number(smallCell.fontSizePx).toFixed(2))
+      });
+    }
+    cells.forEach((cell,columnIndex)=>{
+      const key=String(cell?.columnKey||("column-"+(Number.isFinite(Number(cell?.columnIndex))?cell.columnIndex:columnIndex)));
+      if(!columns.has(key))columns.set(key,{alignments:new Set(),label:String(cell?.columnLabel||""),cells:[]});
+      const column=columns.get(key);
+      const alignment=normalizeCellAlignment(cell?.textAlign);
+      if(alignment)column.alignments.add(alignment);
+      if(Number(cell?.fontSizePx)>0)column.cells.push(Number(cell.fontSizePx));
+    });
+  });
+  columns.forEach((column,key)=>{
+    const expectedAlignment=RIGHT_ALIGNED_ITEM_COLUMNS.has(key)?"right"
+      :CENTER_ALIGNED_ITEM_COLUMNS.has(key)?"center":null;
+    if(column.alignments.size>1){
+      addWarning(warnings,{
+        id:"table-column-alignment-inconsistent-"+pageNumber+"-"+table.id+"-"+key,
+        severity:"warning",
+        title:"An item column is not consistently aligned",
+        detail:"Values in the "+(column.label||key)+" column do not share the same alignment. Keep the column aligned consistently so amounts and item details are easier to compare.",
+        pageNumber,blockId:table.id,blockType:table.type,columnKey:key,
+        alignments:Array.from(column.alignments)
+      });
+    }
+    if(expectedAlignment&&column.alignments.size&&Array.from(column.alignments).some(value=>value!==expectedAlignment)){
+      addWarning(warnings,{
+        id:"table-column-alignment-expected-"+pageNumber+"-"+table.id+"-"+key,
+        severity:"warning",
+        title:"An item column is not using its recommended alignment",
+        detail:(column.label||key)+(expectedAlignment==="right"?" contains amounts and should be right-aligned.":" is easier to scan when its values are "+expectedAlignment+"-aligned.")+" Review the column alignment in the table design.",
+        pageNumber,blockId:table.id,blockType:table.type,columnKey:key,
+        expectedAlignment,actualAlignments:Array.from(column.alignments)
+      });
+    }
+  });
+  const headerSizes=(Array.isArray(table.headerCells)?table.headerCells:[])
+    .map(cell=>Number(cell?.fontSizePx)||0).filter(value=>value>0).sort((a,b)=>a-b);
+  const bodySizes=Array.from(columns.values()).flatMap(column=>column.cells).sort((a,b)=>a-b);
+  if(headerSizes.length&&bodySizes.length){
+    const median=values=>values.length%2?values[(values.length-1)/2]:(values[values.length/2-1]+values[values.length/2])/2;
+    const headerSize=median(headerSizes),bodySize=median(bodySizes);
+    if(Math.abs(headerSize-bodySize)>1.5){
+      addWarning(warnings,{
+        id:"table-header-body-font-mismatch-"+pageNumber+"-"+table.id,
+        severity:"warning",
+        title:"Item headings and row text use different text sizes",
+        detail:"The item-table headings use "+headerSize.toFixed(1)+" px text while item values use "+bodySize.toFixed(1)+" px. Review the table style so headings remain clear without overpowering the item details.",
+        pageNumber,blockId:table.id,blockType:table.type,
+        headerFontSizePx:Number(headerSize.toFixed(2)),bodyFontSizePx:Number(bodySize.toFixed(2))
+      });
+    }
+  }
 }
 
 function expectedPageDimensions(pageSize,orientation){
@@ -686,6 +836,7 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
     itemTables.forEach(table=>{
       auditInvoiceItemRowGeometry(table,pageNumber,warnings);
       auditInvoiceRowsAgainstClosingBlocks(table,pageBlocks,pageNumber,page,warnings);
+      auditInvoiceTableFormatting(table,pageNumber,warnings);
     });
     if(itemTables.length>1){
       addWarning(warnings,{

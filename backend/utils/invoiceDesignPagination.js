@@ -334,6 +334,7 @@ function buildInvoiceDesignPages(template={},items=[],options={}){
       const estimate=estimateInvoiceItemRow(item,columns,tableMetrics,itemTable,options,index+1);
       return {
         item,itemNumber:index+1,rowHeightMm:estimate.rowHeightMm,estimatedLines:estimate.lineCount,
+        columnEstimates:estimate.columnEstimates,
         exceedsTableArea:HEADER_HEIGHT_MM+estimate.rowHeightMm+SAFETY_GAP_MM>tableMetrics.tableHeightMm
       };
     });

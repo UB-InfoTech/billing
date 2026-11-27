@@ -70,6 +70,48 @@ test("custom invoice design renders mapped fields, item table and imported PDF r
 });
 
 
+
+test("print renderer applies the row-specific fit measured by invoice pagination",async()=>{
+  const {buildInvoiceDesignPages}=require("../utils/invoiceDesignPagination");
+  const template={
+    id:"auto-fit-print",
+    name:"Auto-fit print",
+    pageSize:"A4",
+    orientation:"portrait",
+    blocks:[
+      {
+        id:"items",type:"items_table",x:5,y:20,w:90,h:40,fontSize:12,
+        tableCellPadding:4,visible:true,
+        columns:[
+          {key:"description",label:"Description",width:28,visible:true},
+          {key:"amount",label:"Amount",width:72,visible:true}
+        ]
+      },
+      {id:"totals",type:"totals",x:65,y:82,w:30,h:15,fontSize:11,visible:true}
+    ]
+  };
+  const items=[{
+    orderName:"cotton fabric garment finishing work ".repeat(20),
+    quantity:1,qtyUnit:"PCS",unitPrice:100,shortPcs:0
+  }];
+  const pages=buildInvoiceDesignPages(template,items);
+  const row=pages[0].rows[0];
+  assert.equal(row.autoFitted,true);
+  assert.ok(row.fontSize<12);
+  const html=await ejs.renderFile(templatePath,{
+    ...locals,
+    subOrders:items,
+    invoiceConfig:{
+      ...baseConfig,
+      design:{enabled:true,activeTemplateId:template.id,templates:[template]}
+    },
+    invoicePages:pages
+  });
+  assert.match(html,/data-auto-fitted="true"/);
+  assert.match(html,new RegExp('data-estimated-font-size="'+row.fontSize+'"'));
+  assert.match(html,new RegExp('font-size:'+row.fontSize+'px'));
+  assert.match(html,new RegExp('data-estimated-cell-padding="'+row.cellPaddingPx+'"'));
+});
 test("custom invoice tables align numeric columns and emphasize totals without changing amounts",async()=>{
   const invoiceConfig={
     ...baseConfig,

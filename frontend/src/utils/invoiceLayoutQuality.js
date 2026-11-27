@@ -386,6 +386,7 @@ export function buildInvoiceLayoutOptimizationPlanPreview(blocks=[],suggestions=
  });
  if(!appliedSuggestions.length)return {
   baseSnapshot:JSON.stringify(source),
+  suggestionsSnapshot:JSON.stringify(requested),
   blocks:source,
   changes:[],
   appliedCount:0,
@@ -424,6 +425,7 @@ export function buildInvoiceLayoutOptimizationPlanPreview(blocks=[],suggestions=
 
  return {
   baseSnapshot:JSON.stringify(source),
+  suggestionsSnapshot:JSON.stringify(requested),
   blocks:next,
   changes,
   appliedCount:appliedSuggestions.length,

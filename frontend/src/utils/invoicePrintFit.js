@@ -73,7 +73,7 @@ export function estimateInvoiceTextOverflow(blocks=[],values={},options={}){
   const label=block.label||block.fieldKey||"Text";
   const suggestion=suggestedFontSize
    ?" A text size of "+suggestedFontSize+" px is estimated to fit; apply it and recheck the actual print preview."
-   :" Even at the 6 pt minimum, the estimated text does not fit. Increase the box or shorten the content.";
+   :" Even at the 6 px minimum, the estimated text does not fit. Increase the box or shorten the content.";
   warnings.push({
    id:"text-overflow-"+(block.id||block.fieldKey||"block"),
    severity:"warning",

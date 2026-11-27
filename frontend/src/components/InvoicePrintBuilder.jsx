@@ -3,7 +3,7 @@ import axios from "axios";
 import "./InvoicePrintBuilder.css";
 import {buildInvoiceSmartLayout,scanImportedInvoiceLayout} from "../utils/invoiceLayoutScanner.js";
 import {inferOcrValueBox} from "../utils/invoiceOcrMapping.js";
-import {analyzeInvoiceLayout,buildInvoiceLayoutOptimizationSuggestions,buildInvoiceLayoutOptimizationPlanPreview,buildInvoiceColumnOptimizationPreview,applyInvoiceLayoutOptimizationSuggestion,reduceInvoiceBlockFontSize} from "../utils/invoiceLayoutQuality.js";
+import {analyzeInvoiceLayout,buildInvoiceLayoutOptimizationSuggestions,buildInvoiceRenderedLayoutOptimizationSuggestions,buildInvoiceLayoutOptimizationPlanPreview,buildInvoiceColumnOptimizationPreview,applyInvoiceLayoutOptimizationSuggestion,reduceInvoiceBlockFontSize} from "../utils/invoiceLayoutQuality.js";
 import {estimateInvoiceTextOverflow,getInvoiceMarginWarnings,getInvoicePrintGeometry} from "../utils/invoicePrintFit.js";
 import {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics} from "../utils/invoiceRenderedPrintCheck.js";
 import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
@@ -221,6 +221,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [layoutScanLoading,setLayoutScanLoading]=useState(false);
   const [layoutScanError,setLayoutScanError]=useState("");
   const [layoutPlanPreview,setLayoutPlanPreview]=useState(null);
+  const [renderedLayoutPlanPreview,setRenderedLayoutPlanPreview]=useState(null);
   const [importedFile,setImportedFile]=useState(null);
   const [ocrScan,setOcrScan]=useState(null);
   const [ocrLoading,setOcrLoading]=useState(false);
@@ -365,6 +366,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
 
   const closeActualPrintPreview=()=>{
     setColumnOptimizationPreview(null);
+    setRenderedLayoutPlanPreview(null);
     setPrintPreviewOpen(false);
     setPrintPreviewReady(false);
     setPrintPreviewAudit(null);
@@ -443,11 +445,6 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     ()=>localDesign.templates.find(template=>template.id===localDesign.activeTemplateId)||localDesign.templates[0]||makeTemplate("clean-default","Clean","clean"),
     [localDesign]
   );
-  useEffect(()=>{
-    if(layoutPlanPreview&&(layoutPlanPreview.baseSnapshot!==JSON.stringify(activeTemplate.blocks)||layoutPlanPreview.suggestionsSnapshot!==JSON.stringify(layoutOptimizationSuggestions))){
-      setLayoutPlanPreview(null);
-    }
-  },[layoutPlanPreview,activeTemplate,layoutOptimizationSuggestions]);
   const printPageNavigation=buildInvoicePageNavigation(printPreviewAudit?.pageLayouts,printPreviewAudit?.warnings);
   const visibleTemplatePresets=INVOICE_DESIGN_PRESETS.filter(preset=>(templateCategory==="All industries"||preset.category===templateCategory)&&(!templateSearch.trim()||(preset.name+" "+preset.category+" "+preset.description).toLowerCase().includes(templateSearch.trim().toLowerCase())));
   const selectedTemplatePreset=visibleTemplatePresets.find(preset=>preset.key===selectedTemplateKey)||visibleTemplatePresets[0]||null;
@@ -498,6 +495,23 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     ...getInvoiceMarginWarnings(activeTemplate.pageSize,activeTemplate.orientation,printMargins)
   ],[activeTemplate.blocks,activeTemplate.pageSize,activeTemplate.orientation,previewColumns,previewFields,printMargins]);
   const layoutOptimizationSuggestions=useMemo(()=>buildInvoiceLayoutOptimizationSuggestions(activeTemplate.blocks,previewColumns,designWarnings),[activeTemplate.blocks,previewColumns,designWarnings]);
+  const renderedLayoutOptimizationSuggestions=useMemo(()=>[
+    ...layoutOptimizationSuggestions,
+    ...buildInvoiceRenderedLayoutOptimizationSuggestions(activeTemplate.blocks,printPreviewAudit?.warnings||[],previewColumns)
+  ],[activeTemplate.blocks,layoutOptimizationSuggestions,printPreviewAudit?.warnings,previewColumns]);
+  useEffect(()=>{
+    if(layoutPlanPreview&&(layoutPlanPreview.baseSnapshot!==JSON.stringify(activeTemplate.blocks)||layoutPlanPreview.suggestionsSnapshot!==JSON.stringify(layoutOptimizationSuggestions))){
+      setLayoutPlanPreview(null);
+    }
+  },[layoutPlanPreview,activeTemplate,layoutOptimizationSuggestions]);
+  useEffect(()=>{
+    if(renderedLayoutPlanPreview&&
+      (renderedLayoutPlanPreview.baseSnapshot!==JSON.stringify(activeTemplate.blocks)||
+       renderedLayoutPlanPreview.suggestionsSnapshot!==JSON.stringify(renderedLayoutOptimizationSuggestions))){
+      setRenderedLayoutPlanPreview(null);
+    }
+  },[renderedLayoutPlanPreview,activeTemplate.blocks,renderedLayoutOptimizationSuggestions]);
+
   const applyDesign=next=>{
     currentDesignRef.current=next;
     setLocalDesign(next);
@@ -613,6 +627,35 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setMessage(appliedCount+" reviewed layout change(s) applied in one step."+
       (skippedCount?" "+skippedCount+" suggestion(s) were skipped.":"")+
       " Use Undo to restore the previous design.");
+  };
+  const openRenderedLayoutPlanPreview=()=>{
+    const preview=buildInvoiceLayoutOptimizationPlanPreview(activeTemplate.blocks,renderedLayoutOptimizationSuggestions,previewColumns);
+    if(!preview||!preview.appliedCount){
+      setRenderedLayoutPlanPreview(null);
+      setMessage("No coordinated layout changes are safe to apply. Review the remaining print findings manually.");
+      return;
+    }
+    setRenderedLayoutPlanPreview(preview);
+  };
+  const applyRenderedLayoutPlanPreview=()=>{
+    if(!renderedLayoutPlanPreview)return;
+    if(renderedLayoutPlanPreview.baseSnapshot!==JSON.stringify(activeTemplate.blocks)||
+      renderedLayoutPlanPreview.suggestionsSnapshot!==JSON.stringify(renderedLayoutOptimizationSuggestions)){
+      setRenderedLayoutPlanPreview(null);
+      setMessage("The invoice layout or measured findings changed. Run the print check again before applying.");
+      return;
+    }
+    if(!renderedLayoutPlanPreview.appliedCount||!renderedLayoutPlanPreview.changes.length){
+      setRenderedLayoutPlanPreview(null);
+      setMessage("There are no safe coordinated changes to apply.");
+      return;
+    }
+    updateActive({blocks:renderedLayoutPlanPreview.blocks});
+    setSelectedBlockId(renderedLayoutPlanPreview.changes[0].blockId||selectedBlockId);
+    const count=renderedLayoutPlanPreview.appliedCount;
+    setRenderedLayoutPlanPreview(null);
+    closeActualPrintPreview();
+    setMessage(count+" coordinated layout change(s) applied. The next Actual print check will recalculate row heights and page distribution. Use Undo to restore the previous design.");
   };
   const openColumnOptimizationPreview=issue=>{
     const block=activeTemplate.blocks.find(item=>item.id===issue?.blockId);
@@ -1748,6 +1791,29 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               {printPreviewAudit&&(
                 <aside className={"invoice-builder-rendered-audit "+(printPreviewAudit.warnings.length?"has-warnings":"is-clear")} role="status" aria-live="polite">
                   <strong><i className={"bi "+(printPreviewAudit.hasErrors?"bi-x-circle":printPreviewAudit.warnings.length?"bi-exclamation-triangle":"bi-check-circle")}/>{printPreviewAudit.pageCount} page{printPreviewAudit.pageCount===1?"":"s"} measured · {printPreviewAudit.hasErrors?printPreviewAudit.warnings.filter(issue=>issue.severity==="error").length+" critical issue(s) blocking print":printPreviewAudit.warnings.length?printPreviewAudit.warnings.length+" issue"+(printPreviewAudit.warnings.length===1?"":"s")+" to review":"No measured clipping detected"}</strong>
+                  {renderedLayoutOptimizationSuggestions.length>0&&(
+                    <section className="invoice-builder-coordinated-optimizer" aria-label="Coordinated invoice layout optimizer">
+                      <div className="invoice-builder-coordinated-optimizer-heading">
+                        <div><strong>Coordinated layout optimizer</strong><small>{renderedLayoutOptimizationSuggestions.length} safe change(s) based on this rendered preview</small></div>
+                        <button type="button" className="btn btn-sm btn-outline-primary" onClick={openRenderedLayoutPlanPreview}>Review combined fixes</button>
+                      </div>
+                      <p>Checks item-column wrapping, table text size, available table height and totals placement together. Page count is recalculated when you reopen the print check.</p>
+                      {renderedLayoutPlanPreview&&(
+                        <div className="invoice-builder-coordinated-review">
+                          <div className="invoice-builder-layout-plan-review-heading">
+                            <div><strong>Before and after</strong><small>{printPreviewAudit.pageCount} page(s) measured before these changes · {renderedLayoutPlanPreview.appliedCount} ready to apply</small></div>
+                            <button type="button" className="btn btn-sm btn-light border" onClick={()=>setRenderedLayoutPlanPreview(null)}>Close</button>
+                          </div>
+                          <ul>{renderedLayoutPlanPreview.changes.map(change=><li key={change.id}><div><b>{change.title}</b><small>{change.summary}</small></div></li>)}</ul>
+                          <small className="invoice-builder-coordinated-review-note">These are safe layout recommendations, not a promise of fewer pages. The next preview runs the paginator again and measures the real result. Invoice quantities, rates, discounts, taxes, totals and payments are not changed.</small>
+                          <div className="invoice-builder-layout-plan-actions">
+                            <button type="button" className="btn btn-sm btn-light border" onClick={()=>setRenderedLayoutPlanPreview(null)}>Keep current design</button>
+                            <button type="button" className="btn btn-sm btn-primary" onClick={applyRenderedLayoutPlanPreview}>Apply reviewed changes</button>
+                          </div>
+                        </div>
+                      )}
+                    </section>
+                  )}
                   {printPreviewAudit.pageLayouts?.length>0&&(
                     <div className="invoice-builder-page-inspector">
                       <strong>Page-by-page layout</strong>

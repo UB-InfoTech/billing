@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { analyzeInvoiceLayout, applySafeInvoiceLayoutFixes, buildInvoiceLayoutOptimizationSuggestions, buildInvoiceLayoutOptimizationPlanPreview, buildInvoiceColumnOptimizationPreview, applyInvoiceLayoutOptimizationSuggestion, applyInvoiceLayoutOptimizationPlan } from "./invoiceLayoutQuality.js";
+import { analyzeInvoiceLayout, applySafeInvoiceLayoutFixes, buildInvoiceLayoutOptimizationSuggestions, buildInvoiceRenderedLayoutOptimizationSuggestions, buildInvoiceLayoutOptimizationPlanPreview, buildInvoiceColumnOptimizationPreview, applyInvoiceLayoutOptimizationSuggestion, applyInvoiceLayoutOptimizationPlan } from "./invoiceLayoutQuality.js";
 import { analyzeInvoicePagination } from "./invoicePaginationHints.js";
 import { analyzeRenderedInvoiceMetrics, measureRenderedInvoiceDocument } from "./invoiceRenderedPrintCheck.js";
 import {
@@ -732,4 +732,162 @@ test("combined layout review counts stale suggestions as skipped and leaves sour
 
 test("combined layout review returns no plan when no suggestions are supplied", () => {
   assert.equal(buildInvoiceLayoutOptimizationPlanPreview([], []), null);
+});
+
+
+test("rendered layout optimizer widens a measured wrapping column and expands the table only into clear space", () => {
+  const blocks = [
+    {
+      id: "items",
+      type: "items_table",
+      x: 5, y: 20, w: 90, h: 40, fontSize: 8,
+      columns: [
+        { key: "description", label: "Description", width: 20, visible: true },
+        { key: "amount", label: "Amount", width: 80, visible: true }
+      ]
+    },
+    { id: "totals", type: "totals", x: 60, y: 70, w: 35, h: 20 }
+  ];
+  const suggestions = buildInvoiceRenderedLayoutOptimizationSuggestions(blocks, [
+    {
+      id: "row-height",
+      title: "An invoice item row is taller than planned",
+      blockId: "items",
+      columnKey: "description",
+      columnLabel: "Description",
+      estimatedLines: 1,
+      actualLines: 2
+    },
+    {
+      id: "capacity",
+      title: "Invoice items exceed their allocated page space",
+      blockId: "items"
+    }
+  ]);
+
+  assert.equal(suggestions.length, 2);
+  assert.equal(suggestions[0].action, "optimize-item-column");
+  assert.equal(suggestions[1].action, "increase-item-table-height");
+  assert.equal(suggestions[1].nextHeight, 48.5);
+
+  const preview = buildInvoiceLayoutOptimizationPlanPreview(blocks, suggestions);
+  assert.equal(preview.appliedCount, 2);
+  assert.equal(preview.blocks[0].h, 48.5);
+  assert.ok(preview.blocks[0].columns[0].width > 20);
+  assert.equal(preview.blocks[0].columns.reduce((sum, column) => sum + column.width, 0), 100);
+  assert.equal(preview.blocks[1].y, 70);
+  assert.equal(blocks[0].h, 40);
+  assert.equal(blocks[0].columns[0].width, 20);
+  assert.match(preview.changes.find(change => change.action === "increase-item-table-height").summary, /40\.0% → 48\.5%/);
+});
+
+test("rendered layout optimizer reduces table font only when no safe column width change exists", () => {
+  const table = {
+    id: "items",
+    type: "items_table",
+    x: 0, y: 10, w: 100, h: 40, fontSize: 8,
+    columns: [
+      { key: "description", label: "Description", width: 97, visible: true },
+      { key: "amount", label: "Amount", width: 3, visible: true }
+    ]
+  };
+  const warnings = [{
+    id: "row-height",
+    title: "An invoice item row is taller than planned",
+    blockId: "items",
+    columnKey: "description",
+    columnLabel: "Description",
+    estimatedLines: 1,
+    actualLines: 2
+  }];
+  const reservedSpaceBlocks = [
+    table,
+    { id: "footer", type: "text", x: 0, y: 52, w: 100, h: 10 }
+  ];
+  const suggestions = buildInvoiceRenderedLayoutOptimizationSuggestions(reservedSpaceBlocks, warnings);
+  assert.equal(suggestions.length, 1);
+  assert.equal(suggestions[0].action, "fit-item-table-text");
+  const applied = applyInvoiceLayoutOptimizationSuggestion(reservedSpaceBlocks, suggestions[0]);
+  assert.equal(applied.changed, true);
+  assert.equal(applied.blocks[0].fontSize, 7);
+  assert.equal(table.fontSize, 8);
+});
+
+test("rendered layout optimizer moves totals only to a clear, on-page position after the item table", () => {
+  const blocks = [
+    { id: "items", type: "items_table", x: 0, y: 20, w: 100, h: 40 },
+    { id: "totals", type: "totals", x: 65, y: 45, w: 30, h: 15 }
+  ];
+  const suggestions = buildInvoiceRenderedLayoutOptimizationSuggestions(blocks, [{
+    id: "totals-overlap",
+    title: "The totals section overlaps invoice items",
+    blockId: "totals"
+  }]);
+  assert.equal(suggestions.length, 1);
+  assert.equal(suggestions[0].action, "move-totals-after-items");
+  assert.equal(suggestions[0].nextY, 61.5);
+
+  const applied = applyInvoiceLayoutOptimizationSuggestion(blocks, suggestions[0]);
+  assert.equal(applied.changed, true);
+  assert.equal(applied.blocks[1].y, 61.5);
+  assert.equal(blocks[1].y, 45);
+
+  const stale = [{ ...blocks[0], h: 42 }, blocks[1]];
+  const rejected = applyInvoiceLayoutOptimizationSuggestion(stale, suggestions[0]);
+  assert.equal(rejected.changed, false);
+  assert.match(rejected.reason, /placement changed/);
+});
+
+test("rendered layout optimizer never grows the item table into another element or moves totals off the page", () => {
+  const crowded = [
+    { id: "items", type: "items_table", x: 0, y: 20, w: 100, h: 40 },
+    { id: "notes", type: "text", x: 0, y: 62, w: 100, h: 15 },
+    { id: "totals", type: "totals", x: 65, y: 80, w: 30, h: 15 }
+  ];
+  const heightSuggestions = buildInvoiceRenderedLayoutOptimizationSuggestions(crowded, [{
+    id: "capacity",
+    title: "Invoice items exceed their allocated page space",
+    blockId: "items"
+  }]);
+  assert.equal(heightSuggestions.some(item => item.action === "increase-item-table-height"), false);
+
+  const totalsTooLow = [
+    { id: "items", type: "items_table", x: 0, y: 20, w: 100, h: 65 },
+    { id: "totals", type: "totals", x: 65, y: 80, w: 30, h: 20 }
+  ];
+  const totalsSuggestions = buildInvoiceRenderedLayoutOptimizationSuggestions(totalsTooLow, [{
+    id: "totals-overlap",
+    title: "The totals section overlaps invoice items",
+    blockId: "totals"
+  }]);
+  assert.equal(totalsSuggestions.some(item => item.action === "move-totals-after-items"), false);
+});
+
+test("combined rendered layout plan keeps invoice financial values untouched", () => {
+  const blocks = [
+    {
+      id: "items", type: "items_table", x: 0, y: 10, w: 100, h: 45,
+      fontSize: 8, amount: 2400, tax: 18, due: 500,
+      columns: [
+        { key: "description", label: "Description", width: 25, visible: true },
+        { key: "amount", label: "Amount", width: 75, visible: true }
+      ]
+    },
+    { id: "totals", type: "totals", x: 65, y: 50, w: 30, h: 15, grandTotal: 2400 }
+  ];
+  const suggestions = buildInvoiceRenderedLayoutOptimizationSuggestions(blocks, [{
+    id: "row-height",
+    title: "An invoice item row is taller than planned",
+    blockId: "items",
+    columnKey: "description",
+    estimatedLines: 1,
+    actualLines: 2
+  }]);
+  const preview = buildInvoiceLayoutOptimizationPlanPreview(blocks, suggestions);
+  assert.equal(preview.blocks[0].amount, 2400);
+  assert.equal(preview.blocks[0].tax, 18);
+  assert.equal(preview.blocks[0].due, 500);
+  assert.equal(preview.blocks[1].grandTotal, 2400);
+  assert.equal(blocks[0].fontSize, 8);
+  assert.equal(blocks[0].columns[0].width, 25);
 });

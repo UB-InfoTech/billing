@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { analyzeInvoiceLayout, applySafeInvoiceLayoutFixes, buildInvoiceLayoutOptimizationSuggestions, buildInvoiceColumnOptimizationPreview, applyInvoiceLayoutOptimizationSuggestion, applyInvoiceLayoutOptimizationPlan } from "./invoiceLayoutQuality.js";
+import { analyzeInvoiceLayout, applySafeInvoiceLayoutFixes, buildInvoiceLayoutOptimizationSuggestions, buildInvoiceLayoutOptimizationPlanPreview, buildInvoiceColumnOptimizationPreview, applyInvoiceLayoutOptimizationSuggestion, applyInvoiceLayoutOptimizationPlan } from "./invoiceLayoutQuality.js";
 import { analyzeInvoicePagination } from "./invoicePaginationHints.js";
 import { analyzeRenderedInvoiceMetrics, measureRenderedInvoiceDocument } from "./invoiceRenderedPrintCheck.js";
 import {
@@ -667,4 +667,69 @@ test("applying the optimization plan changes layout only and keeps financial fie
   assert.equal(result.blocks[0].tax, 18);
   assert.equal(result.blocks[0].due, 500);
   assert.equal(blocks[0].x, 95);
+});
+
+
+test("combined layout review previews positions, text size and table columns without mutating the design", () => {
+  const hidden = { key: "internal", label: "Hidden", width: 18, visible: false };
+  const blocks = [
+    { id: "customer", type: "field", label: "Customer", x: 95, y: 10, w: 10, h: 10, fontSize: 12, amount: 900, tax: 18 },
+    {
+      id: "items",
+      type: "items_table",
+      label: "Invoice items",
+      x: 0, y: 20, w: 100, h: 40,
+      columns: [
+        { key: "description", label: "Description", width: 60 },
+        { key: "amount", label: "Amount", width: 60 },
+        hidden
+      ]
+    }
+  ];
+  const suggestions = buildInvoiceLayoutOptimizationSuggestions(blocks, [], [
+    { fixAction: "fit-text", blockId: "customer", suggestedFontSize: 9 }
+  ]);
+  const preview = buildInvoiceLayoutOptimizationPlanPreview(blocks, suggestions);
+
+  assert.ok(preview);
+  assert.equal(preview.appliedCount, 3);
+  assert.equal(preview.skippedCount, 0);
+  assert.equal(preview.changes.length, 3);
+  assert.equal(preview.blocks[0].x, 90);
+  assert.equal(preview.blocks[0].fontSize, 9);
+  assert.equal(preview.blocks[0].amount, 900);
+  assert.equal(preview.blocks[0].tax, 18);
+  assert.equal(preview.blocks[1].columns.filter(column => column.visible !== false).reduce((sum, column) => sum + column.width, 0), 100);
+  assert.deepEqual(preview.blocks[1].columns[2], hidden);
+  assert.match(preview.changes.find(change => change.action === "move-inside-page").summary, /95\.0%, 10\.0% to 90\.0%, 10\.0%/);
+  assert.match(preview.changes.find(change => change.action === "fit-text").summary, /12\.0 px → 9\.0 px/);
+  assert.match(preview.changes.find(change => change.action === "normalize-item-columns").summary, /Description 60\.0% → 50\.0%/);
+  assert.equal(blocks[0].x, 95);
+  assert.equal(blocks[0].fontSize, 12);
+  assert.equal(blocks[1].columns[0].width, 60);
+  assert.equal(preview.baseSnapshot, JSON.stringify(blocks));
+});
+
+test("combined layout review counts stale suggestions as skipped and leaves source blocks unchanged", () => {
+  const blocks = [{ id: "customer", type: "field", label: "Customer", x: 95, y: 10, w: 10, h: 10 }];
+  const suggestions = buildInvoiceLayoutOptimizationSuggestions(blocks);
+  suggestions.push({
+    id: "stale-font",
+    action: "fit-text",
+    blockId: "customer",
+    title: "Fit text in Customer",
+    expectedFontSize: 99,
+    nextFontSize: 8
+  });
+  const preview = buildInvoiceLayoutOptimizationPlanPreview(blocks, suggestions);
+  assert.equal(preview.appliedCount, 1);
+  assert.equal(preview.skippedCount, 1);
+  assert.equal(preview.changes.length, 1);
+  assert.equal(preview.blocks[0].x, 90);
+  assert.equal(preview.blocks[0].fontSize, undefined);
+  assert.equal(blocks[0].x, 95);
+});
+
+test("combined layout review returns no plan when no suggestions are supplied", () => {
+  assert.equal(buildInvoiceLayoutOptimizationPlanPreview([], []), null);
 });

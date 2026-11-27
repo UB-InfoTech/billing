@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { analyzeInvoiceLayout, applySafeInvoiceLayoutFixes, buildInvoiceLayoutOptimizationSuggestions, buildInvoiceRenderedLayoutOptimizationSuggestions, buildInvoiceLayoutOptimizationPlanPreview, buildInvoiceColumnOptimizationPreview, applyInvoiceLayoutOptimizationSuggestion, applyInvoiceLayoutOptimizationPlan } from "./invoiceLayoutQuality.js";
+import { INVOICE_DESIGN_PRESETS, createInvoiceDesignTemplate } from "./invoiceTemplateLibrary.js";
 import { analyzeInvoicePagination } from "./invoicePaginationHints.js";
 import { analyzeRenderedInvoiceMetrics, measureRenderedInvoiceDocument } from "./invoiceRenderedPrintCheck.js";
 import {
@@ -890,4 +891,44 @@ test("combined rendered layout plan keeps invoice financial values untouched", (
   assert.equal(preview.blocks[1].grandTotal, 2400);
   assert.equal(blocks[0].fontSize, 8);
   assert.equal(blocks[0].columns[0].width, 25);
+});
+
+test("all ready-made invoice templates stay inside the page and keep their closing areas clear", () => {
+  assert.equal(INVOICE_DESIGN_PRESETS.length, 14);
+
+  INVOICE_DESIGN_PRESETS.forEach(preset => {
+    const design = createInvoiceDesignTemplate("qa-" + preset.key, preset.key);
+    const ids = design.blocks.map(block => block.id);
+    assert.equal(new Set(ids).size, ids.length, preset.name + " must use unique element IDs");
+
+    design.blocks.filter(block => block.visible !== false).forEach(block => {
+      assert.ok(Number.isFinite(block.x) && Number.isFinite(block.y), preset.name + " has finite element positions");
+      assert.ok(Number.isFinite(block.w) && Number.isFinite(block.h), preset.name + " has finite element sizes");
+      assert.ok(block.w > 0 && block.h > 0, preset.name + " has non-zero visible element sizes");
+      assert.ok(block.x >= 0 && block.y >= 0, preset.name + " keeps visible elements within the page origin");
+      assert.ok(block.x + block.w <= 100.001, preset.name + " keeps visible elements within the page width");
+      assert.ok(block.y + block.h <= 100.001, preset.name + " keeps visible elements within the page height");
+    });
+
+    const fieldKeys = new Set(design.blocks.filter(block => block.type === "field").map(block => block.fieldKey));
+    ["company_name", "customer_name", "invoice_title", "invoice_no", "invoice_date"].forEach(key => {
+      assert.ok(fieldKeys.has(key), preset.name + " includes " + key);
+    });
+
+    const tables = design.blocks.filter(block => block.type === "items_table");
+    assert.equal(tables.length, 1, preset.name + " has exactly one line-item table");
+    const visibleColumns = tables[0].columns.filter(column => column.visible !== false);
+    assert.ok(visibleColumns.length > 0, preset.name + " has visible item columns");
+    const visibleColumnWidth = visibleColumns.reduce((sum, column) => sum + Number(column.width || 0), 0);
+    assert.ok(Math.abs(visibleColumnWidth - 100) < 0.001, preset.name + " item columns fill exactly 100%");
+
+    const totalsPanel = design.blocks.find(block => block.id === "totals-panel");
+    const signatureRule = design.blocks.find(block => block.id === "signature-rule");
+    assert.ok(totalsPanel && signatureRule, preset.name + " reserves both totals and signatory areas");
+    assert.ok(
+      totalsPanel.y + totalsPanel.h <= signatureRule.y,
+      preset.name + " keeps the signatory rule below, not inside, the totals panel"
+    );
+    assert.ok(design.blocks.some(block => block.type === "totals"), preset.name + " includes invoice totals");
+  });
 });

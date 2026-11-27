@@ -365,6 +365,26 @@ test("long custom invoices continue on additional pages and repeat invoice heade
   assert.ok(Math.max(...fillRatios)-Math.min(...fillRatios)<0.12,"item pages should have reasonably balanced printable-area utilization");
 });
 
+test("final-page row auto-fit avoids an unnecessary closing-only invoice page",()=>{
+ const template={pageSize:"A4",orientation:"portrait",blocks:[
+  {id:"items",type:"items_table",x:5,y:20,w:90,h:20,fontSize:8,tableCellPadding:4,visible:true,
+   columns:[{key:"description",label:"Description",width:20,visible:true},{key:"amount",label:"Amount",width:80,visible:true}]},
+  {id:"totals",type:"totals",x:65,y:35,w:30,h:8,visible:true}
+ ]};
+ const item={orderName:"premium embroidered fabric finishing instructions with custom measurements ".repeat(5),quantity:1,qtyUnit:"PCS",unitPrice:100,shortPcs:0};
+ const pages=buildInvoiceDesignPages(template,[item]);
+ assert.equal(pages.length,1,"a row that can be safely auto-fitted should share the final page with totals");
+ const page=pages[0];
+ assert.equal(page.closingOnly,false);
+ assert.equal(page.rows.length,1);
+ assert.equal(page.rows[0].finalPageAutoFitted,true);
+ assert.equal(page.rows[0].autoFitted,true);
+ assert.ok(page.rows[0].fontSize<8||page.rows[0].cellPaddingPx<4);
+ assert.ok(page.rowHeightTotalMm<=page.itemCapacityMm+0.01);
+ assert.ok(page.blocks.some(block=>block.id==="totals"));
+ assert.equal(page.blocks.find(block=>block.id==="totals").y,35,"user-designed totals position must remain unchanged");
+});
+
 test("invoice pagination respects paper size and orientation and always keeps at least one row",()=>{
   const base={blocks:[{type:"items_table",x:5,y:10,w:90,h:25}]};
   assert.ok(getInvoiceRowsPerPage({...base,pageSize:"A5",orientation:"portrait"})<getInvoiceRowsPerPage({...base,pageSize:"A4",orientation:"portrait"}));

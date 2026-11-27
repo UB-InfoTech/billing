@@ -132,13 +132,16 @@ function estimateWrappedLineCount(value,availableUnits){
   return Math.max(1,lineCount);
 }
 
-function estimateInvoiceItemRow(item,columns,metrics,table,options={},itemNumber=0){
+function estimateInvoiceItemRow(item,columns,metrics,table,options={},itemNumber=0,maxRowHeightMmOverride=null){
   const defaultFontSize=clamp(table.fontSize,6,48,8);
   const defaultPaddingPx=clamp(table.tableCellPadding,1,10,4);
   const borderMm=Math.max(0.5,clamp(table.tableBorderWidth,0,3,1)*25.4/96);
-  const maxRowHeightMm=Number.isFinite(Number(metrics.tableHeightMm))
-    ?Math.max(0,Number(metrics.tableHeightMm)-HEADER_HEIGHT_MM-SAFETY_GAP_MM)
-    :Infinity;
+  const hasHeightOverride=maxRowHeightMmOverride!==null&&maxRowHeightMmOverride!==undefined&&Number.isFinite(Number(maxRowHeightMmOverride));
+  const maxRowHeightMm=hasHeightOverride
+    ?Math.max(0,Number(maxRowHeightMmOverride))
+    :Number.isFinite(Number(metrics.tableHeightMm))
+      ?Math.max(0,Number(metrics.tableHeightMm)-HEADER_HEIGHT_MM-SAFETY_GAP_MM)
+      :Infinity;
 
   const measure=(fontSize,cellPaddingPx)=>{
     const paddingMm=cellPaddingPx*25.4/96;
@@ -334,7 +337,7 @@ function balanceInvoicePageRows(pages,normalCapacityMm,finalCapacityMm,hasClosin
   return pages;
 }
 
-function paginateInvoiceRows(rows,normalCapacityMm,finalCapacityMm,hasClosingReservation){
+function paginateInvoiceRows(rows,normalCapacityMm,finalCapacityMm,hasClosingReservation,fitRowToFinalCapacity){
   if(!rows.length)return [[]];
   const pages=[];
   let cursor=0;
@@ -357,9 +360,23 @@ function paginateInvoiceRows(rows,normalCapacityMm,finalCapacityMm,hasClosingRes
     if(cursor+take===rows.length&&hasClosingReservation){
       let finalStart=rows.length,finalHeight=0;
       while(finalStart>cursor){
-        const candidateHeight=Number(rows[finalStart-1].rowHeightMm)||MIN_ROW_HEIGHT_MM;
+        let candidate=rows[finalStart-1];
+        let candidateHeight=Number(candidate?.rowHeightMm)||MIN_ROW_HEIGHT_MM;
+        const availableHeight=Math.max(0,finalCapacityMm-finalHeight);
+        if(finalHeight+candidateHeight>finalCapacityMm+0.01&&typeof fitRowToFinalCapacity==="function"){
+          const fitted=fitRowToFinalCapacity(candidate,availableHeight);
+          if(fitted&&!fitted.exceedsTableArea&&Number(fitted.rowHeightMm)<=availableHeight+0.01){
+            candidate={...fitted,finalPageAutoFitted:true};
+            rows[finalStart-1]=candidate;
+            candidateHeight=Number(candidate.rowHeightMm)||MIN_ROW_HEIGHT_MM;
+          }
+        }
         if(finalHeight+candidateHeight>finalCapacityMm+0.01)break;
-        finalStart-=1;finalHeight+=candidateHeight;
+        finalStart-=1;
+        finalHeight+=candidateHeight;
+      }
+      if(finalStart===cursor){
+        pages.push(rows.slice(cursor));cursor=rows.length;break;
       }
       if(finalStart>cursor&&finalStart<rows.length)take=finalStart-cursor;
       else{pages.push(rows.slice(cursor));cursor=rows.length;pages.push([]);break;}
@@ -392,7 +409,16 @@ function buildInvoiceDesignPages(template={},items=[],options={}){
         exceedsTableArea:estimate.exceedsTableArea
       };
     });
-    pageRows.push(...paginateInvoiceRows(estimatedRows,normalCapacityMm,finalCapacityMm,closingLayout.reservedClosingSpaceMm>0));
+    const fitRowToFinalCapacity=(row,maxHeightMm)=>{
+      const estimate=estimateInvoiceItemRow(
+        row.item,columns,tableMetrics,itemTable,options,row.itemNumber,maxHeightMm
+      );
+      return estimate.exceedsTableArea?null:{...row,...estimate};
+    };
+    pageRows.push(...paginateInvoiceRows(
+      estimatedRows,normalCapacityMm,finalCapacityMm,
+      closingLayout.reservedClosingSpaceMm>0,fitRowToFinalCapacity
+    ));
   }
   if(!pageRows.length)pageRows.push([]);
   const pageCount=pageRows.length;

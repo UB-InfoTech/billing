@@ -232,3 +232,33 @@ test("layout analysis reports overlapping elements without proposing an unsafe m
   assert.ok(overlap);
   assert.equal(overlap.fixable, false);
 });
+
+
+test("page navigation groups page-specific warnings without counting global warnings", async () => {
+  const { buildInvoicePageNavigation } = await import("./invoicePreviewNavigation.js");
+  const pages = buildInvoicePageNavigation([
+    { pageNumber: 1, itemCount: 8 },
+    { pageNumber: 2, itemCount: 2, reservedClosingSpaceMm: 24 },
+    { pageNumber: 3, itemCount: 0, closingOnly: true }
+  ], [
+    { pageNumber: 1, severity: "warning" },
+    { pageNumber: 2, severity: "error" },
+    { pageNumber: 2, severity: "warning" },
+    { severity: "warning", title: "Global preview warning" }
+  ]);
+
+  assert.deepEqual(pages, [
+    { pageNumber: 1, itemCount: 8, closingOnly: false, reservedClosingSpaceMm: 0, errorCount: 0, warningCount: 1, issueCount: 1 },
+    { pageNumber: 2, itemCount: 2, closingOnly: false, reservedClosingSpaceMm: 24, errorCount: 1, warningCount: 1, issueCount: 2 },
+    { pageNumber: 3, itemCount: 0, closingOnly: true, reservedClosingSpaceMm: 0, errorCount: 0, warningCount: 0, issueCount: 0 }
+  ]);
+});
+
+test("page navigation tolerates missing page data and malformed warnings", async () => {
+  const { buildInvoicePageNavigation } = await import("./invoicePreviewNavigation.js");
+  assert.deepEqual(buildInvoicePageNavigation(null, null), []);
+  assert.deepEqual(buildInvoicePageNavigation([{}, { pageNumber: "4", itemCount: -3 }], [null, { pageNumber: 4, severity: "error" }]), [
+    { pageNumber: 1, itemCount: 0, closingOnly: false, reservedClosingSpaceMm: 0, errorCount: 0, warningCount: 0, issueCount: 0 },
+    { pageNumber: 4, itemCount: 0, closingOnly: false, reservedClosingSpaceMm: 0, errorCount: 1, warningCount: 0, issueCount: 1 }
+  ]);
+});

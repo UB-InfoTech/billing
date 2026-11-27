@@ -2,6 +2,7 @@ const test=require("node:test");
 const assert=require("node:assert/strict");
 const path=require("node:path");
 const ejs=require("ejs");
+const {buildInvoiceDesignPages}=require("../utils/invoiceDesignPagination");
 
 const templatePath=path.join(__dirname,"../public/invoiceTable.ejs");
 const baseConfig={

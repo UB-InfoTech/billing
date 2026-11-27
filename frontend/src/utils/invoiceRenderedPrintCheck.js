@@ -48,6 +48,8 @@ export function measureRenderedInvoiceDocument(documentRef){
   return {
     pages:sheets.map((sheet,pageIndex)=>{
       const sheetRect=sheet.getBoundingClientRect();
+      const contentArea=sheet.querySelector?.(".design-content-area");
+      const contentAreaRect=contentArea?.getBoundingClientRect?.();
       const blocks=Array.from(sheet.querySelectorAll(".design-block")).map((block,blockIndex)=>{
         const bounds=getRect(block,sheetRect);
         const type=block.getAttribute("data-block-type")||"";
@@ -149,6 +151,7 @@ export function measureRenderedInvoiceDocument(documentRef){
         closingOnly:sheet.getAttribute?.("data-page-closing-only")==="true",
         width:Number(sheet.clientWidth)||sheetRect.width,
         height:Number(sheet.clientHeight)||sheetRect.height,
+        contentAreaHeightPx:Number(contentAreaRect?.height)||null,
         blocks
       };
     })
@@ -262,7 +265,7 @@ function auditInvoiceItemRowGeometry(table,pageNumber,warnings){
 
 const CLOSING_FIELD_KEYS=new Set(["amount_words","amount_paid","balance_due","bank_details","terms","signature"]);
 
-function auditInvoiceRowsAgainstClosingBlocks(table,pageBlocks,pageNumber,warnings){
+function auditInvoiceRowsAgainstClosingBlocks(table,pageBlocks,pageNumber,page,warnings){
   if(!table||!Array.isArray(table.rows)||!Array.isArray(pageBlocks))return;
   const closingBlocks=pageBlocks.filter(block=>
     block&&block!==table&&(
@@ -291,6 +294,11 @@ function auditInvoiceRowsAgainstClosingBlocks(table,pageBlocks,pageNumber,warnin
       const overlapHeight=Math.min(rowBounds.bottom,closingBounds.bottom)-Math.max(rowBounds.top,closingBounds.top);
       if(overlapWidth<=RECT_TOLERANCE_PX||overlapHeight<=RECT_TOLERANCE_PX)return;
 
+      const contentAreaHeightPx=Number(page?.contentAreaHeightPx);
+      const clearanceShiftPx=Math.max(0,rowBounds.bottom-closingBounds.top)+6;
+      const suggestedShiftYPercent=Number.isFinite(contentAreaHeightPx)&&contentAreaHeightPx>0
+        ?Number((Math.ceil(clearanceShiftPx/contentAreaHeightPx*1000)/10).toFixed(1))
+        :null;
       const itemName=String(row.label||"").trim();
       const closingName=String(closingBlock.label||(
         closingBlock.type==="totals"?"Invoice totals":closingBlock.fieldKey||"Closing details"
@@ -308,7 +316,8 @@ function auditInvoiceRowsAgainstClosingBlocks(table,pageBlocks,pageNumber,warnin
         overlappingBlockType:closingBlock.type,
         overlappingBlockLabel:closingName,
         overlapWidthPx:Number(overlapWidth.toFixed(2)),
-        overlapHeightPx:Number(overlapHeight.toFixed(2))
+        overlapHeightPx:Number(overlapHeight.toFixed(2)),
+        suggestedShiftYPercent
       });
     });
   });
@@ -676,7 +685,7 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
     });
     itemTables.forEach(table=>{
       auditInvoiceItemRowGeometry(table,pageNumber,warnings);
-      auditInvoiceRowsAgainstClosingBlocks(table,pageBlocks,pageNumber,warnings);
+      auditInvoiceRowsAgainstClosingBlocks(table,pageBlocks,pageNumber,page,warnings);
     });
     if(itemTables.length>1){
       addWarning(warnings,{

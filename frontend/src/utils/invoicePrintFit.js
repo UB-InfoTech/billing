@@ -1,5 +1,6 @@
 const PAGE_DIMENSIONS_MM={A4:{width:210,height:297},A5:{width:148,height:210},Letter:{width:215.9,height:279.4}};
 const safeMm=value=>Math.max(0,Math.min(25,Number.isFinite(Number(value))?Number(value):0));
+const clamp=(value,min,max)=>Math.min(max,Math.max(min,value));
 export function getInvoicePrintGeometry(pageSize="A4",orientation="portrait",printMargins={}){
  const base=PAGE_DIMENSIONS_MM[pageSize]||PAGE_DIMENSIONS_MM.A4,landscape=orientation==="landscape";
  const widthMm=landscape?base.height:base.width,heightMm=landscape?base.width:base.height;

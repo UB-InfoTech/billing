@@ -1731,6 +1731,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                       <div className="invoice-builder-template-card-copy">
                         <strong>{preset.name}</strong>
                         <small>{preset.category}</small>
+                        <span className="invoice-builder-template-card-description">{preset.description}</span>
                       </div>
                     </article>
                   ))}

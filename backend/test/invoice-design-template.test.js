@@ -145,7 +145,8 @@ test("custom invoice tables align numeric columns and emphasize totals without c
   };
   const html=await ejs.renderFile(templatePath,{...locals,invoiceConfig});
   assert.match(html,/class="design-cell is-centered"/);
-  assert.match(html,/class="design-cell is-numeric is-nowrap"/);
+  assert.match(html,/class="design-cell is-numeric"/);
+  assert.doesNotMatch(html,/class="design-cell is-numeric is-nowrap"/,"numeric cells must be allowed to wrap instead of spilling into adjacent columns");
   assert.match(html,/text-align:right/);
   assert.match(html,/\.design-totals \.grand/);
   assert.match(html,/font-variant-numeric:tabular-nums/);
@@ -153,6 +154,42 @@ test("custom invoice tables align numeric columns and emphasize totals without c
   assert.match(html,/>₹ 236\.00<\/b>/);
 });
 
+
+test("large numeric invoice amounts wrap inside their own table cells",async()=>{
+  const template={
+    id:"large-number-wrapping",
+    name:"Large number wrapping",
+    pageSize:"A4",
+    orientation:"portrait",
+    blocks:[{
+      id:"items",type:"items_table",x:5,y:20,w:90,h:40,fontSize:8,
+      tableCellPadding:4,visible:true,
+      columns:[
+        {key:"amount",label:"Amount",width:5,visible:true,order:0},
+        {key:"description",label:"Description",width:95,visible:true,order:1}
+      ]
+    }]
+  };
+  const items=[{
+    orderName:"High-value order line",quantity:999,qtyUnit:"PCS",
+    unitPrice:999999999999,shortPcs:0
+  }];
+  const pages=buildInvoiceDesignPages(template,items);
+  const row=pages[0].rows[0];
+  const amountEstimate=row.columnEstimates.find(column=>column.key==="amount");
+  assert.ok(amountEstimate.estimatedLines>1,"long financial values should be measured as wrapped content");
+  const html=await ejs.renderFile(templatePath,{
+    ...locals,
+    subOrders:items,
+    invoiceConfig:{
+      ...baseConfig,
+      design:{enabled:true,activeTemplateId:template.id,templates:[template]}
+    },
+    invoicePages:pages
+  });
+  assert.match(html,/class="design-cell is-numeric" data-column-key="amount"[^>]*data-estimated-lines="[2-9]/);
+  assert.doesNotMatch(html,/class="design-cell is-numeric is-nowrap"/);
+});
 
 test("multipage print shows page ranges and continued captions without overlapping the business header",async()=>{
   const template={

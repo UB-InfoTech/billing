@@ -293,7 +293,6 @@ test("rendered invoice measurements identify each cell's estimated and actual wr
     getAttribute: name => ({
       "data-column-key": "description",
       "data-column-label": "Description",
-      "data-column-index": "0",
       "data-estimated-lines": "1"
     }[name] ?? null),
     querySelector: () => textElement,

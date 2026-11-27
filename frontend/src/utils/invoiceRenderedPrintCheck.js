@@ -218,6 +218,15 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
     const pageNumber=Number(page.pageNumber)||pageIndex+1;
     const pageWidth=Math.max(0,Number(page.width)||0);
     const pageHeight=Math.max(0,Number(page.height)||0);
+    if(!pageWidth||!pageHeight){
+      addWarning(warnings,{
+        id:"page-geometry-unmeasured-"+pageNumber,
+        severity:"error",
+        title:"Page dimensions could not be measured",
+        detail:"Page "+pageNumber+" has no measurable width or height. The preview cannot verify paper size or page boundaries, so printing is paused until the preview can be measured.",
+        pageNumber
+      });
+    }
     if(expected&&pageWidth&&pageHeight){
       const widthDeviation=Math.abs(pageWidth-expected.widthPx)/expected.widthPx;
       const heightDeviation=Math.abs(pageHeight-expected.heightPx)/expected.heightPx;

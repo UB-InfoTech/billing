@@ -324,9 +324,11 @@ test("rendered invoice measurements identify each cell's estimated and actual wr
     querySelector: selector => selector === ".design-items" ? table : null,
     querySelectorAll: () => []
   };
+  const contentArea = { getBoundingClientRect: () => makeRect(760, 1000, 60, 17) };
   const sheet = {
     clientWidth: 794, clientHeight: 1123,
     getBoundingClientRect: () => makeRect(794, 1123),
+    querySelector: selector => selector === ".design-content-area" ? contentArea : null,
     getAttribute: name => ({
       "data-page-number": "1",
       "data-page-item-count": "1",
@@ -353,6 +355,7 @@ test("rendered invoice measurements identify each cell's estimated and actual wr
   assert.equal(measuredCell.columnLabel, "Description");
   assert.equal(measuredCell.estimatedLines, 1);
   assert.equal(measuredCell.actualLines, 3);
+  assert.equal(measured.pages[0].contentAreaHeightPx, 1000);
 });
 
 test("tall item-row warnings name the row and the column that wrapped more than estimated", () => {
@@ -409,6 +412,7 @@ test("actual print audit blocks printing when rendered item rows overlap invoice
       pageNumber:2,
       width:793.7,
       height:1122.5,
+      contentAreaHeightPx:1000,
       blocks:[
         {
           id:"items",type:"items_table",
@@ -440,6 +444,7 @@ test("actual print audit blocks printing when rendered item rows overlap invoice
   assert.equal(issue.overlappingBlockId,"totals");
   assert.ok(issue.overlapWidthPx>0);
   assert.ok(issue.overlapHeightPx>0);
+  assert.equal(issue.suggestedShiftYPercent,2.4,"the measured shift includes a small safety gap and uses printable-area height");
   assert.equal(audit.hasErrors,true);
 });
 
@@ -850,6 +855,72 @@ test("rendered layout optimizer widens a measured wrapping column and expands th
   assert.equal(blocks[0].h, 40);
   assert.equal(blocks[0].columns[0].width, 20);
   assert.match(preview.changes.find(change => change.action === "increase-item-table-height").summary, /40\.0% → 48\.5%/);
+});
+
+test("rendered layout optimizer previews and applies a safe closing-element shift from measured row overlap",()=>{
+  const blocks=[
+    {
+      id:"items",type:"items_table",label:"Items",
+      x:5,y:20,w:90,h:40,fontSize:8,
+      columns:[
+        {key:"description",label:"Description",width:60,visible:true},
+        {key:"amount",label:"Amount",width:40,visible:true}
+      ]
+    },
+    {id:"totals",type:"totals",label:"Invoice totals",x:60,y:61,w:35,h:20},
+    {id:"signature",type:"field",fieldKey:"signature",label:"Signature",x:60,y:84,w:35,h:8}
+  ];
+  const warnings=[{
+    id:"item-closing-overlap-2-items-8-totals",
+    title:"An item row overlaps invoice closing details",
+    blockId:"items",
+    overlappingBlockId:"totals",
+    itemNumber:8,
+    suggestedShiftYPercent:2.4
+  }];
+  const suggestions=buildInvoiceRenderedLayoutOptimizationSuggestions(blocks,warnings);
+  assert.equal(suggestions.length,1);
+  const suggestion=suggestions[0];
+  assert.equal(suggestion.action,"move-closing-clear-of-items");
+  assert.equal(suggestion.blockId,"totals");
+  assert.equal(suggestion.nextY,63.4);
+  assert.deepEqual(suggestion.measuredItemNumbers,[8]);
+
+  const preview=buildInvoiceLayoutOptimizationPlanPreview(blocks,suggestions);
+  assert.equal(preview.appliedCount,1);
+  assert.equal(preview.skippedCount,0);
+  assert.equal(preview.blocks[1].y,63.4);
+  assert.match(preview.changes[0].summary,/Invoice totals from 61\.0% to 63\.4% \(\+2\.4%\)/);
+  assert.match(preview.changes[0].summary,/item 8/);
+  assert.equal(blocks[1].y,61,"preview creation must not mutate the saved design");
+
+  const applied=applyInvoiceLayoutOptimizationSuggestion(blocks,suggestion);
+  assert.equal(applied.changed,true);
+  assert.equal(applied.blocks[1].y,63.4);
+  assert.equal(blocks[1].y,61);
+
+  const stale=[blocks[0],{...blocks[1],y:62},blocks[2]];
+  const rejected=applyInvoiceLayoutOptimizationSuggestion(stale,suggestion);
+  assert.equal(rejected.changed,false);
+  assert.match(rejected.reason,/changed after this measurement/);
+});
+
+test("rendered layout optimizer refuses a closing-element shift that would collide or leave the page",()=>{
+  const table={id:"items",type:"items_table",x:5,y:20,w:90,h:40,fontSize:8};
+  const totals={id:"totals",type:"totals",x:60,y:61,w:35,h:20};
+  const signature={id:"signature",type:"field",fieldKey:"signature",x:60,y:82,w:35,h:10};
+  const blocked=buildInvoiceRenderedLayoutOptimizationSuggestions([table,totals,signature],[{
+    title:"An item row overlaps invoice closing details",
+    blockId:"items",overlappingBlockId:"totals",itemNumber:3,suggestedShiftYPercent:2.4
+  }]);
+  assert.equal(blocked.some(suggestion=>suggestion.action==="move-closing-clear-of-items"),false);
+  const offPage=buildInvoiceRenderedLayoutOptimizationSuggestions([
+    table,{...totals,y:80,h:18}
+  ],[{
+    title:"An item row overlaps invoice closing details",
+    blockId:"items",overlappingBlockId:"totals",itemNumber:3,suggestedShiftYPercent:2.4
+  }]);
+  assert.equal(offPage.some(suggestion=>suggestion.action==="move-closing-clear-of-items"),false);
 });
 
 test("rendered layout optimizer reduces table font only when no safe column width change exists", () => {

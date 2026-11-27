@@ -947,3 +947,18 @@ test("embroidery job-work template includes its real production and fabric billi
   const design = createInvoiceDesignTemplate("qa-embroidery", preset.key);
   assert.ok(design.blocks.some(block => block.id === "items-caption" && block.text === "EMBROIDERY & JOB WORK DETAILS"));
 });
+
+
+test("ready-made invoice templates use more legible print sizes for tables, totals and supporting details",()=>{
+  INVOICE_DESIGN_PRESETS.forEach(preset=>{
+    const design=createInvoiceDesignTemplate("type-qa-"+preset.key,preset.key);
+    const itemTable=design.blocks.find(block=>block.type==="items_table");
+    const totals=design.blocks.find(block=>block.type==="totals");
+    const amountWords=design.blocks.find(block=>block.id==="amount-in-words");
+    const terms=design.blocks.find(block=>block.id==="terms");
+    assert.ok(itemTable.fontSize>=10.5,preset.name+" keeps item text readable at print size");
+    assert.ok(totals.fontSize>=10,preset.name+" keeps totals readable at print size");
+    assert.ok(amountWords.fontSize>=9.5,preset.name+" keeps amount words legible");
+    assert.ok(terms.fontSize>=8.5,preset.name+" keeps terms legible");
+  });
+});

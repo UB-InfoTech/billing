@@ -68,3 +68,44 @@ test("custom invoice design renders mapped fields, item table and imported PDF r
   assert.match(html,/Invoice total/);
   assert.doesNotMatch(html,/Receiver&#39;s Details/);
 });
+
+
+test("custom invoice tables align numeric columns and emphasize totals without changing amounts",async()=>{
+  const invoiceConfig={
+    ...baseConfig,
+    design:{
+      enabled:true,
+      activeTemplateId:"readable-design",
+      templates:[{
+        id:"readable-design",
+        name:"Readable design",
+        pageSize:"A4",
+        orientation:"portrait",
+        blocks:[
+          {
+            id:"items",
+            type:"items_table",
+            x:5,y:20,w:90,h:40,fontSize:12,color:"#172335",visible:true,
+            tableHeaderBackground:"#244d70",tableHeaderColor:"#ffffff",tableBorderColor:"#c8d8e7",
+            columns:[
+              {key:"sr",label:"#",width:10,visible:true},
+              {key:"description",label:"Product",width:50,visible:true},
+              {key:"quantity",label:"Qty",width:10,visible:true},
+              {key:"unitPrice",label:"Rate",width:15,visible:true},
+              {key:"amount",label:"Amount",width:15,visible:true}
+            ]
+          },
+          {id:"totals",type:"totals",x:65,y:65,w:30,h:25,fontSize:11,visible:true}
+        ]
+      }]
+    }
+  };
+  const html=await ejs.renderFile(templatePath,{...locals,invoiceConfig});
+  assert.match(html,/class="design-cell is-centered"/);
+  assert.match(html,/class="design-cell is-numeric is-nowrap"/);
+  assert.match(html,/text-align:right/);
+  assert.match(html,/\.design-totals \.grand/);
+  assert.match(html,/font-variant-numeric:tabular-nums/);
+  assert.match(html,/>200\.00<\/span>/);
+  assert.match(html,/>₹ 236\.00<\/b>/);
+});

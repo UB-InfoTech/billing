@@ -64,15 +64,24 @@
     .design-items{width:100%;min-height:100%;overflow:visible}
     .design-items table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:inherit}
     .design-items th,.design-items td{border:1px solid #c4ced9;padding:4px 5px;vertical-align:middle;overflow-wrap:anywhere}
-    .design-items th{height:8mm;background:#edf2f7;text-align:center;font-weight:800;line-height:1.15;letter-spacing:.05px}
-    .design-items td{min-height:9mm;height:auto;line-height:1.2}
+    .design-items th{height:auto;min-height:8mm;background:#edf2f7;text-align:center;font-weight:800;line-height:1.2;letter-spacing:.05px;padding-top:2mm;padding-bottom:2mm}
+    .design-items td{min-height:9mm;height:auto;line-height:1.25}
+    .design-items tbody tr:last-child td{border-bottom-width:1.2px}
+    .design-items td.is-centered{text-align:center}
+    .design-items td.is-numeric{text-align:right}
+    .design-items td.is-numeric .design-cell-text{font-variant-numeric:tabular-nums;font-weight:650}
+    .design-items td.is-nowrap .design-cell-text{white-space:nowrap;overflow-wrap:normal;word-break:normal}
     .design-cell-text{display:block;overflow:visible;line-height:1.2;overflow-wrap:anywhere;white-space:pre-wrap}
     .design-items thead{display:table-header-group}
     .design-items tr{height:9mm;break-inside:avoid;page-break-inside:avoid}
     .design-page-number{position:absolute;right:6%;top:1%;z-index:5;font-size:9px;color:#64748b}
-    .design-totals{width:100%;font-size:inherit;line-height:1.12}
-    .design-totals div{display:flex;justify-content:space-between;gap:8px;padding:1.5px 1px;border-bottom:1px solid #e5eaf0}
-    .design-totals .grand{font-size:1.2em;font-weight:900;border-top:1.5px solid #475569;padding-top:2px}
+    .design-totals{display:flex;flex-direction:column;width:100%;font-size:inherit;line-height:1.16;font-variant-numeric:tabular-nums}
+    .design-totals div{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:2px 2px;border-bottom:1px solid #e5eaf0;min-width:0}
+    .design-totals div>span{color:#5b6b7e;font-weight:600}
+    .design-totals div>b{font-weight:750;text-align:right;white-space:nowrap}
+    .design-totals .grand{font-size:1.18em;font-weight:900;color:#173b5e;background:#f0f5fa;border:1px solid #d9e3ed;border-radius:2px;margin:1.5px 0;padding:3px 4px}
+    .design-totals .grand>span{color:inherit;font-weight:800}
+    .design-totals .grand>b{font-weight:900}
     .design-blank-table{width:100%;height:100%;overflow:hidden}
     .design-blank-table table{width:100%;height:100%;border-collapse:collapse;table-layout:fixed}
     .design-blank-table th,.design-blank-table td{border:1px solid #b8c4d1;padding:4px;overflow-wrap:anywhere;vertical-align:middle;white-space:pre-wrap}
@@ -105,6 +114,12 @@
     bank_details:[profileBankName,profileAccountNo,profileBranchName,profileIfsc].filter(Boolean).join(" · "),
     terms:"Thank you for your business. Please contact us promptly if you have any questions about this invoice.",
     signature:"For, "+profileCompanyName+" · Authorised Signatory"
+  };
+  const centeredItemColumnKeys=new Set(["sr","hsnCode","quantity","qtyUnit","cut","MTR","shortPcs","discount"]);
+  const rightAlignedItemColumnKeys=new Set(["unitPrice","amount","taxable"]);
+  const itemColumnAlignment=column=>{
+    const key=String(column?.key||"");
+    return rightAlignedItemColumnKeys.has(key)?"right":centeredItemColumnKeys.has(key)?"center":"left";
   };
   const itemValue=(item,column)=>{
     const unit=item.qtyUnit||"PCS";
@@ -165,7 +180,7 @@
               <thead><tr><% tableColumns.forEach(column=>{ %><th style="background:<%= block.tableHeaderBackground||"#edf2f7" %>;color:<%= block.tableHeaderColor||"#172335" %>;border-color:<%= block.tableBorderColor||"#b8c4d1" %>;border-width:<%= Number(block.tableBorderWidth??1) %>px;padding:<%= Number(block.tableCellPadding??4) %>px"><span class="design-cell-text"><%= column.label %></span></th><% }) %></tr></thead>
               <tbody>
                 <% (page.rows||[]).forEach((entry,rowIndex)=>{ const row={...entry.item,_index:entry.itemNumber}; const rowBackground=block.alternateRows!==false&&(Number(entry.itemNumber||rowIndex+1)-1)%2===1?(block.tableAlternateRowBackground||"#f7f9fc"):(block.tableRowBackground||"#ffffff"); %>
-                  <tr data-item-number="<%= Number(entry.itemNumber||rowIndex+1) %>" data-item-label="<%= String(entry.item?.orderName||"") %>" data-estimated-height-mm="<%= Number(entry.rowHeightMm||9).toFixed(2) %>" data-estimated-lines="<%= Number(entry.estimatedLines||1) %>" style="height:<%= Number(entry.rowHeightMm||9).toFixed(2) %>mm"><% tableColumns.forEach(column=>{ const columnEstimate=(entry.columnEstimates||[]).find(item=>item.key===String(column.key||"")); %><td data-column-key="<%= column.key||"" %>" data-column-label="<%= column.label||column.key||"Item detail" %>" data-estimated-lines="<%= Number(columnEstimate?.estimatedLines||1) %>" style="background:<%= rowBackground %>;border-color:<%= block.tableBorderColor||"#b8c4d1" %>;border-width:<%= Number(block.tableBorderWidth??1) %>px;padding:<%= Number(block.tableCellPadding??4) %>px"><span class="design-cell-text"><%= itemValue(row,column) %></span></td><% }) %></tr>
+                  <tr data-item-number="<%= Number(entry.itemNumber||rowIndex+1) %>" data-item-label="<%= String(entry.item?.orderName||"") %>" data-estimated-height-mm="<%= Number(entry.rowHeightMm||9).toFixed(2) %>" data-estimated-lines="<%= Number(entry.estimatedLines||1) %>" style="height:<%= Number(entry.rowHeightMm||9).toFixed(2) %>mm"><% tableColumns.forEach(column=>{ const columnEstimate=(entry.columnEstimates||[]).find(item=>item.key===String(column.key||"")); %><td class="design-cell <%= itemColumnAlignment(column)==="right"?"is-numeric is-nowrap":itemColumnAlignment(column)==="center"?"is-centered":"" %>" data-column-key="<%= column.key||"" %>" data-column-label="<%= column.label||column.key||"Item detail" %>" data-estimated-lines="<%= Number(columnEstimate?.estimatedLines||1) %>" style="background:<%= rowBackground %>;border-color:<%= block.tableBorderColor||"#b8c4d1" %>;border-width:<%= Number(block.tableBorderWidth??1) %>px;padding:<%= Number(block.tableCellPadding??4) %>px;text-align:<%= itemColumnAlignment(column) %>"><span class="design-cell-text"><%= itemValue(row,column) %></span></td><% }) %></tr>
                 <% }) %>
               </tbody>
             </table>

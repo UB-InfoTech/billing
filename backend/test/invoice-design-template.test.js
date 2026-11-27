@@ -241,6 +241,7 @@ test("closing-only invoice page is clearly labelled as the invoice summary and h
   assert.match(html,/data-page-closing-only="true"/);
   assert.match(html,/INVOICE SUMMARY/);
   assert.match(html,new RegExp('Page '+closingPage.pageNumber+' of '+closingPage.totalPages));
-  const closingPageMarkup=html.split('data-page-closing-only="true"')[1]||"";
-  assert.ok(!closingPageMarkup.slice(0,closingPageMarkup.indexOf("</div>")).includes('data-block-type="items_table"'));
+  const closingPageMarkup=html.split('<div class="design-sheet').pop()||"";
+  assert.ok(closingPageMarkup.includes('data-block-type="totals"'));
+  assert.ok(!closingPageMarkup.includes('data-block-type="items_table"'));
 });

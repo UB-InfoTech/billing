@@ -91,7 +91,7 @@ test("print renderer applies the row-specific fit measured by invoice pagination
     ]
   };
   const items=[{
-    orderName:"cotton fabric garment finishing work ".repeat(20),
+    orderName:"cotton fabric garment finishing work ".repeat(40),
     quantity:1,qtyUnit:"PCS",unitPrice:100,shortPcs:0
   }];
   const pages=buildInvoiceDesignPages(template,items);

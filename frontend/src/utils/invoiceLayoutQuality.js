@@ -297,6 +297,40 @@ export function buildInvoiceRenderedLayoutOptimizationSuggestions(blocks=[],rend
 
  tables.forEach(table=>{
   const tableWarnings=warnings.filter(issue=>issue?.blockId===table.id);
+  const closingCollisionIssues=tableWarnings.filter(issue=>
+   issue?.title==="An item row overlaps invoice closing details"&&
+   issue.overlappingBlockId&&Number.isFinite(Number(issue.suggestedShiftYPercent))&&
+   Number(issue.suggestedShiftYPercent)>0
+  );
+  const closingTargetIds=Array.from(new Set(closingCollisionIssues.map(issue=>issue.overlappingBlockId)));
+  let closingMoveSuggestion=null;
+  if(closingTargetIds.length===1){
+   const target=source.find(block=>block?.id===closingTargetIds[0]);
+   const shifts=closingCollisionIssues.map(issue=>Number(issue.suggestedShiftYPercent));
+   const shiftYPercent=Math.max(...shifts);
+   if(target&&target.visible!==false&&(target.type==="totals"||target.type==="field")&&
+     Number.isFinite(Number(target.x))&&Number.isFinite(Number(target.y))&&
+     Number.isFinite(Number(target.w))&&Number.isFinite(Number(target.h))&&
+     Number.isFinite(shiftYPercent)&&shiftYPercent>0){
+    const nextY=Number((Number(target.y)+shiftYPercent).toFixed(1));
+    const candidate={...target,y:nextY};
+    if(nextY>Number(target.y)&&nextY+Number(target.h)<=100&&
+      !hasLayoutCollision(candidate,source,target.id)){
+     closingMoveSuggestion={
+      id:"closing-clear-"+target.id,
+      action:"move-closing-clear-of-items",
+      blockId:target.id,
+      title:"Move "+labelFor(target)+" clear of the measured item rows",
+      detail:"Move this closing element down by "+shiftYPercent.toFixed(1)+"% based on the browser-measured overlap. The proposed position stays on the page and does not collide with another visible element.",
+      expected:{x:target.x,y:target.y,w:target.w,h:target.h},
+      expectedTable:{id:table.id,x:table.x,y:table.y,w:table.w,h:table.h},
+      nextY,
+      shiftYPercent,
+      measuredItemNumbers:Array.from(new Set(closingCollisionIssues.map(issue=>Number(issue.itemNumber)).filter(Number.isFinite))).sort((a,b)=>a-b)
+     };
+    }
+   }
+  }
   const wrappingIssues=tableWarnings.filter(issue=>
    issue?.title==="An invoice item row is taller than planned"&&
    issue.columnKey&&Number.isFinite(Number(issue.actualLines))&&
@@ -312,13 +346,16 @@ export function buildInvoiceRenderedLayoutOptimizationSuggestions(blocks=[],rend
    const preview=buildInvoiceColumnOptimizationPreview(table,issue,defaultColumns);
    if(preview){columnSuggestion=preview.suggestion;break;}
   }
-  if(columnSuggestion){
+  if(closingMoveSuggestion){
+   suggestions.push(closingMoveSuggestion);
+  }else if(columnSuggestion){
    suggestions.push(columnSuggestion);
   }else if(wrappingIssues.length||tableWarnings.some(issue=>[
    "Invoice items exceed their allocated page space",
    "An item cell is clipped",
    "Rendered item heights differ from the page estimate",
-   "An item row is taller than planned"
+   "An item row is taller than planned",
+   "An item row overlaps invoice closing details"
   ].includes(issue?.title))){
    const currentSize=Number(table.fontSize||8);
    const nextSize=Math.max(6,Math.round((currentSize-1)*10)/10);
@@ -500,6 +537,20 @@ export function applyInvoiceLayoutOptimizationSuggestion(blocks=[],suggestion,de
   const candidate={...current,y:Number(suggestion.nextY)};
   if(hasLayoutCollision(candidate,source,current.id))return {blocks:source,changed:false,reason:"The suggested totals position is no longer clear."};
   patch={y:Number(suggestion.nextY)};
+ }else if(suggestion.action==="move-closing-clear-of-items"){
+  const expected=suggestion.expected||{},expectedTable=suggestion.expectedTable||{};
+  const table=source.find(block=>block?.id===expectedTable.id);
+  if(current.visible===false||!["totals","field"].includes(current.type)||
+    !["x","y","w","h"].every(key=>sameNumber(current[key],expected[key]))||
+    !table||table.visible===false||table.type!=="items_table"||
+    !["x","y","w","h"].every(key=>sameNumber(table[key],expectedTable[key]))||
+    !Number.isFinite(Number(suggestion.nextY))||Number(suggestion.nextY)<=Number(current.y)||
+    Number(suggestion.nextY)+Number(current.h)>100){
+   return {blocks:source,changed:false,reason:"The closing element or item-table layout changed after this measurement."};
+  }
+  const candidate={...current,y:Number(suggestion.nextY)};
+  if(hasLayoutCollision(candidate,source,current.id))return {blocks:source,changed:false,reason:"The proposed closing position now overlaps another element."};
+  patch={y:Number(suggestion.nextY)};
  }else if(suggestion.action==="fit-text"){
   const currentSize=Number(current.fontSize||10);
   if(current.visible===false||!["field","text"].includes(current.type)||!sameNumber(currentSize,suggestion.expectedFontSize)||
@@ -568,6 +619,9 @@ export function buildInvoiceLayoutOptimizationPlanPreview(blocks=[],suggestions=
    summary="Item-table height: "+Number(before.h).toFixed(1)+"% → "+Number(after.h).toFixed(1)+"% of printable page height. Page breaks will be recalculated on the next print check.";
   }else if(before&&after&&suggestion.action==="move-totals-after-items"){
    summary="Move totals from "+Number(before.y).toFixed(1)+"% to "+Number(after.y).toFixed(1)+"% on the page, after the item table.";
+  }else if(before&&after&&suggestion.action==="move-closing-clear-of-items"){
+   const affected=Array.isArray(suggestion.measuredItemNumbers)?suggestion.measuredItemNumbers:[];
+   summary="Move "+labelFor(before)+" from "+Number(before.y).toFixed(1)+"% to "+Number(after.y).toFixed(1)+"% (+"+Number(suggestion.shiftYPercent).toFixed(1)+"%) to clear the measured overlap"+(affected.length?" with item"+(affected.length===1?" ":"s ")+affected.join(", "):"")+".";
   }else if(before&&after&&["normalize-item-columns","optimize-item-column"].includes(suggestion.action)){
    const beforeColumns=Array.isArray(before.columns)&&before.columns.length?before.columns:defaultColumns;
    const afterColumns=Array.isArray(after.columns)&&after.columns.length?after.columns:defaultColumns;

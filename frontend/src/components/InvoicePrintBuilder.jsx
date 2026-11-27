@@ -1659,6 +1659,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                     </div>
                   )}
                   {printPreviewAudit.warnings.length>0&&(
+                    <>
                     <ul>{(showAllPrintWarnings?printPreviewAudit.warnings:printPreviewAudit.warnings.slice(0,8)).map((issue,index)=>{
                     const issueBlock=activeTemplate.blocks.find(block=>block.id===issue.blockId);
                     const shrinkableWarnings=["Text or totals may be clipped","Item table may be too wide","An item cell is clipped","An item row exceeds the table area","An item row extends beyond the page","Blank table content may be clipped","Invoice items exceed their allocated page space"];
@@ -1666,6 +1667,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                     return <li key={issue.id||index}><div><b>{issue.title}</b> — {issue.detail}</div>{issue.blockId&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{setSelectedBlockId(issue.blockId);closeActualPrintPreview();}}>Edit this element</button>}{canReduceText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{const result=reduceInvoiceBlockFontSize(activeTemplate.blocks,issue.blockId,1);if(result.changed){updateActive({blocks:result.blocks});setSelectedBlockId(issue.blockId);setMessage("Text size reduced by up to 1 pt. Recheck the print preview before printing.");}}}>Reduce text size by up to 1 pt</button>}</li>;
                   })}</ul>
                     {printPreviewAudit.warnings.length>8&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>setShowAllPrintWarnings(value=>!value)}>{showAllPrintWarnings?"Show fewer issues":"Show all "+printPreviewAudit.warnings.length+" issues"}</button>}
+                    </>
                   )}
                 </aside>
               )}

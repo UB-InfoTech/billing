@@ -39,7 +39,7 @@ function normalizeTextTransform(value,transform){
  const text=String(value??"");
  if(transform==="uppercase")return text.toLocaleUpperCase();
  if(transform==="lowercase")return text.toLocaleLowerCase();
- if(transform==="capitalize")return text.replace(/(^|[\s\p{P}])(\p{L})/gu,(_match,prefix,letter)=>prefix+letter.toLocaleUpperCase());
+ if(transform==="capitalize")return text.replace(/(^|[\s\p{P}])(\p{L})/gu,parts=>parts[1]+parts[2].toLocaleUpperCase());
  return text;
 }
 function measureTextFit(block,value,geometry,fontSize){

@@ -619,7 +619,7 @@ test("very long item descriptions auto-fit their row typography before exceeding
  ]};
  const table=template.blocks[0];
  const rows=Array.from({length:8},(_,index)=>({
-  orderName:"cotton fabric garment finishing work ".repeat(20)+" item "+index,
+  orderName:"cotton fabric garment finishing work ".repeat(40)+" item "+index,
   quantity:1,unitPrice:100
  }));
  const metrics={

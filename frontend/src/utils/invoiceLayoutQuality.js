@@ -285,6 +285,134 @@ export function buildInvoiceColumnOptimizationPreview(block,issue,defaultColumns
 }
 
 /**
+ * Build coordinated recommendations from the actual rendered print audit.
+ * At most one text/column strategy is chosen per item table, while table
+ * capacity and safe totals placement are considered as separate layout factors.
+ */
+export function buildInvoiceRenderedLayoutOptimizationSuggestions(blocks=[],renderedWarnings=[],defaultColumns=[]) {
+ const source=Array.isArray(blocks)?blocks:[];
+ const warnings=Array.isArray(renderedWarnings)?renderedWarnings:[];
+ const suggestions=[];
+ const tables=source.filter(block=>block?.type==="items_table"&&block.visible!==false&&block.id);
+
+ tables.forEach(table=>{
+  const tableWarnings=warnings.filter(issue=>issue?.blockId===table.id);
+  const wrappingIssues=tableWarnings.filter(issue=>
+   issue?.title==="An invoice item row is taller than planned"&&
+   issue.columnKey&&Number.isFinite(Number(issue.actualLines))&&
+   Number.isFinite(Number(issue.estimatedLines))&&
+   Number(issue.actualLines)>Number(issue.estimatedLines)&&Number(issue.estimatedLines)>=1
+  ).sort((a,b)=>
+   (Number(b.actualLines)/Number(b.estimatedLines))-
+   (Number(a.actualLines)/Number(a.estimatedLines))
+  );
+
+  let columnSuggestion=null;
+  for(const issue of wrappingIssues){
+   const preview=buildInvoiceColumnOptimizationPreview(table,issue,defaultColumns);
+   if(preview){columnSuggestion=preview.suggestion;break;}
+  }
+  if(columnSuggestion){
+   suggestions.push(columnSuggestion);
+  }else if(wrappingIssues.length||tableWarnings.some(issue=>[
+   "Invoice items exceed their allocated page space",
+   "An item cell is clipped",
+   "Rendered item heights differ from the page estimate",
+   "An item row is taller than planned"
+  ].includes(issue?.title))){
+   const currentSize=Number(table.fontSize||8);
+   const nextSize=Math.max(6,Math.round((currentSize-1)*10)/10);
+   if(Number.isFinite(currentSize)&&currentSize>6&&nextSize<currentSize){
+    suggestions.push({
+     id:"table-font-"+table.id,
+     action:"fit-item-table-text",
+     blockId:table.id,
+     title:"Reduce item-table text slightly",
+     detail:"Reduce the item-table font from "+currentSize.toFixed(1)+" px to "+nextSize.toFixed(1)+" px. This is suggested because a safe column-width change was not available.",
+     expectedFontSize:table.fontSize??8,
+     nextFontSize:nextSize
+    });
+   }
+  }
+
+  const needsMorePageCapacity=tableWarnings.some(issue=>[
+   "An invoice item row is taller than planned",
+   "Invoice items exceed their allocated page space",
+   "Rendered item heights differ from the page estimate",
+   "The final page may have room for another item"
+  ].includes(issue?.title));
+  const hasTotalsPlacementIssue=warnings.some(issue=>
+   ["Invoice totals appear before the final item page","The totals section overlaps invoice items"]
+    .includes(issue?.title)&&issue.blockId
+  );
+  const x=Number(table.x),y=Number(table.y),w=Number(table.w),h=Number(table.h);
+  if(needsMorePageCapacity&&!hasTotalsPlacementIssue&&
+    [x,y,w,h].every(Number.isFinite)&&w>0&&h>0&&x>=0&&y>=0&&x+w<=100&&y+h<=100){
+   const currentBottom=y+h;
+   let allowedBottom=100;
+   let currentTableHasCollision=false;
+   source.forEach(other=>{
+    if(!other||other.id===table.id||other.visible===false||["shape","divider"].includes(other.type))return;
+    const otherX=Number(other.x),otherY=Number(other.y),otherW=Number(other.w),otherH=Number(other.h);
+    if(![otherX,otherY,otherW,otherH].every(Number.isFinite)||otherW<=0||otherH<=0)return;
+    const overlapWidth=Math.min(x+w,otherX+otherW)-Math.max(x,otherX);
+    if(overlapWidth<=0.5)return;
+    const otherBottom=otherY+otherH;
+    if(otherY<currentBottom-0.5&&otherBottom>y+0.5){
+     currentTableHasCollision=true;
+     return;
+    }
+    if(otherY>=currentBottom-0.5)allowedBottom=Math.min(allowedBottom,otherY-1.5);
+   });
+   const nextHeight=Number(Math.min(100-y,allowedBottom-y).toFixed(1));
+   if(!currentTableHasCollision&&nextHeight>=h+2.5){
+    const candidate={...table,h:nextHeight};
+    if(!hasLayoutCollision(candidate,source,table.id)){
+     suggestions.push({
+      id:"table-height-"+table.id,
+      action:"increase-item-table-height",
+      blockId:table.id,
+      title:"Give the item table more vertical space",
+      detail:"Increase the table area from "+h.toFixed(1)+"% to "+nextHeight.toFixed(1)+"% of the printable page, stopping before the next content element. The next print check will recalculate page breaks and row distribution.",
+      expected:{x:table.x,y:table.y,w:table.w,h:table.h},
+      nextHeight
+     });
+    }
+   }
+  }
+ });
+
+ const totalsWarnings=warnings.filter(issue=>
+  ["Invoice totals appear before the final item page","The totals section overlaps invoice items"]
+   .includes(issue?.title)&&issue.blockId
+ );
+ totalsWarnings.forEach(issue=>{
+  const totals=source.find(block=>block?.id===issue.blockId&&block.type==="totals"&&block.visible!==false);
+  const table=source.find(block=>block?.type==="items_table"&&block.visible!==false);
+  if(!totals||!table||suggestions.some(item=>item.blockId===totals.id&&item.action==="move-totals-after-items"))return;
+  const tx=Number(totals.x),ty=Number(totals.y),tw=Number(totals.w),th=Number(totals.h);
+  const tableX=Number(table.x),tableY=Number(table.y),tableW=Number(table.w),tableH=Number(table.h);
+  if(![tx,ty,tw,th,tableX,tableY,tableW,tableH].every(Number.isFinite)||tw<=0||th<=0||tableW<=0||tableH<=0)return;
+  const nextY=Number((tableY+tableH+1.5).toFixed(2));
+  if(tx<0||nextY<0||tx+tw>100||nextY+th>100)return;
+  const candidate={...totals,y:nextY};
+  if(hasLayoutCollision(candidate,source,totals.id))return;
+  suggestions.push({
+   id:"totals-after-items-"+totals.id,
+   action:"move-totals-after-items",
+   blockId:totals.id,
+   title:"Place invoice totals after the item table",
+   detail:"Move totals below the item table with a small gap. This is offered only because the destination is clear and stays on the printable page.",
+   expected:{x:totals.x,y:totals.y,w:totals.w,h:totals.h},
+   expectedTable:{id:table.id,x:table.x,y:table.y,w:table.w,h:table.h},
+   nextY
+  });
+ });
+
+ return suggestions;
+}
+
+/**
  * Apply one suggestion only while its original values still match.
  * This prevents stale suggestions from overwriting newer user edits.
  */
@@ -340,6 +468,38 @@ export function applyInvoiceLayoutOptimizationSuggestion(blocks=[],suggestion,de
    ...columns[columnIndex],
    width:column.visible===false?columns[columnIndex].width:Number(column.width)
   }))};
+ }else if(suggestion.action==="fit-item-table-text"){
+  const currentSize=Number(current.fontSize||8);
+  if(current.visible===false||current.type!=="items_table"||!sameNumber(currentSize,suggestion.expectedFontSize)||
+    !Number.isFinite(Number(suggestion.nextFontSize))||Number(suggestion.nextFontSize)<6||Number(suggestion.nextFontSize)>=currentSize){
+   return {blocks:source,changed:false,reason:"The item-table text changed after this suggestion was created."};
+  }
+  patch={fontSize:Number(suggestion.nextFontSize)};
+ }else if(suggestion.action==="increase-item-table-height"){
+  const expected=suggestion.expected||{};
+  if(current.visible===false||current.type!=="items_table"||
+    !["x","y","w","h"].every(key=>sameNumber(current[key],expected[key]))||
+    !Number.isFinite(Number(suggestion.nextHeight))||Number(suggestion.nextHeight)<=Number(current.h)||
+    Number(current.y)+Number(suggestion.nextHeight)>100){
+   return {blocks:source,changed:false,reason:"The item-table area changed after this suggestion was created."};
+  }
+  const candidate={...current,h:Number(suggestion.nextHeight)};
+  if(hasLayoutCollision(candidate,source,current.id))return {blocks:source,changed:false,reason:"The larger item-table area would overlap another element."};
+  patch={h:Number(suggestion.nextHeight)};
+ }else if(suggestion.action==="move-totals-after-items"){
+  const expected=suggestion.expected||{},expectedTable=suggestion.expectedTable||{};
+  const table=source.find(block=>block?.id===expectedTable.id);
+  if(current.visible===false||current.type!=="totals"||
+    !["x","y","w","h"].every(key=>sameNumber(current[key],expected[key]))||
+    !table||table.visible===false||table.type!=="items_table"||
+    !["x","y","w","h"].every(key=>sameNumber(table[key],expectedTable[key]))||
+    !Number.isFinite(Number(suggestion.nextY))||Number(suggestion.nextY)<0||
+    Number(suggestion.nextY)+Number(current.h)>100){
+   return {blocks:source,changed:false,reason:"The totals or item-table placement changed after this suggestion was created."};
+  }
+  const candidate={...current,y:Number(suggestion.nextY)};
+  if(hasLayoutCollision(candidate,source,current.id))return {blocks:source,changed:false,reason:"The suggested totals position is no longer clear."};
+  patch={y:Number(suggestion.nextY)};
  }else if(suggestion.action==="fit-text"){
   const currentSize=Number(current.fontSize||10);
   if(current.visible===false||!["field","text"].includes(current.type)||!sameNumber(currentSize,suggestion.expectedFontSize)||
@@ -402,6 +562,12 @@ export function buildInvoiceLayoutOptimizationPlanPreview(blocks=[],suggestions=
     Number(after.x).toFixed(1)+"%, "+Number(after.y).toFixed(1)+"% on the page.";
   }else if(before&&after&&suggestion.action==="fit-text"){
    summary="Text size: "+Number(before.fontSize||10).toFixed(1)+" px → "+Number(after.fontSize||10).toFixed(1)+" px.";
+  }else if(before&&after&&suggestion.action==="fit-item-table-text"){
+   summary="Item-table text: "+Number(before.fontSize||8).toFixed(1)+" px → "+Number(after.fontSize||8).toFixed(1)+" px.";
+  }else if(before&&after&&suggestion.action==="increase-item-table-height"){
+   summary="Item-table height: "+Number(before.h).toFixed(1)+"% → "+Number(after.h).toFixed(1)+"% of printable page height. Page breaks will be recalculated on the next print check.";
+  }else if(before&&after&&suggestion.action==="move-totals-after-items"){
+   summary="Move totals from "+Number(before.y).toFixed(1)+"% to "+Number(after.y).toFixed(1)+"% on the page, after the item table.";
   }else if(before&&after&&["normalize-item-columns","optimize-item-column"].includes(suggestion.action)){
    const beforeColumns=Array.isArray(before.columns)&&before.columns.length?before.columns:defaultColumns;
    const afterColumns=Array.isArray(after.columns)&&after.columns.length?after.columns:defaultColumns;

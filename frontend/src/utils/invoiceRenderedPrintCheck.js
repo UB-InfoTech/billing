@@ -158,6 +158,48 @@ function addWarning(warnings,warning){
   if(!warnings.some(item=>item.id===warning.id))warnings.push(warning);
 }
 
+function auditInvoiceItemRowHeightEstimate(row,table,pageNumber,warnings){
+  const estimatedHeightMm=Number(row.estimatedHeightMm);
+  const renderedHeightMm=Number(row.height)*25.4/96;
+  if(!Number.isFinite(estimatedHeightMm)||estimatedHeightMm<=0||
+    !Number.isFinite(renderedHeightMm)||renderedHeightMm<=0)return;
+
+  const heightDifferenceMm=renderedHeightMm-estimatedHeightMm;
+  const meaningfulDriftMm=Math.max(1.5,estimatedHeightMm*0.2);
+  if(heightDifferenceMm<=meaningfulDriftMm)return;
+
+  const columnDrivers=(Array.isArray(row.cells)?row.cells:[])
+    .filter(cell=>cell?.hasContent&&Number.isFinite(Number(cell.estimatedLines))&&
+      Number.isFinite(Number(cell.actualLines))&&Number(cell.actualLines)>Number(cell.estimatedLines))
+    .sort((a,b)=>(Number(b.actualLines)-Number(b.estimatedLines))-(Number(a.actualLines)-Number(a.estimatedLines)));
+  const driver=columnDrivers[0];
+  const itemName=String(row.label||"").trim();
+  const columnDetail=driver
+    ?" The "+(driver.columnLabel||"item detail")+" column wraps to "+driver.actualLines+" lines instead of the "+driver.estimatedLines+" estimated."
+    :" No single column explains the extra height; check the item-table font size, line spacing and cell padding.";
+  const recommendation=driver
+    ?" Widen that column, shorten this item's value or reduce the item-table text size."
+    :" Review the row's text size and cell spacing, then inspect its column widths.";
+
+  addWarning(warnings,{
+    id:"item-row-height-estimate-"+pageNumber+"-"+table.id+"-"+row.itemNumber,
+    severity:"warning",
+    title:"An invoice item row is taller than planned",
+    detail:"Item "+row.itemNumber+(itemName?" (“"+itemName+"”)":"")+" measures "+renderedHeightMm.toFixed(1)+" mm, compared with "+estimatedHeightMm.toFixed(1)+" mm planned."+columnDetail+recommendation,
+    pageNumber,
+    blockId:table.id,
+    blockType:table.type,
+    itemNumber:row.itemNumber,
+    renderedHeightMm:Number(renderedHeightMm.toFixed(2)),
+    estimatedHeightMm:Number(estimatedHeightMm.toFixed(2)),
+    driftMm:Number(heightDifferenceMm.toFixed(2)),
+    columnKey:driver?.columnKey||null,
+    columnLabel:driver?.columnLabel||null,
+    estimatedLines:driver?Number(driver.estimatedLines):null,
+    actualLines:driver?Number(driver.actualLines):null
+  });
+}
+
 function auditInvoiceItemRowGeometry(table,pageNumber,warnings){
   const rows=(Array.isArray(table.rows)?table.rows:[]).map((row,index)=>({
     ...row,
@@ -170,6 +212,7 @@ function auditInvoiceItemRowGeometry(table,pageNumber,warnings){
   const bounds=table.bounds||{};
   rows.forEach((row,index)=>{
     if(row.geometryAvailable===false)return;
+    auditInvoiceItemRowHeightEstimate(row,table,pageNumber,warnings);
     if(Number.isFinite(row.left)&&Number.isFinite(row.right)&&
       Number.isFinite(Number(bounds.left))&&Number.isFinite(Number(bounds.right))&&
       (row.left<Number(bounds.left)-RECT_TOLERANCE_PX||row.right>Number(bounds.right)+RECT_TOLERANCE_PX)){

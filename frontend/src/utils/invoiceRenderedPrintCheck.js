@@ -124,6 +124,7 @@ export function measureRenderedInvoiceDocument(documentRef){
           type,
           fieldKey:block.getAttribute("data-field-key")||"",
           label:block.getAttribute("data-block-label")||"",
+          hasContent:String(block.textContent||"").trim().length>0,
           bounds,
           tablePresent:type==="items_table"?Boolean(table):undefined,
           headerDisplay:header?String(headerStyle?.display||"").toLowerCase():"",
@@ -256,6 +257,60 @@ function auditInvoiceItemRowGeometry(table,pageNumber,warnings){
         previousItemNumber:previous.itemNumber
       });
     }
+  });
+}
+
+const CLOSING_FIELD_KEYS=new Set(["amount_words","amount_paid","balance_due","bank_details","terms","signature"]);
+
+function auditInvoiceRowsAgainstClosingBlocks(table,pageBlocks,pageNumber,warnings){
+  if(!table||!Array.isArray(table.rows)||!Array.isArray(pageBlocks))return;
+  const closingBlocks=pageBlocks.filter(block=>
+    block&&block!==table&&(
+      block.type==="totals"||
+      (block.type==="field"&&CLOSING_FIELD_KEYS.has(String(block.fieldKey||"")))
+    )&&block.hasContent!==false
+  );
+  if(!closingBlocks.length)return;
+
+  table.rows.forEach((row,index)=>{
+    if(row?.geometryAvailable===false)return;
+    const rowBounds={
+      left:Number(row?.left),top:Number(row?.top),
+      right:Number(row?.right),bottom:Number(row?.bottom)
+    };
+    if(!Object.values(rowBounds).every(Number.isFinite))return;
+    const itemNumber=Number(row.itemNumber)||index+1;
+    closingBlocks.forEach(closingBlock=>{
+      const bounds=closingBlock.bounds||{};
+      const closingBounds={
+        left:Number(bounds.left),top:Number(bounds.top),
+        right:Number(bounds.right),bottom:Number(bounds.bottom)
+      };
+      if(!Object.values(closingBounds).every(Number.isFinite))return;
+      const overlapWidth=Math.min(rowBounds.right,closingBounds.right)-Math.max(rowBounds.left,closingBounds.left);
+      const overlapHeight=Math.min(rowBounds.bottom,closingBounds.bottom)-Math.max(rowBounds.top,closingBounds.top);
+      if(overlapWidth<=RECT_TOLERANCE_PX||overlapHeight<=RECT_TOLERANCE_PX)return;
+
+      const itemName=String(row.label||"").trim();
+      const closingName=String(closingBlock.label||(
+        closingBlock.type==="totals"?"Invoice totals":closingBlock.fieldKey||"Closing details"
+      )).trim();
+      addWarning(warnings,{
+        id:"item-closing-overlap-"+pageNumber+"-"+table.id+"-"+itemNumber+"-"+closingBlock.id,
+        severity:"error",
+        title:"An item row overlaps invoice closing details",
+        detail:"Item "+itemNumber+(itemName?" (“"+itemName+"”)":"")+" physically overlaps "+closingName+" on page "+pageNumber+". The browser-rendered row is entering the closing section. Reduce item text size, widen the wrapped column or move the closing element so both areas have clear space.",
+        pageNumber,
+        blockId:table.id,
+        blockType:table.type,
+        itemNumber,
+        overlappingBlockId:closingBlock.id,
+        overlappingBlockType:closingBlock.type,
+        overlappingBlockLabel:closingName,
+        overlapWidthPx:Number(overlapWidth.toFixed(2)),
+        overlapHeightPx:Number(overlapHeight.toFixed(2))
+      });
+    });
   });
 }
 
@@ -619,7 +674,10 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
         }
       });
     });
-    itemTables.forEach(table=>auditInvoiceItemRowGeometry(table,pageNumber,warnings));
+    itemTables.forEach(table=>{
+      auditInvoiceItemRowGeometry(table,pageNumber,warnings);
+      auditInvoiceRowsAgainstClosingBlocks(table,pageBlocks,pageNumber,warnings);
+    });
     if(itemTables.length>1){
       addWarning(warnings,{
         id:"multiple-item-tables-"+pageNumber,

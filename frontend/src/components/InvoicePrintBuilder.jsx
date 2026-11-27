@@ -3,7 +3,7 @@ import axios from "axios";
 import "./InvoicePrintBuilder.css";
 import {buildInvoiceSmartLayout,scanImportedInvoiceLayout} from "../utils/invoiceLayoutScanner.js";
 import {inferOcrValueBox} from "../utils/invoiceOcrMapping.js";
-import {analyzeInvoiceLayout,buildInvoiceLayoutOptimizationSuggestions,applyInvoiceLayoutOptimizationSuggestion,applyInvoiceLayoutOptimizationPlan,reduceInvoiceBlockFontSize} from "../utils/invoiceLayoutQuality.js";
+import {analyzeInvoiceLayout,buildInvoiceLayoutOptimizationSuggestions,buildInvoiceColumnOptimizationPreview,applyInvoiceLayoutOptimizationSuggestion,applyInvoiceLayoutOptimizationPlan,reduceInvoiceBlockFontSize} from "../utils/invoiceLayoutQuality.js";
 import {estimateInvoiceTextOverflow,getInvoiceMarginWarnings,getInvoicePrintGeometry} from "../utils/invoicePrintFit.js";
 import {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics} from "../utils/invoiceRenderedPrintCheck.js";
 import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
@@ -246,6 +246,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [printPreviewAudit,setPrintPreviewAudit]=useState(null);
   const [showAllPrintWarnings,setShowAllPrintWarnings]=useState(false);
   const [printPreviewIsSample,setPrintPreviewIsSample]=useState(false);
+  const [columnOptimizationPreview,setColumnOptimizationPreview]=useState(null);
   const [printPreviewError,setPrintPreviewError]=useState("");
   const canvasRef=useRef(null);
   const printPreviewFrameRef=useRef(null);
@@ -583,6 +584,35 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     }
     updateActive({blocks:result.blocks});
     setMessage(result.appliedCount+" safe layout suggestion(s) applied in one step. Use Undo to restore the previous layout.");
+  };
+  const openColumnOptimizationPreview=issue=>{
+    const block=activeTemplate.blocks.find(item=>item.id===issue?.blockId);
+    const preview=buildInvoiceColumnOptimizationPreview(block,issue,previewColumns);
+    if(!preview){
+      setMessage("A safe width change is not available for this column. Check that visible columns total 100% and try again.");
+      return;
+    }
+    setColumnOptimizationPreview(preview);
+  };
+  const applyColumnOptimizationPreview=()=>{
+    if(!columnOptimizationPreview)return;
+    const result=applyInvoiceLayoutOptimizationSuggestion(
+      activeTemplate.blocks,
+      columnOptimizationPreview.suggestion,
+      previewColumns
+    );
+    if(!result.changed){
+      setMessage(result.reason||"The column layout changed. Preview the recommendation again.");
+      setColumnOptimizationPreview(null);
+      return;
+    }
+    updateActive({blocks:result.blocks});
+    setSelectedBlockId(columnOptimizationPreview.suggestion.blockId);
+    const target=columnOptimizationPreview.targetColumnLabel;
+    const nextWidth=columnOptimizationPreview.suggestedTargetWidth;
+    setColumnOptimizationPreview(null);
+    closeActualPrintPreview();
+    setMessage(target+" column adjusted to "+nextWidth.toFixed(1)+"%. Use Undo to restore the previous widths, then reopen Actual print to check the result.");
   };
   const addBlock=(type,fieldKey,position,dimensions={},extra={})=>{
     const elementLimit=Math.min(300,Math.max(80,Number(activeTemplate.elementLimit)||80));

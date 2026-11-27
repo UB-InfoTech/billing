@@ -363,6 +363,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   };
 
   const closeActualPrintPreview=()=>{
+    setColumnOptimizationPreview(null);
     setPrintPreviewOpen(false);
     setPrintPreviewReady(false);
     setPrintPreviewAudit(null);
@@ -1743,8 +1744,27 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                     const issueBlock=activeTemplate.blocks.find(block=>block.id===issue.blockId);
                     const shrinkableWarnings=["Text or totals may be clipped","Item table may be too wide","An item cell is clipped","An item row is taller than planned","An item row exceeds the table area","An item row extends beyond the page","Blank table content may be clipped","Invoice items exceed their allocated page space"];
                     const canReduceText=issueBlock&&issueBlock.visible!==false&&["field","text","totals","blank_table","items_table"].includes(issue.blockType)&&shrinkableWarnings.includes(issue.title)&&Number(issueBlock.fontSize||10)>6;
-                    return <li key={issue.id||index}><div><b>{issue.title}</b> — {issue.detail}</div>{Number(issue.pageNumber)>0&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>jumpToPrintPage(issue.pageNumber)}>View page {issue.pageNumber}</button>}{issue.blockId&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{setSelectedBlockId(issue.blockId);closeActualPrintPreview();}}>Edit this element</button>}{canReduceText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{const result=reduceInvoiceBlockFontSize(activeTemplate.blocks,issue.blockId,1);if(result.changed){updateActive({blocks:result.blocks});setSelectedBlockId(issue.blockId);setMessage("Text size reduced by up to 1 pt. Recheck the print preview before printing.");}}}>Reduce text size by up to 1 pt</button>}</li>;
+                    const canOptimizeColumn=Boolean(issueBlock&&issueBlock.type==="items_table"&&issue.title==="An invoice item row is taller than planned"&&issue.columnKey&&issue.actualLines>issue.estimatedLines&&buildInvoiceColumnOptimizationPreview(issueBlock,issue,previewColumns));
+                    return <li key={issue.id||index}><div><b>{issue.title}</b> — {issue.detail}</div>{Number(issue.pageNumber)>0&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>jumpToPrintPage(issue.pageNumber)}>View page {issue.pageNumber}</button>}{issue.blockId&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{setSelectedBlockId(issue.blockId);closeActualPrintPreview();}}>Edit this element</button>}{canReduceText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{const result=reduceInvoiceBlockFontSize(activeTemplate.blocks,issue.blockId,1);if(result.changed){updateActive({blocks:result.blocks});setSelectedBlockId(issue.blockId);closeActualPrintPreview();setMessage("Text size reduced by up to 1 pt. Reopen Actual print to check the result. Use Undo to restore the previous size.");}}}>Reduce text size by up to 1 pt</button>}{canOptimizeColumn&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>openColumnOptimizationPreview(issue)}>Preview column width change</button>}</li>;
                   })}</ul>
+                    {columnOptimizationPreview&&(
+                      <section className="invoice-builder-column-width-preview" aria-label="Column width comparison">
+                        <div className="invoice-builder-column-width-preview-heading">
+                          <div><strong>Preview recommended column widths</strong><small>{columnOptimizationPreview.targetColumnLabel} · {columnOptimizationPreview.currentTargetWidth.toFixed(1)}% → {columnOptimizationPreview.suggestedTargetWidth.toFixed(1)}%</small></div>
+                          <button type="button" className="btn btn-sm btn-light border" onClick={()=>setColumnOptimizationPreview(null)}>Close</button>
+                        </div>
+                        <p>Compare every visible column before applying. The total remains 100%; hidden columns and column order are preserved.</p>
+                        <div className="invoice-builder-column-width-comparison">
+                          <div><b>Current</b>{columnOptimizationPreview.beforeColumns.filter(column=>column&&column.visible!==false).map(column=><div className="invoice-builder-column-width-row" key={column.key}><span>{column.label||column.key}</span><strong>{Number(column.width).toFixed(1)}%</strong><div className="invoice-builder-column-width-track"><i style={{width:Math.max(0,Math.min(100,Number(column.width)))+"%"}}/></div></div>)}</div>
+                          <div><b>Proposed</b>{columnOptimizationPreview.afterColumns.filter(column=>column&&column.visible!==false).map(column=><div className={"invoice-builder-column-width-row"+(column.key===columnOptimizationPreview.targetColumnKey?" is-target":"")} key={column.key}><span>{column.label||column.key}</span><strong>{Number(column.width).toFixed(1)}%</strong><div className="invoice-builder-column-width-track"><i style={{width:Math.max(0,Math.min(100,Number(column.width)))+"%"}}/></div></div>)}</div>
+                        </div>
+                        <div className="invoice-builder-column-width-preview-summary"><strong>Table width: {columnOptimizationPreview.visibleTotalBefore.toFixed(1)}% → {columnOptimizationPreview.visibleTotalAfter.toFixed(1)}%</strong><small>This gives the identified column more room to reduce wrapping. Review Actual print after applying; other rows may wrap differently too.</small></div>
+                        <div className="invoice-builder-column-width-preview-actions">
+                          <button type="button" className="btn btn-sm btn-light border" onClick={()=>setColumnOptimizationPreview(null)}>Keep current widths</button>
+                          <button type="button" className="btn btn-sm btn-primary" onClick={applyColumnOptimizationPreview}>Apply recommended widths</button>
+                        </div>
+                      </section>
+                    )}
                     {printPreviewAudit.warnings.length>8&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>setShowAllPrintWarnings(value=>!value)}>{showAllPrintWarnings?"Show fewer issues":"Show all "+printPreviewAudit.warnings.length+" issues"}</button>}
                     </>
                   )}

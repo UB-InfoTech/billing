@@ -772,3 +772,16 @@
   .invoice-builder-template-detail-preview{height:116px}
   .invoice-builder-template-specs span{font-size:7.5px}
 }
+
+.invoice-builder-optimization{margin-top:10px;padding:11px;border:1px solid #d8e5f3;border-radius:9px;background:#f8fbff}
+.invoice-builder-optimization-heading{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.invoice-builder-optimization-heading>div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.invoice-builder-optimization-heading strong{color:#24496f;font-size:12px;font-weight:800}
+.invoice-builder-optimization-heading small{color:#71849a;font-size:10px;line-height:1.35}
+.invoice-builder-optimization>ul{display:flex;flex-direction:column;gap:7px;margin:10px 0 0;padding:0;list-style:none}
+.invoice-builder-optimization>ul>li{display:flex;align-items:center;justify-content:space-between;gap:9px;padding-top:8px;border-top:1px solid #e6eef7}
+.invoice-builder-optimization>ul>li>div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.invoice-builder-optimization>ul>li b{color:#344b64;font-size:10px}
+.invoice-builder-optimization>ul>li small{color:#75879a;font-size:9px;line-height:1.4}
+.invoice-builder-optimization>ul>li .btn{flex:0 0 auto;font-size:10px}
+@media(max-width:760px){.invoice-builder-optimization>ul>li{align-items:flex-start}.invoice-builder-optimization-heading{align-items:flex-start}}

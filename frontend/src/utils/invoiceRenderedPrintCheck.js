@@ -74,9 +74,34 @@ export function measureRenderedInvoiceDocument(documentRef){
           const rect=getRect(row,sheetRect);
           const rowStyle=getElementStyle(documentRef,row);
           const cells=Array.from(row.querySelectorAll?.("th,td")||[]);
+          const cellMeasurements=cells.map(cell=>{
+            const textElement=cell.querySelector?.(".design-cell-text")||cell;
+            const textRect=textElement?.getBoundingClientRect?.();
+            const textStyle=getElementStyle(documentRef,textElement);
+            const fontSizePx=Number.parseFloat(textStyle?.fontSize)||0;
+            const parsedLineHeight=Number.parseFloat(textStyle?.lineHeight);
+            const lineHeightPx=Number.isFinite(parsedLineHeight)&&parsedLineHeight>0
+              ?parsedLineHeight:fontSizePx>0?fontSizePx*1.2:0;
+            const textHeightPx=Number(textRect?.height)||0;
+            const hasContent=String(textElement?.textContent||"").trim().length>0;
+            return {
+              columnKey:cell.getAttribute?.("data-column-key")||"",
+              columnLabel:cell.getAttribute?.("data-column-label")||"",
+              estimatedLines:readOptionalNumberAttribute(cell,"data-estimated-lines"),
+              actualLines:hasContent&&textHeightPx>0&&lineHeightPx>0
+                ?Math.max(1,Math.round(textHeightPx/lineHeightPx)):null,
+              textHeightPx,
+              lineHeightPx,
+              widthPx:Number(cell.getBoundingClientRect?.().width)||Number(cell.clientWidth)||0,
+              textLength:String(textElement?.textContent||"").trim().length,
+              hasContent
+            };
+          });
           return {
             itemNumber:Number(row.getAttribute("data-item-number"))||index+1,
             label:row.getAttribute("data-item-label")||"",
+            estimatedHeightMm:readOptionalNumberAttribute(row,"data-estimated-height-mm"),
+            estimatedLines:readOptionalNumberAttribute(row,"data-estimated-lines"),
             geometryAvailable:Boolean(rect&&rect.width>0&&rect.height>0),
             left:rect?.left??null,
             top:rect?.top??null,

@@ -609,6 +609,49 @@ test("variable-height row measurement follows the visible table columns and font
  assert.ok(narrowHeight.rowHeightMm>=wideHeight.rowHeightMm);
  assert.ok(largeFontHeight.rowHeightMm>=wideHeight.rowHeightMm);
 });
+
+test("very long item descriptions auto-fit their row typography before exceeding a printable table page",()=>{
+ const {estimateInvoiceItemRow}=require("../utils/invoiceDesignPagination");
+ const template={pageSize:"A4",orientation:"portrait",blocks:[
+  {id:"items",type:"items_table",x:5,y:20,w:90,h:40,fontSize:12,tableCellPadding:4,visible:true,
+   columns:[{key:"description",label:"Description",width:28,visible:true},{key:"amount",label:"Amount",width:72,visible:true}]},
+  {id:"totals",type:"totals",x:65,y:82,w:30,h:15,visible:true}
+ ]};
+ const table=template.blocks[0];
+ const rows=Array.from({length:8},(_,index)=>({
+  orderName:"cotton fabric garment finishing work ".repeat(20)+" item "+index,
+  quantity:1,unitPrice:100
+ }));
+ const metrics={
+  tableWidthMm:180,
+  tableHeightMm:297*table.h/100
+ };
+ const first=estimateInvoiceItemRow(rows[0],table.columns,metrics,table,{},1);
+ assert.equal(first.autoFitted,true);
+ assert.ok(first.fontSize<12,"the item row font should step down only when its measured height needs it");
+ assert.ok(first.fontSize>=6,"the fallback must respect the readable six-pixel minimum");
+ assert.ok(first.cellPaddingPx>=1&&first.cellPaddingPx<=4);
+ assert.ok(first.rowHeightMm<=metrics.tableHeightMm-11+0.01,"the fitted row must fit the table's usable height");
+ assert.equal(first.exceedsTableArea,false);
+
+ const pages=buildInvoiceDesignPages(template,rows);
+ assert.deepEqual(pages.flatMap(page=>page.rows.map(row=>row.itemNumber)),Array.from({length:8},(_,index)=>index+1));
+ assert.ok(pages.every(page=>page.rows.every(row=>row.exceedsTableArea!==true)));
+ assert.ok(pages.every(page=>page.rowHeightTotalMm+11<=page.tableHeightMm+0.01));
+ assert.ok(pages[pages.length-1].blocks.some(block=>block.type==="totals"));
+ assert.ok(pages.slice(0,-1).every(page=>!page.blocks.some(block=>block.type==="totals")));
+ assert.ok(pages.some(page=>page.rows.some(row=>row.autoFitted===true&&row.fontSize<12)));
+});
+
+test("item rows that cannot fit even at minimum print typography remain explicitly flagged",()=>{
+ const {estimateInvoiceItemRow}=require("../utils/invoiceDesignPagination");
+ const table={type:"items_table",fontSize:12,tableCellPadding:4,columns:[{key:"description",width:100,visible:true}]};
+ const metrics={tableWidthMm:180,tableHeightMm:24};
+ const estimate=estimateInvoiceItemRow({orderName:"unbrokenfabricdescription".repeat(120)},table.columns,metrics,table,{},1);
+ assert.equal(estimate.fontSize,6);
+ assert.equal(estimate.cellPaddingPx,1);
+ assert.equal(estimate.exceedsTableArea,true);
+});
 test("multi-page invoice pagination retains original line numbering and moves totals to the final page",()=>{
  const template={pageSize:"A5",orientation:"portrait",blocks:[
   {id:"items",type:"items_table",x:5,y:30,w:90,h:30,visible:true,columns:[{key:"description",width:40,visible:true}]},

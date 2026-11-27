@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { analyzeInvoiceLayout, applySafeInvoiceLayoutFixes, buildInvoiceLayoutOptimizationSuggestions, applyInvoiceLayoutOptimizationSuggestion, applyInvoiceLayoutOptimizationPlan } from "./invoiceLayoutQuality.js";
+import { analyzeInvoiceLayout, applySafeInvoiceLayoutFixes, buildInvoiceLayoutOptimizationSuggestions, buildInvoiceColumnOptimizationPreview, applyInvoiceLayoutOptimizationSuggestion, applyInvoiceLayoutOptimizationPlan } from "./invoiceLayoutQuality.js";
 import { analyzeInvoicePagination } from "./invoicePaginationHints.js";
 import { analyzeRenderedInvoiceMetrics, measureRenderedInvoiceDocument } from "./invoiceRenderedPrintCheck.js";
 import {
@@ -534,6 +534,95 @@ test("layout assistant normalizes visible item columns and preserves hidden colu
   assert.deepEqual(updated[2], hidden);
   assert.equal(updated[0].key, "description");
   assert.equal(updated[1].key, "amount");
+});
+
+test("column optimizer previews a wider diagnostic column while preserving the 100% table width", () => {
+  const hidden = { key: "legacy", label: "Hidden detail", width: 23, visible: false, order: 8 };
+  const block = {
+    id: "items",
+    type: "items_table",
+    columns: [
+      { key: "sr", label: "#", width: 8, order: 0, visible: true },
+      { key: "description", label: "Description", width: 18, order: 1, visible: true },
+      { key: "designNumber", label: "Design No.", width: 12, order: 2, visible: true },
+      { key: "hsnCode", label: "HSN", width: 8, order: 3, visible: true },
+      { key: "quantity", label: "Qty", width: 8, order: 4, visible: true },
+      { key: "unitPrice", label: "Rate", width: 18, order: 5, visible: true },
+      { key: "amount", label: "Amount", width: 28, order: 6, visible: true },
+      hidden
+    ]
+  };
+  const issue = {
+    blockId: "items",
+    columnKey: "description",
+    columnLabel: "Description",
+    estimatedLines: 1,
+    actualLines: 3
+  };
+  const preview = buildInvoiceColumnOptimizationPreview(block, issue);
+  assert.ok(preview);
+  assert.equal(preview.suggestion.action, "optimize-item-column");
+  assert.equal(preview.currentTargetWidth, 18);
+  assert.equal(preview.suggestedTargetWidth, 54);
+  assert.equal(preview.visibleTotalBefore, 100);
+  assert.equal(preview.visibleTotalAfter, 100);
+  assert.deepEqual(preview.beforeColumns.map(column=>column.key),block.columns.map(column=>column.key));
+  assert.deepEqual(preview.afterColumns[7],hidden);
+  assert.ok(preview.afterColumns.filter(column=>column.visible!==false).every(column=>column.width>=3));
+  assert.ok(preview.changedColumns.some(column=>column.key==="description"&&column.change>0));
+  assert.ok(preview.changedColumns.filter(column=>column.key!=="description").every(column=>column.change<=0));
+  assert.equal(block.columns[1].width,18,"preview generation does not mutate the saved table");
+});
+
+test("column optimizer refuses unsafe or ambiguous width layouts", () => {
+  const base = {
+    id: "items",
+    type: "items_table",
+    columns: [
+      { key: "description", label: "Description", width: 50, visible: true },
+      { key: "amount", label: "Amount", width: 50, visible: true }
+    ]
+  };
+  const issue = { columnKey: "description", estimatedLines: 1, actualLines: 2 };
+  assert.equal(buildInvoiceColumnOptimizationPreview(base,{...issue,actualLines:1}),null);
+  assert.equal(buildInvoiceColumnOptimizationPreview(base,{...issue,columnKey:"missing"}),null);
+  assert.equal(buildInvoiceColumnOptimizationPreview({...base,columns:[
+    {key:"description",width:40,visible:true},
+    {key:"amount",width:40,visible:true}
+  ]},issue),null,"non-100% layouts must be normalized before optimization");
+  assert.equal(buildInvoiceColumnOptimizationPreview({...base,columns:[
+    {key:"description",width:97,visible:true},
+    {key:"amount",width:3,visible:true}
+  ]},issue),null,"there must be enough width to redistribute safely");
+});
+
+test("applying a column preview is reversible, preserves hidden columns and rejects stale widths", () => {
+  const block = {
+    id: "items",
+    type: "items_table",
+    columns: [
+      { key: "description", label: "Description", width: 30, visible: true, order: 0 },
+      { key: "designNumber", label: "Design No.", width: 30, visible: true, order: 1 },
+      { key: "amount", label: "Amount", width: 40, visible: true, order: 2 },
+      { key: "hidden", label: "Hidden", width: 17, visible: false, order: 3 }
+    ]
+  };
+  const issue = { columnKey: "description", columnLabel: "Description", estimatedLines: 1, actualLines: 2 };
+  const preview = buildInvoiceColumnOptimizationPreview(block,issue);
+  assert.ok(preview);
+  const applied = applyInvoiceLayoutOptimizationSuggestion([block],preview.suggestion);
+  assert.equal(applied.changed,true);
+  const updated = applied.blocks[0].columns;
+  assert.ok(updated[0].width>block.columns[0].width);
+  assert.deepEqual(updated[3],block.columns[3]);
+  assert.equal(updated.reduce((sum,column)=>sum+(column.visible===false?0:column.width),0),100);
+  assert.equal(block.columns[0].width,30,"the original block remains unchanged");
+
+  const stale = [{...block,columns:block.columns.map((column,index)=>index===0?{...column,width:31}:column)}];
+  const rejected = applyInvoiceLayoutOptimizationSuggestion(stale,preview.suggestion);
+  assert.equal(rejected.changed,false);
+  assert.match(rejected.reason,/changed after this preview/);
+  assert.equal(stale[0].columns[0].width,31);
 });
 
 test("layout assistant offers text fitting for visible text blocks and ignores hidden or non-text elements", () => {

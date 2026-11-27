@@ -144,7 +144,7 @@ function createInvoiceDesignTemplate(id,key="modern-business"){
     borderColor:preset.border,borderWidth:.5,borderRadius:preset.header==="minimal"?1:2
   }));
   blocks.push(text("bill-to-label","BILL TO",7,26.1,50,2,{
-    fontSize:8.1,bold:true,color:preset.accent,letterSpacing:.35
+    fontSize:8.8,bold:true,color:preset.accent,letterSpacing:.35
   }));
   blocks.push(field("customer-name","customer_name",7,28.6,50.5,3,{
     fontSize:13.2,bold:true,color:preset.deep,showLabel:false
@@ -208,7 +208,7 @@ function createInvoiceDesignTemplate(id,key="modern-business"){
     fontSize:smallFont,color:"#536477",lineHeight:1.16
   }));
   blocks.push(text("terms-heading","TERMS & CONDITIONS",5.5,termsTitleTop,54,1.7,{
-    fontSize:7.5,bold:true,color:preset.accent,letterSpacing:.3
+    fontSize:8.5,bold:true,color:preset.accent,letterSpacing:.3
   }));
   blocks.push(field("terms","terms",5.5,termsTop,54,termsHeight,{
     fontSize:compact?8.8:9.2,color:"#5b6b7e",lineHeight:1.16,showLabel:false

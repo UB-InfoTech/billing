@@ -293,6 +293,7 @@ test("rendered invoice measurements identify each cell's estimated and actual wr
     getAttribute: name => ({
       "data-column-key": "description",
       "data-column-label": "Description",
+      "data-column-index": "0",
       "data-estimated-lines": "1"
     }[name] ?? null),
     querySelector: () => textElement,
@@ -343,8 +344,10 @@ test("rendered invoice measurements identify each cell's estimated and actual wr
     querySelectorAll: selector => selector === ".design-sheet" ? [sheet] : [],
     defaultView: {
       getComputedStyle: element => element === textElement
-        ? { fontSize: "10px", lineHeight: "12px" }
-        : { breakInside: "avoid", pageBreakInside: "avoid" }
+        ? { fontSize: "10px", lineHeight: "12px", fontFamily: "Arial", fontWeight: "400" }
+        : element === cell
+          ? { textAlign: "left", verticalAlign: "middle", paddingTop: "4px", paddingRight: "5px", paddingBottom: "4px", paddingLeft: "5px" }
+          : { breakInside: "avoid", pageBreakInside: "avoid" }
     }
   };
 
@@ -353,9 +356,62 @@ test("rendered invoice measurements identify each cell's estimated and actual wr
   assert.equal(measured.pages[0].blocks[0].rows[0].estimatedHeightMm, 9);
   assert.equal(measuredCell.columnKey, "description");
   assert.equal(measuredCell.columnLabel, "Description");
+  assert.equal(measuredCell.columnIndex, 0);
+  assert.equal(measuredCell.fontSizePx, 10);
+  assert.equal(measuredCell.fontFamily, "Arial");
+  assert.equal(measuredCell.textAlign, "left");
+  assert.equal(measuredCell.verticalAlign, "middle");
+  assert.equal(measuredCell.paddingTopPx, 4);
+  assert.equal(measuredCell.paddingRightPx, 5);
   assert.equal(measuredCell.estimatedLines, 1);
   assert.equal(measuredCell.actualLines, 3);
   assert.equal(measured.pages[0].contentAreaHeightPx, 1000);
+});
+
+
+test("actual print audit flags inconsistent item-column alignment and misplaced numeric values",()=>{
+  const audit=analyzeRenderedInvoiceMetrics({
+    pages:[{pageNumber:1,width:793.7,height:1122.5,blocks:[{
+      id:"items",type:"items_table",
+      headerCells:[{label:"Description",fontSizePx:9},{label:"Amount",fontSizePx:9}],
+      rows:[
+        {itemNumber:1,cells:[
+          {columnKey:"description",columnLabel:"Description",columnIndex:0,textAlign:"left",hasContent:true,fontSizePx:9},
+          {columnKey:"amount",columnLabel:"Amount",columnIndex:1,textAlign:"left",hasContent:true,fontSizePx:9}
+        ]},
+        {itemNumber:2,cells:[
+          {columnKey:"description",columnLabel:"Description",columnIndex:0,textAlign:"right",hasContent:true,fontSizePx:9},
+          {columnKey:"amount",columnLabel:"Amount",columnIndex:1,textAlign:"left",hasContent:true,fontSizePx:9}
+        ]}
+      ]
+    }]}]
+  });
+  assert.ok(audit.warnings.some(issue=>issue.id==="table-column-alignment-inconsistent-1-items-description"));
+  const amount=audit.warnings.find(issue=>issue.id==="table-column-alignment-expected-1-items-amount");
+  assert.ok(amount);
+  assert.equal(amount.expectedAlignment,"right");
+  assert.equal(audit.hasErrors,false,"formatting guidance must not block an otherwise valid invoice");
+});
+
+test("actual print audit checks table text readability and heading-to-row typography",()=>{
+  const audit=analyzeRenderedInvoiceMetrics({
+    pages:[{pageNumber:2,width:793.7,height:1122.5,blocks:[{
+      id:"items",type:"items_table",
+      headerCells:[{label:"Description",fontSizePx:12},{label:"Amount",fontSizePx:12}],
+      rows:[{itemNumber:7,cells:[
+        {columnKey:"description",columnLabel:"Description",columnIndex:0,textAlign:"left",hasContent:true,fontSizePx:5.8},
+        {columnKey:"amount",columnLabel:"Amount",columnIndex:1,textAlign:"right",hasContent:true,fontSizePx:5.8}
+      ]}]
+    }]}]
+  });
+  const smallText=audit.warnings.find(issue=>issue.id==="table-small-text-2-items-7");
+  assert.ok(smallText);
+  assert.equal(smallText.fontSizePx,5.8);
+  assert.equal(smallText.columnKey,"description");
+  const mismatch=audit.warnings.find(issue=>issue.id==="table-header-body-font-mismatch-2-items");
+  assert.ok(mismatch);
+  assert.equal(mismatch.headerFontSizePx,12);
+  assert.equal(mismatch.bodyFontSizePx,5.8);
 });
 
 test("tall item-row warnings name the row and the column that wrapped more than estimated", () => {

@@ -1696,6 +1696,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                         {printPageNavigation.map(page=>(
                           <div className="invoice-builder-page-inspector-item" key={page.pageNumber}>
                             <div><b>Page {page.pageNumber}</b><span>{page.closingOnly?"Closing details only":page.itemCount+" item row"+(page.itemCount===1?"":"s")}</span></div>
+                            {page.renderedItemHeightMm!==null&&page.itemCapacityMm>0&&<small>Item rows use {page.renderedItemHeightMm.toFixed(1)} of {page.itemCapacityMm.toFixed(1)} mm ({page.itemSpaceUsedPercent}%)</small>}
                             {page.reservedClosingSpaceMm>0.5&&<small>Reserves {page.reservedClosingSpaceMm.toFixed(1)} mm for closing details</small>}
                             <div className="d-flex align-items-center justify-content-between gap-2">
                               <small className={page.errorCount?"text-danger":page.warningCount?"text-warning":"text-success"}>{page.errorCount?page.errorCount+" critical":page.warningCount?page.warningCount+" warning(s)":"No page issues"}{page.errorCount&&page.warningCount?" · "+page.warningCount+" warning(s)":""}</small>

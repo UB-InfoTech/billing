@@ -132,7 +132,7 @@
   };
 %>
   <% designPages.forEach((page,pageIndex)=>{ %>
-  <div class="design-sheet <%= pageIndex===designPages.length-1?'is-last-page':'' %>" data-page-number="<%= page.pageNumber %>" data-page-item-count="<%= (page.rows||[]).length %>" data-page-item-capacity-mm="<%= Number(page.itemCapacityMm||0).toFixed(2) %>" data-page-closing-reserved-mm="<%= Number(page.reservedClosingSpaceMm||0).toFixed(2) %>" data-page-closing-only="<%= page.closingOnly?'true':'false' %>">
+  <div class="design-sheet <%= pageIndex===designPages.length-1?'is-last-page':'' %>" data-page-number="<%= page.pageNumber %>" data-page-item-count="<%= (page.rows||[]).length %>" data-page-item-capacity-mm="<%= Number(page.itemCapacityMm||0).toFixed(2) %>" data-page-row-height-estimate-mm="<%= Number.isFinite(Number(page.rowHeightTotalMm))?Number(page.rowHeightTotalMm).toFixed(2):'' %>" data-page-closing-reserved-mm="<%= Number(page.reservedClosingSpaceMm||0).toFixed(2) %>" data-page-closing-only="<%= page.closingOnly?'true':'false' %>">
     <% if(activeDesignTemplate.background?.url&&activeDesignTemplate.background.visible!==false){
       const backgroundUrl=activeDesignTemplate.background.url.startsWith("http")?activeDesignTemplate.background.url:(publicUploadBaseUrl||"")+activeDesignTemplate.background.url;
     %>

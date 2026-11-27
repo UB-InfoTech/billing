@@ -146,6 +146,7 @@ test("rendered print audit exposes page-by-page item counts and reserved closing
    "data-page-number":"2",
    "data-page-item-count":"7",
    "data-page-item-capacity-mm":"119.65",
+   "data-page-row-height-estimate-mm":"64.25",
    "data-page-closing-reserved-mm":"47.55",
    "data-page-closing-only":"false"
   }[name]??null),
@@ -155,8 +156,12 @@ test("rendered print audit exposes page-by-page item counts and reserved closing
  };
  const documentRef={querySelectorAll:selector=>selector===".design-sheet"?[sheet]:[]};
  const measured=measureRenderedInvoiceDocument(documentRef);
+ assert.equal(measured.pages[0].estimatedItemRowHeightMm,64.25);
  const audit=analyzeRenderedInvoiceMetrics(measured,{pageSize:"A4",orientation:"portrait"});
- assert.deepEqual(audit.pageLayouts,[{pageNumber:2,itemCount:7,itemCapacityMm:119.65,reservedClosingSpaceMm:47.55,closingOnly:false}]);
+ assert.deepEqual(audit.pageLayouts,[{
+  pageNumber:2,itemCount:7,itemCapacityMm:119.65,renderedItemHeightMm:null,itemSpaceUsedPercent:null,
+  reservedClosingSpaceMm:47.55,closingOnly:false
+ }]);
 });
 
 test("pagination hints explain when closing details safely require a dedicated final page",async()=>{

@@ -403,6 +403,76 @@ test("tall item-row warnings name the row and the column that wrapped more than 
   assert.match(issue.detail, /Widen that column/);
 });
 
+test("actual print audit blocks printing when rendered item rows overlap invoice totals",()=>{
+  const audit=analyzeRenderedInvoiceMetrics({
+    pages:[{
+      pageNumber:2,
+      width:793.7,
+      height:1122.5,
+      blocks:[
+        {
+          id:"items",type:"items_table",
+          bounds:{left:30,top:180,right:760,bottom:780},
+          rows:[{
+            itemNumber:8,label:"Premium cotton fabric",
+            geometryAvailable:true,left:30,top:520,right:760,bottom:566,
+            height:46,estimatedHeightMm:9,cells:[]
+          }]
+        },
+        {
+          id:"totals",type:"totals",label:"Invoice totals",hasContent:true,
+          bounds:{left:580,top:548,right:760,bottom:720},
+          rows:[]
+        },
+        {
+          id:"signature",type:"field",fieldKey:"signature",label:"Authorised signature",
+          hasContent:true,bounds:{left:580,top:740,right:760,bottom:790},rows:[]
+        }
+      ]
+    }]
+  });
+  const issue=audit.warnings.find(item=>item.id==="item-closing-overlap-2-items-8-totals");
+  assert.ok(issue);
+  assert.equal(issue.severity,"error");
+  assert.equal(issue.title,"An item row overlaps invoice closing details");
+  assert.equal(issue.itemNumber,8);
+  assert.equal(issue.blockId,"items");
+  assert.equal(issue.overlappingBlockId,"totals");
+  assert.ok(issue.overlapWidthPx>0);
+  assert.ok(issue.overlapHeightPx>0);
+  assert.equal(audit.hasErrors,true);
+});
+
+test("actual print audit ignores closing elements that do not overlap item rows or have no content",()=>{
+  const audit=analyzeRenderedInvoiceMetrics({
+    pages:[{
+      pageNumber:1,
+      width:793.7,
+      height:1122.5,
+      blocks:[
+        {
+          id:"items",type:"items_table",
+          bounds:{left:30,top:180,right:760,bottom:780},
+          rows:[{
+            itemNumber:1,label:"Cotton fabric",
+            geometryAvailable:true,left:30,top:520,right:760,bottom:548,
+            height:28,estimatedHeightMm:9,cells:[]
+          }]
+        },
+        {
+          id:"totals",type:"totals",label:"Invoice totals",hasContent:true,
+          bounds:{left:580,top:552,right:760,bottom:720},rows:[]
+        },
+        {
+          id:"terms",type:"field",fieldKey:"terms",label:"Terms",hasContent:false,
+          bounds:{left:30,top:525,right:500,bottom:580},rows:[]
+        }
+      ]
+    }]
+  });
+  assert.equal(audit.warnings.some(item=>item.title==="An item row overlaps invoice closing details"),false);
+});
+
 test("tall item-row warnings still give a useful fallback when no single cell is responsible", () => {
   const audit = analyzeRenderedInvoiceMetrics({
     pages: [{

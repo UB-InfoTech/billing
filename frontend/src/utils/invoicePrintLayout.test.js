@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { analyzeInvoiceLayout, applySafeInvoiceLayoutFixes } from "./invoiceLayoutQuality.js";
+import { analyzeInvoiceLayout, applySafeInvoiceLayoutFixes, buildInvoiceLayoutOptimizationSuggestions, applyInvoiceLayoutOptimizationSuggestion, applyInvoiceLayoutOptimizationPlan } from "./invoiceLayoutQuality.js";
 import { analyzeInvoicePagination } from "./invoicePaginationHints.js";
 import { analyzeRenderedInvoiceMetrics } from "./invoiceRenderedPrintCheck.js";
 import {
@@ -261,4 +261,99 @@ test("page navigation tolerates missing page data and malformed warnings", async
     { pageNumber: 1, itemCount: 0, closingOnly: false, reservedClosingSpaceMm: 0, errorCount: 0, warningCount: 0, issueCount: 0 },
     { pageNumber: 4, itemCount: 0, closingOnly: false, reservedClosingSpaceMm: 0, errorCount: 1, warningCount: 0, issueCount: 1 }
   ]);
+});
+
+
+test("layout assistant suggests an off-page position correction only when it is collision-free", () => {
+  const blocks = [
+    { id: "outside", type: "field", label: "Customer", x: 95, y: 10, w: 10, h: 10 },
+    { id: "other", type: "field", label: "Date", x: 10, y: 10, w: 20, h: 10 }
+  ];
+  const [suggestion] = buildInvoiceLayoutOptimizationSuggestions(blocks);
+  assert.equal(suggestion.action, "move-inside-page");
+  assert.deepEqual(suggestion.next, { x: 90, y: 10 });
+
+  const applied = applyInvoiceLayoutOptimizationSuggestion(blocks, suggestion);
+  assert.equal(applied.changed, true);
+  assert.deepEqual(
+    { x: applied.blocks[0].x, y: applied.blocks[0].y, w: applied.blocks[0].w, h: applied.blocks[0].h },
+    { x: 90, y: 10, w: 10, h: 10 }
+  );
+  assert.equal(blocks[0].x, 95, "the original design remains unchanged");
+});
+
+test("layout assistant does not propose a position that would overlap another element", () => {
+  const blocks = [
+    { id: "outside", type: "field", x: 95, y: 10, w: 10, h: 10 },
+    { id: "edge", type: "field", x: 90, y: 10, w: 10, h: 10 }
+  ];
+  const suggestions = buildInvoiceLayoutOptimizationSuggestions(blocks);
+  assert.equal(suggestions.some(issue => issue.action === "move-inside-page"), false);
+});
+
+test("layout assistant normalizes visible item columns and preserves hidden columns", () => {
+  const hidden = { key: "internal", width: 37, visible: false, label: "Hidden" };
+  const blocks = [{
+    id: "items",
+    type: "items_table",
+    x: 0, y: 20, w: 100, h: 40,
+    columns: [
+      { key: "description", width: 60, label: "Description" },
+      { key: "amount", width: 60, label: "Amount" },
+      hidden
+    ]
+  }];
+  const [suggestion] = buildInvoiceLayoutOptimizationSuggestions(blocks);
+  assert.equal(suggestion.action, "normalize-item-columns");
+  const applied = applyInvoiceLayoutOptimizationSuggestion(blocks, suggestion);
+  assert.equal(applied.changed, true);
+  const updated = applied.blocks[0].columns;
+  assert.ok(Math.abs(updated.filter(column => column.visible !== false).reduce((sum, column) => sum + column.width, 0) - 100) < 0.001);
+  assert.deepEqual(updated[2], hidden);
+  assert.equal(updated[0].key, "description");
+  assert.equal(updated[1].key, "amount");
+});
+
+test("layout assistant offers text fitting only for a current visible text element", () => {
+  const blocks = [
+    { id: "address", type: "text", text: "Long address", fontSize: 16, visible: true },
+    { id: "hidden", type: "text", text: "Hidden", fontSize: 16, visible: false },
+    { id: "gst", type: "field", fieldKey: "gst", fontSize: 12, visible: true }
+  ];
+  const suggestions = buildInvoiceLayoutOptimizationSuggestions(blocks, [], [
+    { fixAction: "fit-text", blockId: "address", suggestedFontSize: 9 },
+    { fixAction: "fit-text", blockId: "hidden", suggestedFontSize: 9 },
+    { fixAction: "fit-text", blockId: "gst", suggestedFontSize: 9 }
+  ]);
+  assert.equal(suggestions.length, 1);
+  assert.equal(suggestions[0].action, "fit-text");
+  const applied = applyInvoiceLayoutOptimizationSuggestion(blocks, suggestions[0]);
+  assert.equal(applied.changed, true);
+  assert.equal(applied.blocks[0].fontSize, 9);
+  assert.equal(blocks[0].fontSize, 16);
+});
+
+test("stale layout suggestions do not overwrite newer element edits", () => {
+  const blocks = [{ id: "outside", type: "field", x: 95, y: 10, w: 10, h: 10 }];
+  const [suggestion] = buildInvoiceLayoutOptimizationSuggestions(blocks);
+  const edited = [{ ...blocks[0], x: 80 }];
+  const result = applyInvoiceLayoutOptimizationSuggestion(edited, suggestion);
+  assert.equal(result.changed, false);
+  assert.match(result.reason, /changed after this suggestion/);
+  assert.equal(result.blocks[0].x, 80);
+});
+
+test("applying the optimization plan changes layout only and keeps financial fields untouched", () => {
+  const blocks = [
+    { id: "outside", type: "field", x: 95, y: 10, w: 10, h: 10, amount: 1200, tax: 18, due: 500 },
+    { id: "items", type: "items_table", x: 0, y: 20, w: 100, h: 40, columns: [{ key: "description", width: 70 }, { key: "amount", width: 70 }] }
+  ];
+  const suggestions = buildInvoiceLayoutOptimizationSuggestions(blocks);
+  const result = applyInvoiceLayoutOptimizationPlan(blocks, suggestions);
+  assert.equal(result.changed, true);
+  assert.equal(result.appliedCount, 2);
+  assert.equal(result.blocks[0].amount, 1200);
+  assert.equal(result.blocks[0].tax, 18);
+  assert.equal(result.blocks[0].due, 500);
+  assert.equal(blocks[0].x, 95);
 });

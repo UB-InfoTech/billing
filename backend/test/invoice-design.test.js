@@ -310,9 +310,10 @@ test("invalid imported images and unsafe style values are rejected",()=>{
 
 test("professional invoice design library contains distinct ready-to-use layouts",async()=>{
   const {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate}=await import("../../frontend/src/utils/invoiceTemplateLibrary.js");
-  assert.equal(INVOICE_DESIGN_PRESETS.length,14);
+  assert.equal(INVOICE_DESIGN_PRESETS.length,15);
   const keys=INVOICE_DESIGN_PRESETS.map(preset=>preset.key);
-  assert.equal(new Set(keys).size,14);
+  assert.equal(new Set(keys).size,15);
+  assert.ok(keys.includes("embroidery-job-work"));
   const templates=keys.map(key=>createInvoiceDesignTemplate("tpl-"+key,key));
   assert.ok(templates.some(template=>template.blocks.some(block=>block.type==="shape")));
   assert.ok(templates.some(template=>template.pageSize==="A5"));
@@ -758,7 +759,7 @@ test("custom text styling is sanitized and survives invoice design saves",()=>{
 });
 test("professional built-in templates include complete, readable business and invoice details",async()=>{
  const {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate}=await import("../../frontend/src/utils/invoiceTemplateLibrary.js");
- assert.equal(INVOICE_DESIGN_PRESETS.length,14);
+ assert.equal(INVOICE_DESIGN_PRESETS.length,15);
  for(const preset of INVOICE_DESIGN_PRESETS){
   const template=createInvoiceDesignTemplate("test-"+preset.key,preset.key);
   const fields=new Set(template.blocks.filter(block=>block.type==="field").map(block=>block.fieldKey));

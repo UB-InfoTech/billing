@@ -894,7 +894,7 @@ test("combined rendered layout plan keeps invoice financial values untouched", (
 });
 
 test("all ready-made invoice templates stay inside the page and keep their closing areas clear", () => {
-  assert.equal(INVOICE_DESIGN_PRESETS.length, 14);
+  assert.equal(INVOICE_DESIGN_PRESETS.length, 15);
 
   INVOICE_DESIGN_PRESETS.forEach(preset => {
     const design = createInvoiceDesignTemplate("qa-" + preset.key, preset.key);
@@ -931,4 +931,19 @@ test("all ready-made invoice templates stay inside the page and keep their closi
     );
     assert.ok(design.blocks.some(block => block.type === "totals"), preset.name + " includes invoice totals");
   });
+});
+
+test("embroidery job-work template includes its real production and fabric billing columns", () => {
+  const preset = INVOICE_DESIGN_PRESETS.find(item => item.key === "embroidery-job-work");
+  assert.ok(preset);
+  assert.equal(preset.category, "Textile & manufacturing");
+  assert.equal(preset.pageSize, "A4");
+  assert.equal(preset.orientation, "landscape");
+  assert.deepEqual(
+    preset.columns.map(column => column.key),
+    ["sr", "designNumber", "description", "hsnCode", "quantity", "qtyUnit", "cut", "MTR", "shortPcs", "unitPrice", "taxable", "amount"]
+  );
+  assert.equal(preset.columns.reduce((sum, column) => sum + column.width, 0), 100);
+  const design = createInvoiceDesignTemplate("qa-embroidery", preset.key);
+  assert.ok(design.blocks.some(block => block.id === "items-caption" && block.text === "EMBROIDERY & JOB WORK DETAILS"));
 });

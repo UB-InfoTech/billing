@@ -365,6 +365,40 @@ function auditInvoiceTableFormatting(table,pageNumber,warnings){
     const populated=cells.filter(cell=>cell?.hasContent&&Number(cell.fontSizePx)>0);
     const rowFontSizes=populated.map(cell=>Number(cell.fontSizePx));
     const itemNumber=Number(row.itemNumber)||rowIndex+1;
+    const measuredSpacing=cells.filter(cell=>[
+      cell?.paddingTopPx,cell?.paddingRightPx,cell?.paddingBottomPx,cell?.paddingLeftPx
+    ].every(value=>Number.isFinite(Number(value))));
+    if(measuredSpacing.length>1){
+      const vertical=c=>((Number(c.paddingTopPx)+Number(c.paddingBottomPx))/2);
+      const horizontal=c=>((Number(c.paddingLeftPx)+Number(c.paddingRightPx))/2);
+      const verticalValues=measuredSpacing.map(vertical);
+      const horizontalValues=measuredSpacing.map(horizontal);
+      const verticalSpread=Math.max(...verticalValues)-Math.min(...verticalValues);
+      const horizontalSpread=Math.max(...horizontalValues)-Math.min(...horizontalValues);
+      if(verticalSpread>1.5||horizontalSpread>1.5){
+        addWarning(warnings,{
+          id:"table-cell-spacing-inconsistent-"+pageNumber+"-"+table.id+"-"+itemNumber,
+          severity:"warning",
+          title:"Spacing varies across an item row",
+          detail:"The cells in item "+itemNumber+" have noticeably different inner spacing. Review the table cell padding so each column has a consistent, balanced appearance.",
+          pageNumber,blockId:table.id,blockType:table.type,itemNumber,
+          verticalPaddingSpreadPx:Number(verticalSpread.toFixed(2)),
+          horizontalPaddingSpreadPx:Number(horizontalSpread.toFixed(2))
+        });
+      }
+    }
+    const misalignedCell=cells.find(cell=>cell?.verticalAlign&&cell.verticalAlign!=="middle");
+    if(misalignedCell){
+      addWarning(warnings,{
+        id:"table-cell-vertical-alignment-"+pageNumber+"-"+table.id+"-"+itemNumber,
+        severity:"warning",
+        title:"Text is not vertically centered in an item row",
+        detail:"At least one cell in item "+itemNumber+" is not vertically centered. Centering text within the row makes wrapped descriptions and numeric values easier to scan.",
+        pageNumber,blockId:table.id,blockType:table.type,itemNumber,
+        columnKey:misalignedCell.columnKey||null,
+        verticalAlign:misalignedCell.verticalAlign
+      });
+    }
     if(rowFontSizes.length>1&&Math.max(...rowFontSizes)-Math.min(...rowFontSizes)>1.25){
       addWarning(warnings,{
         id:"table-row-font-inconsistent-"+pageNumber+"-"+table.id+"-"+itemNumber,

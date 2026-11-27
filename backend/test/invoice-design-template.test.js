@@ -191,6 +191,48 @@ test("large numeric invoice amounts wrap inside their own table cells",async()=>
   assert.doesNotMatch(html,/class="design-cell is-numeric is-nowrap"/);
 });
 
+test("print renderer uses final-page auto-fit measurements beside invoice totals",async()=>{
+  const template={
+    id:"final-page-auto-fit",
+    name:"Final page auto-fit",
+    pageSize:"A4",
+    orientation:"portrait",
+    blocks:[
+      {
+        id:"items",type:"items_table",x:5,y:20,w:90,h:20,fontSize:8,
+        tableCellPadding:4,visible:true,
+        columns:[
+          {key:"description",label:"Description",width:20,visible:true},
+          {key:"amount",label:"Amount",width:80,visible:true}
+        ]
+      },
+      {id:"totals",type:"totals",x:65,y:35,w:30,h:8,fontSize:9,visible:true}
+    ]
+  };
+  const items=[{
+    orderName:"premium embroidered fabric finishing instructions with custom measurements ".repeat(5),
+    quantity:1,qtyUnit:"PCS",unitPrice:100,shortPcs:0
+  }];
+  const pages=buildInvoiceDesignPages(template,items);
+  const row=pages[0].rows[0];
+  assert.equal(pages.length,1);
+  assert.equal(row.finalPageAutoFitted,true);
+  const html=await ejs.renderFile(templatePath,{
+    ...locals,
+    subOrders:items,
+    invoiceConfig:{
+      ...baseConfig,
+      design:{enabled:true,activeTemplateId:template.id,templates:[template]}
+    },
+    invoicePages:pages
+  });
+  assert.match(html,/data-final-page-auto-fitted="true"/);
+  assert.match(html,new RegExp('data-estimated-font-size="'+row.fontSize+'"'));
+  assert.match(html,new RegExp('font-size:'+row.fontSize+'px'));
+  assert.match(html,new RegExp('height:'+row.rowHeightMm.toFixed(2)+'mm'));
+  assert.match(html,/data-block-id="totals"/);
+});
+
 test("multipage print shows page ranges and continued captions without overlapping the business header",async()=>{
   const template={
     id:"multipage-context",

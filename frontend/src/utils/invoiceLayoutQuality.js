@@ -365,3 +365,70 @@ export function applyInvoiceLayoutOptimizationPlan(blocks=[],suggestions=[],defa
  });
  return {blocks:next,changed:applied>0,appliedCount:applied,skippedCount:Math.max(0,(Array.isArray(suggestions)?suggestions.length:0)-applied)};
 }
+
+/**
+ * Build a read-only, combined preview of the safe layout suggestions.
+ * The snapshot lets the UI reject the preview if the design changes before Apply.
+ */
+export function buildInvoiceLayoutOptimizationPlanPreview(blocks=[],suggestions=[],defaultColumns=[]) {
+ const source=Array.isArray(blocks)?blocks:[];
+ const requested=Array.isArray(suggestions)?suggestions:[];
+ if(!requested.length)return null;
+
+ let next=source;
+ const appliedSuggestions=[];
+ requested.forEach(suggestion=>{
+  const result=applyInvoiceLayoutOptimizationSuggestion(next,suggestion,defaultColumns);
+  if(result.changed){
+   next=result.blocks;
+   appliedSuggestions.push(suggestion);
+  }
+ });
+ if(!appliedSuggestions.length)return {
+  baseSnapshot:JSON.stringify(source),
+  suggestionsSnapshot:JSON.stringify(requested),
+  blocks:source,
+  changes:[],
+  appliedCount:0,
+  skippedCount:requested.length
+ };
+
+ const changes=appliedSuggestions.map(suggestion=>{
+  const before=source.find(block=>block?.id===suggestion.blockId);
+  const after=next.find(block=>block?.id===suggestion.blockId);
+  let summary="Layout setting updated.";
+  if(before&&after&&suggestion.action==="move-inside-page"){
+   summary="Move from "+Number(before.x).toFixed(1)+"%, "+Number(before.y).toFixed(1)+"% to "+
+    Number(after.x).toFixed(1)+"%, "+Number(after.y).toFixed(1)+"% on the page.";
+  }else if(before&&after&&suggestion.action==="fit-text"){
+   summary="Text size: "+Number(before.fontSize||10).toFixed(1)+" px → "+Number(after.fontSize||10).toFixed(1)+" px.";
+  }else if(before&&after&&["normalize-item-columns","optimize-item-column"].includes(suggestion.action)){
+   const beforeColumns=Array.isArray(before.columns)&&before.columns.length?before.columns:defaultColumns;
+   const afterColumns=Array.isArray(after.columns)&&after.columns.length?after.columns:defaultColumns;
+   const changed=afterColumns.map((column,index)=>{
+    const original=beforeColumns[index];
+    if(!column||!original||column.visible===false||original.visible===false||
+      sameNumber(column.width,original.width))return null;
+    return (column.label||column.key||"Column")+" "+Number(original.width).toFixed(1)+"% → "+Number(column.width).toFixed(1)+"%";
+   }).filter(Boolean);
+   summary=changed.length?changed.join("; ")+".":"Item column widths updated.";
+  }
+  return {
+   id:suggestion.id,
+   blockId:suggestion.blockId,
+   title:suggestion.title||labelFor(before),
+   detail:suggestion.detail||"",
+   summary,
+   action:suggestion.action
+  };
+ });
+
+ return {
+  baseSnapshot:JSON.stringify(source),
+  suggestionsSnapshot:JSON.stringify(requested),
+  blocks:next,
+  changes,
+  appliedCount:appliedSuggestions.length,
+  skippedCount:Math.max(0,requested.length-appliedSuggestions.length)
+ };
+}

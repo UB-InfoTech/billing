@@ -193,7 +193,8 @@ function createInvoiceDesignTemplate(id,key="modern-business"){
   const termsTitleTop=footerTop+8.8;
   const termsTop=footerTop+10.6;
   const termsHeight=Math.max(2.6,footerHeight-11.5);
-  const totalsPanelHeight=Math.max(10,footerHeight-3.2);
+  // Keep the signatory rule outside the totals panel on every page size.
+  const totalsPanelHeight=Math.max(10,footerHeight-4.0);
   const totalsTop=footerTop+.2;
   const totalsBlockTop=footerTop+.8;
   const signatureTop=footerTop+footerHeight-2.45;

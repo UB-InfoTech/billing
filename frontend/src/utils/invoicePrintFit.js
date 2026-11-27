@@ -19,14 +19,14 @@ const charUnit=char=>{
  if(MEDIUM_WIDTH_SCRIPT.test(char))return 0.78;
  return 0.52;
 };
-function estimateLineCount(value,maxUnits){
+function estimateLineCount(value,maxUnits,letterSpacingUnits=0){
  let total=0;
  String(value??"").split(/\r?\n/u).forEach(paragraph=>{
   const words=paragraph.trim().split(/\s+/u).filter(Boolean);
   if(!words.length){total+=1;return;}
   let used=0;
   words.forEach(word=>{
-   const units=Array.from(word).reduce((sum,char)=>sum+charUnit(char),0),gap=used?0.3:0;
+   const units=Array.from(word).reduce((sum,char)=>sum+Math.max(0,charUnit(char)+letterSpacingUnits),0),gap=used?0.3:0;
    if(used&&used+gap+units>maxUnits){total+=1;used=0;}
    if(units>maxUnits){const lines=Math.ceil(units/maxUnits);total+=Math.max(0,lines-1);used=units-(lines-1)*maxUnits;}
    else used+=(used?0.3:0)+units;
@@ -35,6 +35,23 @@ function estimateLineCount(value,maxUnits){
  });
  return Math.max(1,total);
 }
+function normalizeTextTransform(value,transform){
+ const text=String(value??"");
+ if(transform==="uppercase")return text.toLocaleUpperCase();
+ if(transform==="lowercase")return text.toLocaleLowerCase();
+ if(transform==="capitalize")return text.replace(/(^|[\s\p{P}])(\p{L})/gu,(_match,prefix,letter)=>prefix+letter.toLocaleUpperCase());
+ return text;
+}
+function measureTextFit(block,value,geometry,fontSize){
+ const widthPx=geometry.contentWidthMm*Math.max(0,Number(block.w)||0)/100*96/25.4-2*(Number(block.padding)||0);
+ const heightPx=geometry.contentHeightMm*Math.max(0,Number(block.h)||0)/100*96/25.4-2*(Number(block.padding)||0);
+ const lineHeight=clamp(Number(block.lineHeight)||1.25,1,2.5);
+ const letterSpacing=Number.isFinite(Number(block.letterSpacing))?Number(block.letterSpacing):0;
+ const maxUnits=Math.max(0.5,(widthPx/Math.max(1,fontSize))*0.96);
+ const availableLines=Math.max(0,(heightPx/(Math.max(1,fontSize)*lineHeight))*0.98);
+ const requiredLines=estimateLineCount(value,maxUnits,letterSpacing/Math.max(1,fontSize));
+ return {requiredLines,availableLines,fits:requiredLines<=availableLines+0.05};
+}
 export function estimateInvoiceTextOverflow(blocks=[],values={},options={}){
  const geometry=getInvoicePrintGeometry(options.pageSize,options.orientation,options.printMargins),warnings=[];
  (Array.isArray(blocks)?blocks:[]).forEach(block=>{
@@ -42,12 +59,31 @@ export function estimateInvoiceTextOverflow(blocks=[],values={},options={}){
   let value=block.type==="text"?(block.text||block.label):(values[block.fieldKey]??"");
   if(value===null||value===undefined||String(value).trim()==="")return;
   if(block.type==="field"&&block.label&&block.showLabel!==false)value=block.label+": "+value;
+  value=normalizeTextTransform(value,block.textTransform);
   const fontSize=Math.max(6,Math.min(48,Number(block.fontSize)||10));
-  const widthPx=geometry.contentWidthMm*Math.max(0,Number(block.w)||0)/100*96/25.4-2*(Number(block.padding)||0);
-  const heightPx=geometry.contentHeightMm*Math.max(0,Number(block.h)||0)/100*96/25.4-2*(Number(block.padding)||0);
-  const maxUnits=Math.max(1,widthPx/fontSize),availableLines=Math.max(0,heightPx/(fontSize*1.25));
-  const requiredLines=estimateLineCount(value,maxUnits);
-  if(requiredLines>availableLines+0.25)warnings.push({severity:"warning",title:"Text may overflow its box",detail:(block.label||block.fieldKey||"Text")+" is estimated to need "+requiredLines+" lines; its box fits about "+availableLines.toFixed(1)+".",fixable:false,blockId:block.id});
+  const current=measureTextFit(block,value,geometry,fontSize);
+  if(current.requiredLines<=current.availableLines+0.25)return;
+  let suggestedFontSize=null;
+  for(let candidate=Math.floor((fontSize-0.25)*4)/4;candidate>=6;candidate=Math.round((candidate-0.25)*100)/100){
+   if(measureTextFit(block,value,geometry,candidate).fits){
+    suggestedFontSize=Number(candidate.toFixed(2));
+    break;
+   }
+  }
+  const label=block.label||block.fieldKey||"Text";
+  const suggestion=suggestedFontSize
+   ?" A text size of "+suggestedFontSize+" pt is estimated to fit; apply it and recheck the actual print preview."
+   :" Even at the 6 pt minimum, the estimated text does not fit. Increase the box or shorten the content.";
+  warnings.push({
+   id:"text-overflow-"+(block.id||block.fieldKey||"block"),
+   severity:"warning",
+   title:"Text may overflow its box",
+   detail:label+" is estimated to need "+current.requiredLines+" lines; its box fits about "+current.availableLines.toFixed(1)+"."+suggestion,
+   fixable:false,
+   fixAction:suggestedFontSize?"fit-text":undefined,
+   suggestedFontSize,
+   blockId:block.id
+  });
  });
  return warnings;
 }
@@ -64,12 +100,13 @@ export function getInvoiceMarginWarnings(pageSize,orientation,printMargins={}){
   warnings.push({severity:"warning",id:"unsupported-page-orientation",title:"Page orientation is not supported",detail:"Choose Portrait or Landscape so the preview and printed page use the same orientation.",fixable:false});
  }
  if(invalid.length){
-  warnings.push({severity:"warning",id:"invalid-print-margin",title:"One or more margin values are outside the allowed range",detail:"The "+invalid.join(", ")+" margin values must be between 0 and 25 mm. They are normalized for layout measurement.",fixable:false});
+  const normalizedMargins=Object.fromEntries(keys.map(key=>[key,safeMm(printMargins[key])]));
+  warnings.push({severity:"warning",id:"invalid-print-margin",title:"One or more margin values are outside the allowed range",detail:"The "+invalid.join(", ")+" margin values must be between 0 and 25 mm. Apply the normalized values to make the saved settings and measured preview agree.",fixable:false,fixAction:"normalize-print-margins",normalizedMargins});
  }
  const belowSafe=keys.filter(key=>geometry.margins[key]<PRINT_SAFE_MARGIN_MM);
  if(belowSafe.length){
   const labels={top:"Top",right:"Right",bottom:"Bottom",left:"Left"};
-  warnings.push({severity:"warning",id:"printer-safe-margin",title:"Some margins are below 4 mm",detail:belowSafe.map(key=>labels[key]).join(", ")+" margin"+(belowSafe.length===1?" is":"s are")+" below a common printer-safe distance. Content near these edges may be clipped on printers that cannot print borderlessly.",fixable:false,recommendedMargins:{top:4,right:4,bottom:4,left:4}});
+  warnings.push({severity:"warning",id:"printer-safe-margin",title:"Some margins are below 4 mm",detail:belowSafe.map(key=>labels[key]).join(", ")+" margin"+(belowSafe.length===1?" is":"s are")+" below a common printer-safe distance. Content near these edges may be clipped on printers that cannot print borderlessly.",fixable:false,fixAction:"set-printer-safe-margins",recommendedMargins:{top:4,right:4,bottom:4,left:4}});
  }
  if(geometry.contentWidthMm/geometry.widthMm<0.68||geometry.contentHeightMm/geometry.heightMm<0.68){
   warnings.push({severity:"warning",id:"large-print-margins",title:"Print margins are very large",detail:"The printable area is unusually small. Reduce the margins or check the selected paper size.",fixable:false});

@@ -2,6 +2,7 @@ const test=require("node:test");
 const assert=require("node:assert/strict");
 const path=require("node:path");
 const ejs=require("ejs");
+const {buildInvoiceDesignPages}=require("../utils/invoiceDesignPagination");
 
 const templatePath=path.join(__dirname,"../public/invoiceTable.ejs");
 const baseConfig={
@@ -150,4 +151,98 @@ test("custom invoice tables align numeric columns and emphasize totals without c
   assert.match(html,/font-variant-numeric:tabular-nums/);
   assert.match(html,/>200\.00<\/span>/);
   assert.match(html,/>₹ 236\.00<\/b>/);
+});
+
+
+test("multipage print shows page ranges and continued captions without overlapping the business header",async()=>{
+  const template={
+    id:"multipage-context",
+    name:"Multipage context",
+    pageSize:"A4",
+    orientation:"portrait",
+    blocks:[
+      {id:"business",type:"field",fieldKey:"company_name",label:"",x:5,y:3,w:65,h:5,fontSize:18,bold:true,visible:true},
+      {id:"items-caption",type:"text",text:"ITEM DETAILS",label:"Item details",x:5,y:17.2,w:90,h:2.2,fontSize:8.8,bold:true,visible:true},
+      {
+        id:"items",type:"items_table",x:5,y:20,w:90,h:22,fontSize:8,
+        tableCellPadding:2,visible:true,
+        columns:[
+          {key:"description",label:"Product description",width:70,visible:true},
+          {key:"amount",label:"Amount",width:30,visible:true}
+        ]
+      },
+      {id:"totals",type:"totals",x:65,y:82,w:30,h:15,fontSize:9,visible:true},
+      {id:"signature",type:"field",fieldKey:"signature",label:"",x:65,y:96,w:30,h:3,fontSize:8,visible:true}
+    ]
+  };
+  const items=Array.from({length:20},(_,index)=>({
+    orderName:"Product "+(index+1),quantity:1,qtyUnit:"PCS",unitPrice:100,shortPcs:0
+  }));
+  const pages=buildInvoiceDesignPages(template,items);
+  assert.ok(pages.length>1);
+  assert.equal(pages[0].isContinuation,false);
+  assert.equal(pages[1].isContinuation,true);
+  assert.equal(pages[0].firstItemNumber,1);
+  assert.equal(pages[0].lastItemNumber,pages[1].firstItemNumber-1);
+  assert.equal(pages[pages.length-1].isFinalPage,true);
+
+  const html=await ejs.renderFile(templatePath,{
+    ...locals,
+    subOrders:items,
+    invoiceConfig:{
+      ...baseConfig,
+      design:{enabled:true,activeTemplateId:template.id,templates:[template]}
+    },
+    invoicePages:pages
+  });
+  assert.match(html,/ITEM DETAILS/);
+  assert.match(html,/ITEM DETAILS · CONTINUED/);
+  assert.match(html,new RegExp('Items 1–'+pages[0].lastItemNumber+' · Page 1 of '+pages.length));
+  assert.match(html,new RegExp('data-page-continuation="true"'));
+  assert.match(html,new RegExp('data-page-first-item="'+pages[1].firstItemNumber+'"'));
+  assert.doesNotMatch(html,/class="design-page-number"/,"prebuilt caption should own page numbering instead of a floating badge near the logo");
+});
+
+test("closing-only invoice page is clearly labelled as the invoice summary and has no empty item table",async()=>{
+  const template={
+    id:"closing-page-context",
+    name:"Closing page context",
+    pageSize:"A4",
+    orientation:"portrait",
+    blocks:[
+      {id:"items-caption",type:"text",text:"ITEM DETAILS",label:"Item details",x:5,y:17.2,w:90,h:2.2,fontSize:8.8,bold:true,visible:true},
+      {
+        id:"items",type:"items_table",x:5,y:20,w:90,h:22,fontSize:8,
+        tableCellPadding:2,visible:true,
+        columns:[{key:"description",label:"Description",width:70,visible:true},{key:"amount",label:"Amount",width:30,visible:true}]
+      },
+      {id:"totals",type:"totals",x:65,y:25,w:30,h:15,fontSize:9,visible:true},
+      {id:"signature",type:"field",fieldKey:"signature",label:"",x:65,y:48,w:30,h:4,fontSize:8,visible:true}
+    ]
+  };
+  const items=Array.from({length:12},(_,index)=>({
+    orderName:"Item "+(index+1),quantity:1,qtyUnit:"PCS",unitPrice:100,shortPcs:0
+  }));
+  const pages=buildInvoiceDesignPages(template,items);
+  const closingPage=pages[pages.length-1];
+  assert.equal(closingPage.closingOnly,true);
+  assert.equal(closingPage.rows.length,0);
+  assert.ok(closingPage.blocks.some(block=>block.type==="totals"));
+  assert.ok(!closingPage.blocks.some(block=>block.type==="items_table"));
+
+  const html=await ejs.renderFile(templatePath,{
+    ...locals,
+    subOrders:items,
+    invoiceConfig:{
+      ...baseConfig,
+      design:{enabled:true,activeTemplateId:template.id,templates:[template]}
+    },
+    invoicePages:pages
+  });
+  assert.match(html,/data-page-closing-only="true"/);
+  assert.match(html,/INVOICE SUMMARY/);
+  assert.match(html,new RegExp('Page '+closingPage.pageNumber+' of '+closingPage.totalPages));
+  const closingPageMarkup=html.split('<div class="design-sheet').pop()||"";
+  assert.ok(closingPageMarkup.includes('data-block-type="totals"'));
+  assert.ok(!closingPageMarkup.includes('data-block-type="items_table"'));
 });

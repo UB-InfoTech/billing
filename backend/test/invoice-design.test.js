@@ -354,6 +354,15 @@ test("long custom invoices continue on additional pages and repeat invoice heade
   assert.equal(pages[2].blocks.some(block=>block.id==="totals"),true);
   assert.equal(pages[2].blocks.some(block=>block.id==="terms"),true);
   assert.deepEqual(pages.flatMap(page=>page.rows.map(row=>row.itemNumber)),Array.from({length:25},(_,index)=>index+1));
+  pages.forEach((page,index)=>{
+    assert.equal(page.firstItemNumber,page.rows[0].itemNumber);
+    assert.equal(page.lastItemNumber,page.rows[page.rows.length-1].itemNumber);
+    assert.equal(page.isContinuation,index>0);
+    assert.equal(page.isFinalPage,index===pages.length-1);
+    assert.equal(page.totalPages,pages.length);
+  });
+  const fillRatios=pages.map(page=>page.rowHeightTotalMm/page.itemCapacityMm);
+  assert.ok(Math.max(...fillRatios)-Math.min(...fillRatios)<0.12,"item pages should have reasonably balanced printable-area utilization");
 });
 
 test("invoice pagination respects paper size and orientation and always keeps at least one row",()=>{

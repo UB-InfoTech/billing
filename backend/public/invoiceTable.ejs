@@ -74,7 +74,10 @@
     .design-cell-text{display:block;overflow:visible;line-height:1.2;overflow-wrap:anywhere;white-space:pre-wrap}
     .design-items thead{display:table-header-group}
     .design-items tr{height:9mm;break-inside:avoid;page-break-inside:avoid}
-    .design-page-number{position:absolute;right:6%;top:1%;z-index:5;font-size:9px;color:#64748b}
+    .design-page-number{position:absolute;right:6%;top:1%;z-index:5;padding:1.2mm 2mm;border:1px solid #dbe3eb;border-radius:2mm;background:rgba(255,255,255,.94);font-size:8px;font-weight:700;color:#52657a;white-space:nowrap;font-variant-numeric:tabular-nums}
+    .design-item-caption{display:flex;align-items:center;justify-content:space-between;gap:8px;white-space:nowrap;overflow:hidden}
+    .design-item-caption-title{display:block;min-width:0;width:auto!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .design-item-caption-meta{display:block;flex:0 0 auto;width:auto!important;color:#64748b;font-size:.84em;font-weight:700;letter-spacing:0;white-space:nowrap;font-variant-numeric:tabular-nums}
     .design-totals{display:flex;flex-direction:column;width:100%;font-size:inherit;line-height:1.16;font-variant-numeric:tabular-nums}
     .design-totals div{display:flex;align-items:baseline;justify-content:space-between;gap:8px;padding:2px 2px;border-bottom:1px solid #e5eaf0;min-width:0}
     .design-totals div>span{color:#5b6b7e;font-weight:600}
@@ -147,7 +150,7 @@
   };
 %>
   <% designPages.forEach((page,pageIndex)=>{ %>
-  <div class="design-sheet <%= pageIndex===designPages.length-1?'is-last-page':'' %>" data-page-number="<%= page.pageNumber %>" data-page-item-count="<%= (page.rows||[]).length %>" data-page-item-capacity-mm="<%= Number(page.itemCapacityMm||0).toFixed(2) %>" data-page-row-height-estimate-mm="<%= Number.isFinite(Number(page.rowHeightTotalMm))?Number(page.rowHeightTotalMm).toFixed(2):'' %>" data-page-closing-reserved-mm="<%= Number(page.reservedClosingSpaceMm||0).toFixed(2) %>" data-page-closing-only="<%= page.closingOnly?'true':'false' %>">
+  <div class="design-sheet <%= pageIndex===designPages.length-1?'is-last-page':'' %>" data-page-number="<%= page.pageNumber %>" data-page-item-count="<%= (page.rows||[]).length %>" data-page-first-item="<%= Number(page.firstItemNumber||0) %>" data-page-last-item="<%= Number(page.lastItemNumber||0) %>" data-page-continuation="<%= page.isContinuation?'true':'false' %>" data-page-final="<%= page.isFinalPage?'true':'false' %>" data-page-item-capacity-mm="<%= Number(page.itemCapacityMm||0).toFixed(2) %>" data-page-row-height-estimate-mm="<%= Number.isFinite(Number(page.rowHeightTotalMm))?Number(page.rowHeightTotalMm).toFixed(2):'' %>" data-page-closing-reserved-mm="<%= Number(page.reservedClosingSpaceMm||0).toFixed(2) %>" data-page-closing-only="<%= page.closingOnly?'true':'false' %>">
     <% if(activeDesignTemplate.background?.url&&activeDesignTemplate.background.visible!==false){
       const backgroundUrl=activeDesignTemplate.background.url.startsWith("http")?activeDesignTemplate.background.url:(publicUploadBaseUrl||"")+activeDesignTemplate.background.url;
     %>
@@ -163,7 +166,14 @@
         <% if(block.type==="shape"){ %>
         <% }else if(block.type==="image"){ %><img src="<%= block.imageUrl %>" alt="<%= block.label||"Imported image" %>" style="display:block;width:100%;height:100%;object-fit:<%= block.imageFit||"contain" %>">
         <% }else if(block.type==="text"){ %>
-          <div class="design-custom-text" style="align-items:<%= block.verticalAlign==="middle"?"center":block.verticalAlign==="bottom"?"flex-end":"flex-start" %>;justify-content:<%= block.align==="center"?"center":block.align==="right"?"flex-end":"flex-start" %>"><span><%= block.text||block.label %></span></div>
+          <% if(block.id==="items-caption"&&Number(page.totalPages)>1){ %>
+            <div class="design-custom-text design-item-caption">
+              <span class="design-item-caption-title"><%= page.closingOnly?"INVOICE SUMMARY":String(block.text||block.label||"ITEM DETAILS")+(page.isContinuation?" · CONTINUED":"") %></span>
+              <span class="design-item-caption-meta"><% if(page.firstItemNumber&&page.lastItemNumber){ %>Items <%= page.firstItemNumber %>–<%= page.lastItemNumber %> · <% } %>Page <%= page.pageNumber %> of <%= page.totalPages %></span>
+            </div>
+          <% }else{ %>
+            <div class="design-custom-text" style="align-items:<%= block.verticalAlign==="middle"?"center":block.verticalAlign==="bottom"?"flex-end":"flex-start" %>;justify-content:<%= block.align==="center"?"center":block.align==="right"?"flex-end":"flex-start" %>"><span><%= block.text||block.label %></span></div>
+          <% } %>
         <% }else if(block.type==="divider"){ %><div style="width:100%;border-top:1px solid currentColor;margin-top:3px"></div>
         <% }else if(block.type==="logo"){ %>
           <% if(profileLogoUrl){ %><img src="<%= profileLogoUrl %>" alt="Business logo" style="width:100%;height:100%;object-fit:contain"><% } %>
@@ -220,7 +230,7 @@
       </div>
     <% }) %>
     </div>
-    <% if(page.totalPages>1){ %><div class="design-page-number">Page <%= page.pageNumber %> of <%= page.totalPages %></div><% } %>
+    <% if(page.totalPages>1&&!(page.blocks||[]).some(block=>block.id==="items-caption")){ %><div class="design-page-number">Page <%= page.pageNumber %> of <%= page.totalPages %></div><% } %>
   </div>
   <% }) %>
 <% }else{ %>

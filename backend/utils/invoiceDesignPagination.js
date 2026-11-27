@@ -411,8 +411,13 @@ function buildInvoiceDesignPages(template={},items=[],options={}){
       });
     }
     const closingOnly=Boolean(itemTable&&sourceItems.length&&last&&!rows.length&&closingLayout.closingBlockIds.length);
+    const firstItemNumber=rows.length?Number(rows[0].itemNumber)||null:null;
+    const lastItemNumber=rows.length?Number(rows[rows.length-1].itemNumber)||null:null;
     return {
       pageNumber:pageIndex+1,totalPages:pageCount,rows,
+      firstItemNumber,lastItemNumber,
+      isContinuation:pageIndex>0&&rows.length>0,
+      isFinalPage:last,
       rowHeightTotalMm:rows.reduce((sum,row)=>sum+row.rowHeightMm,0),
       tableHeightMm:tableMetrics?.tableHeightMm||null,
       itemCapacityMm:last?finalCapacityMm:normalCapacityMm,

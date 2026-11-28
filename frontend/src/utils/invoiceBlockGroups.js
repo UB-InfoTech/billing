@@ -32,6 +32,48 @@ function expandInvoiceBlockGroupSelection(blocks, selectedBlockIds) {
     .map(block => block.id);
 }
 
+function moveInvoiceLayerStack(blocks, movingBlockIds, targetBlockIds, placement = "above") {
+  if (!Array.isArray(blocks) || !Array.isArray(movingBlockIds) || !Array.isArray(targetBlockIds)) {
+    return { blocks: Array.isArray(blocks) ? blocks : [], changed: false };
+  }
+  if (!movingBlockIds.length || !targetBlockIds.length || !["above", "below"].includes(placement)) {
+    return { blocks, changed: false };
+  }
+
+  const movingIds = new Set(movingBlockIds.filter(id => typeof id === "string" && id));
+  const targetIds = new Set(targetBlockIds.filter(id => typeof id === "string" && id));
+  if (!movingIds.size || !targetIds.size || [...movingIds].some(id => targetIds.has(id))) {
+    return { blocks, changed: false };
+  }
+
+  const movingBlocks = blocks.filter(block => block && movingIds.has(block.id));
+  const targetIndexes = [];
+  blocks.forEach((block, index) => {
+    if (block && targetIds.has(block.id)) targetIndexes.push(index);
+  });
+  if (movingBlocks.length !== movingIds.size || !targetIndexes.length) {
+    return { blocks, changed: false };
+  }
+
+  const remainingBlocks = blocks.filter(block => !block || !movingIds.has(block.id));
+  const remainingTargetIndexes = [];
+  remainingBlocks.forEach((block, index) => {
+    if (block && targetIds.has(block.id)) remainingTargetIndexes.push(index);
+  });
+  if (!remainingTargetIndexes.length) return { blocks, changed: false };
+
+  const insertAt = placement === "above"
+    ? Math.max(...remainingTargetIndexes) + 1
+    : Math.min(...remainingTargetIndexes);
+  const nextBlocks = [
+    ...remainingBlocks.slice(0, insertAt),
+    ...movingBlocks,
+    ...remainingBlocks.slice(insertAt)
+  ];
+  const changed = nextBlocks.some((block, index) => block?.id !== blocks[index]?.id);
+  return changed ? { blocks: nextBlocks, changed: true } : { blocks, changed: false };
+}
+
 function ungroupInvoiceBlocks(blocks, selectedBlockIds) {
   if (!Array.isArray(blocks) || !Array.isArray(selectedBlockIds)) {
     return { blocks: Array.isArray(blocks) ? blocks : [], affectedIds: [] };
@@ -54,4 +96,4 @@ function ungroupInvoiceBlocks(blocks, selectedBlockIds) {
   return { blocks: nextBlocks, affectedIds };
 }
 
-export { getInvoiceBlockGroupMemberIds, assignInvoiceBlockGroup, expandInvoiceBlockGroupSelection, ungroupInvoiceBlocks };
+export { getInvoiceBlockGroupMemberIds, assignInvoiceBlockGroup, expandInvoiceBlockGroupSelection, moveInvoiceLayerStack, ungroupInvoiceBlocks };

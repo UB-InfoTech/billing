@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch } from "./invoiceBlockGeometry.js";
+import { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch, getInvoiceGroupAlignmentPatches, getInvoiceGroupDistributionPatches, getInvoiceGroupMovePatches } from "./invoiceBlockGeometry.js";
 
 const block = { x: 20, y: 25, w: 30, h: 20 };
 
@@ -82,4 +82,65 @@ test("page alignment safely handles elements as large as the available page", ()
 test("unsupported page alignments and missing elements return no change", () => {
   assert.equal(getInvoiceBlockAlignmentPatch(positionedBlock, "diagonal"), null);
   assert.equal(getInvoiceBlockAlignmentPatch(null, "center"), null);
+});
+
+const arrangedBlocks = [
+  { id: "a", x: 10, y: 12, w: 10, h: 8 },
+  { id: "b", x: 35, y: 30, w: 20, h: 10 },
+  { id: "c", x: 70, y: 45, w: 15, h: 12 }
+];
+
+test("group alignment shares collective edges and centre lines without changing sizes", () => {
+  assert.deepEqual(
+    getInvoiceGroupAlignmentPatches(arrangedBlocks, "left"),
+    [{ id: "a", x: 10 }, { id: "b", x: 10 }, { id: "c", x: 10 }]
+  );
+  assert.deepEqual(
+    getInvoiceGroupAlignmentPatches(arrangedBlocks, "right"),
+    [{ id: "a", x: 75 }, { id: "b", x: 65 }, { id: "c", x: 70 }]
+  );
+  assert.deepEqual(
+    getInvoiceGroupAlignmentPatches(arrangedBlocks, "middle"),
+    [{ id: "a", y: 30.5 }, { id: "b", y: 29.5 }, { id: "c", y: 28.5 }]
+  );
+  assert.deepEqual(getInvoiceGroupAlignmentPatches(arrangedBlocks, "diagonal"), []);
+});
+
+test("group distribution uses equal clear gaps and keeps the outer elements fixed", () => {
+  assert.deepEqual(
+    getInvoiceGroupDistributionPatches(arrangedBlocks, "horizontal"),
+    [{ id: "a", x: 10 }, { id: "b", x: 35 }, { id: "c", x: 70 }]
+  );
+  assert.deepEqual(
+    getInvoiceGroupDistributionPatches(arrangedBlocks, "vertical"),
+    [{ id: "a", y: 12 }, { id: "b", y: 27.5 }, { id: "c", y: 45 }]
+  );
+});
+
+test("group distribution refuses too few or overlapping blocks", () => {
+  assert.deepEqual(getInvoiceGroupDistributionPatches(arrangedBlocks.slice(0, 2), "horizontal"), []);
+  assert.deepEqual(getInvoiceGroupDistributionPatches([
+    { id: "a", x: 0, w: 25 }, { id: "b", x: 10, w: 25 }, { id: "c", x: 20, w: 25 }
+  ], "horizontal"), []);
+});
+
+test("group movement preserves relative spacing and clamps the group to page bounds", () => {
+  assert.deepEqual(
+    getInvoiceGroupMovePatches(arrangedBlocks, 5, -4),
+    [
+      { id: "a", x: 15, y: 8 },
+      { id: "b", x: 40, y: 26 },
+      { id: "c", x: 75, y: 41 }
+    ]
+  );
+  assert.deepEqual(
+    getInvoiceGroupMovePatches([
+      { id: "a", x: 8, y: 10, w: 30, h: 20 },
+      { id: "b", x: 60, y: 40, w: 35, h: 30 }
+    ], 20, 20),
+    [
+      { id: "a", x: 13, y: 30 },
+      { id: "b", x: 65, y: 60 }
+    ]
+  );
 });

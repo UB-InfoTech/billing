@@ -280,6 +280,91 @@ test("small planner-to-preview height differences do not create noisy warnings",
   assert.equal(audit.warnings.some(issue => issue.id === "item-row-height-estimate-drift-1-items"), false);
 });
 
+
+test("rendered invoice measurement captures failed web fonts and image readiness",()=>{
+  const rect={left:0,top:0,right:794,bottom:1123,width:794,height:1123};
+  const backgroundImage={
+    complete:true,naturalWidth:0,naturalHeight:0,loading:"eager",
+    getAttribute:name=>name==="alt"?"Imported letterhead":null
+  };
+  const logoImage={
+    complete:false,naturalWidth:0,naturalHeight:0,loading:"lazy",
+    getAttribute:name=>name==="alt"?"Business logo":null
+  };
+  const block={
+    getAttribute:name=>({
+      "data-block-id":"company-logo",
+      "data-block-type":"image",
+      "data-block-label":"Business logo"
+    }[name]??null),
+    getBoundingClientRect:()=>rect,
+    querySelector:()=>null,
+    querySelectorAll:selector=>selector==="img"?[logoImage]:[],
+    scrollWidth:0,clientWidth:0,scrollHeight:0,clientHeight:0,
+    textContent:""
+  };
+  const contentArea={getBoundingClientRect:()=>({...rect,width:760,height:1000})};
+  const sheet={
+    clientWidth:794,clientHeight:1123,
+    getBoundingClientRect:()=>rect,
+    getAttribute:name=>name==="data-page-number"?"1":null,
+    querySelector:selector=>selector===".design-content-area"?contentArea:null,
+    querySelectorAll:selector=>selector===".design-block"?[block]:selector===".design-background"?[backgroundImage]:[]
+  };
+  const documentRef={
+    fonts:Object.assign([{family:"Invoice Sans",status:"error",weight:"400",style:"normal"}],{status:"loaded"}),
+    querySelectorAll:selector=>selector===".design-sheet"?[sheet]:[],
+    defaultView:{getComputedStyle:element=>element===block
+      ?{fontFamily:'"Invoice Sans", Arial, sans-serif',fontSize:"11px",fontWeight:"400"}
+      :{display:"block"}}
+  };
+  const measured=measureRenderedInvoiceDocument(documentRef);
+  assert.equal(measured.fontSetStatus,"loaded");
+  assert.equal(measured.fontFaces[0].status,"error");
+  assert.equal(measured.pages[0].blocks[0].fontFamily,'"Invoice Sans", Arial, sans-serif');
+  assert.equal(measured.pages[0].blocks[0].images[0].incomplete,true);
+  assert.equal(measured.pages[0].backgroundImages[0].broken,true);
+});
+
+test("actual print audit flags only failed fonts that are used and unresolved invoice images",()=>{
+  const audit=analyzeRenderedInvoiceMetrics({
+    fontSetStatus:"loaded",
+    fontFaces:[
+      {family:"Invoice Sans",status:"error"},
+      {family:"Unused Font",status:"error"}
+    ],
+    pages:[{
+      pageNumber:1,width:793.7,height:1122.5,
+      backgroundImages:[{broken:true,incomplete:false,alt:"Imported letterhead"}],
+      blocks:[{
+        id:"logo",type:"image",label:"Business logo",
+        fontFamily:'"Invoice Sans", Arial, sans-serif',
+        images:[{broken:false,incomplete:true,alt:"Business logo"}],
+        rows:[]
+      }]
+    }]
+  });
+  assert.ok(audit.warnings.some(issue=>issue.id==="invoice-font-load-failed-invoice-sans"));
+  assert.equal(audit.warnings.some(issue=>issue.id.includes("unused-font")),false);
+  assert.ok(audit.warnings.some(issue=>issue.id==="broken-invoice-background-1-0"));
+  assert.ok(audit.warnings.some(issue=>issue.id==="incomplete-image-1-logo-0"));
+  assert.equal(audit.hasErrors,false,"asset readiness warnings do not alter invoice calculations or block printing");
+});
+
+test("actual print audit detects meaningful paper-size scaling differences but ignores normal pixel rounding",()=>{
+  const rounded=analyzeRenderedInvoiceMetrics({
+    pages:[{pageNumber:1,width:794,height:1123,blocks:[]}]
+  },{pageSize:"A4",orientation:"portrait"});
+  assert.equal(rounded.warnings.some(issue=>issue.id==="page-size-mismatch-1"),false);
+
+  const scaled=analyzeRenderedInvoiceMetrics({
+    pages:[{pageNumber:1,width:730,height:1032,blocks:[]}]
+  },{pageSize:"A4",orientation:"portrait"});
+  const warning=scaled.warnings.find(issue=>issue.id==="page-size-mismatch-1");
+  assert.ok(warning);
+  assert.match(warning.detail,/100%/);
+});
+
 test("rendered invoice measurements identify each cell's estimated and actual wrapped lines", () => {
   const makeRect = (width, height, top = 0, left = 0) => ({
     left, top, right: left + width, bottom: top + height, width, height

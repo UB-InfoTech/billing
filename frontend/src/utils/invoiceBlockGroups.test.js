@@ -25,7 +25,8 @@ test("assigns persistent group metadata only to the selected elements", () => {
 test("group assignment refuses fewer than two elements or a missing group id", () => {
   assert.equal(assignInvoiceBlockGroup(baseBlocks, ["name"], "group-1", "Header"), baseBlocks);
   assert.equal(assignInvoiceBlockGroup(baseBlocks, ["name", "address"], "", "Header"), baseBlocks);
-  assert.equal(assignInvoiceBlockGroup(baseBlocks, ["name", "address"], "group-1", "  "), baseBlocks === null);
+  const defaultNamed = assignInvoiceBlockGroup(baseBlocks, ["name", "address"], "group-1", "  ");
+  assert.equal(defaultNamed[0].groupName, "Saved group");
 });
 
 test("group member lookup excludes hidden elements unless explicitly requested", () => {

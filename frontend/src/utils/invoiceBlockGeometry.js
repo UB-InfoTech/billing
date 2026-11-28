@@ -8,10 +8,6 @@ const toFiniteNumber = (value, fallback) => {
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 
 /**
- * Return a safe percentage-based geometry patch for resizing one invoice block.
- * The opposite edge stays fixed when resizing from the north or west.
- */
-/**
  * Place a block against one page edge or in the centre of one axis.
  * The element's size and its other axis are kept unchanged.
  */
@@ -30,6 +26,10 @@ function getInvoiceBlockAlignmentPatch(block, alignment) {
   return null;
 }
 
+/**
+ * Return a safe percentage-based geometry patch for resizing one invoice block.
+ * The opposite edge stays fixed when resizing from the north or west.
+ */
 function getInvoiceBlockResizePatch(block, handle, deltaX = 0, deltaY = 0) {
   if (!block || !RESIZE_DIRECTIONS.has(handle)) return null;
 

@@ -213,7 +213,7 @@ test("context toolbar returns null for missing blocks or invalid page dimensions
 
 test("context toolbar anchors to the full visible multi-selection bounds", () => {
   const selection = [
-    { id: "first", x: 12, y: 18, w: 15, h: 8 },
+    { id: "first", x: 12, y: 1, w: 15, h: 8 },
     { id: "second", x: 72, y: 35, w: 18, h: 12 },
     { id: "hidden", x: 0, y: 92, w: 12, h: 5, visible: false }
   ];

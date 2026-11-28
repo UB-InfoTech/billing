@@ -11,6 +11,7 @@ import {buildInvoicePageNavigation} from "../utils/invoicePreviewNavigation.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
 import {getInvoiceBlockResizePatch,getInvoiceBlockAlignmentPatch,getInvoiceGroupAlignmentPatches,getInvoiceGroupDistributionPatches,getInvoiceGroupMovePatches,getInvoiceMarqueeSelection} from "../utils/invoiceBlockGeometry.js";
 import {getInvoiceCanvasScaleSettings} from "../utils/invoiceCanvasScale.js";
+import {canStartInvoiceBlockDrag,getInvoicePointerDragThreshold} from "../utils/invoiceCanvasInteraction.js";
 import {getInvoiceBlockGroupMemberIds,assignInvoiceBlockGroup,expandInvoiceBlockGroupSelection,moveInvoiceLayerStack,ungroupInvoiceBlocks} from "../utils/invoiceBlockGroups.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
@@ -224,6 +225,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [alignmentGuides,setAlignmentGuides]=useState({vertical:[],horizontal:[]});
   const [showGrid,setShowGrid]=useState(false);
   const [snapToGrid,setSnapToGrid]=useState(false);
+  const [touchMoveMode,setTouchMoveMode]=useState(false);
   const [mobilePanel,setMobilePanel]=useState("design");
   const [canvasScale,setCanvasScale]=useState(1);
   const [canvasFitScale,setCanvasFitScale]=useState(1);
@@ -1313,7 +1315,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   };
 
   const startMarqueeSelection=event=>{
-    if(placingField||event.target!==event.currentTarget||event.button!==0||event.pointerType==="touch")return;
+    if(placingField||event.target!==event.currentTarget||event.button!==0||!canStartInvoiceBlockDrag(event.pointerType,touchMoveMode))return;
     const rect=canvasRef.current?.getBoundingClientRect();
     if(!rect||!rect.width||!rect.height)return;
     event.preventDefault();
@@ -1336,6 +1338,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     if(event.target.closest("[data-resize-handle]"))return;
     const nestedButton=event.target.closest("button");
     if(nestedButton&&nestedButton!==event.currentTarget)return;
+    if(!canStartInvoiceBlockDrag(event.pointerType,touchMoveMode))return;
     if(event.shiftKey||event.ctrlKey||event.metaKey){
       event.preventDefault();
       return;
@@ -1355,7 +1358,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     else selectSingleBlock(block.id);
     const moveBlocks=isSavedGroupMove?savedGroupBlocks:isSelectedGroupMove?selectedBlocks:[];
     const groupBlocks=isGroupMove?moveBlocks.map(item=>({id:item.id,x:item.x,y:item.y,w:item.w,h:item.h})):[];
-    const next={id:block.id,mode:isGroupMove?"group-move":"move",groupBlocks,startX:event.clientX,startY:event.clientY,x:block.x,y:block.y,w:block.w,h:block.h,initialDesign:currentDesignRef.current,didMove:false};
+    const next={id:block.id,mode:isGroupMove?"group-move":"move",groupBlocks,startX:event.clientX,startY:event.clientY,pointerType:event.pointerType,x:block.x,y:block.y,w:block.w,h:block.h,initialDesign:currentDesignRef.current,didMove:false};
     draggingRef.current=next;
     setDragging(next);
   };
@@ -1363,7 +1366,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    const next={id:block.id,mode:"resize",handle,startX:event.clientX,startY:event.clientY,x:block.x,y:block.y,w:block.w,h:block.h,initialDesign:currentDesignRef.current,didMove:false};
+    const next={id:block.id,mode:"resize",handle,startX:event.clientX,startY:event.clientY,pointerType:event.pointerType,x:block.x,y:block.y,w:block.w,h:block.h,initialDesign:currentDesignRef.current,didMove:false};
     draggingRef.current=next;
     selectSingleBlock(block.id);
     setDragging(next);
@@ -1446,6 +1449,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     }
     const rect=canvasRef.current.getBoundingClientRect();
     if(!rect.width||!rect.height)return;
+    const dragDistance=Math.hypot(event.clientX-current.startX,event.clientY-current.startY);
+    if(!current.didMove&&dragDistance<getInvoicePointerDragThreshold(current.pointerType))return;
     const dx=(event.clientX-current.startX)/rect.width*100;
     const dy=(event.clientY-current.startY)/rect.height*100;
     if(current.mode==="group-move"){
@@ -1685,7 +1690,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         {previewError&&<div className="alert alert-warning m-3 mb-0">{previewError} You can continue with sample data.</div>}
         {printPreviewError&&<div className="alert alert-warning m-3 mb-0">{printPreviewError}<button type="button" className="btn-close float-end" aria-label="Dismiss" onClick={()=>setPrintPreviewError("")}/></div>}
         {message&&<div className="alert alert-info m-3 mb-0">{message}<button type="button" className="btn-close float-end" aria-label="Dismiss" onClick={()=>setMessage("")}/></div>}
-        <div className={"invoice-builder-workspace mobile-panel-"+mobilePanel}>
+        <div className={"invoice-builder-workspace mobile-panel-"+mobilePanel+(touchMoveMode?" is-touch-move-mode":"")}>
           <nav className="invoice-builder-mobile-tabs" aria-label="Invoice editor panels">
             <button type="button" className={mobilePanel==="fields"?"is-active":""} aria-pressed={mobilePanel==="fields"} onClick={()=>setMobilePanel("fields")}><i className="bi bi-plus-square me-1"/>Add</button>
             <button type="button" className={mobilePanel==="design"?"is-active":""} aria-pressed={mobilePanel==="design"} onClick={()=>setMobilePanel("design")}><i className="bi bi-file-earmark me-1"/>Page</button>
@@ -1855,6 +1860,10 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
             </div>
             <div className="invoice-builder-canvas-footer">
               <span className="invoice-builder-canvas-help"><i className="bi bi-arrows-move me-1"/>Drag blank space to select several. Drag an element to move it.</span>
+              <button type="button" className={"invoice-builder-touch-move-toggle"+(touchMoveMode?" is-active":"")} onClick={()=>setTouchMoveMode(value=>!value)} aria-pressed={touchMoveMode} title={touchMoveMode?"Turn off drag mode so the page can scroll normally":"Turn on drag mode to move invoice elements with your finger"}>
+                <i className="bi bi-arrows-move me-1"/>{touchMoveMode?"Move mode on":"Move elements"}
+              </button>
+              <span className="invoice-builder-touch-move-help">{touchMoveMode?"Drag an element to move it. Turn Move mode off to scroll the page.":"Swipe to scroll and tap an element to edit. Turn on Move elements when you need to drag."}</span>
               <div className="invoice-builder-canvas-zoom" aria-label="Page zoom controls">
                 <button type="button" aria-label="Zoom out" title="Zoom out" onClick={()=>setCanvasZoom(value=>Math.max(0.25,Math.round((value-0.1)*100)/100))} disabled={canvasZoom<=0.25}><i className="bi bi-dash-lg"/></button>
                 <span aria-live="polite">{effectiveCanvasScalePercent}%</span>

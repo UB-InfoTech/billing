@@ -160,4 +160,38 @@ function getInvoiceGroupMovePatches(blocks, deltaX = 0, deltaY = 0) {
   return items.map(item => ({ id: item.id, x: item.x + dx, y: item.y + dy }));
 }
 
-export { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch, getInvoiceGroupAlignmentPatches, getInvoiceGroupDistributionPatches, getInvoiceGroupMovePatches };
+/**
+ * Find visible invoice elements intersected by a percentage-based canvas selection.
+ * Edge-only contact is not treated as a selection.
+ */
+function getInvoiceMarqueeSelection(blocks, selection) {
+  if (!Array.isArray(blocks) || !selection) return [];
+
+  const x = toFiniteNumber(selection.x, NaN);
+  const y = toFiniteNumber(selection.y, NaN);
+  const width = toFiniteNumber(selection.w, NaN);
+  const height = toFiniteNumber(selection.h, NaN);
+  if (![x, y, width, height].every(Number.isFinite) || width === 0 || height === 0) return [];
+
+  const left = Math.min(x, x + width);
+  const right = Math.max(x, x + width);
+  const top = Math.min(y, y + height);
+  const bottom = Math.max(y, y + height);
+
+  return blocks.filter(block => {
+    if (!block || !block.id || block.visible === false) return false;
+    const blockX = toFiniteNumber(block.x, NaN);
+    const blockY = toFiniteNumber(block.y, NaN);
+    const blockWidth = toFiniteNumber(block.w, NaN);
+    const blockHeight = toFiniteNumber(block.h, NaN);
+    if (![blockX, blockY, blockWidth, blockHeight].every(Number.isFinite)) return false;
+    if (blockWidth <= 0 || blockHeight <= 0) return false;
+
+    return blockX < right
+      && blockX + blockWidth > left
+      && blockY < bottom
+      && blockY + blockHeight > top;
+  }).map(block => block.id);
+}
+
+export { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch, getInvoiceGroupAlignmentPatches, getInvoiceGroupDistributionPatches, getInvoiceGroupMovePatches, getInvoiceMarqueeSelection };

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch, getInvoiceGroupAlignmentPatches, getInvoiceGroupDistributionPatches, getInvoiceGroupMovePatches } from "./invoiceBlockGeometry.js";
+import { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch, getInvoiceGroupAlignmentPatches, getInvoiceGroupDistributionPatches, getInvoiceGroupMovePatches, getInvoiceMarqueeSelection } from "./invoiceBlockGeometry.js";
 
 const block = { x: 20, y: 25, w: 30, h: 20 };
 
@@ -143,4 +143,40 @@ test("group movement preserves relative spacing and clamps the group to page bou
       { id: "b", x: 65, y: 60 }
     ]
   );
+});
+
+
+const marqueeBlocks = [
+  { id: "left", x: 10, y: 10, w: 12, h: 12 },
+  { id: "overlap", x: 20, y: 18, w: 12, h: 12 },
+  { id: "edge-touch", x: 32, y: 12, w: 10, h: 10 },
+  { id: "hidden", x: 18, y: 15, w: 10, h: 10, visible: false },
+  { id: "outside", x: 60, y: 60, w: 10, h: 10 }
+];
+
+test("marquee selection finds visible elements that overlap the selection area", () => {
+  assert.deepEqual(
+    getInvoiceMarqueeSelection(marqueeBlocks, { x: 15, y: 12, w: 17, h: 18 }),
+    ["left", "overlap"]
+  );
+});
+
+test("marquee selection works in either drag direction and ignores edge-only contact", () => {
+  assert.deepEqual(
+    getInvoiceMarqueeSelection(marqueeBlocks, { x: 32, y: 30, w: -17, h: -18 }),
+    ["left", "overlap"]
+  );
+  assert.deepEqual(
+    getInvoiceMarqueeSelection(marqueeBlocks, { x: 22, y: 10, w: 10, h: 20 }),
+    ["overlap"]
+  );
+});
+
+test("marquee selection ignores zero-area, invalid and hidden elements", () => {
+  assert.deepEqual(getInvoiceMarqueeSelection(marqueeBlocks, { x: 10, y: 10, w: 0, h: 20 }), []);
+  assert.deepEqual(getInvoiceMarqueeSelection(marqueeBlocks, { x: 10, y: 10, w: 20, h: 0 }), []);
+  assert.deepEqual(getInvoiceMarqueeSelection([
+    { id: "bad-size", x: 10, y: 10, w: 0, h: 5 },
+    { id: "bad-position", x: "nope", y: 10, w: 5, h: 5 }
+  ], { x: 0, y: 0, w: 100, h: 100 }), []);
 });

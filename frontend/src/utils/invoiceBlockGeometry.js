@@ -161,6 +161,132 @@ function getInvoiceGroupMovePatches(blocks, deltaX = 0, deltaY = 0) {
 }
 
 /**
+ * Resize several elements as one selection, preserving their relative positions.
+ * The opposite outer edge remains fixed for west/north handles.
+ */
+function getInvoiceGroupResizePatches(blocks, handle, deltaX = 0, deltaY = 0) {
+  if (!Array.isArray(blocks) || blocks.length < 2 || !RESIZE_DIRECTIONS.has(handle)) return [];
+  const items = blocks.filter(block => block && block.id).map(block => ({
+    id: block.id,
+    x: toFiniteNumber(block.x, NaN),
+    y: toFiniteNumber(block.y, NaN),
+    w: toFiniteNumber(block.w, NaN),
+    h: toFiniteNumber(block.h, NaN)
+  }));
+  if (items.length < 2 || items.some(item =>
+    ![item.x, item.y, item.w, item.h].every(Number.isFinite) || item.w <= 0 || item.h <= 0
+  )) return [];
+
+  const left = Math.min(...items.map(item => item.x));
+  const top = Math.min(...items.map(item => item.y));
+  const right = Math.max(...items.map(item => item.x + item.w));
+  const bottom = Math.max(...items.map(item => item.y + item.h));
+  const width = right - left;
+  const height = bottom - top;
+  if (width <= 0 || height <= 0) return [];
+
+  const minScaleX = Math.max(...items.map(item => 3 / item.w));
+  const minScaleY = Math.max(...items.map(item => 2 / item.h));
+  const dx = toFiniteNumber(deltaX, 0);
+  const dy = toFiniteNumber(deltaY, 0);
+  let nextLeft = left;
+  let nextRight = right;
+  let nextTop = top;
+  let nextBottom = bottom;
+
+  if (handle.includes("w")) nextLeft = clamp(left + dx, 0, right - width * minScaleX);
+  else if (handle.includes("e")) nextRight = clamp(right + dx, left + width * minScaleX, 100);
+  if (handle.includes("n")) nextTop = clamp(top + dy, 0, bottom - height * minScaleY);
+  else if (handle.includes("s")) nextBottom = clamp(bottom + dy, top + height * minScaleY, 100);
+
+  const scaleX = (nextRight - nextLeft) / width;
+  const scaleY = (nextBottom - nextTop) / height;
+  if (![scaleX, scaleY].every(Number.isFinite) || scaleX <= 0 || scaleY <= 0) return [];
+
+  return items.map(item => ({
+    id: item.id,
+    x: nextLeft + (item.x - left) * scaleX,
+    y: nextTop + (item.y - top) * scaleY,
+    w: item.w * scaleX,
+    h: item.h * scaleY
+  }));
+}
+
+/**
+ * Snap a multi-element selection as one object to page guides and nearby
+ * unselected elements. Returns a shared delta and the guides to display.
+ */
+function getInvoiceGroupSnapMove(blocks, allBlocks, deltaX = 0, deltaY = 0, tolerance = 1.25) {
+  const fallback = {
+    deltaX: toFiniteNumber(deltaX, 0),
+    deltaY: toFiniteNumber(deltaY, 0),
+    guides: { vertical: [], horizontal: [] }
+  };
+  if (!Array.isArray(blocks) || !blocks.length || !Array.isArray(allBlocks)) return fallback;
+
+  const items = blocks.filter(block => block && block.id).map(block => ({
+    id: block.id,
+    x: toFiniteNumber(block.x, NaN),
+    y: toFiniteNumber(block.y, NaN),
+    w: toFiniteNumber(block.w, NaN),
+    h: toFiniteNumber(block.h, NaN)
+  })).filter(item => [item.x, item.y, item.w, item.h].every(Number.isFinite) && item.w > 0 && item.h > 0);
+  if (!items.length) return fallback;
+
+  const selectedIds = new Set(items.map(item => item.id));
+  const others = allBlocks.filter(block => block && block.id && !selectedIds.has(block.id) && block.visible !== false);
+  const left = Math.min(...items.map(item => item.x));
+  const top = Math.min(...items.map(item => item.y));
+  const right = Math.max(...items.map(item => item.x + item.w));
+  const bottom = Math.max(...items.map(item => item.y + item.h));
+  const width = right - left;
+  const height = bottom - top;
+  const verticalLines = [5, 50, 95];
+  const horizontalLines = [5, 50, 95];
+
+  others.forEach(block => {
+    const x = toFiniteNumber(block.x, NaN);
+    const y = toFiniteNumber(block.y, NaN);
+    const w = toFiniteNumber(block.w, NaN);
+    const h = toFiniteNumber(block.h, NaN);
+    if ([x, y, w, h].every(Number.isFinite)) {
+      verticalLines.push(x, x + w / 2, x + w);
+      horizontalLines.push(y, y + h / 2, y + h);
+    }
+  });
+
+  const snapAxis = (origin, size, lines) => {
+    let bestPosition = origin;
+    let bestGuide = null;
+    let bestDistance = Math.max(0, toFiniteNumber(tolerance, 1.25));
+    [0, size / 2, size].forEach(offset => {
+      lines.forEach(line => {
+        const candidate = line - offset;
+        if (candidate < 0 || candidate > 100 - size) return;
+        const distance = Math.abs(candidate - origin);
+        if (distance <= bestDistance) {
+          bestDistance = distance;
+          bestPosition = candidate;
+          bestGuide = line;
+        }
+      });
+    });
+    return { position: bestPosition, guide: bestGuide };
+  };
+
+  const snappedX = snapAxis(left + toFiniteNumber(deltaX, 0), width, verticalLines);
+  const snappedY = snapAxis(top + toFiniteNumber(deltaY, 0), height, horizontalLines);
+  return {
+    deltaX: snappedX.position - left,
+    deltaY: snappedY.position - top,
+    guides: {
+      vertical: snappedX.guide === null ? [] : [snappedX.guide],
+      horizontal: snappedY.guide === null ? [] : [snappedY.guide]
+    }
+  };
+}
+
+/**
  * Find visible invoice elements intersected by a percentage-based canvas selection.
  * Edge-only contact is not treated as a selection.
  */
@@ -255,4 +381,4 @@ function getInvoiceContextToolbarPosition(blockOrBlocks, options = {}) {
   };
 }
 
-export { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch, getInvoiceContextToolbarPosition, getInvoiceGroupAlignmentPatches, getInvoiceGroupDistributionPatches, getInvoiceGroupMovePatches, getInvoiceMarqueeSelection };
+export { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch, getInvoiceContextToolbarPosition, getInvoiceGroupAlignmentPatches, getInvoiceGroupDistributionPatches, getInvoiceGroupMovePatches, getInvoiceGroupResizePatches, getInvoiceGroupSnapMove, getInvoiceMarqueeSelection };

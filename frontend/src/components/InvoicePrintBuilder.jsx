@@ -494,6 +494,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const selectedPersistentGroupSize=selectedPersistentGroupId
     ?activeTemplate.blocks.filter(block=>block.groupId===selectedPersistentGroupId).length
     :0;
+  const selectedArrangementCount=selectedPersistentGroupId?selectedPersistentGroupSize:selectedBlocks.length;
   const layerRows=[];
   const layerGroupRows=new Map();
   activeTemplate.blocks.slice().reverse().forEach(block=>{
@@ -648,7 +649,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       if(!selectedBlockId||!["arrowleft","arrowright","arrowup","arrowdown"].includes(key))return;
       event.preventDefault();
       const step=snapToGrid?2:(event.shiftKey?1:0.25);
-      if(selectedBlockIds.length>1){
+      if(selectedBlockIds.length>1||selectedPersistentGroupId){
         const group=selectedPersistentGroupId
           ?activeTemplate.blocks.filter(item=>item.groupId===selectedPersistentGroupId)
           :activeTemplate.blocks.filter(item=>selectedBlockIds.includes(item.id));
@@ -1847,7 +1848,6 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                       <small>{selectedPersistentGroupSize} element(s) stay together, including hidden members.</small>
                       <div className="invoice-builder-saved-group-buttons">
                         <button type="button" className="btn btn-sm btn-outline-danger" onClick={ungroupSelectedBlocks}>Ungroup</button>
-                        <button type="button" className="btn btn-sm btn-light border" onClick={()=>selectSingleBlock(selectedBlockId)}>Edit one element</button>
                       </div>
                     </>
                   ):(
@@ -1873,8 +1873,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 <div className="invoice-builder-group-actions">
                   <strong>Even spacing</strong>
                   <div className="invoice-builder-group-button-row">
-                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>distributeSelectedBlocks("horizontal")} disabled={selectedBlocks.length<3}>Across</button>
-                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>distributeSelectedBlocks("vertical")} disabled={selectedBlocks.length<3}>Down</button>
+                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>distributeSelectedBlocks("horizontal")} disabled={selectedArrangementCount<3}>Across</button>
+                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>distributeSelectedBlocks("vertical")} disabled={selectedArrangementCount<3}>Down</button>
                   </div>
                   <small>Spacing keeps the first and last elements in place. Choose three or more elements.</small>
                 </div>

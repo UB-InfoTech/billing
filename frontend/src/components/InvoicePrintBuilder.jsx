@@ -9,7 +9,7 @@ import {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics} from "../u
 import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
 import {buildInvoicePageNavigation} from "../utils/invoicePreviewNavigation.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
-import {getInvoiceBlockResizePatch,getInvoiceBlockAlignmentPatch,getInvoiceGroupAlignmentPatches,getInvoiceGroupDistributionPatches,getInvoiceGroupMovePatches} from "../utils/invoiceBlockGeometry.js";
+import {getInvoiceBlockResizePatch,getInvoiceBlockAlignmentPatch,getInvoiceGroupAlignmentPatches,getInvoiceGroupDistributionPatches,getInvoiceGroupMovePatches,getInvoiceMarqueeSelection} from "../utils/invoiceBlockGeometry.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
@@ -208,6 +208,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [selectedBlockId,setSelectedBlockId]=useState("business-name");
   const [selectedBlockIds,setSelectedBlockIds]=useState(["business-name"]);
   const [dragging,setDragging]=useState(null);
+  const [marqueeSelection,setMarqueeSelection]=useState(null);
   const [history,setHistory]=useState({past:[],future:[]});
   const [alignmentGuides,setAlignmentGuides]=useState({vertical:[],horizontal:[]});
   const [showGrid,setShowGrid]=useState(false);
@@ -262,6 +263,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const currentDesignRef=useRef(localDesign);
   const historyRef=useRef(history);
   const draggingRef=useRef(null);
+  const marqueeRef=useRef(null);
   const previewRequestRef=useRef(0);
   const starterTemplateSnapshotRef=useRef(null);
 
@@ -1090,6 +1092,26 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setMessage((FIELD_LABELS[fieldKey]||"Invoice field")+" placed "+placementDescription+". Check the preview and adjust its size or position if needed.");
   };
 
+  const startMarqueeSelection=event=>{
+    if(placingField||event.target!==event.currentTarget||event.button!==0||event.pointerType==="touch")return;
+    const rect=canvasRef.current?.getBoundingClientRect();
+    if(!rect||!rect.width||!rect.height)return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    const startX=clamp((event.clientX-rect.left)/rect.width*100,0,100);
+    const startY=clamp((event.clientY-rect.top)/rect.height*100,0,100);
+    const next={
+      pointerId:event.pointerId,
+      startX,startY,currentX:startX,currentY:startY,
+      startClientX:event.clientX,startClientY:event.clientY,
+      didMove:false,
+      additive:event.shiftKey||event.ctrlKey||event.metaKey
+    };
+    marqueeRef.current=next;
+    setMarqueeSelection({x:startX,y:startY,w:0,h:0,didMove:false});
+    setDragging({mode:"marquee"});
+    setAlignmentGuides({vertical:[],horizontal:[]});
+  };
   const startBlockDrag=(event,block)=>{
     if(event.target.closest("[data-resize-handle]"))return;
     const nestedButton=event.target.closest("button");
@@ -1118,14 +1140,77 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setDragging(next);
     setAlignmentGuides({vertical:[],horizontal:[]});
   };
-  const finishBlockDrag=()=>{
+  const finishBlockDrag=event=>{
+    const marquee=marqueeRef.current;
+    if(marquee&&(!event||event.pointerId===marquee.pointerId)){
+      const rect=canvasRef.current?.getBoundingClientRect();
+      let currentX=marquee.currentX;
+      let currentY=marquee.currentY;
+      if(rect&&rect.width&&rect.height&&event){
+        currentX=clamp((event.clientX-rect.left)/rect.width*100,0,100);
+        currentY=clamp((event.clientY-rect.top)/rect.height*100,0,100);
+      }
+      const didMove=marquee.didMove||Boolean(event&&Math.hypot(
+        event.clientX-marquee.startClientX,
+        event.clientY-marquee.startClientY
+      )>=3);
+      const selectionArea={
+        x:Math.min(marquee.startX,currentX),
+        y:Math.min(marquee.startY,currentY),
+        w:Math.abs(currentX-marquee.startX),
+        h:Math.abs(currentY-marquee.startY)
+      };
+      const hitIds=didMove?getInvoiceMarqueeSelection(activeTemplate.blocks,selectionArea):[];
+      const visibleIds=new Set(activeTemplate.blocks.filter(block=>block.visible!==false).map(block=>block.id));
+      const retainedIds=marquee.additive?selectedBlockIds.filter(id=>visibleIds.has(id)):[];
+      const nextIds=[...new Set([...retainedIds,...hitIds])];
+      setSelectedBlockIds(nextIds);
+      setSelectedBlockId(
+        hitIds.length?hitIds[hitIds.length-1]
+          :nextIds.includes(selectedBlockId)?selectedBlockId
+            :nextIds[nextIds.length-1]||""
+      );
+      marqueeRef.current=null;
+      setMarqueeSelection(null);
+      draggingRef.current=null;
+      setDragging(null);
+      setAlignmentGuides({vertical:[],horizontal:[]});
+      return;
+    }
     draggingRef.current=null;
     setDragging(null);
     setAlignmentGuides({vertical:[],horizontal:[]});
   };
+  const cancelBlockDrag=()=>{
+    marqueeRef.current=null;
+    setMarqueeSelection(null);
+    finishBlockDrag();
+  };
   const moveBlock=event=>{
+    if(!canvasRef.current)return;
     const current=draggingRef.current;
-    if(!current||!canvasRef.current)return;
+    if(!current){
+      const marquee=marqueeRef.current;
+      if(!marquee||marquee.pointerId!==event.pointerId)return;
+      const rect=canvasRef.current.getBoundingClientRect();
+      if(!rect.width||!rect.height)return;
+      const currentX=clamp((event.clientX-rect.left)/rect.width*100,0,100);
+      const currentY=clamp((event.clientY-rect.top)/rect.height*100,0,100);
+      const didMove=marquee.didMove||Math.hypot(
+        event.clientX-marquee.startClientX,
+        event.clientY-marquee.startClientY
+      )>=3;
+      const next={...marquee,currentX,currentY,didMove};
+      marqueeRef.current=next;
+      setMarqueeSelection({
+        x:Math.min(marquee.startX,currentX),
+        y:Math.min(marquee.startY,currentY),
+        w:Math.abs(currentX-marquee.startX),
+        h:Math.abs(currentY-marquee.startY),
+        didMove
+      });
+      return;
+    }
     const rect=canvasRef.current.getBoundingClientRect();
     if(!rect.width||!rect.height)return;
     const dx=(event.clientX-current.startX)/rect.width*100;
@@ -1458,7 +1543,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
             <div className="invoice-builder-canvas-scroll">
               <div className="invoice-builder-page-frame" style={{width:Math.round(basePageWidth*effectiveCanvasScale)+"px",aspectRatio:String(canvasRatio)}}>
                 <div className={"invoice-builder-page "+(activeTemplate.orientation==="landscape"?"is-landscape":"")} style={{width:basePageWidth+"px",minWidth:basePageWidth+"px",maxWidth:"none",height:"100%",aspectRatio:String(canvasRatio),transform:"scale("+effectiveCanvasScale+")",transformOrigin:"top left"}}>
-                <div className="invoice-builder-canvas" onDragOver={event=>event.preventDefault()} onDrop={handlePaletteDrop} onPointerMove={moveBlock} onPointerUp={finishBlockDrag} onPointerCancel={finishBlockDrag}>
+                <div className="invoice-builder-canvas" onDragOver={event=>event.preventDefault()} onDrop={handlePaletteDrop} onPointerMove={moveBlock} onPointerUp={finishBlockDrag} onPointerCancel={cancelBlockDrag}>
                   {highlightedOcrLine?.box&&<div className="invoice-builder-ocr-highlight is-label" style={{left:highlightedOcrLine.box.x+"%",top:highlightedOcrLine.box.y+"%",width:highlightedOcrLine.box.w+"%",height:Math.max(2,highlightedOcrLine.box.h)+"%"}}><span>Matched text</span></div>}
                   {highlightedOcrLine?.valueBox&&<div className={"invoice-builder-ocr-highlight is-target "+(highlightedOcrLine.valueBox.kind==="estimated"?"is-estimated":"")} style={{left:highlightedOcrLine.valueBox.x+"%",top:highlightedOcrLine.valueBox.y+"%",width:highlightedOcrLine.valueBox.w+"%",height:highlightedOcrLine.valueBox.h+"%"}}><span>{highlightedOcrLine.valueBox.kind==="estimated"?"Suggested space":"Live field position"}</span></div>}
                   {activeTemplate.background?.url&&activeTemplate.background.visible!==false&&(
@@ -1473,7 +1558,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                     {alignmentGuides.vertical.map((position,index)=><span key={"v-"+index} className="invoice-builder-alignment-guide vertical" style={{left:position+"%"}}/>)}
                     {alignmentGuides.horizontal.map((position,index)=><span key={"h-"+index} className="invoice-builder-alignment-guide horizontal" style={{top:position+"%"}}/>)}
                   </div>
-                  <div className="invoice-builder-block-layer">
+                  <div className="invoice-builder-block-layer" onPointerDown={startMarqueeSelection}>\n                    {marqueeSelection?.didMove&&<div className="invoice-builder-marquee-selection" style={{left:marqueeSelection.x+"%",top:marqueeSelection.y+"%",width:marqueeSelection.w+"%",height:marqueeSelection.h+"%"}} aria-hidden="true"/>}
                     {activeTemplate.blocks.filter(block=>block.visible!==false).map(block=>(
                       <React.Fragment key={block.id}>
                         <button type="button" className={"invoice-builder-block "+(selectedBlockIds.includes(block.id)?"is-selected":"")+(dragging?.mode==="group-move"&&selectedBlockIds.includes(block.id)||dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,fontStyle:block.italic?"italic":"normal",fontFamily:block.fontFamily||"Arial",textAlign:block.align,color:block.color,backgroundColor:block.backgroundColor||"transparent",border:block.borderWidth?block.borderWidth+"px solid "+(block.borderColor||"#d8e0e9"):undefined,borderRadius:block.borderRadius+"px",padding:block.padding+"px",opacity:block.opacity??1,lineHeight:block.lineHeight??1.25,letterSpacing:(block.letterSpacing??0)+"px",textDecoration:block.textDecoration||"none",textTransform:block.textTransform||"none"}} onClick={event=>{
@@ -1510,7 +1595,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               </div>
             </div>
             <div className="invoice-builder-canvas-footer">
-              <span><i className="bi bi-arrows-move me-1"/>Drag to position · Shift-click to select several · Arrow keys nudge.</span>
+              <span><i className="bi bi-arrows-move me-1"/>Drag empty space to select several · Shift-click adds · Arrow keys nudge.</span>
               <div className="invoice-builder-mobile-zoom" aria-label="Page zoom controls">
                 <button type="button" aria-label="Zoom out" onClick={()=>setCanvasZoom(value=>Math.max(1,Math.round((value-0.25)*100)/100))} disabled={canvasZoom<=1}><i className="bi bi-dash-lg"/></button>
                 <span>{Math.round(canvasZoom*100)}%</span>

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch, getInvoiceGroupAlignmentPatches, getInvoiceGroupDistributionPatches, getInvoiceGroupMovePatches, getInvoiceMarqueeSelection } from "./invoiceBlockGeometry.js";
+import { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch, getInvoiceContextToolbarPosition, getInvoiceGroupAlignmentPatches, getInvoiceGroupDistributionPatches, getInvoiceGroupMovePatches, getInvoiceMarqueeSelection } from "./invoiceBlockGeometry.js";
 
 const block = { x: 20, y: 25, w: 30, h: 20 };
 
@@ -179,4 +179,33 @@ test("marquee selection ignores zero-area, invalid and hidden elements", () => {
     { id: "bad-size", x: 10, y: 10, w: 0, h: 5 },
     { id: "bad-position", x: "nope", y: 10, w: 5, h: 5 }
   ], { x: 0, y: 0, w: 100, h: 100 }), []);
+});
+
+
+test("context toolbar stays within the page and remains readable at mobile canvas zoom", () => {
+  const position = getInvoiceContextToolbarPosition(
+    { x: 92, y: 1, w: 6, h: 5 },
+    { pageWidth: 794, pageHeight: 1123, scale: 0.5 }
+  );
+
+  assert.equal(position.placement, "below");
+  assert.equal(position.scale, 2);
+  assert.ok(position.left >= 0);
+  assert.ok(position.left + position.width <= 794);
+  assert.ok(position.top > 0);
+});
+
+test("context toolbar moves above elements near the bottom edge", () => {
+  const position = getInvoiceContextToolbarPosition(
+    { x: 20, y: 94, w: 30, h: 5 },
+    { pageWidth: 794, pageHeight: 1123, scale: 0.75 }
+  );
+
+  assert.equal(position.placement, "above");
+  assert.ok(position.top + 44 / 0.75 <= 1123);
+});
+
+test("context toolbar returns null for missing blocks or invalid page dimensions", () => {
+  assert.equal(getInvoiceContextToolbarPosition(null), null);
+  assert.equal(getInvoiceContextToolbarPosition({ x: 0, y: 0 }, { pageWidth: 0 }), null);
 });

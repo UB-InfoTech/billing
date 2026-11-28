@@ -303,14 +303,23 @@ test("rendered invoice measurements identify each cell's estimated and actual wr
     getAttribute: name => ({
       "data-item-number": "4",
       "data-item-label": "Printed fabric",
+      "data-auto-fitted": "true",
       "data-estimated-height-mm": "9",
       "data-estimated-lines": "1"
     }[name] ?? null),
     getBoundingClientRect: () => makeRect(130, 60, 18, 15),
     querySelectorAll: () => [cell]
   };
+  const headerCell = {
+    textContent: "Description",
+    getBoundingClientRect: () => makeRect(325, 24, 0, 0)
+  };
+  const header = {
+    getBoundingClientRect: () => makeRect(760, 24, 0, 0),
+    querySelectorAll: selector => selector === "th" ? [headerCell] : []
+  };
   const table = {
-    querySelector: () => null,
+    querySelector: selector => selector === "thead" ? header : null,
     querySelectorAll: selector => selector === "tbody tr" ? [row] : []
   };
   const block = {
@@ -346,13 +355,21 @@ test("rendered invoice measurements identify each cell's estimated and actual wr
         ? { fontSize: "10px", lineHeight: "12px", fontFamily: "Arial", fontWeight: "400" }
         : element === cell
           ? { textAlign: "left", verticalAlign: "middle", paddingTop: "4px", paddingRight: "5px", paddingBottom: "4px", paddingLeft: "5px" }
-          : { breakInside: "avoid", pageBreakInside: "avoid" }
+          : element === header
+            ? { display: "table-header-group" }
+            : element === headerCell
+              ? { fontSize: "10px", fontFamily: "Arial", fontWeight: "700", textAlign: "center" }
+              : { breakInside: "avoid", pageBreakInside: "avoid" }
     }
   };
 
   const measured = measureRenderedInvoiceDocument(documentRef);
   const measuredCell = measured.pages[0].blocks[0].rows[0].cells[0];
   assert.equal(measured.pages[0].blocks[0].rows[0].estimatedHeightMm, 9);
+  assert.equal(measured.pages[0].blocks[0].rows[0].autoFitted, true);
+  assert.equal(measured.pages[0].blocks[0].headerCells[0].widthPx, 325);
+  assert.equal(measured.pages[0].blocks[0].headerCells[0].fontFamily, "Arial");
+  assert.equal(measured.pages[0].blocks[0].headerLabels[0], "description");
   assert.equal(measuredCell.columnKey, "description");
   assert.equal(measuredCell.columnLabel, "Description");
   assert.equal(measuredCell.columnIndex, 0);

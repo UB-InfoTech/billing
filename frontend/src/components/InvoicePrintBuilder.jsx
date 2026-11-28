@@ -1145,6 +1145,16 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     updateActive({blocks:activeTemplate.blocks.filter(block=>block.id!==selectedBlock.id)});
     selectSingleBlock("");
   };
+  const removeSelectedBlocks=()=>{
+    const ids=expandInvoiceBlockGroupSelection(activeTemplate.blocks,selectedBlockIds);
+    if(ids.length<2)return;
+    const removeIds=new Set(ids);
+    const blocks=activeTemplate.blocks.filter(block=>!removeIds.has(block.id));
+    if(blocks.length===activeTemplate.blocks.length)return;
+    updateActive({blocks});
+    selectSingleBlock("");
+    setMessage("Deleted "+ids.length+" selected elements. Use Undo to restore them.");
+  };
   const handleHtmlUpload=async file=>{
     if(!file)return;
     setError("");setMessage("");
@@ -1521,12 +1531,14 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     :(activeTemplate.pageSize==="Letter"?0.773:0.707);
   const basePageWidth=activeTemplate.orientation==="landscape"?1123:794;
   const effectiveCanvasScale=canvasScale*canvasZoom;
-  const selectedContextToolbarPosition=selectedBlock&&selectedBlock.visible!==false&&selectedBlockIds.length===1&&!dragging&&!placingField
-    ?getInvoiceContextToolbarPosition(selectedBlock,{
+  const isMultiSelection=selectedBlockIds.length>1&&selectedBlocks.length>1;
+  const contextToolbarBlocks=isMultiSelection?selectedBlocks:(selectedBlock?[selectedBlock]:[]);
+  const selectedContextToolbarPosition=contextToolbarBlocks.length&&!dragging&&!placingField
+    ?getInvoiceContextToolbarPosition(contextToolbarBlocks,{
       pageWidth:basePageWidth,
       pageHeight:basePageWidth/canvasRatio,
       scale:effectiveCanvasScale,
-      toolbarWidth:252,
+      toolbarWidth:isMultiSelection?280:252,
       toolbarHeight:44
     })
     :null;
@@ -1894,6 +1906,46 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                         )}
                       </React.Fragment>
                     ))}
+                    {isMultiSelection&&selectedContextToolbarPosition&&!dragging&&!placingField&&(
+                      <div
+                        className={"invoice-builder-context-toolbar invoice-builder-context-multi-toolbar is-"+selectedContextToolbarPosition.placement}
+                        role="group"
+                        aria-label={"Actions for "+selectedArrangementCount+" selected elements"}
+                        style={{
+                          left:selectedContextToolbarPosition.left+"px",
+                          top:selectedContextToolbarPosition.top+"px",
+                          width:selectedContextToolbarPosition.width+"px",
+                          transform:"scale("+selectedContextToolbarPosition.scale+")"
+                        }}
+                        onPointerDown={event=>event.stopPropagation()}
+                      >
+                        <details className="invoice-builder-context-align">
+                          <summary title="Arrange selected elements" aria-label="Arrange selected elements">
+                            <i className="bi bi-grid-3x3-gap" aria-hidden="true"/> <span>Arrange</span> <i className="bi bi-chevron-down" aria-hidden="true"/>
+                          </summary>
+                          <div className="invoice-builder-context-align-menu invoice-builder-context-arrange-menu" role="group" aria-label="Arrangement actions">
+                            <strong>Line up</strong>
+                            <button type="button" onClick={event=>{alignSelectedBlocks("left");event.currentTarget.closest("details")?.removeAttribute("open");}}>Left edges</button>
+                            <button type="button" onClick={event=>{alignSelectedBlocks("center");event.currentTarget.closest("details")?.removeAttribute("open");}}>Centres</button>
+                            <button type="button" onClick={event=>{alignSelectedBlocks("right");event.currentTarget.closest("details")?.removeAttribute("open");}}>Right edges</button>
+                            <button type="button" onClick={event=>{alignSelectedBlocks("top");event.currentTarget.closest("details")?.removeAttribute("open");}}>Top edges</button>
+                            <button type="button" onClick={event=>{alignSelectedBlocks("middle");event.currentTarget.closest("details")?.removeAttribute("open");}}>Middle</button>
+                            <button type="button" onClick={event=>{alignSelectedBlocks("bottom");event.currentTarget.closest("details")?.removeAttribute("open");}}>Bottom edges</button>
+                            <span className="invoice-builder-context-menu-divider"/>
+                            <strong>Space evenly</strong>
+                            <button type="button" disabled={selectedArrangementCount<3} onClick={event=>{distributeSelectedBlocks("horizontal");event.currentTarget.closest("details")?.removeAttribute("open");}}>Across the page</button>
+                            <button type="button" disabled={selectedArrangementCount<3} onClick={event=>{distributeSelectedBlocks("vertical");event.currentTarget.closest("details")?.removeAttribute("open");}}>Down the page</button>
+                          </div>
+                        </details>
+                        {selectedPersistentGroupId
+                          ?<button type="button" onClick={ungroupSelectedBlocks} title="Separate this saved group" aria-label="Ungroup selected elements"><i className="bi bi-unlock" aria-hidden="true"/> <span>Ungroup</span></button>
+                          :<button type="button" onClick={groupSelectedBlocks} title="Keep these elements together" aria-label="Group selected elements"><i className="bi bi-link-45deg" aria-hidden="true"/> <span>Group</span></button>
+                        }
+                        <button type="button" className="is-danger" onClick={removeSelectedBlocks} title="Delete all selected elements" aria-label="Delete selected elements">
+                          <i className="bi bi-trash" aria-hidden="true"/> <span>Delete</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                   </div>
                   {activeTemplate.background?.url&&<div className="invoice-builder-reference-hint">Reference background · {activeTemplate.background.type.toUpperCase()}</div>}

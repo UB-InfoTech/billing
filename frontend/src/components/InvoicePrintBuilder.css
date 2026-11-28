@@ -36,6 +36,7 @@
 .invoice-builder-canvas{position:absolute;inset:0;overflow:hidden;background:#fff;touch-action:pan-x pan-y}
 .invoice-builder-background{position:absolute;inset:0;z-index:0;width:100%;height:100%;border:0;object-fit:fill;pointer-events:none;background:#fff}
 .invoice-builder-safe-area{position:absolute;inset:0;z-index:2;box-sizing:border-box;outline:1px dashed rgba(79,116,157,.34);outline-offset:-1px;pointer-events:none}.invoice-builder-block-layer,.invoice-builder-placement-layer{pointer-events:auto}.invoice-builder-block-layer{position:absolute;inset:0;z-index:2}
+.invoice-builder-marquee-selection{position:absolute;z-index:8;pointer-events:none;border:1px solid #2876c7;border-radius:2px;background:rgba(40,118,199,.13);box-shadow:0 0 0 1px rgba(40,118,199,.08)}
 .invoice-builder-block{position:absolute;display:block;min-width:2%;min-height:2%;overflow:hidden;padding:3px 5px;border:1px dashed transparent;border-radius:2px;background:rgba(255,255,255,.13);font-family:Arial,Helvetica,sans-serif;line-height:1.25;cursor:move;text-align:left;touch-action:none}
 .invoice-builder-block:hover{border-color:#9bbbe0;background:rgba(240,247,255,.38)}
 .invoice-builder-block.is-selected{z-index:5;border:1px solid #2876c7;background:rgba(237,246,255,.46);box-shadow:0 0 0 2px rgba(40,118,199,.12)}

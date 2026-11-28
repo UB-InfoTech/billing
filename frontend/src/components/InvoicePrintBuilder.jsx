@@ -10,7 +10,7 @@ import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
 import {buildInvoicePageNavigation} from "../utils/invoicePreviewNavigation.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
 import {getInvoiceBlockResizePatch,getInvoiceBlockAlignmentPatch,getInvoiceGroupAlignmentPatches,getInvoiceGroupDistributionPatches,getInvoiceGroupMovePatches,getInvoiceMarqueeSelection} from "../utils/invoiceBlockGeometry.js";
-import {getInvoiceBlockGroupMemberIds,assignInvoiceBlockGroup,expandInvoiceBlockGroupSelection,ungroupInvoiceBlocks} from "../utils/invoiceBlockGroups.js";
+import {getInvoiceBlockGroupMemberIds,assignInvoiceBlockGroup,expandInvoiceBlockGroupSelection,moveInvoiceLayerStack,ungroupInvoiceBlocks} from "../utils/invoiceBlockGroups.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
@@ -211,6 +211,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [dragging,setDragging]=useState(null);
   const [marqueeSelection,setMarqueeSelection]=useState(null);
   const [collapsedLayerGroups,setCollapsedLayerGroups]=useState([]);
+  const [layerDropTargetId,setLayerDropTargetId]=useState("");
   const [history,setHistory]=useState({past:[],future:[]});
   const [alignmentGuides,setAlignmentGuides]=useState({vertical:[],horizontal:[]});
   const [showGrid,setShowGrid]=useState(false);
@@ -540,17 +541,26 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       ?current.filter(id=>id!==groupId)
       :[...current,groupId]);
   };
-  const renderLayerBlock=block=>(
-    <div className={selectedBlockIds.includes(block.id)?"is-selected":""} key={block.id}>
-      <button type="button" className="invoice-builder-layer-select" onClick={()=>selectBlockOrGroup(block.id)}>
-        <i className={"bi "+(block.type==="field"?"bi-braces":block.type==="items_table"?"bi-table":block.type==="image"||block.type==="logo"?"bi-image":block.type==="shape"?"bi-square":block.type==="divider"?"bi-dash":"bi-fonts")}/>
-        <span>{block.label||block.text||block.type.replace("_"," ")}</span>
-      </button>
-      <button type="button" className="invoice-builder-layer-visibility" title={block.visible===false?"Show element":"Hide element"} onClick={()=>updateBlock(block.id,{visible:block.visible===false})}>
-        <i className={"bi "+(block.visible===false?"bi-eye-slash":"bi-eye")}/>
-      </button>
-    </div>
-  );
+  const renderLayerBlock=(block,canReorder=false)=>{
+    const targetKey="block:"+block.id;
+    return (
+      <div
+        className={(selectedBlockIds.includes(block.id)?"is-selected ":"")+(canReorder&&layerDropTargetId===targetKey?"is-drop-target":"")}
+        key={block.id}
+        onDragOver={canReorder?event=>handleLayerDragOver(event,targetKey):undefined}
+        onDrop={canReorder?event=>handleLayerDrop(event,[block.id],targetKey):undefined}
+      >
+        {canReorder&&<span className="invoice-builder-layer-grip" draggable onDragStart={event=>startLayerDrag(event,[block.id])} onDragEnd={clearLayerDrag} title="Drag to change layer order" aria-hidden="true"><i className="bi bi-grip-vertical"/></span>}
+        <button type="button" className="invoice-builder-layer-select" onClick={()=>selectBlockOrGroup(block.id)}>
+          <i className={"bi "+(block.type==="field"?"bi-braces":block.type==="items_table"?"bi-table":block.type==="image"||block.type==="logo"?"bi-image":block.type==="shape"?"bi-square":block.type==="divider"?"bi-dash":"bi-fonts")}/>
+          <span>{block.label||block.text||block.type.replace("_"," ")}</span>
+        </button>
+        <button type="button" className="invoice-builder-layer-visibility" title={block.visible===false?"Show element":"Hide element"} onClick={()=>updateBlock(block.id,{visible:block.visible===false})}>
+          <i className={"bi "+(block.visible===false?"bi-eye-slash":"bi-eye")}/>
+        </button>
+      </div>
+    );
+  };
   const visibleOcrLines=useMemo(()=>{
     if(!ocrScan)return [];
     const source=ocrView==="suggested"?ocrScan.lines.filter(line=>line.selectedField):ocrScan.lines;
@@ -1026,13 +1036,69 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   };
   const moveSelectedLayer=direction=>{
     if(!selectedBlock)return;
-    const blocks=activeTemplate.blocks.slice();
-    const index=blocks.findIndex(block=>block.id===selectedBlock.id);
-    const target=index+direction;
-    if(index<0||target<0||target>=blocks.length)return;
-    [blocks[index],blocks[target]]=[blocks[target],blocks[index]];
-    updateActive({blocks});
+    const movingIds=selectedPersistentGroupId
+      ?activeTemplate.blocks.filter(block=>block.groupId===selectedPersistentGroupId).map(block=>block.id)
+      :selectedBlocks.length>1?selectedBlockIds:[selectedBlock.id];
+    const movingIndexes=activeTemplate.blocks
+      .map((block,index)=>movingIds.includes(block.id)?index:-1)
+      .filter(index=>index>=0);
+    if(!movingIndexes.length)return;
+    const targetIndex=direction>0?Math.max(...movingIndexes)+1:Math.min(...movingIndexes)-1;
+    const targetBlock=activeTemplate.blocks[targetIndex];
+    if(!targetBlock)return;
+    const result=moveInvoiceLayerStack(
+      activeTemplate.blocks,
+      movingIds,
+      [targetBlock.id],
+      direction>0?"above":"below"
+    );
+    if(!result.changed)return;
+    updateActive({blocks:result.blocks});
+    setMessage((movingIds.length>1?"Moved "+movingIds.length+" selected elements":"Moved the selected element")+
+      (direction>0?" in front of the next layer.":" behind the previous layer."));
   };
+  const startLayerDrag=(event,blockIds)=>{
+    const ids=expandInvoiceBlockGroupSelection(activeTemplate.blocks,blockIds);
+    if(!event.dataTransfer||!ids.length){event.preventDefault();return;}
+    event.dataTransfer.setData("application/x-invoice-layer-ids",JSON.stringify(ids));
+    event.dataTransfer.effectAllowed="move";
+    setLayerDropTargetId("");
+  };
+  const hasLayerDragData=transfer=>Array.from(transfer?.types||[]).includes("application/x-invoice-layer-ids");
+  const handleLayerDragOver=(event,targetKey)=>{
+    if(!hasLayerDragData(event.dataTransfer))return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect="move";
+    setLayerDropTargetId(current=>current===targetKey?current:targetKey);
+  };
+  const handleLayerDrop=(event,targetIds,targetKey)=>{
+    if(!hasLayerDragData(event.dataTransfer))return;
+    event.preventDefault();
+    event.stopPropagation();
+    setLayerDropTargetId("");
+    let movingIds=[];
+    try{
+      const parsed=JSON.parse(event.dataTransfer.getData("application/x-invoice-layer-ids")||"[]");
+      if(Array.isArray(parsed))movingIds=parsed;
+    }catch{
+      setMessage("These layers could not be moved. Please try again.");
+      return;
+    }
+    const rect=event.currentTarget.getBoundingClientRect();
+    const placement=event.clientY<rect.top+rect.height/2?"above":"below";
+    const expandedIds=expandInvoiceBlockGroupSelection(activeTemplate.blocks,movingIds);
+    const result=moveInvoiceLayerStack(activeTemplate.blocks,expandedIds,targetIds,placement);
+    if(!result.changed){
+      setMessage("That layer is already in this position.");
+      return;
+    }
+    updateActive({blocks:result.blocks});
+    setSelectedBlockIds(expandedIds);
+    setSelectedBlockId(expandedIds.includes(selectedBlockId)?selectedBlockId:expandedIds[0]||"");
+    setMessage((expandedIds.length>1?"Moved "+expandedIds.length+" elements together":"Moved element")+
+      (placement==="above"?" in front of the target layer.":" behind the target layer.")+" Use Undo to restore the previous order.");
+  };
+  const clearLayerDrag=()=>setLayerDropTargetId("");
   const duplicateTemplate=()=>{
     if(localDesign.templates.length>=12){setError("You can save up to 12 invoice designs.");return;}
     const copy={...activeTemplate,id:createId("copy"),name:activeTemplate.name+" copy",blocks:activeTemplate.blocks.map(block=>({...block,id:createId("block")})),background:{...activeTemplate.background}};
@@ -2050,11 +2116,18 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               {confirmDeleteTemplate&&<div className="invoice-builder-delete-confirm"><span>Delete “{activeTemplate.name}”?</span><button type="button" className="btn btn-sm btn-danger" onClick={deleteActiveTemplate}>Delete design</button><button type="button" className="btn btn-sm btn-light border" onClick={()=>setConfirmDeleteTemplate(false)}>Keep it</button></div>}
             </section>
             <section className="invoice-builder-property-card invoice-builder-layers">
-              <div className="d-flex justify-content-between align-items-center gap-2 mb-2"><h3 className="mb-0">Elements on this page</h3><small>{activeTemplate.blocks.length}/{activeTemplate.elementLimit||80}</small></div>
+              <div className="d-flex justify-content-between align-items-center gap-2 mb-1"><h3 className="mb-0">Elements on this page</h3><small>{activeTemplate.blocks.length}/{activeTemplate.elementLimit||80}</small></div>
+              <small className="invoice-builder-layer-hint">Drag the grip to change which elements appear in front. Saved groups move together.</small>
               {activeTemplate.blocks.length===0?<p>Start by adding a field, text, image, divider or accent shape.</p>:<div className="invoice-builder-layer-list">
                 {layerRows.map(row=>row.type==="group"?(
-                  <div className={"invoice-builder-layer-group"+(row.blocks.some(block=>selectedBlockIds.includes(block.id))?" is-selected":"")} key={"group-"+row.id}>
+                  <div
+                    className={"invoice-builder-layer-group"+(row.blocks.some(block=>selectedBlockIds.includes(block.id))?" is-selected":"")+(layerDropTargetId==="group:"+row.id?" is-drop-target":"")}
+                    key={"group-"+row.id}
+                    onDragOver={event=>handleLayerDragOver(event,"group:"+row.id)}
+                    onDrop={event=>handleLayerDrop(event,row.blocks.map(block=>block.id),"group:"+row.id)}
+                  >
                     <div className="invoice-builder-layer-group-heading">
+                      <span className="invoice-builder-layer-grip" draggable onDragStart={event=>startLayerDrag(event,row.blocks.map(block=>block.id))} onDragEnd={clearLayerDrag} title="Drag to move this group" aria-hidden="true"><i className="bi bi-grip-vertical"/></span>
                       <button type="button" className="invoice-builder-layer-group-select" onClick={()=>selectLayerGroup(row.id)} aria-pressed={row.blocks.some(block=>selectedBlockIds.includes(block.id))}>
                         <i className="bi bi-folder-fill"/>
                         <span><strong>{row.name}</strong><small>{row.blocks.length} element(s)</small></span>
@@ -2066,9 +2139,9 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                         <i className={"bi "+(row.blocks.every(block=>block.visible===false)?"bi-eye-slash":"bi-eye")}/>
                       </button>
                     </div>
-                    {!collapsedLayerGroups.includes(row.id)&&<div className="invoice-builder-layer-group-items">{row.blocks.map(renderLayerBlock)}</div>}
+                    {!collapsedLayerGroups.includes(row.id)&&<div className="invoice-builder-layer-group-items">{row.blocks.map(block=>renderLayerBlock(block,false))}</div>}
                   </div>
-                ):renderLayerBlock(row.block))}
+                ):renderLayerBlock(row.block,true))}
               </div>}
             </section>
           </aside>

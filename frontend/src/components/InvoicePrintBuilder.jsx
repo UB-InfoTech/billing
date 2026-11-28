@@ -9,7 +9,7 @@ import {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics} from "../u
 import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
 import {buildInvoicePageNavigation} from "../utils/invoicePreviewNavigation.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
-import {getInvoiceBlockResizePatch,getInvoiceBlockAlignmentPatch} from "../utils/invoiceBlockGeometry.js";
+import {getInvoiceBlockResizePatch,getInvoiceBlockAlignmentPatch,getInvoiceGroupAlignmentPatches,getInvoiceGroupDistributionPatches,getInvoiceGroupMovePatches} from "../utils/invoiceBlockGeometry.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
@@ -206,6 +206,7 @@ function renderTemplateThumbnail(preset){
 export default function InvoicePrintBuilder({design,onChange,onSave,onClose,saving=false}){
   const [localDesign,setLocalDesign]=useState(()=>design&&Array.isArray(design.templates)&&design.templates.length?design:makeInitialDesign());
   const [selectedBlockId,setSelectedBlockId]=useState("business-name");
+  const [selectedBlockIds,setSelectedBlockIds]=useState(["business-name"]);
   const [dragging,setDragging]=useState(null);
   const [history,setHistory]=useState({past:[],future:[]});
   const [alignmentGuides,setAlignmentGuides]=useState({vertical:[],horizontal:[]});
@@ -472,6 +473,11 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     starterTemplateSnapshotRef.current={id:activeTemplate.id,blocks:JSON.stringify(activeTemplate.blocks)};
   }
   const selectedBlock=activeTemplate.blocks.find(block=>block.id===selectedBlockId)||null;
+  const selectedBlocks=activeTemplate.blocks.filter(block=>selectedBlockIds.includes(block.id)&&block.visible!==false);
+  const selectSingleBlock=blockId=>{
+    selectSingleBlock(blockId);
+    setSelectedBlockIds(blockId?[blockId]:[]);
+  };
   const visibleOcrLines=useMemo(()=>{
     if(!ocrScan)return [];
     const source=ocrView==="suggested"?ocrScan.lines.filter(line=>line.selectedField):ocrScan.lines;
@@ -592,6 +598,23 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const patch=getInvoiceBlockAlignmentPatch(selectedBlock,alignment);
     if(patch)updateBlock(selectedBlock.id,patch);
   };
+  const alignSelectedBlocks=alignment=>{
+    const patches=getInvoiceGroupAlignmentPatches(selectedBlocks,alignment);
+    if(!patches.length)return;
+    const byId=new Map(patches.map(patch=>[patch.id,patch]));
+    updateActive({blocks:activeTemplate.blocks.map(block=>byId.has(block.id)?{...block,...byId.get(block.id)}:block)});
+    setMessage("Aligned "+patches.length+" selected elements. Use Undo to restore their previous positions.");
+  };
+  const distributeSelectedBlocks=axis=>{
+    const patches=getInvoiceGroupDistributionPatches(selectedBlocks,axis);
+    if(!patches.length){
+      setMessage("Select at least three elements with enough space between them to distribute evenly.");
+      return;
+    }
+    const byId=new Map(patches.map(patch=>[patch.id,patch]));
+    updateActive({blocks:activeTemplate.blocks.map(block=>byId.has(block.id)?{...block,...byId.get(block.id)}:block)});
+    setMessage("Evenly spaced "+patches.length+" selected elements. Use Undo to restore their previous positions.");
+  };
 
   const applyLayoutSuggestion=suggestion=>{
     const result=applyInvoiceLayoutOptimizationSuggestion(activeTemplate.blocks,suggestion,previewColumns);
@@ -601,7 +624,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     }
     updateActive({blocks:result.blocks});
     setLayoutPlanPreview(null);
-    setSelectedBlockId(suggestion.blockId);
+    selectSingleBlock(suggestion.blockId);
     setMessage("Applied: "+suggestion.title+". Use Undo to restore the previous layout.");
   };
   const openLayoutPlanPreview=()=>{
@@ -626,7 +649,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       return;
     }
     updateActive({blocks:layoutPlanPreview.blocks});
-    setSelectedBlockId(layoutPlanPreview.changes[0].blockId||selectedBlockId);
+    selectSingleBlock(layoutPlanPreview.changes[0].blockId||selectedBlockId);
     const appliedCount=layoutPlanPreview.appliedCount;
     const skippedCount=layoutPlanPreview.skippedCount;
     setLayoutPlanPreview(null);
@@ -657,7 +680,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       return;
     }
     updateActive({blocks:renderedLayoutPlanPreview.blocks});
-    setSelectedBlockId(renderedLayoutPlanPreview.changes[0].blockId||selectedBlockId);
+    selectSingleBlock(renderedLayoutPlanPreview.changes[0].blockId||selectedBlockId);
     const count=renderedLayoutPlanPreview.appliedCount;
     setRenderedLayoutPlanPreview(null);
     closeActualPrintPreview();
@@ -685,7 +708,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       return;
     }
     updateActive({blocks:result.blocks});
-    setSelectedBlockId(columnOptimizationPreview.suggestion.blockId);
+    selectSingleBlock(columnOptimizationPreview.suggestion.blockId);
     const target=columnOptimizationPreview.targetColumnLabel;
     const nextWidth=columnOptimizationPreview.suggestedTargetWidth;
     setColumnOptimizationPreview(null);
@@ -719,7 +742,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       newBlock.alternateRows=true;
     }
     updateActive({blocks:type==="shape"?[newBlock,...activeTemplate.blocks]:[...activeTemplate.blocks,newBlock]});
-    setSelectedBlockId(id);
+    selectSingleBlock(id);
   };
   const findOpenPalettePosition=(width,height)=>{
     const occupied=activeTemplate.blocks.filter(block=>block.visible!==false);
@@ -783,7 +806,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       }
     });
     updateActive({blocks});
-    if(tableBlockId)setSelectedBlockId(tableBlockId);
+    if(tableBlockId)selectSingleBlock(tableBlockId);
     setMessage(plan.tableDetected
       ?"Suggested fields were added around the detected table. Any fields you had already positioned were kept in place."
       :"A standard starting layout was added because no clear table grid was found. Existing field positions were kept; please check the table area.");
@@ -810,7 +833,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       :activeTemplate.blocks.find(block=>block.type===type);
     if(existing){
       updateBlock(existing.id,{x,y,...dimensions,visible:true,...(type==="field"&&activeTemplate.background?.url?{showLabel:false}:{})});
-      setSelectedBlockId(existing.id);
+      selectSingleBlock(existing.id);
     }else addBlock(type,placementField,{x,y},dimensions);
     setPlacingField(false);
     setMessage((FIELD_LABELS[placementField]||"Invoice element")+" positioned. You can drag or resize it on the page.");
@@ -819,14 +842,14 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     if(localDesign.templates.length>=12){setError("You can keep up to 12 invoice designs. Delete an unused design before adding another.");return;}
     const template=createInvoiceDesignTemplate(createId("design"),key);
     updateDesign({...localDesign,activeTemplateId:template.id,templates:[...localDesign.templates,template]});
-    setSelectedBlockId(template.blocks[0]?.id||"");setShowTemplateLibrary(false);setConfirmDeleteTemplate(false);
+    selectSingleBlock(template.blocks[0]?.id||"");setShowTemplateLibrary(false);setConfirmDeleteTemplate(false);
     setMessage(template.name+" added. You can now edit every element and position it on the page.");
   };
   const createBlankDesign=()=>{
     if(localDesign.templates.length>=12){setError("You can keep up to 12 invoice designs. Delete an unused design first.");return;}
     const template=createBlankInvoiceDesignTemplate(createId("blank"),"My blank invoice");
     updateDesign({...localDesign,activeTemplateId:template.id,templates:[...localDesign.templates,template]});
-    setSelectedBlockId("");setShowTemplateLibrary(false);setConfirmDeleteTemplate(false);
+    selectSingleBlock("");setShowTemplateLibrary(false);setConfirmDeleteTemplate(false);
     setMessage("Blank design created. Add fields, text, images, dividers and accent shapes from the left panel.");
   };
   const deleteActiveTemplate=()=>{
@@ -834,13 +857,13 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     if(localDesign.templates.length===1){
       const blank=createBlankInvoiceDesignTemplate(createId("blank"),"My blank invoice");
       updateDesign({...localDesign,enabled:false,activeTemplateId:blank.id,templates:[blank]});
-      setSelectedBlockId("");setConfirmDeleteTemplate(false);
+      selectSingleBlock("");setConfirmDeleteTemplate(false);
       setMessage("The design was deleted. A blank design is ready to customize.");return;
     }
     const remaining=localDesign.templates.filter(template=>template.id!==activeTemplate.id);
     const next=remaining[0];
     updateDesign({...localDesign,activeTemplateId:next.id,templates:remaining});
-    setSelectedBlockId(next.blocks[0]?.id||"");setConfirmDeleteTemplate(false);
+    selectSingleBlock(next.blocks[0]?.id||"");setConfirmDeleteTemplate(false);
     setMessage(activeTemplate.name+" deleted. Your other designs are unchanged.");
   };
   const duplicateSelectedBlock=()=>{
@@ -848,7 +871,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const elementLimit=Math.min(300,Math.max(80,Number(activeTemplate.elementLimit)||80));
     if(activeTemplate.blocks.length>=elementLimit){setError("This design has reached its "+elementLimit+" element limit. Increase the limit in Design settings.");return;}
     const copy={...selectedBlock,id:createId("element"),x:clamp(selectedBlock.x+2,0,100-selectedBlock.w),y:clamp(selectedBlock.y+2,0,100-selectedBlock.h),label:(selectedBlock.label||"Element")+" copy"};
-    updateActive({blocks:[...activeTemplate.blocks,copy]});setSelectedBlockId(copy.id);
+    updateActive({blocks:[...activeTemplate.blocks,copy]});selectSingleBlock(copy.id);
   };
   const moveSelectedLayer=direction=>{
     if(!selectedBlock)return;
@@ -863,14 +886,14 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     if(localDesign.templates.length>=12){setError("You can save up to 12 invoice designs.");return;}
     const copy={...activeTemplate,id:createId("copy"),name:activeTemplate.name+" copy",blocks:activeTemplate.blocks.map(block=>({...block,id:createId("block")})),background:{...activeTemplate.background}};
     updateDesign({...localDesign,activeTemplateId:copy.id,templates:[...localDesign.templates,copy]});
-    setSelectedBlockId(copy.blocks[0]?.id||"");
+    selectSingleBlock(copy.blocks[0]?.id||"");
     setMessage("Design duplicated. Your original design is unchanged.");
   };
   const renameTemplate=value=>updateActive({name:value.slice(0,60)});
   const removeBlock=()=>{
     if(!selectedBlock)return;
     updateActive({blocks:activeTemplate.blocks.filter(block=>block.id!==selectedBlock.id)});
-    setSelectedBlockId("");
+    selectSingleBlock("");
   };
   const handleHtmlUpload=async file=>{
     if(!file)return;
@@ -883,7 +906,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       const template=createBlankInvoiceDesignTemplate(createId("html"),imported.name);
       template.templateKey="html-import";template.pageSize=imported.pageSize||"A4";template.blocks=imported.blocks.slice(0,300);template.elementLimit=Math.min(300,Math.max(80,Math.ceil(template.blocks.length/20)*20));
       updateDesign({...localDesign,activeTemplateId:template.id,templates:[...localDesign.templates,template]});
-      setSelectedBlockId(template.blocks[0]?.id||"");setShowTemplateLibrary(false);
+      selectSingleBlock(template.blocks[0]?.id||"");setShowTemplateLibrary(false);
       const summary=imported.matchedFieldCount+" live fields, "+imported.staticTextCount+" text elements"+(imported.imageCount?", "+imported.imageCount+" embedded images":"");
       setMessage("HTML design converted into editable elements: "+summary+"."+(imported.warning?" "+imported.warning:""));
     }catch(importError){setError(importError.message||"This HTML design could not be converted. Try PDF or image import instead.");}
@@ -1029,7 +1052,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const existing=activeTemplate.blocks.find(block=>block.type==="field"&&block.fieldKey===fieldKey);
     if(existing){
       updateBlock(existing.id,{...position,w:width,h:height,visible:true,showLabel:false});
-      setSelectedBlockId(existing.id);
+      selectSingleBlock(existing.id);
     }else{
       addBlock("field",fieldKey,position,{w:width,h:height});
     }
@@ -1045,10 +1068,17 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     if(event.target.closest("[data-resize-handle]"))return;
     const nestedButton=event.target.closest("button");
     if(nestedButton&&nestedButton!==event.currentTarget)return;
+    if(event.shiftKey||event.ctrlKey||event.metaKey){
+      event.preventDefault();
+      return;
+    }
     event.preventDefault();
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    setSelectedBlockId(block.id);
-    const next={id:block.id,mode:"move",startX:event.clientX,startY:event.clientY,x:block.x,y:block.y,w:block.w,h:block.h,initialDesign:currentDesignRef.current,didMove:false};
+    const isGroupMove=selectedBlockIds.length>1&&selectedBlockIds.includes(block.id);
+    if(isGroupMove)setSelectedBlockId(block.id);
+    else selectSingleBlock(block.id);
+    const groupBlocks=isGroupMove?selectedBlocks.map(item=>({id:item.id,x:item.x,y:item.y,w:item.w,h:item.h})):[];
+    const next={id:block.id,mode:isGroupMove?"group-move":"move",groupBlocks,startX:event.clientX,startY:event.clientY,x:block.x,y:block.y,w:block.w,h:block.h,initialDesign:currentDesignRef.current,didMove:false};
     draggingRef.current=next;
     setDragging(next);
   };
@@ -1058,7 +1088,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     event.currentTarget.setPointerCapture?.(event.pointerId);
     const next={id:block.id,mode:"resize",handle,startX:event.clientX,startY:event.clientY,x:block.x,y:block.y,w:block.w,h:block.h,initialDesign:currentDesignRef.current,didMove:false};
     draggingRef.current=next;
-    setSelectedBlockId(block.id);
+    selectSingleBlock(block.id);
     setDragging(next);
     setAlignmentGuides({vertical:[],horizontal:[]});
   };
@@ -1074,6 +1104,27 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     if(!rect.width||!rect.height)return;
     const dx=(event.clientX-current.startX)/rect.width*100;
     const dy=(event.clientY-current.startY)/rect.height*100;
+    if(current.mode==="group-move"){
+      const moveX=snapToGrid?Math.round(dx/2)*2:dx;
+      const moveY=snapToGrid?Math.round(dy/2)*2:dy;
+      const patches=getInvoiceGroupMovePatches(current.groupBlocks,moveX,moveY);
+      if(!patches.length)return;
+      const byId=new Map(patches.map(item=>[item.id,item]));
+      const changed=patches.some(item=>{
+        const live=activeTemplate.blocks.find(block=>block.id===item.id);
+        return live&&(Math.abs(live.x-item.x)>0.01||Math.abs(live.y-item.y)>0.01);
+      });
+      if(!changed)return;
+      if(!current.didMove){
+        pushHistory(current.initialDesign);
+        const next={...current,didMove:true};
+        draggingRef.current=next;
+        setDragging(next);
+      }
+      setAlignmentGuides({vertical:[],horizontal:[]});
+      updateActive({blocks:activeTemplate.blocks.map(block=>byId.has(block.id)?{...block,x:byId.get(block.id).x,y:byId.get(block.id).y}:block)},{recordHistory:false});
+      return;
+    }
     let patch;
     if(current.mode==="resize"){
       patch=getInvoiceBlockResizePatch(current,current.handle,dx,dy);
@@ -1376,7 +1427,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 const canFitText=issue.fixAction==="fit-text"&&issueBlock&&issueBlock.visible!==false&&["field","text"].includes(issueBlock.type)&&Number(issue.suggestedFontSize)>=6&&Number(issue.suggestedFontSize)<Number(issueBlock.fontSize||10);
                 const canSetSafeMargins=issue.fixAction==="set-printer-safe-margins"&&issue.recommendedMargins;
                 const canNormalizeMargins=issue.fixAction==="normalize-print-margins"&&issue.normalizedMargins;
-                return <li key={issue.id||index}><div><span className={issue.severity==="error"?"text-danger":"text-warning"}>{issue.title}</span> — {issue.detail}</div>{canFitText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{updateBlock(issue.blockId,{fontSize:issue.suggestedFontSize});setSelectedBlockId(issue.blockId);setMessage("Text size adjusted to "+issue.suggestedFontSize+" px. Recheck the actual print preview.");}}>Fit text to box · {issue.suggestedFontSize} px</button>}{canSetSafeMargins&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{updateActive({printMargins:issue.recommendedMargins});setMessage("Applied 4 mm printer-safe design margins. Recheck the actual print preview.");}}>Set 4 mm safe margins</button>}{canNormalizeMargins&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{updateActive({printMargins:issue.normalizedMargins});setMessage("Margin values normalized to the supported 0–25 mm range.");}}>Normalize margins</button>}</li>;
+                return <li key={issue.id||index}><div><span className={issue.severity==="error"?"text-danger":"text-warning"}>{issue.title}</span> — {issue.detail}</div>{canFitText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{updateBlock(issue.blockId,{fontSize:issue.suggestedFontSize});selectSingleBlock(issue.blockId);setMessage("Text size adjusted to "+issue.suggestedFontSize+" px. Recheck the actual print preview.");}}>Fit text to box · {issue.suggestedFontSize} px</button>}{canSetSafeMargins&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{updateActive({printMargins:issue.recommendedMargins});setMessage("Applied 4 mm printer-safe design margins. Recheck the actual print preview.");}}>Set 4 mm safe margins</button>}{canNormalizeMargins&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{updateActive({printMargins:issue.normalizedMargins});setMessage("Margin values normalized to the supported 0–25 mm range.");}}>Normalize margins</button>}</li>;
               })}</ul>:<small>No obvious layout problems were estimated. Confirm the final design in Actual print before printing.</small>}{designWarnings.length>0&&<small>Text-fit checks are estimates. Confirm the final result using Actual print.</small>}</div>
             <div className="invoice-builder-canvas-scroll">
               <div className="invoice-builder-page-frame" style={{width:Math.round(basePageWidth*effectiveCanvasScale)+"px",aspectRatio:String(canvasRatio)}}>
@@ -1399,10 +1450,24 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   <div className="invoice-builder-block-layer">
                     {activeTemplate.blocks.filter(block=>block.visible!==false).map(block=>(
                       <React.Fragment key={block.id}>
-                        <button type="button" className={"invoice-builder-block "+(selectedBlockId===block.id?"is-selected":"")+(dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,fontStyle:block.italic?"italic":"normal",fontFamily:block.fontFamily||"Arial",textAlign:block.align,color:block.color,backgroundColor:block.backgroundColor||"transparent",border:block.borderWidth?block.borderWidth+"px solid "+(block.borderColor||"#d8e0e9"):undefined,borderRadius:block.borderRadius+"px",padding:block.padding+"px",opacity:block.opacity??1,lineHeight:block.lineHeight??1.25,letterSpacing:(block.letterSpacing??0)+"px",textDecoration:block.textDecoration||"none",textTransform:block.textTransform||"none"}} onClick={()=>{if(!placingField)setSelectedBlockId(block.id);}} onPointerDown={event=>{if(!placingField)startBlockDrag(event,block);}} aria-label={"Move "+(block.label||"invoice element")}>
+                        <button type="button" className={"invoice-builder-block "+(selectedBlockIds.includes(block.id)?"is-selected":"")+(dragging?.mode==="group-move"&&selectedBlockIds.includes(block.id)||dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,fontStyle:block.italic?"italic":"normal",fontFamily:block.fontFamily||"Arial",textAlign:block.align,color:block.color,backgroundColor:block.backgroundColor||"transparent",border:block.borderWidth?block.borderWidth+"px solid "+(block.borderColor||"#d8e0e9"):undefined,borderRadius:block.borderRadius+"px",padding:block.padding+"px",opacity:block.opacity??1,lineHeight:block.lineHeight??1.25,letterSpacing:(block.letterSpacing??0)+"px",textDecoration:block.textDecoration||"none",textTransform:block.textTransform||"none"}} onClick={event=>{
+                          if(placingField)return;
+                          if(event.shiftKey||event.ctrlKey||event.metaKey){
+                            const alreadySelected=selectedBlockIds.includes(block.id);
+                            const nextIds=alreadySelected
+                              ?selectedBlockIds.filter(id=>id!==block.id)
+                              :[...selectedBlockIds,block.id];
+                            setSelectedBlockIds(nextIds);
+                            setSelectedBlockId(alreadySelected
+                              ?(selectedBlockId===block.id?(nextIds[nextIds.length-1]||""):selectedBlockId)
+                              :block.id);
+                          }else if(event.detail===0){
+                            selectSingleBlock(block.id);
+                          }
+                        }} onPointerDown={event=>{if(!placingField)startBlockDrag(event,block);}} aria-label={"Move "+(block.label||"invoice element")}>
                           {renderBlockContent(block)}
                         </button>
-                        {selectedBlockId===block.id&&(
+                        {selectedBlockIds.length===1&&selectedBlockId===block.id&&(
                           <div className="invoice-builder-resize-overlay" style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%"}} aria-hidden="true">
                             {RESIZE_HANDLES.map(handle=>(
                               <span key={handle} className={"invoice-builder-resize-handle handle-"+handle} data-resize-handle={handle} onPointerDown={event=>startBlockResize(event,block,handle)}/>
@@ -1419,7 +1484,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               </div>
             </div>
             <div className="invoice-builder-canvas-footer">
-              <span><i className="bi bi-arrows-move me-1"/>Drag to position · Arrow keys nudge (Shift for larger steps) · Select to edit.</span>
+              <span><i className="bi bi-arrows-move me-1"/>Drag to position · Shift-click to select several · Arrow keys nudge.</span>
               <div className="invoice-builder-mobile-zoom" aria-label="Page zoom controls">
                 <button type="button" aria-label="Zoom out" onClick={()=>setCanvasZoom(value=>Math.max(1,Math.round((value-0.25)*100)/100))} disabled={canvasZoom<=1}><i className="bi bi-dash-lg"/></button>
                 <span>{Math.round(canvasZoom*100)}%</span>
@@ -1525,6 +1590,33 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   {placingField&&<div className="small text-primary mt-2">Placement mode is on. Click the matching area on the invoice page.</div>}
                 </div>
                 <div className="small text-secondary mt-2">{activeTemplate.background.type==="pdf"?"PDF page shown as a locked reference. Map fields onto the visible page; the original file will not move.":"Image shown as a locked reference. Map fields onto the visible page; the original file will not move."}</div>
+              </section>
+            )}
+            {selectedBlocks.length>1&&(
+              <section className="invoice-builder-property-card invoice-builder-group-arrange">
+                <div className="d-flex justify-content-between align-items-center gap-2 mb-2">
+                  <h3 className="mb-0">Arrange selected elements</h3>
+                  <span className="invoice-builder-selection-count">{selectedBlocks.length} selected</span>
+                </div>
+                <p>Shift-click elements on the page to add or remove them. Drag any selected element to move the whole group together.</p>
+                <div className="invoice-builder-group-actions">
+                  <strong>Align edges</strong>
+                  <div className="invoice-builder-group-button-row">
+                    {["left","center","right"].map(value=><button type="button" className="btn btn-sm btn-light border" key={"x-"+value} onClick={()=>alignSelectedBlocks(value)}>{value==="center"?"Centre":value[0].toUpperCase()+value.slice(1)}</button>)}
+                  </div>
+                  <div className="invoice-builder-group-button-row">
+                    {["top","middle","bottom"].map(value=><button type="button" className="btn btn-sm btn-light border" key={"y-"+value} onClick={()=>alignSelectedBlocks(value)}>{value==="middle"?"Middle":value[0].toUpperCase()+value.slice(1)}</button>)}
+                  </div>
+                </div>
+                <div className="invoice-builder-group-actions">
+                  <strong>Even spacing</strong>
+                  <div className="invoice-builder-group-button-row">
+                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>distributeSelectedBlocks("horizontal")} disabled={selectedBlocks.length<3}>Across</button>
+                    <button type="button" className="btn btn-sm btn-light border" onClick={()=>distributeSelectedBlocks("vertical")} disabled={selectedBlocks.length<3}>Down</button>
+                  </div>
+                  <small>Spacing keeps the first and last elements in place. Choose three or more elements.</small>
+                </div>
+                <button type="button" className="btn btn-sm btn-link p-0" onClick={()=>selectSingleBlock(selectedBlockId)}>Finish group selection</button>
               </section>
             )}
             {!selectedBlock?(
@@ -1697,7 +1789,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
             </section>
             <section className="invoice-builder-property-card invoice-builder-layers">
               <div className="d-flex justify-content-between align-items-center gap-2 mb-2"><h3 className="mb-0">Elements on this page</h3><small>{activeTemplate.blocks.length}/{activeTemplate.elementLimit||80}</small></div>
-              {activeTemplate.blocks.length===0?<p>Start by adding a field, text, image, divider or accent shape.</p>:<div className="invoice-builder-layer-list">{activeTemplate.blocks.slice().reverse().map(block=><div className={selectedBlockId===block.id?"is-selected":""} key={block.id}><button type="button" className="invoice-builder-layer-select" onClick={()=>setSelectedBlockId(block.id)}><i className={"bi "+(block.type==="field"?"bi-braces":block.type==="items_table"?"bi-table":block.type==="image"||block.type==="logo"?"bi-image":block.type==="shape"?"bi-square":block.type==="divider"?"bi-dash":"bi-fonts")}/><span>{block.label||block.text||block.type.replace("_"," ")}</span></button><button type="button" className="invoice-builder-layer-visibility" title={block.visible===false?"Show element":"Hide element"} onClick={()=>updateBlock(block.id,{visible:block.visible===false})}><i className={"bi "+(block.visible===false?"bi-eye-slash":"bi-eye")}/></button></div>)}</div>}
+              {activeTemplate.blocks.length===0?<p>Start by adding a field, text, image, divider or accent shape.</p>:<div className="invoice-builder-layer-list">{activeTemplate.blocks.slice().reverse().map(block=><div className={selectedBlockIds.includes(block.id)?"is-selected":""} key={block.id}><button type="button" className="invoice-builder-layer-select" onClick={()=>selectSingleBlock(block.id)}><i className={"bi "+(block.type==="field"?"bi-braces":block.type==="items_table"?"bi-table":block.type==="image"||block.type==="logo"?"bi-image":block.type==="shape"?"bi-square":block.type==="divider"?"bi-dash":"bi-fonts")}/><span>{block.label||block.text||block.type.replace("_"," ")}</span></button><button type="button" className="invoice-builder-layer-visibility" title={block.visible===false?"Show element":"Hide element"} onClick={()=>updateBlock(block.id,{visible:block.visible===false})}><i className={"bi "+(block.visible===false?"bi-eye-slash":"bi-eye")}/></button></div>)}</div>}
             </section>
           </aside>
         </div>
@@ -1866,7 +1958,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                     const shrinkableWarnings=["Text or totals may be clipped","Item table may be too wide","An item cell is clipped","An item row is taller than planned","An item row overlaps invoice closing details","An item row exceeds the table area","An item row extends beyond the page","Blank table content may be clipped","Invoice items exceed their allocated page space"];
                     const canReduceText=issueBlock&&issueBlock.visible!==false&&["field","text","totals","blank_table","items_table"].includes(issue.blockType)&&shrinkableWarnings.includes(issue.title)&&Number(issueBlock.fontSize||10)>6;
                     const canOptimizeColumn=Boolean(issueBlock&&issueBlock.type==="items_table"&&issue.title==="An invoice item row is taller than planned"&&issue.columnKey&&issue.actualLines>issue.estimatedLines&&buildInvoiceColumnOptimizationPreview(issueBlock,issue,previewColumns));
-                    return <li key={issue.id||index}><div><b>{issue.title}</b> — {issue.detail}</div>{Number(issue.pageNumber)>0&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>jumpToPrintPage(issue.pageNumber)}>View page {issue.pageNumber}</button>}{issue.blockId&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{setSelectedBlockId(issue.blockId);closeActualPrintPreview();}}>Edit this element</button>}{issue.overlappingBlockId&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{setSelectedBlockId(issue.overlappingBlockId);closeActualPrintPreview();}}>Edit overlapping element</button>}{canReduceText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{const result=reduceInvoiceBlockFontSize(activeTemplate.blocks,issue.blockId,1);if(result.changed){updateActive({blocks:result.blocks});setSelectedBlockId(issue.blockId);closeActualPrintPreview();setMessage("Text size reduced by up to 1 pt. Reopen Actual print to check the result. Use Undo to restore the previous size.");}}}>Reduce text size by up to 1 pt</button>}{canOptimizeColumn&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>openColumnOptimizationPreview(issue)}>Preview column width change</button>}</li>;
+                    return <li key={issue.id||index}><div><b>{issue.title}</b> — {issue.detail}</div>{Number(issue.pageNumber)>0&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>jumpToPrintPage(issue.pageNumber)}>View page {issue.pageNumber}</button>}{issue.blockId&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{selectSingleBlock(issue.blockId);closeActualPrintPreview();}}>Edit this element</button>}{issue.overlappingBlockId&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{selectSingleBlock(issue.overlappingBlockId);closeActualPrintPreview();}}>Edit overlapping element</button>}{canReduceText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{const result=reduceInvoiceBlockFontSize(activeTemplate.blocks,issue.blockId,1);if(result.changed){updateActive({blocks:result.blocks});selectSingleBlock(issue.blockId);closeActualPrintPreview();setMessage("Text size reduced by up to 1 pt. Reopen Actual print to check the result. Use Undo to restore the previous size.");}}}>Reduce text size by up to 1 pt</button>}{canOptimizeColumn&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>openColumnOptimizationPreview(issue)}>Preview column width change</button>}</li>;
                   })}</ul>
                     {columnOptimizationPreview&&(
                       <section className="invoice-builder-column-width-preview" aria-label="Column width comparison">

@@ -216,7 +216,7 @@ function createInvoiceDesignTemplate(id,key="modern-business"){
   blocks.push(shape("totals-panel",62,totalsTop,33,totalsPanelHeight,preset.soft,{
     borderColor:preset.border,borderWidth:.5,borderRadius:preset.header==="minimal"?1:2
   }));
-  blocks.push(totals("invoice-totals",64,totalsBlockTop,29,totalsPanelHeight-1.2,preset,compact?10.2:11));
+  blocks.push(totals("invoice-totals",64,totalsBlockTop,29,totalsPanelHeight-1.2,preset,compact?10.8:11.5));
   blocks.push(line("signature-rule",70,signatureTop-.6,22,preset.border));
   blocks.push(field("signature","signature",64,signatureTop,31,2.1,{
     fontSize:10,bold:true,align:"right",color:preset.deep,showLabel:false

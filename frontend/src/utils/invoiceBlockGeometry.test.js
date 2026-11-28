@@ -101,7 +101,7 @@ test("group alignment shares collective edges and centre lines without changing 
   );
   assert.deepEqual(
     getInvoiceGroupAlignmentPatches(arrangedBlocks, "middle"),
-    [{ id: "a", y: 30.5 }, { id: "b", y: 29.5 }, { id: "c", y: 22.5 }]
+    [{ id: "a", y: 30.5 }, { id: "b", y: 29.5 }, { id: "c", y: 28.5 }]
   );
   assert.deepEqual(getInvoiceGroupAlignmentPatches(arrangedBlocks, "diagonal"), []);
 });

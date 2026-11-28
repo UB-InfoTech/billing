@@ -9,6 +9,7 @@ import {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics} from "../u
 import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
 import {buildInvoicePageNavigation} from "../utils/invoicePreviewNavigation.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
+import {getInvoiceBlockResizePatch} from "../utils/invoiceBlockGeometry.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
@@ -53,6 +54,7 @@ const makeBlock=(id,type,fieldKey,label,x,y,w,h,extra={})=>({id,type,fieldKey:fi
 const makeTemplate=(id,name,key)=>({...createInvoiceDesignTemplate(id,key),name:name||createInvoiceDesignTemplate(id,key).name});
 const makeInitialDesign=()=>({enabled:false,activeTemplateId:"clean-default",templates:[makeTemplate("clean-default","Modern business","modern-business")]});
 const createId=prefix=>prefix+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7);
+const RESIZE_HANDLES=["nw","n","ne","e","se","s","sw","w"];
 const clamp=(value,min,max)=>Math.min(max,Math.max(min,Number(value)||min));
 const snapAxis=(origin,size,lines)=>{
   let bestPosition=origin;
@@ -1046,11 +1048,11 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     draggingRef.current=next;
     setDragging(next);
   };
-  const startBlockResize=(event,block)=>{
+  const startBlockResize=(event,block,handle="se")=>{
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    const next={id:block.id,mode:"resize",startX:event.clientX,startY:event.clientY,x:block.x,y:block.y,w:block.w,h:block.h,initialDesign:currentDesignRef.current,didMove:false};
+    const next={id:block.id,mode:"resize",handle,startX:event.clientX,startY:event.clientY,x:block.x,y:block.y,w:block.w,h:block.h,initialDesign:currentDesignRef.current,didMove:false};
     draggingRef.current=next;
     setSelectedBlockId(block.id);
     setDragging(next);
@@ -1070,10 +1072,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const dy=(event.clientY-current.startY)/rect.height*100;
     let patch;
     if(current.mode==="resize"){
-      patch={
-        w:clamp(current.w+dx,3,100-current.x),
-        h:clamp(current.h+dy,2,100-current.y)
-      };
+      patch=getInvoiceBlockResizePatch(current,current.handle,dx,dy);
+      if(!patch)return;
       setAlignmentGuides({vertical:[],horizontal:[]});
     }else{
       const block=activeTemplate.blocks.find(item=>item.id===current.id);
@@ -1394,10 +1394,18 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   </div>
                   <div className="invoice-builder-block-layer">
                     {activeTemplate.blocks.filter(block=>block.visible!==false).map(block=>(
-                      <button type="button" key={block.id} className={"invoice-builder-block "+(selectedBlockId===block.id?"is-selected":"")+(dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,fontStyle:block.italic?"italic":"normal",fontFamily:block.fontFamily||"Arial",textAlign:block.align,color:block.color,backgroundColor:block.backgroundColor||"transparent",border:block.borderWidth?block.borderWidth+"px solid "+(block.borderColor||"#d8e0e9"):undefined,borderRadius:block.borderRadius+"px",padding:block.padding+"px",opacity:block.opacity??1,lineHeight:block.lineHeight??1.25,letterSpacing:(block.letterSpacing??0)+"px",textDecoration:block.textDecoration||"none",textTransform:block.textTransform||"none"}} onClick={()=>{if(!placingField)setSelectedBlockId(block.id);}} onPointerDown={event=>{if(!placingField)startBlockDrag(event,block);}} aria-label={"Move "+(block.label||"invoice element")}>
-                        {renderBlockContent(block)}
-                        {selectedBlockId===block.id&&<span className="invoice-builder-resize-handle" data-resize-handle="true" onPointerDown={event=>startBlockResize(event,block)} aria-hidden="true"/>}
-                      </button>
+                      <React.Fragment key={block.id}>
+                        <button type="button" className={"invoice-builder-block "+(selectedBlockId===block.id?"is-selected":"")+(dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,fontStyle:block.italic?"italic":"normal",fontFamily:block.fontFamily||"Arial",textAlign:block.align,color:block.color,backgroundColor:block.backgroundColor||"transparent",border:block.borderWidth?block.borderWidth+"px solid "+(block.borderColor||"#d8e0e9"):undefined,borderRadius:block.borderRadius+"px",padding:block.padding+"px",opacity:block.opacity??1,lineHeight:block.lineHeight??1.25,letterSpacing:(block.letterSpacing??0)+"px",textDecoration:block.textDecoration||"none",textTransform:block.textTransform||"none"}} onClick={()=>{if(!placingField)setSelectedBlockId(block.id);}} onPointerDown={event=>{if(!placingField)startBlockDrag(event,block);}} aria-label={"Move "+(block.label||"invoice element")}>
+                          {renderBlockContent(block)}
+                        </button>
+                        {selectedBlockId===block.id&&(
+                          <div className="invoice-builder-resize-overlay" style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%"}} aria-hidden="true">
+                            {RESIZE_HANDLES.map(handle=>(
+                              <span key={handle} className={"invoice-builder-resize-handle handle-"+handle} data-resize-handle={handle} onPointerDown={event=>startBlockResize(event,block,handle)}/>
+                            ))}
+                          </div>
+                        )}
+                      </React.Fragment>
                     ))}
                   </div>
                   </div>

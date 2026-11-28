@@ -107,7 +107,16 @@
 .invoice-builder-alignment-guide.vertical{top:0;bottom:0;border-left:1px dashed #2583df}
 .invoice-builder-alignment-guide.horizontal{left:0;right:0;border-top:1px dashed #2583df}
 .invoice-builder-block.is-dragging{z-index:7;opacity:.92;cursor:grabbing}
-.invoice-builder-resize-handle{position:absolute;right:2px;bottom:2px;z-index:10;width:12px;height:12px;border:2px solid #fff;border-radius:3px;background:#1769c2;box-shadow:0 0 0 1px #1769c2;cursor:nwse-resize;touch-action:none}
+.invoice-builder-resize-overlay{position:absolute;z-index:9;border:1px solid #2876c7;box-shadow:0 0 0 1px rgba(40,118,199,.1);pointer-events:none}
+.invoice-builder-resize-handle{position:absolute;display:block;width:14px;height:14px;border:2px solid #fff;border-radius:4px;background:#1769c2;box-shadow:0 0 0 1px #1769c2;pointer-events:auto;touch-action:none}
+.invoice-builder-resize-handle.handle-nw{top:0;left:0;transform:translate(-50%,-50%);cursor:nwse-resize}
+.invoice-builder-resize-handle.handle-n{top:0;left:50%;transform:translate(-50%,-50%);cursor:ns-resize}
+.invoice-builder-resize-handle.handle-ne{top:0;right:0;transform:translate(50%,-50%);cursor:nesw-resize}
+.invoice-builder-resize-handle.handle-e{top:50%;right:0;transform:translate(50%,-50%);cursor:ew-resize}
+.invoice-builder-resize-handle.handle-se{right:0;bottom:0;transform:translate(50%,50%);cursor:nwse-resize}
+.invoice-builder-resize-handle.handle-s{bottom:0;left:50%;transform:translate(-50%,50%);cursor:ns-resize}
+.invoice-builder-resize-handle.handle-sw{bottom:0;left:0;transform:translate(-50%,50%);cursor:nesw-resize}
+.invoice-builder-resize-handle.handle-w{top:50%;left:0;transform:translate(-50%,-50%);cursor:ew-resize}
 .invoice-builder-toolbar .btn:disabled{opacity:.42;cursor:not-allowed}
 
 .invoice-builder-mapping-guide{padding:11px;border:1px solid #dce7f3;border-radius:8px;background:#f7faff}
@@ -500,7 +509,7 @@
  .invoice-builder-page-frame{margin:0 auto}
  .invoice-builder-page,.invoice-builder-page.is-landscape{position:absolute;top:0;left:0;max-width:none;min-width:0}
  .invoice-builder-page .invoice-builder-block{max-width:none}
- .invoice-builder-resize-handle{width:34px;height:34px;right:0;bottom:0;border-width:3px}
+ .invoice-builder-resize-handle{width:30px;height:30px;border-width:3px;border-radius:7px}
  .invoice-builder-canvas-footer{flex:0 0 auto;gap:6px;padding:7px 9px;font-size:9px}
  .invoice-builder-canvas-footer span:first-child{line-height:1.35}
  .invoice-builder-pagination-hint{font-size:9px}

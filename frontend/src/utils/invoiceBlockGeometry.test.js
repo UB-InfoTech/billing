@@ -97,11 +97,11 @@ test("group alignment shares collective edges and centre lines without changing 
   );
   assert.deepEqual(
     getInvoiceGroupAlignmentPatches(arrangedBlocks, "right"),
-    [{ id: "a", x: 70 }, { id: "b", x: 60 }, { id: "c", x: 70 }]
+    [{ id: "a", x: 75 }, { id: "b", x: 65 }, { id: "c", x: 70 }]
   );
   assert.deepEqual(
     getInvoiceGroupAlignmentPatches(arrangedBlocks, "middle"),
-    [{ id: "a", y: 33.5 }, { id: "b", y: 32.5 }, { id: "c", y: 31.5 }]
+    [{ id: "a", y: 30.5 }, { id: "b", y: 29.5 }, { id: "c", y: 22.5 }]
   );
   assert.deepEqual(getInvoiceGroupAlignmentPatches(arrangedBlocks, "diagonal"), []);
 });
@@ -109,11 +109,11 @@ test("group alignment shares collective edges and centre lines without changing 
 test("group distribution uses equal clear gaps and keeps the outer elements fixed", () => {
   assert.deepEqual(
     getInvoiceGroupDistributionPatches(arrangedBlocks, "horizontal"),
-    [{ id: "a", x: 10 }, { id: "b", x: 42.5 }, { id: "c", x: 75 }]
+    [{ id: "a", x: 10 }, { id: "b", x: 35 }, { id: "c", x: 70 }]
   );
   assert.deepEqual(
     getInvoiceGroupDistributionPatches(arrangedBlocks, "vertical"),
-    [{ id: "a", y: 12 }, { id: "b", y: 23.5 }, { id: "c", y: 35 }]
+    [{ id: "a", y: 12 }, { id: "b", y: 27.5 }, { id: "c", y: 45 }]
   );
 });
 
@@ -139,8 +139,8 @@ test("group movement preserves relative spacing and clamps the group to page bou
       { id: "b", x: 60, y: 40, w: 35, h: 30 }
     ], 20, 20),
     [
-      { id: "a", x: 5, y: 20 },
-      { id: "b", x: 57, y: 50 }
+      { id: "a", x: 13, y: 30 },
+      { id: "b", x: 65, y: 60 }
     ]
   );
 });

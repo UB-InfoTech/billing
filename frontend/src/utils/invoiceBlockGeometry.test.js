@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch, getInvoiceContextToolbarPosition, getInvoiceGroupAlignmentPatches, getInvoiceGroupDistributionPatches, getInvoiceGroupMovePatches, getInvoiceMarqueeSelection } from "./invoiceBlockGeometry.js";
+import { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch, getInvoiceContextToolbarPosition, getInvoiceGroupAlignmentPatches, getInvoiceGroupDistributionPatches, getInvoiceGroupMovePatches, getInvoiceGroupResizePatches, getInvoiceGroupSnapMove, getInvoiceMarqueeSelection } from "./invoiceBlockGeometry.js";
 
 const block = { x: 20, y: 25, w: 30, h: 20 };
 
@@ -190,6 +190,7 @@ test("context toolbar stays within the page and remains readable at mobile canva
 
   assert.equal(position.placement, "below");
   assert.equal(position.scale, 2);
+  assert.equal(position.width, 252);
   assert.ok(position.left >= 0);
   assert.ok(position.left + position.width <= 794);
   assert.ok(position.top > 0);
@@ -225,6 +226,7 @@ test("context toolbar anchors to the full visible multi-selection bounds", () =>
   });
 
   assert.equal(position.left, 12 * 794 / 100);
+  assert.equal(position.width, 280);
   assert.equal(position.placement, "below");
   assert.ok(position.top >= (35 + 12) * 1123 / 100);
 });
@@ -234,4 +236,68 @@ test("context toolbar returns null when a multi-selection has no visible element
     { id: "hidden-a", visible: false },
     { id: "hidden-b", visible: false }
   ]), null);
+});
+
+
+const resizableSelection = [
+  { id: "title", x: 10, y: 10, w: 20, h: 8 },
+  { id: "logo", x: 40, y: 20, w: 10, h: 12 }
+];
+
+test("multi-resize scales every selected element together from the opposite corner", () => {
+  const patches = getInvoiceGroupResizePatches(resizableSelection, "se", 10, 8);
+  assert.equal(patches.length, 2);
+  assert.equal(patches[0].x, 10);
+  assert.equal(patches[0].y, 10);
+  assert.equal(patches[0].w, 25);
+  assert.ok(Math.abs(patches[0].h - (8 * 30 / 22)) < 0.000001);
+  assert.equal(patches[1].x, 47.5);
+  assert.ok(Math.abs(patches[1].y - (10 + 10 * 30 / 22)) < 0.000001);
+});
+
+test("multi-resize keeps opposite edges fixed and enforces minimum element sizes", () => {
+  const patches = getInvoiceGroupResizePatches(resizableSelection, "nw", 100, 100);
+  assert.equal(patches.length, 2);
+  assert.ok(Math.abs(Math.max(...patches.map(item => item.x + item.w)) - 50) < 0.000001);
+  assert.ok(Math.abs(Math.max(...patches.map(item => item.y + item.h)) - 32) < 0.000001);
+  assert.ok(patches.every(item => item.w >= 3 && item.h >= 2));
+});
+
+test("multi-resize keeps the selection within page bounds", () => {
+  const patches = getInvoiceGroupResizePatches(resizableSelection, "se", 100, 100);
+  assert.ok(patches.every(item => item.x >= 0 && item.y >= 0));
+  assert.ok(patches.every(item => item.x + item.w <= 100.000001));
+  assert.ok(patches.every(item => item.y + item.h <= 100.000001));
+});
+
+test("multi-resize ignores invalid handles and incomplete selections", () => {
+  assert.deepEqual(getInvoiceGroupResizePatches(resizableSelection.slice(0, 1), "se", 5, 5), []);
+  assert.deepEqual(getInvoiceGroupResizePatches(resizableSelection, "move", 5, 5), []);
+});
+
+test("group movement snaps the outer selection to nearby unselected elements", () => {
+  const selection = [
+    { id: "a", x: 10, y: 10, w: 12, h: 8 },
+    { id: "b", x: 25, y: 20, w: 5, h: 8 }
+  ];
+  const external = [...selection, { id: "target", x: 36, y: 10, w: 10, h: 10 }];
+  const snapped = getInvoiceGroupSnapMove(selection, external, 5, 0);
+  assert.equal(snapped.deltaX, 6);
+  assert.deepEqual(snapped.guides.vertical, [36]);
+  assert.deepEqual(snapped.guides.horizontal, [10]);
+});
+
+test("group snapping ignores selected, hidden and invalid external elements", () => {
+  const selection = [
+    { id: "a", x: 10, y: 10, w: 10, h: 10 },
+    { id: "b", x: 30, y: 30, w: 10, h: 10 }
+  ];
+  const snapped = getInvoiceGroupSnapMove(selection, [
+    ...selection,
+    { id: "hidden", x: 15, y: 15, w: 10, h: 10, visible: false },
+    { id: "invalid", x: "bad", y: 15, w: 10, h: 10 }
+  ], 0.5, 0.5);
+  assert.equal(snapped.deltaX, 0.5);
+  assert.equal(snapped.deltaY, 0.5);
+  assert.deepEqual(snapped.guides, { vertical: [], horizontal: [] });
 });

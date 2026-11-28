@@ -9,7 +9,7 @@ import {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics} from "../u
 import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
 import {buildInvoicePageNavigation} from "../utils/invoicePreviewNavigation.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
-import {getInvoiceBlockResizePatch,getInvoiceBlockAlignmentPatch,getInvoiceContextToolbarPosition,getInvoiceGroupAlignmentPatches,getInvoiceGroupDistributionPatches,getInvoiceGroupMovePatches,getInvoiceMarqueeSelection} from "../utils/invoiceBlockGeometry.js";
+import {getInvoiceBlockResizePatch,getInvoiceBlockAlignmentPatch,getInvoiceContextToolbarPosition,getInvoiceGroupAlignmentPatches,getInvoiceGroupDistributionPatches,getInvoiceGroupMovePatches,getInvoiceGroupResizePatches,getInvoiceGroupSnapMove,getInvoiceMarqueeSelection} from "../utils/invoiceBlockGeometry.js";
 import {getInvoiceCanvasScaleSettings} from "../utils/invoiceCanvasScale.js";
 import {canStartInvoiceBlockDrag,getInvoicePointerDragThreshold} from "../utils/invoiceCanvasInteraction.js";
 import {getInvoiceBlockGroupMemberIds,assignInvoiceBlockGroup,expandInvoiceBlockGroupSelection,moveInvoiceLayerStack,ungroupInvoiceBlocks} from "../utils/invoiceBlockGroups.js";
@@ -527,7 +527,16 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const selectedPersistentGroupSize=selectedPersistentGroupId
     ?activeTemplate.blocks.filter(block=>block.groupId===selectedPersistentGroupId).length
     :0;
-  const selectedArrangementCount=selectedPersistentGroupId?selectedPersistentGroupSize:selectedBlocks.length;
+  const selectedArrangementBlocks=selectedPersistentGroupId
+    ?activeTemplate.blocks.filter(block=>block.groupId===selectedPersistentGroupId)
+    :selectedBlocks;
+  const selectedArrangementCount=selectedArrangementBlocks.length;
+  const selectedArrangementBounds=selectedArrangementBlocks.length?{
+    left:Math.min(...selectedArrangementBlocks.map(block=>Number(block.x)||0)),
+    top:Math.min(...selectedArrangementBlocks.map(block=>Number(block.y)||0)),
+    right:Math.max(...selectedArrangementBlocks.map(block=>(Number(block.x)||0)+(Number(block.w)||0))),
+    bottom:Math.max(...selectedArrangementBlocks.map(block=>(Number(block.y)||0)+(Number(block.h)||0)))
+  }:null;
   const layerRows=[];
   const layerGroupRows=new Map();
   activeTemplate.blocks.slice().reverse().forEach(block=>{
@@ -747,6 +756,24 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setSelectedBlockIds(nextIds);
     setSelectedBlockId(nextIds.includes(selectedBlockId)?selectedBlockId:nextIds[nextIds.length-1]||"");
     setMessage("Ungrouped "+result.affectedIds.length+" elements. Their positions and appearance are unchanged.");
+  };
+  const moveSelectedBlocksTo=(axis,value)=>{
+    if(!selectedArrangementBounds||!["x","y"].includes(axis))return;
+    if(String(value).trim()==="")return;
+    const requested=Number(value);
+    if(!Number.isFinite(requested))return;
+    const currentStart=axis==="x"?selectedArrangementBounds.left:selectedArrangementBounds.top;
+    const currentEnd=axis==="x"?selectedArrangementBounds.right:selectedArrangementBounds.bottom;
+    const targetStart=clamp(requested,0,Math.max(0,100-(currentEnd-currentStart)));
+    const delta=targetStart-currentStart;
+    if(Math.abs(delta)<0.0001)return;
+    const patches=getInvoiceGroupMovePatches(selectedArrangementBlocks,axis==="x"?delta:0,axis==="y"?delta:0);
+    const byId=new Map(patches.map(patch=>[patch.id,patch]));
+    if(!byId.size)return;
+    updateActive({blocks:activeTemplate.blocks.map(block=>byId.has(block.id)
+      ?{...block,...byId.get(block.id)}
+      :block
+    )});
   };
   const renameSelectedGroup=value=>{
     if(!selectedPersistentGroupId)return;
@@ -1382,6 +1409,27 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setDragging(next);
     setAlignmentGuides({vertical:[],horizontal:[]});
   };
+  const startGroupResize=(event,blocks,handle="se")=>{
+    if(!Array.isArray(blocks)||blocks.length<2)return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    const groupBlocks=blocks.map(block=>({id:block.id,x:block.x,y:block.y,w:block.w,h:block.h}));
+    const next={
+      id:"",
+      mode:"group-resize",
+      handle,
+      groupBlocks,
+      startX:event.clientX,
+      startY:event.clientY,
+      pointerType:event.pointerType,
+      initialDesign:currentDesignRef.current,
+      didMove:false
+    };
+    draggingRef.current=next;
+    setDragging(next);
+    setAlignmentGuides({vertical:[],horizontal:[]});
+  };
   const finishBlockDrag=event=>{
     const marquee=marqueeRef.current;
     if(marquee&&(!event||event.pointerId===marquee.pointerId)){
@@ -1464,9 +1512,10 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const dx=(event.clientX-current.startX)/rect.width*100;
     const dy=(event.clientY-current.startY)/rect.height*100;
     if(current.mode==="group-move"){
-      const moveX=snapToGrid?Math.round(dx/2)*2:dx;
-      const moveY=snapToGrid?Math.round(dy/2)*2:dy;
-      const patches=getInvoiceGroupMovePatches(current.groupBlocks,moveX,moveY);
+      const snapped=snapToGrid
+        ?{deltaX:Math.round(dx/2)*2,deltaY:Math.round(dy/2)*2,guides:{vertical:[],horizontal:[]}}
+        :getInvoiceGroupSnapMove(current.groupBlocks,activeTemplate.blocks,dx,dy);
+      const patches=getInvoiceGroupMovePatches(current.groupBlocks,snapped.deltaX,snapped.deltaY);
       if(!patches.length)return;
       const byId=new Map(patches.map(item=>[item.id,item]));
       const changed=patches.some(item=>{
@@ -1480,8 +1529,27 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         draggingRef.current=next;
         setDragging(next);
       }
-      setAlignmentGuides({vertical:[],horizontal:[]});
+      setAlignmentGuides(snapped.guides);
       updateActive({blocks:activeTemplate.blocks.map(block=>byId.has(block.id)?{...block,x:byId.get(block.id).x,y:byId.get(block.id).y}:block)},{recordHistory:false});
+      return;
+    }
+    if(current.mode==="group-resize"){
+      const patches=getInvoiceGroupResizePatches(current.groupBlocks,current.handle,dx,dy);
+      if(!patches.length)return;
+      const byId=new Map(patches.map(item=>[item.id,item]));
+      const changed=patches.some(item=>{
+        const live=activeTemplate.blocks.find(block=>block.id===item.id);
+        return live&&["x","y","w","h"].some(key=>Math.abs(Number(live[key])-item[key])>0.01);
+      });
+      if(!changed)return;
+      if(!current.didMove){
+        pushHistory(current.initialDesign);
+        const next={...current,didMove:true};
+        draggingRef.current=next;
+        setDragging(next);
+      }
+      setAlignmentGuides({vertical:[],horizontal:[]});
+      updateActive({blocks:activeTemplate.blocks.map(block=>byId.has(block.id)?{...block,...byId.get(block.id)}:block)},{recordHistory:false});
       return;
     }
     let patch;
@@ -1531,14 +1599,14 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     :(activeTemplate.pageSize==="Letter"?0.773:0.707);
   const basePageWidth=activeTemplate.orientation==="landscape"?1123:794;
   const effectiveCanvasScale=canvasScale*canvasZoom;
-  const isMultiSelection=selectedBlockIds.length>1&&selectedBlocks.length>1;
+  const isMultiSelection=selectedArrangementBlocks.length>1&&selectedBlocks.length>0;
   const contextToolbarBlocks=isMultiSelection?selectedBlocks:(selectedBlock?[selectedBlock]:[]);
   const selectedContextToolbarPosition=contextToolbarBlocks.length&&!dragging&&!placingField
-    ?getInvoiceContextToolbarPosition(contextToolbarBlocks,{
+    ?getInvoiceContextToolbarPosition(isMultiSelection?selectedArrangementBlocks:contextToolbarBlocks,{
       pageWidth:basePageWidth,
       pageHeight:basePageWidth/canvasRatio,
       scale:effectiveCanvasScale,
-      toolbarWidth:isMultiSelection?280:252,
+      toolbarWidth:isMultiSelection?340:252,
       toolbarHeight:44
     })
     :null;
@@ -1906,6 +1974,28 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                         )}
                       </React.Fragment>
                     ))}
+                    {isMultiSelection&&selectedArrangementBounds&&(
+                      <div
+                        className="invoice-builder-resize-overlay invoice-builder-group-resize-overlay"
+                        style={{
+                          left:selectedArrangementBounds.left+"%",
+                          top:selectedArrangementBounds.top+"%",
+                          width:Math.max(0,selectedArrangementBounds.right-selectedArrangementBounds.left)+"%",
+                          height:Math.max(0,selectedArrangementBounds.bottom-selectedArrangementBounds.top)+"%"
+                        }}
+                        aria-label="Resize selected elements together"
+                      >
+                        {RESIZE_HANDLES.map(handle=>(
+                          <span
+                            key={handle}
+                            className={"invoice-builder-resize-handle handle-"+handle}
+                            data-resize-handle={handle}
+                            aria-hidden="true"
+                            onPointerDown={event=>startGroupResize(event,selectedArrangementBlocks,handle)}
+                          />
+                        ))}
+                      </div>
+                    )}
                     {isMultiSelection&&selectedContextToolbarPosition&&!dragging&&!placingField&&(
                       <div
                         className={"invoice-builder-context-toolbar invoice-builder-context-multi-toolbar is-"+selectedContextToolbarPosition.placement}
@@ -1919,6 +2009,22 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                         }}
                         onPointerDown={event=>event.stopPropagation()}
                       >
+                        <details className="invoice-builder-context-position">
+                          <summary title="Set the position of all selected elements" aria-label="Set the position of all selected elements">
+                            <i className="bi bi-crosshair" aria-hidden="true"/> <span>Position</span> <i className="bi bi-chevron-down" aria-hidden="true"/>
+                          </summary>
+                          <div className="invoice-builder-context-position-menu">
+                            <label>
+                              <span>Left edge (%)</span>
+                              <input key={"left-"+selectedArrangementBounds.left.toFixed(1)+"-"+selectedArrangementBlocks.map(block=>block.id).join(":")} type="number" min="0" max={Math.max(0,100-(selectedArrangementBounds.right-selectedArrangementBounds.left))} step="0.1" defaultValue={selectedArrangementBounds.left.toFixed(1)} onBlur={event=>moveSelectedBlocksTo("x",event.target.value)} onKeyDown={event=>{if(event.key==="Enter")event.currentTarget.blur();}}/>
+                            </label>
+                            <label>
+                              <span>Top edge (%)</span>
+                              <input key={"top-"+selectedArrangementBounds.top.toFixed(1)+"-"+selectedArrangementBlocks.map(block=>block.id).join(":")} type="number" min="0" max={Math.max(0,100-(selectedArrangementBounds.bottom-selectedArrangementBounds.top))} step="0.1" defaultValue={selectedArrangementBounds.top.toFixed(1)} onBlur={event=>moveSelectedBlocksTo("y",event.target.value)} onKeyDown={event=>{if(event.key==="Enter")event.currentTarget.blur();}}/>
+                            </label>
+                            <small>All selected elements move together. Press Enter or tap away to apply.</small>
+                          </div>
+                        </details>
                         <details className="invoice-builder-context-align">
                           <summary title="Arrange selected elements" aria-label="Arrange selected elements">
                             <i className="bi bi-grid-3x3-gap" aria-hidden="true"/> <span>Arrange</span> <i className="bi bi-chevron-down" aria-hidden="true"/>

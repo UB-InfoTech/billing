@@ -1100,7 +1100,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     }
     event.preventDefault();
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    const isGroupMove=selectedBlockIds.length>1&&selectedBlockIds.includes(block.id);
+    const isGroupMove=selectedBlocks.length>1&&selectedBlocks.some(item=>item.id===block.id);
     if(isGroupMove)setSelectedBlockId(block.id);
     else selectSingleBlock(block.id);
     const groupBlocks=isGroupMove?selectedBlocks.map(item=>({id:item.id,x:item.x,y:item.y,w:item.w,h:item.h})):[];

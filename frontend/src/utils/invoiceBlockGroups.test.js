@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   getInvoiceBlockGroupMemberIds,
   assignInvoiceBlockGroup,
+  expandInvoiceBlockGroupSelection,
   ungroupInvoiceBlocks
 } from "./invoiceBlockGroups.js";
 
@@ -51,4 +52,23 @@ test("ungrouping an ordinary element leaves the design unchanged", () => {
   const result = ungroupInvoiceBlocks(baseBlocks, ["logo"]);
   assert.equal(result.blocks, baseBlocks);
   assert.deepEqual(result.affectedIds, []);
+});
+
+
+test("selection expands to include every member of any saved group it touches", () => {
+  const firstGroup = assignInvoiceBlockGroup(baseBlocks, ["name", "address", "hidden"], "group-1", "Header");
+  const secondGroup = assignInvoiceBlockGroup(firstGroup, ["logo"], "group-2", "Brand");
+  assert.deepEqual(
+    expandInvoiceBlockGroupSelection(secondGroup, ["name"]),
+    ["name", "address", "hidden"]
+  );
+  assert.deepEqual(
+    expandInvoiceBlockGroupSelection(secondGroup, ["logo", "address"]),
+    ["name", "address", "logo", "hidden"]
+  );
+});
+
+test("selection expansion preserves ordinary selections and ignores invalid ids", () => {
+  assert.deepEqual(expandInvoiceBlockGroupSelection(baseBlocks, ["logo", "missing"]), ["logo"]);
+  assert.deepEqual(expandInvoiceBlockGroupSelection(baseBlocks, []), []);
 });

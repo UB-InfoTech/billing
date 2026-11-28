@@ -368,6 +368,61 @@ test("rendered invoice measurements identify each cell's estimated and actual wr
 });
 
 
+ 
+test("continuation pages keep item-column proportions, fonts and cell spacing consistent",()=>{
+  const makeTable=(id,options={})=>({
+    id,type:"items_table",
+    headerCells:[
+      {label:"Description",widthPx:options.widths?.[0]??120,fontSizePx:options.headerSize??9,fontFamily:options.headerFamily??"Arial",fontWeight:options.headerWeight??"700",textAlign:"center"},
+      {label:"Amount",widthPx:options.widths?.[1]??80,fontSizePx:options.headerSize??9,fontFamily:options.headerFamily??"Arial",fontWeight:options.headerWeight??"700",textAlign:"center"}
+    ],
+    rows:[{
+      itemNumber:options.itemNumber??1,
+      autoFitted:options.autoFitted??false,
+      cells:[
+        {columnKey:"description",columnLabel:"Description",fontSizePx:options.bodySize??9,fontFamily:options.bodyFamily??"Arial",fontWeight:options.bodyWeight??"400",paddingLeftPx:options.padding??4,paddingRightPx:options.padding??4,paddingTopPx:options.padding??4,paddingBottomPx:options.padding??4,hasContent:true,textAlign:"left",verticalAlign:"middle"},
+        {columnKey:"amount",columnLabel:"Amount",fontSizePx:options.bodySize??9,fontFamily:options.bodyFamily??"Arial",fontWeight:options.bodyWeight??"400",paddingLeftPx:options.padding??4,paddingRightPx:options.padding??4,paddingTopPx:options.padding??4,paddingBottomPx:options.padding??4,hasContent:true,textAlign:"right",verticalAlign:"middle"}
+      ]
+    }]
+  });
+  const audit=analyzeRenderedInvoiceMetrics({
+    pages:[
+      {pageNumber:1,width:793.7,height:1122.5,blocks:[makeTable("items-page-1")]},
+      {pageNumber:2,width:793.7,height:1122.5,blocks:[makeTable("items-page-2",{itemNumber:2,widths:[100,100],headerSize:11,bodySize:11,headerFamily:"Georgia",bodyFamily:"Georgia",headerWeight:"600",bodyWeight:"500",padding:7})]}
+    ]
+  });
+  assert.ok(audit.warnings.some(issue=>issue.id==="continuation-column-width-mismatch-2-items-page-2"));
+  const typography=audit.warnings.find(issue=>issue.id==="continuation-table-typography-mismatch-2-items-page-2");
+  assert.ok(typography);
+  assert.ok(typography.differences.includes("heading font family"));
+  assert.ok(typography.differences.includes("item text size"));
+  assert.ok(audit.warnings.some(issue=>issue.id==="continuation-table-spacing-mismatch-2-items-page-2"));
+  assert.equal(audit.hasErrors,false,"cross-page style differences are review warnings");
+});
+
+test("continuation table comparison ignores legitimate font fitting on unusually long rows",()=>{
+  const makeTable=(id,rows)=>({
+    id,type:"items_table",
+    headerCells:[
+      {label:"Description",widthPx:120,fontSizePx:9,fontFamily:"Arial",fontWeight:"700",textAlign:"center"},
+      {label:"Amount",widthPx:80,fontSizePx:9,fontFamily:"Arial",fontWeight:"700",textAlign:"center"}
+    ],
+    rows
+  });
+  const makeCells=(fontSize)=>[
+    {columnKey:"description",columnLabel:"Description",fontSizePx:fontSize,fontFamily:"Arial",fontWeight:"400",paddingLeftPx:4,paddingRightPx:4,paddingTopPx:4,paddingBottomPx:4,hasContent:true,textAlign:"left",verticalAlign:"middle"},
+    {columnKey:"amount",columnLabel:"Amount",fontSizePx:fontSize,fontFamily:"Arial",fontWeight:"400",paddingLeftPx:4,paddingRightPx:4,paddingTopPx:4,paddingBottomPx:4,hasContent:true,textAlign:"right",verticalAlign:"middle"}
+  ];
+  const audit=analyzeRenderedInvoiceMetrics({
+    pages:[
+      {pageNumber:1,width:793.7,height:1122.5,blocks:[makeTable("items-page-1",[{itemNumber:1,autoFitted:false,cells:makeCells(9)}])]},
+      {pageNumber:2,width:793.7,height:1122.5,blocks:[makeTable("items-page-2",[{itemNumber:2,autoFitted:true,cells:makeCells(6)}])]}
+    ]
+  });
+  assert.equal(audit.warnings.some(issue=>issue.id==="continuation-table-typography-mismatch-2-items-page-2"),false);
+  assert.equal(audit.warnings.some(issue=>issue.id==="continuation-table-spacing-mismatch-2-items-page-2"),false);
+});
+
 test("actual print audit flags inconsistent item-column alignment and misplaced numeric values",()=>{
   const audit=analyzeRenderedInvoiceMetrics({
     pages:[{pageNumber:1,width:793.7,height:1122.5,blocks:[{

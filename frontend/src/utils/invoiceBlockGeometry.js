@@ -375,7 +375,7 @@ function getInvoiceContextToolbarPosition(blockOrBlocks, options = {}) {
   return {
     left,
     top,
-    width: localWidth,
+    width: visibleWidth,
     scale: 1 / canvasScale,
     placement
   };

@@ -10,7 +10,7 @@ import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
 import {buildInvoicePageNavigation} from "../utils/invoicePreviewNavigation.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
 import {getInvoiceBlockResizePatch,getInvoiceBlockAlignmentPatch,getInvoiceGroupAlignmentPatches,getInvoiceGroupDistributionPatches,getInvoiceGroupMovePatches,getInvoiceMarqueeSelection} from "../utils/invoiceBlockGeometry.js";
-import {getInvoiceBlockGroupMemberIds,assignInvoiceBlockGroup,ungroupInvoiceBlocks} from "../utils/invoiceBlockGroups.js";
+import {getInvoiceBlockGroupMemberIds,assignInvoiceBlockGroup,expandInvoiceBlockGroupSelection,ungroupInvoiceBlocks} from "../utils/invoiceBlockGroups.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
@@ -482,8 +482,11 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setSelectedBlockId(blockId);
     setSelectedBlockIds(blockId?[blockId]:[]);
   };
-  const selectedPersistentGroupId=selectedBlocks.length>0&&selectedBlocks.every(block=>block.groupId&&block.groupId===selectedBlocks[0].groupId)
-    ?selectedBlocks[0].groupId
+  const selectedGroupCandidate=selectedBlocks[0]?.groupId||"";
+  const selectedPersistentGroupId=Boolean(selectedGroupCandidate)&&selectedBlockIds.length>0
+    &&selectedBlockIds.every(id=>activeTemplate.blocks.find(block=>block.id===id)?.groupId===selectedGroupCandidate)
+    &&selectedBlocks.every(block=>block.groupId===selectedGroupCandidate)
+    ?selectedGroupCandidate
     :"";
   const selectedPersistentGroupName=selectedPersistentGroupId
     ?(activeTemplate.blocks.find(block=>block.groupId===selectedPersistentGroupId)?.groupName||"Saved group")
@@ -646,7 +649,9 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       event.preventDefault();
       const step=snapToGrid?2:(event.shiftKey?1:0.25);
       if(selectedBlockIds.length>1){
-        const group=activeTemplate.blocks.filter(item=>selectedBlockIds.includes(item.id)&&item.visible!==false);
+        const group=selectedPersistentGroupId
+          ?activeTemplate.blocks.filter(item=>item.groupId===selectedPersistentGroupId)
+          :activeTemplate.blocks.filter(item=>selectedBlockIds.includes(item.id));
         const dx=key==="arrowleft"?-step:key==="arrowright"?step:0;
         const dy=key==="arrowup"?-step:key==="arrowdown"?step:0;
         const patches=getInvoiceGroupMovePatches(group,dx,dy);
@@ -667,7 +672,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     };
     window.addEventListener("keydown",handleShortcut);
     return ()=>window.removeEventListener("keydown",handleShortcut);
-  },[history,selectedBlockId,selectedBlockIds,activeTemplate,snapToGrid]);
+  },[history,selectedBlockId,selectedBlockIds,selectedPersistentGroupId,activeTemplate,snapToGrid]);
   const updateActive=(patch,options={})=>{
     updateDesign({...localDesign,templates:localDesign.templates.map(template=>template.id===activeTemplate.id?{...template,...patch}:template)},options);
   };
@@ -679,12 +684,13 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const existingGroupCount=new Set(activeTemplate.blocks.map(block=>block.groupId).filter(Boolean)).size;
     const groupId=createId("invoice-group");
     const groupName="Group "+(existingGroupCount+1);
-    const blocks=assignInvoiceBlockGroup(activeTemplate.blocks,selectedBlocks.map(block=>block.id),groupId,groupName);
+    const memberIds=expandInvoiceBlockGroupSelection(activeTemplate.blocks,selectedBlockIds);
+    const blocks=assignInvoiceBlockGroup(activeTemplate.blocks,memberIds,groupId,groupName);
     if(blocks===activeTemplate.blocks)return;
     updateActive({blocks});
-    setSelectedBlockIds(selectedBlocks.map(block=>block.id));
+    setSelectedBlockIds(memberIds);
     setSelectedBlockId(selectedBlocks[selectedBlocks.length-1].id);
-    setMessage(groupName+" saved with "+selectedBlocks.length+" elements. They will stay together when you reopen this design.");
+    setMessage(groupName+" saved with "+memberIds.length+" elements. They will stay together when you reopen this design.");
   };
   const ungroupSelectedBlocks=()=>{
     const result=ungroupInvoiceBlocks(activeTemplate.blocks,selectedBlockIds);
@@ -722,7 +728,10 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     if(patch)updateBlock(selectedBlock.id,patch);
   };
   const alignSelectedBlocks=alignment=>{
-    const patches=getInvoiceGroupAlignmentPatches(selectedBlocks,alignment);
+    const blocksToArrange=selectedPersistentGroupId
+      ?activeTemplate.blocks.filter(block=>block.groupId===selectedPersistentGroupId)
+      :selectedBlocks;
+    const patches=getInvoiceGroupAlignmentPatches(blocksToArrange,alignment);
     const changed=patches.filter(patch=>{
       const current=activeTemplate.blocks.find(block=>block.id===patch.id);
       return current&&Object.entries(patch).some(([key,value])=>key!=="id"&&Math.abs(Number(current[key])-value)>0.001);
@@ -736,7 +745,10 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     setMessage("Aligned "+changed.length+" selected elements. Use Undo to restore their previous positions.");
   };
   const distributeSelectedBlocks=axis=>{
-    const patches=getInvoiceGroupDistributionPatches(selectedBlocks,axis);
+    const blocksToArrange=selectedPersistentGroupId
+      ?activeTemplate.blocks.filter(block=>block.groupId===selectedPersistentGroupId)
+      :selectedBlocks;
+    const patches=getInvoiceGroupDistributionPatches(blocksToArrange,axis);
     if(!patches.length){
       setMessage("Select at least three elements with enough space between them to distribute evenly.");
       return;
@@ -1279,9 +1291,13 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         w:Math.abs(currentX-marquee.startX),
         h:Math.abs(currentY-marquee.startY)
       };
-      const hitIds=didMove?getInvoiceMarqueeSelection(activeTemplate.blocks,selectionArea):[];
       const visibleIds=new Set(activeTemplate.blocks.filter(block=>block.visible!==false).map(block=>block.id));
-      const retainedIds=marquee.additive?selectedBlockIds.filter(id=>visibleIds.has(id)):[];
+      const hitIds=didMove
+        ?expandInvoiceBlockGroupSelection(activeTemplate.blocks,getInvoiceMarqueeSelection(activeTemplate.blocks,selectionArea))
+        :[];
+      const retainedIds=marquee.additive
+        ?expandInvoiceBlockGroupSelection(activeTemplate.blocks,selectedBlockIds.filter(id=>visibleIds.has(id)))
+        :[];
       const nextIds=[...new Set([...retainedIds,...hitIds])];
       setSelectedBlockIds(nextIds);
       setSelectedBlockId(
@@ -1827,7 +1843,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   {selectedPersistentGroupId?(
                     <>
                       <strong>Saved group name</strong>
-                      <input key={selectedPersistentGroupId} className="form-control form-control-sm" aria-label="Saved group name" defaultValue={selectedPersistentGroupName} maxLength={40} onBlur={event=>renameSelectedGroup(event.target.value)}/>
+                      <input key={selectedPersistentGroupId+"-"+selectedPersistentGroupName} className="form-control form-control-sm" aria-label="Saved group name" defaultValue={selectedPersistentGroupName} maxLength={40} onKeyDown={event=>{if(event.key==="Enter")event.currentTarget.blur();}} onBlur={event=>{if(!event.target.value.trim())event.target.value=selectedPersistentGroupName;else renameSelectedGroup(event.target.value);}}/>
                       <small>{selectedPersistentGroupSize} element(s) stay together, including hidden members.</small>
                       <div className="invoice-builder-saved-group-buttons">
                         <button type="button" className="btn btn-sm btn-outline-danger" onClick={ungroupSelectedBlocks}>Ungroup</button>

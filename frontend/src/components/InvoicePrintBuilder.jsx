@@ -1598,7 +1598,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     :(activeTemplate.pageSize==="Letter"?0.773:0.707);
   const basePageWidth=activeTemplate.orientation==="landscape"?1123:794;
   const effectiveCanvasScale=canvasScale*canvasZoom;
-  const isMultiSelection=selectedBlockIds.length>1&&selectedBlocks.length>1;
+  const isMultiSelection=selectedArrangementBlocks.length>1&&selectedBlocks.length>0;
   const contextToolbarBlocks=isMultiSelection?selectedBlocks:(selectedBlock?[selectedBlock]:[]);
   const selectedContextToolbarPosition=contextToolbarBlocks.length&&!dragging&&!placingField
     ?getInvoiceContextToolbarPosition(isMultiSelection?selectedArrangementBlocks:contextToolbarBlocks,{
@@ -1989,9 +1989,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                             key={handle}
                             className={"invoice-builder-resize-handle handle-"+handle}
                             data-resize-handle={handle}
-                            role="button"
-                            tabIndex={0}
-                            aria-label={"Resize selection from "+handle}
+                            aria-hidden="true"
                             onPointerDown={event=>startGroupResize(event,selectedArrangementBlocks,handle)}
                           />
                         ))}
@@ -2017,13 +2015,13 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                           <div className="invoice-builder-context-position-menu">
                             <label>
                               <span>Left edge (%)</span>
-                              <input type="number" min="0" max={Math.max(0,100-(selectedArrangementBounds.right-selectedArrangementBounds.left))} step="0.1" value={selectedArrangementBounds.left.toFixed(1)} onChange={event=>moveSelectedBlocksTo("x",event.target.value)}/>
+                              <input key={"left-"+selectedArrangementBounds.left.toFixed(1)+"-"+selectedArrangementBlocks.map(block=>block.id).join(":")} type="number" min="0" max={Math.max(0,100-(selectedArrangementBounds.right-selectedArrangementBounds.left))} step="0.1" defaultValue={selectedArrangementBounds.left.toFixed(1)} onBlur={event=>moveSelectedBlocksTo("x",event.target.value)} onKeyDown={event=>{if(event.key==="Enter")event.currentTarget.blur();}}/>
                             </label>
                             <label>
                               <span>Top edge (%)</span>
-                              <input type="number" min="0" max={Math.max(0,100-(selectedArrangementBounds.bottom-selectedArrangementBounds.top))} step="0.1" value={selectedArrangementBounds.top.toFixed(1)} onChange={event=>moveSelectedBlocksTo("y",event.target.value)}/>
+                              <input key={"top-"+selectedArrangementBounds.top.toFixed(1)+"-"+selectedArrangementBlocks.map(block=>block.id).join(":")} type="number" min="0" max={Math.max(0,100-(selectedArrangementBounds.bottom-selectedArrangementBounds.top))} step="0.1" defaultValue={selectedArrangementBounds.top.toFixed(1)} onBlur={event=>moveSelectedBlocksTo("y",event.target.value)} onKeyDown={event=>{if(event.key==="Enter")event.currentTarget.blur();}}/>
                             </label>
-                            <small>All selected elements move together. Their spacing stays the same.</small>
+                            <small>All selected elements move together. Press Enter or tap away to apply.</small>
                           </div>
                         </details>
                         <details className="invoice-builder-context-align">

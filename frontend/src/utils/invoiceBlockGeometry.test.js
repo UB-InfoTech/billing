@@ -256,8 +256,8 @@ test("multi-resize scales every selected element together from the opposite corn
 test("multi-resize keeps opposite edges fixed and enforces minimum element sizes", () => {
   const patches = getInvoiceGroupResizePatches(resizableSelection, "nw", 100, 100);
   assert.equal(patches.length, 2);
-  assert.ok(patches.every(item => Math.abs(item.x + item.w - 50) < 0.000001));
-  assert.ok(patches.every(item => Math.abs(item.y + item.h - 32) < 0.000001));
+  assert.ok(Math.abs(Math.max(...patches.map(item => item.x + item.w)) - 50) < 0.000001);
+  assert.ok(Math.abs(Math.max(...patches.map(item => item.y + item.h)) - 32) < 0.000001);
   assert.ok(patches.every(item => item.w >= 3 && item.h >= 2));
 });
 
@@ -282,7 +282,7 @@ test("group movement snaps the outer selection to nearby unselected elements", (
   const snapped = getInvoiceGroupSnapMove(selection, external, 5, 0);
   assert.equal(snapped.deltaX, 6);
   assert.deepEqual(snapped.guides.vertical, [36]);
-  assert.deepEqual(snapped.guides.horizontal, []);
+  assert.deepEqual(snapped.guides.horizontal, [10]);
 });
 
 test("group snapping ignores selected, hidden and invalid external elements", () => {

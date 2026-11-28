@@ -1711,7 +1711,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                       <span><strong>{group.title}</strong><small>{group.items.length} fields</small></span>
                       <i className={"bi "+(isExpanded?"bi-chevron-up":"bi-chevron-down")}/>
                     </button>
-                    {isExpanded&&<div className="invoice-builder-palette" id={groupId}>
+                    <div className="invoice-builder-palette" id={groupId} hidden={!isExpanded}>
                       {group.items.map(([key,label])=>(
                         <button type="button" key={key} draggable onDragStart={event=>{event.dataTransfer.setData("application/x-invoice-field",key);event.dataTransfer.effectAllowed="copy";}} onClick={()=>addPaletteField(key)}>
                           <span><i className={"bi "+(FIELD_ICONS[key]||"bi-plus-square")}></i></span>
@@ -1719,7 +1719,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                           <i className="bi bi-plus"/>
                         </button>
                       ))}
-                    </div>}
+                    </div>
                   </section>
                 );
               })}

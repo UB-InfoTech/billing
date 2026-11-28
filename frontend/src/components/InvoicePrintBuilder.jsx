@@ -30,6 +30,13 @@ const FIELD_GROUPS=[
   ]}
 ];
 const FIELD_LABELS=Object.fromEntries(FIELD_GROUPS.flatMap(group=>group.items));
+const FIELD_ICONS={
+  company_name:"bi-building",company_address:"bi-geo-alt",company_gstin:"bi-shield-check",company_phone:"bi-telephone",company_email:"bi-envelope",logo:"bi-image",
+  customer_name:"bi-person",customer_address:"bi-geo-alt",customer_phone:"bi-telephone",customer_gstin:"bi-shield-check",customer_state:"bi-geo",
+  invoice_title:"bi-file-earmark-text",invoice_no:"bi-hash",invoice_date:"bi-calendar3",due_date:"bi-calendar-check",challan_no:"bi-file-earmark",payment_terms:"bi-clock",eway_bill:"bi-truck",
+  subtotal:"bi-calculator",discount:"bi-tag",taxable_value:"bi-cash-coin",cgst:"bi-percent",sgst:"bi-percent",igst:"bi-percent",round_off:"bi-arrow-left-right",grand_total:"bi-wallet2",
+  amount_paid:"bi-check-circle",balance_due:"bi-hourglass-split",amount_words:"bi-card-text",bank_details:"bi-bank",terms:"bi-list-check",signature:"bi-pen"
+};
 const DEFAULT_ITEM_COLUMNS=[
   {key:"sr",label:"#",width:5,order:0,visible:true},
   {key:"description",label:"Description",width:24,order:1,visible:true},
@@ -240,6 +247,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [ocrView,setOcrView]=useState("suggested");
   const [highlightedOcrLineId,setHighlightedOcrLineId]=useState("");
   const [fieldSearch,setFieldSearch]=useState("");
+  const [expandedFieldGroups,setExpandedFieldGroups]=useState(["Business details","Customer details"]);
   const [showTemplateLibrary,setShowTemplateLibrary]=useState(false);
   const [templateSearch,setTemplateSearch]=useState("");
   const [templateCategory,setTemplateCategory]=useState("All industries");
@@ -1683,31 +1691,57 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
             <button type="button" className={mobilePanel==="settings"?"is-active":""} aria-pressed={mobilePanel==="settings"} onClick={()=>setMobilePanel("settings")}><i className="bi bi-sliders me-1"/>Edit</button>
           </nav>
           <aside className="invoice-builder-sidebar invoice-builder-fields">
-            <div className="invoice-builder-panel-heading"><strong>Add to invoice</strong><small>Drag a field onto the page or tap to add it</small></div>
-            <div className="invoice-builder-field-search"><i className="bi bi-search"/><input type="search" className="form-control form-control-sm" value={fieldSearch} onChange={event=>setFieldSearch(event.target.value)} placeholder="Find an invoice field…" aria-label="Find an invoice field"/>{fieldSearch&&<button type="button" onClick={()=>setFieldSearch("")} aria-label="Clear field search"><i className="bi bi-x-lg"/></button>}</div>
-            {filteredFieldGroups.map(group=>(
-              <section className="invoice-builder-field-group" key={group.title}>
-                <h3>{group.title}</h3>
-                <div className="invoice-builder-palette">
-                  {group.items.map(([key,label])=>(
-                    <button type="button" key={key} draggable onDragStart={event=>{event.dataTransfer.setData("application/x-invoice-field",key);event.dataTransfer.effectAllowed="copy";}} onClick={()=>addPaletteField(key)}>
-                      <span><i className={"bi "+(key==="logo"?"bi-image":key==="items"?"bi-table":"bi-plus-square")}></i></span>{label}<i className="bi bi-plus"/>
-                    </button>
-                  ))}
-                </div>
-              </section>
-            ))}
-            {!filteredFieldGroups.length&&<div className="invoice-builder-field-no-results">No fields match “{fieldSearch}”. Try another name.</div>}
-            <div className="invoice-builder-extra-tools">
-              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("items_table","items")}> <i className="bi bi-table me-1"/>Item table</button>
-              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("blank_table","")}> <i className="bi bi-grid-3x3 me-1"/>Blank table</button>
-              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("totals","totals")}> <i className="bi bi-calculator me-1"/>Totals</button>
-              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("text","")}> <i className="bi bi-fonts me-1"/>Text</button>
-              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("divider","")}> <i className="bi bi-dash-lg me-1"/>Divider</button>
-              <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("shape","",{x:8,y:40},{w:34,h:7})}> <i className="bi bi-square me-1"/>Accent box</button>
-              <button type="button" className="btn btn-sm btn-light border" onClick={()=>elementImageRef.current?.click()}> <i className="bi bi-image me-1"/>Image</button>
-              <input ref={elementImageRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={event=>handleElementImageUpload(event.target.files?.[0])}/>
+            <div className="invoice-builder-panel-heading">
+              <strong>Add to invoice</strong>
+              <small>Tap any item to add it. On a computer, you can also drag it onto the page.</small>
             </div>
+            <div className="invoice-builder-field-search">
+              <i className="bi bi-search"/>
+              <input type="search" className="form-control form-control-sm" value={fieldSearch} onChange={event=>setFieldSearch(event.target.value)} placeholder="Search invoice details…" aria-label="Search invoice details"/>
+              {fieldSearch&&<button type="button" onClick={()=>setFieldSearch("")} aria-label="Clear search"><i className="bi bi-x-lg"/></button>}
+            </div>
+            <div className="invoice-builder-field-groups">
+              {filteredFieldGroups.map(group=>{
+                const isExpanded=Boolean(fieldSearch.trim())||expandedFieldGroups.includes(group.title);
+                const groupId="invoice-field-group-"+group.title.toLowerCase().replace(/[^a-z0-9]+/g,"-");
+                return (
+                  <section className={"invoice-builder-field-group"+(isExpanded?" is-expanded":"")} key={group.title}>
+                    <button type="button" className="invoice-builder-field-group-toggle" aria-expanded={isExpanded} aria-controls={groupId} onClick={()=>setExpandedFieldGroups(current=>current.includes(group.title)?current.filter(title=>title!==group.title):[...current,group.title])}>
+                      <span><strong>{group.title}</strong><small>{group.items.length} fields</small></span>
+                      <i className={"bi "+(isExpanded?"bi-chevron-up":"bi-chevron-down")}/>
+                    </button>
+                    {isExpanded&&<div className="invoice-builder-palette" id={groupId}>
+                      {group.items.map(([key,label])=>(
+                        <button type="button" key={key} draggable onDragStart={event=>{event.dataTransfer.setData("application/x-invoice-field",key);event.dataTransfer.effectAllowed="copy";}} onClick={()=>addPaletteField(key)}>
+                          <span><i className={"bi "+(FIELD_ICONS[key]||"bi-plus-square")}></i></span>
+                          <span className="invoice-builder-field-label">{label}</span>
+                          <i className="bi bi-plus"/>
+                        </button>
+                      ))}
+                    </div>}
+                  </section>
+                );
+              })}
+            </div>
+            {!filteredFieldGroups.length&&<div className="invoice-builder-field-no-results">No invoice details match “{fieldSearch}”. Try a shorter search.</div>}
+            <section className="invoice-builder-quick-add">
+              <div><strong>Common invoice sections</strong><small>Add these as a single element</small></div>
+              <div>
+                <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("items_table","items")}><i className="bi bi-table me-1"/>Item table</button>
+                <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("totals","totals")}><i className="bi bi-calculator me-1"/>Totals</button>
+              </div>
+            </section>
+            <details className="invoice-builder-more-elements">
+              <summary><span>More elements</span><small>Blank table, text, image and shapes</small></summary>
+              <div className="invoice-builder-extra-tools">
+                <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("blank_table","")}><i className="bi bi-grid-3x3 me-1"/>Blank table</button>
+                <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("text","")}><i className="bi bi-fonts me-1"/>Text</button>
+                <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("divider","")}><i className="bi bi-dash-lg me-1"/>Divider</button>
+                <button type="button" className="btn btn-sm btn-light border" onClick={()=>addBlock("shape","",{x:8,y:40},{w:34,h:7})}><i className="bi bi-square me-1"/>Accent box</button>
+                <button type="button" className="btn btn-sm btn-light border" onClick={()=>elementImageRef.current?.click()}><i className="bi bi-image me-1"/>Image</button>
+                <input ref={elementImageRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={event=>handleElementImageUpload(event.target.files?.[0])}/>
+              </div>
+            </details>
           </aside>
 
           <main className="invoice-builder-center">
@@ -1719,17 +1753,21 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 </select>
                 <button type="button" className="btn btn-sm btn-light border" onClick={undo} disabled={!history.past.length} title="Undo (Ctrl+Z)"><i className="bi bi-arrow-counterclockwise me-1"/>Undo</button>
                 <button type="button" className="btn btn-sm btn-light border" onClick={redo} disabled={!history.future.length} title="Redo (Ctrl+Y)"><i className="bi bi-arrow-clockwise me-1"/>Redo</button>
-                <button type="button" className="btn btn-sm btn-light border" onClick={duplicateTemplate} disabled={localDesign.templates.length>=12} title="Duplicate this design"><i className="bi bi-copy"/></button>
-                <button type="button" className="btn btn-sm btn-light border" onClick={deleteActiveTemplate} title="Delete this design"><i className="bi bi-trash"/></button>
+
               </div>
               <div className="invoice-builder-toolbar-actions">
                 <button type="button" className="btn btn-sm btn-light border" onClick={openTemplateLibrary}><i className="bi bi-grid me-1"/>Templates</button>
-                <label className="btn btn-sm btn-light border mb-0" htmlFor="invoice-html-import"><i className="bi bi-code-slash me-1"/>{htmlImporting?"Reading HTML…":"Import HTML"}</label>
-                <input ref={htmlImportRef} id="invoice-html-import" type="file" accept=".html,.htm,text/html" hidden onChange={event=>handleHtmlUpload(event.target.files?.[0])}/>
-                <label className="btn btn-sm btn-light border mb-0" htmlFor="invoice-design-import"><i className="bi bi-upload me-1"/>{uploading?"Importing…":"Import PDF / image"}</label>
-                <input ref={importRef} id="invoice-design-import" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" hidden onChange={event=>handleUpload(event.target.files?.[0])}/>
-                <button type="button" className="btn btn-sm btn-light border" onClick={createBlankDesign}><i className="bi bi-plus-lg me-1"/>New blank</button>
-                <button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>updateDesign({...localDesign,enabled:!localDesign.enabled})}>{localDesign.enabled?"Using custom design":"Use this design"}</button>
+                <details className="invoice-builder-more-menu">
+                  <summary><i className="bi bi-three-dots me-1"/>More tools</summary>
+                  <div className="invoice-builder-more-menu-panel">
+                    <label className="invoice-builder-more-menu-item" htmlFor="invoice-html-import"><i className="bi bi-code-slash"/><span>{htmlImporting?"Reading HTML…":"Import HTML design"}</span></label>
+                    <input ref={htmlImportRef} id="invoice-html-import" type="file" accept=".html,.htm,text/html" hidden onChange={event=>handleHtmlUpload(event.target.files?.[0])}/>
+                    <label className="invoice-builder-more-menu-item" htmlFor="invoice-design-import"><i className="bi bi-file-earmark-pdf"/><span>{uploading?"Importing…":"Import PDF or image"}</span></label>
+                    <input ref={importRef} id="invoice-design-import" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp" hidden onChange={event=>handleUpload(event.target.files?.[0])}/>
+                    <button type="button" className="invoice-builder-more-menu-item" onClick={event=>{event.currentTarget.closest("details")?.removeAttribute("open");createBlankDesign();}}><i className="bi bi-file-earmark-plus"/><span>Start a blank design</span></button>
+                    <button type="button" className="invoice-builder-more-menu-item" onClick={event=>{event.currentTarget.closest("details")?.removeAttribute("open");updateDesign({...localDesign,enabled:!localDesign.enabled});}}><i className="bi bi-check2-circle"/><span>{localDesign.enabled?"Stop using this design":"Use this design"}</span></button>
+                  </div>
+                </details>
               </div>
             </div>
 

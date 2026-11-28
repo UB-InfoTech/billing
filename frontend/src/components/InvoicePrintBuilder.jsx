@@ -9,7 +9,7 @@ import {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics} from "../u
 import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
 import {buildInvoicePageNavigation} from "../utils/invoicePreviewNavigation.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
-import {getInvoiceBlockResizePatch} from "../utils/invoiceBlockGeometry.js";
+import {getInvoiceBlockResizePatch,getInvoiceBlockAlignmentPatch} from "../utils/invoiceBlockGeometry.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
@@ -587,6 +587,10 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   };
   const updateBlock=(blockId,patch,options={})=>{
     updateActive({blocks:activeTemplate.blocks.map(block=>block.id===blockId?{...block,...patch}:block)},options);
+  };
+  const alignSelectedBlock=alignment=>{
+    const patch=getInvoiceBlockAlignmentPatch(selectedBlock,alignment);
+    if(patch)updateBlock(selectedBlock.id,patch);
   };
 
   const applyLayoutSuggestion=suggestion=>{
@@ -1636,6 +1640,20 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 )}
                 {selectedBlock.type==="field"&&<div className="form-check form-switch mb-3"><input id="invoice-block-show-label" className="form-check-input" type="checkbox" checked={selectedBlock.showLabel!==false} onChange={event=>updateBlock(selectedBlock.id,{showLabel:event.target.checked})}/><label className="form-check-label" htmlFor="invoice-block-show-label">Show field label before the value</label><small className="d-block text-secondary">Turn this off when the imported design already prints the label.</small></div>}
                 <div className="invoice-builder-selected-actions"><button type="button" className="btn btn-sm btn-light border" onClick={duplicateSelectedBlock}><i className="bi bi-copy me-1"/>Duplicate element</button><button type="button" className="btn btn-sm btn-light border" onClick={()=>moveSelectedLayer(1)} title="Bring forward"><i className="bi bi-front"/></button><button type="button" className="btn btn-sm btn-light border" onClick={()=>moveSelectedLayer(-1)} title="Send backward"><i className="bi bi-back"/></button></div>
+                <h4>Quick positioning</h4>
+                <p className="invoice-builder-position-help">Place this element neatly on the page without changing its size.</p>
+                <div className="invoice-builder-position-group">
+                  <strong>Across the page</strong>
+                  <div role="group" aria-label="Position across the page">
+                    {["left","center","right"].map(value=><button type="button" className="btn btn-sm btn-light border" key={value} onClick={()=>alignSelectedBlock(value)}>{value==="center"?"Center":value[0].toUpperCase()+value.slice(1)}</button>)}
+                  </div>
+                </div>
+                <div className="invoice-builder-position-group">
+                  <strong>Down the page</strong>
+                  <div role="group" aria-label="Position down the page">
+                    {["top","middle","bottom"].map(value=><button type="button" className="btn btn-sm btn-light border" key={value} onClick={()=>alignSelectedBlock(value)}>{value[0].toUpperCase()+value.slice(1)}</button>)}
+                  </div>
+                </div>
                 <h4>Position and size</h4>
                 <div className="invoice-builder-number-grid">
                   {[[ "Left", "x"],["Top","y"],["Width","w"],["Height","h"]].map(([label,key])=><div key={key}><label className="form-label">{label} (%)</label><input type="number" min={0} max={100} className="form-control form-control-sm" value={selectedBlock[key]} onChange={event=>updateBlock(selectedBlock.id,{[key]:clamp(event.target.value,0,100)})}/></div>)}

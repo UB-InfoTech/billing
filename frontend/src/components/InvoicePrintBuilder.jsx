@@ -759,6 +759,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   };
   const moveSelectedBlocksTo=(axis,value)=>{
     if(!selectedArrangementBounds||!["x","y"].includes(axis))return;
+    if(String(value).trim()==="")return;
     const requested=Number(value);
     if(!Number.isFinite(requested))return;
     const currentStart=axis==="x"?selectedArrangementBounds.left:selectedArrangementBounds.top;

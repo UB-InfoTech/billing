@@ -81,7 +81,8 @@ export function measureRenderedInvoiceDocument(documentRef){
             fontSizePx:Number.parseFloat(style?.fontSize)||0,
             fontFamily:String(style?.fontFamily||""),
             fontWeight:String(style?.fontWeight||""),
-            textAlign:String(style?.textAlign||"").toLowerCase()
+            textAlign:String(style?.textAlign||"").toLowerCase(),
+            widthPx:Number(cell.getBoundingClientRect?.().width)||Number(cell.clientWidth)||0
           };
         }):[];
         const rows=table?Array.from(table.querySelectorAll("tbody tr")).map((row,index)=>{
@@ -125,6 +126,7 @@ export function measureRenderedInvoiceDocument(documentRef){
           return {
             itemNumber:Number(row.getAttribute("data-item-number"))||index+1,
             label:row.getAttribute("data-item-label")||"",
+            autoFitted:row.getAttribute("data-auto-fitted")==="true",
             estimatedHeightMm:readOptionalNumberAttribute(row,"data-estimated-height-mm"),
             estimatedLines:readOptionalNumberAttribute(row,"data-estimated-lines"),
             geometryAvailable:Boolean(rect&&rect.width>0&&rect.height>0),
@@ -344,6 +346,139 @@ function auditInvoiceRowsAgainstClosingBlocks(table,pageBlocks,pageNumber,page,w
         suggestedShiftYPercent
       });
     });
+  });
+}
+
+function medianPositive(values){
+  const sorted=(Array.isArray(values)?values:[])
+    .map(Number).filter(value=>Number.isFinite(value)&&value>0).sort((a,b)=>a-b);
+  if(!sorted.length)return null;
+  const middle=Math.floor(sorted.length/2);
+  return Number((sorted.length%2?sorted[middle]:(sorted[middle-1]+sorted[middle])/2).toFixed(2));
+}
+
+function uniqueStyleValues(cells,key){
+  return Array.from(new Set((Array.isArray(cells)?cells:[])
+    .map(cell=>String(cell?.[key]||"").trim().toLowerCase()).filter(Boolean))).sort();
+}
+
+function getInvoiceTablePrintProfile(block){
+  const headers=Array.isArray(block?.headerCells)?block.headerCells:[];
+  const rows=Array.isArray(block?.rows)?block.rows:[];
+  const cells=rows.flatMap(row=>Array.isArray(row?.cells)?row.cells:[]);
+  // Auto-fitted long rows may legitimately use smaller text or tighter padding.
+  // Compare the stable rows when checking the template's normal body style.
+  const stableCells=rows.filter(row=>row?.autoFitted!==true)
+    .flatMap(row=>Array.isArray(row?.cells)?row.cells:[]);
+  const headerWidths=headers.map(cell=>Number(cell?.widthPx)||0);
+  const totalHeaderWidth=headerWidths.reduce((sum,width)=>sum+width,0);
+  const columnWidthRatios=totalHeaderWidth>0&&headerWidths.length===headers.length&&headerWidths.every(width=>width>0)
+    ?headerWidths.map(width=>width/totalHeaderWidth)
+    :[];
+  const horizontalPadding=stableCells.map(cell=>
+    (Number(cell?.paddingLeftPx||0)+Number(cell?.paddingRightPx||0))/2
+  );
+  const verticalPadding=stableCells.map(cell=>
+    (Number(cell?.paddingTopPx||0)+Number(cell?.paddingBottomPx||0))/2
+  );
+  return {
+    headers,
+    columnWidthRatios,
+    headerFontSize:medianPositive(headers.map(cell=>cell?.fontSizePx)),
+    headerFamilies:uniqueStyleValues(headers,"fontFamily"),
+    headerWeights:uniqueStyleValues(headers,"fontWeight"),
+    headerAlignments:uniqueStyleValues(headers,"textAlign"),
+    bodyFontSize:medianPositive(stableCells.map(cell=>cell?.fontSizePx)),
+    bodyFamilies:uniqueStyleValues(stableCells,"fontFamily"),
+    bodyWeights:uniqueStyleValues(stableCells,"fontWeight"),
+    horizontalPadding:medianPositive(horizontalPadding),
+    verticalPadding:medianPositive(verticalPadding),
+    hasStableBody:stableCells.length>0,
+    hasBody:cells.length>0
+  };
+}
+
+function auditInvoiceContinuationTableConsistency(tables,warnings){
+  const first=tables[0];
+  if(!first)return;
+  const baseline=getInvoiceTablePrintProfile(first.block);
+  tables.slice(1).forEach(table=>{
+    if(table.pageIndex<=first.pageIndex)return;
+    const current=getInvoiceTablePrintProfile(table.block);
+    const pageNumber=table.pageNumber;
+    const blockId=table.block.id;
+    const baselineLabels=baseline.headers.map(cell=>String(cell?.label||"").trim().toLowerCase());
+    const currentLabels=current.headers.map(cell=>String(cell?.label||"").trim().toLowerCase());
+    const matchingColumns=baselineLabels.length===currentLabels.length&&
+      baselineLabels.every((label,index)=>label===currentLabels[index]);
+    if(matchingColumns&&baseline.columnWidthRatios.length===current.columnWidthRatios.length){
+      const widthDrift=current.columnWidthRatios.map((ratio,index)=>({
+        index,drift:Math.abs(ratio-baseline.columnWidthRatios[index])
+      })).filter(item=>item.drift>0.02);
+      if(widthDrift.length){
+        const changedLabels=widthDrift.map(item=>String(current.headers[item.index]?.label||("Column "+(item.index+1))));
+        addWarning(warnings,{
+          id:"continuation-column-width-mismatch-"+pageNumber+"-"+blockId,
+          severity:"warning",
+          title:"Item columns change width on a continuation page",
+          detail:"The "+changedLabels.join(", ")+" column"+(changedLabels.length===1?"":"s")+" use different proportions on page "+pageNumber+" than on page 1. Keep the column widths consistent so item details and amounts line up from page to page.",
+          pageNumber,blockId,blockType:"items_table",
+          columns:widthDrift.map(item=>({
+            columnIndex:item.index,
+            label:String(current.headers[item.index]?.label||""),
+            firstPageWidthPercent:Number((baseline.columnWidthRatios[item.index]*100).toFixed(2)),
+            currentWidthPercent:Number((current.columnWidthRatios[item.index]*100).toFixed(2))
+          }))
+        });
+      }
+    }
+
+    const typographyDifferences=[];
+    const compareStyle=(label,firstValue,currentValue,threshold=0)=>{
+      if(firstValue===null||firstValue===undefined||!currentValue||currentValue===null)return;
+      if(typeof firstValue==="number"&&typeof currentValue==="number"){
+        if(Math.abs(firstValue-currentValue)>threshold)typographyDifferences.push(label);
+      }else if(JSON.stringify(firstValue)!==JSON.stringify(currentValue)){
+        typographyDifferences.push(label);
+      }
+    };
+    compareStyle("heading font size",baseline.headerFontSize,current.headerFontSize,1);
+    compareStyle("heading font family",baseline.headerFamilies,current.headerFamilies);
+    compareStyle("heading font weight",baseline.headerWeights,current.headerWeights);
+    compareStyle("heading alignment",baseline.headerAlignments,current.headerAlignments);
+    if(baseline.hasStableBody&&current.hasStableBody){
+      compareStyle("item text size",baseline.bodyFontSize,current.bodyFontSize,1.5);
+      compareStyle("item font family",baseline.bodyFamilies,current.bodyFamilies);
+      compareStyle("item font weight",baseline.bodyWeights,current.bodyWeights);
+    }
+    if(typographyDifferences.length){
+      addWarning(warnings,{
+        id:"continuation-table-typography-mismatch-"+pageNumber+"-"+blockId,
+        severity:"warning",
+        title:"Table typography changes between pages",
+        detail:"The "+typographyDifferences.join(", ")+" differs from page 1 on page "+pageNumber+". Keep the same table font styling across pages; long rows that were automatically fitted are excluded from the normal item-text comparison.",
+        pageNumber,blockId,blockType:"items_table",
+        differences:typographyDifferences
+      });
+    }
+
+    const spacingDifferences=[];
+    const compareSpacing=(label,firstValue,currentValue)=>{
+      if(firstValue===null||currentValue===null)return;
+      if(Math.abs(firstValue-currentValue)>1.5)spacingDifferences.push(label);
+    };
+    compareSpacing("horizontal cell padding",baseline.horizontalPadding,current.horizontalPadding);
+    compareSpacing("vertical cell padding",baseline.verticalPadding,current.verticalPadding);
+    if(spacingDifferences.length){
+      addWarning(warnings,{
+        id:"continuation-table-spacing-mismatch-"+pageNumber+"-"+blockId,
+        severity:"warning",
+        title:"Item-table cell spacing changes between pages",
+        detail:"The "+spacingDifferences.join(" and ")+" differs from page 1 on page "+pageNumber+". Keep cell padding consistent so continued item rows have the same density and alignment.",
+        pageNumber,blockId,blockType:"items_table",
+        differences:spacingDifferences
+      });
+    }
   });
 }
 
@@ -870,6 +1005,7 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
       });
     });
   }
+  auditInvoiceContinuationTableConsistency(tablesWithHeaders,warnings);
 
   const anyItemTable=pages.some(page=>(Array.isArray(page.blocks)?page.blocks:[]).some(block=>block.type==="items_table"));
   if(anyItemTable){

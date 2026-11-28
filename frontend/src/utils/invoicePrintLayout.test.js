@@ -303,14 +303,23 @@ test("rendered invoice measurements identify each cell's estimated and actual wr
     getAttribute: name => ({
       "data-item-number": "4",
       "data-item-label": "Printed fabric",
+      "data-auto-fitted": "true",
       "data-estimated-height-mm": "9",
       "data-estimated-lines": "1"
     }[name] ?? null),
     getBoundingClientRect: () => makeRect(130, 60, 18, 15),
     querySelectorAll: () => [cell]
   };
+  const headerCell = {
+    textContent: "Description",
+    getBoundingClientRect: () => makeRect(325, 24, 0, 0)
+  };
+  const header = {
+    getBoundingClientRect: () => makeRect(760, 24, 0, 0),
+    querySelectorAll: selector => selector === "th" ? [headerCell] : []
+  };
   const table = {
-    querySelector: () => null,
+    querySelector: selector => selector === "thead" ? header : null,
     querySelectorAll: selector => selector === "tbody tr" ? [row] : []
   };
   const block = {
@@ -346,13 +355,21 @@ test("rendered invoice measurements identify each cell's estimated and actual wr
         ? { fontSize: "10px", lineHeight: "12px", fontFamily: "Arial", fontWeight: "400" }
         : element === cell
           ? { textAlign: "left", verticalAlign: "middle", paddingTop: "4px", paddingRight: "5px", paddingBottom: "4px", paddingLeft: "5px" }
-          : { breakInside: "avoid", pageBreakInside: "avoid" }
+          : element === header
+            ? { display: "table-header-group" }
+            : element === headerCell
+              ? { fontSize: "10px", fontFamily: "Arial", fontWeight: "700", textAlign: "center" }
+              : { breakInside: "avoid", pageBreakInside: "avoid" }
     }
   };
 
   const measured = measureRenderedInvoiceDocument(documentRef);
   const measuredCell = measured.pages[0].blocks[0].rows[0].cells[0];
   assert.equal(measured.pages[0].blocks[0].rows[0].estimatedHeightMm, 9);
+  assert.equal(measured.pages[0].blocks[0].rows[0].autoFitted, true);
+  assert.equal(measured.pages[0].blocks[0].headerCells[0].widthPx, 325);
+  assert.equal(measured.pages[0].blocks[0].headerCells[0].fontFamily, "Arial");
+  assert.equal(measured.pages[0].blocks[0].headerLabels[0], "description");
   assert.equal(measuredCell.columnKey, "description");
   assert.equal(measuredCell.columnLabel, "Description");
   assert.equal(measuredCell.columnIndex, 0);
@@ -367,6 +384,63 @@ test("rendered invoice measurements identify each cell's estimated and actual wr
   assert.equal(measured.pages[0].contentAreaHeightPx, 1000);
 });
 
+
+ 
+test("continuation pages keep item-column proportions, fonts and cell spacing consistent",()=>{
+  const makeTable=(id,options={})=>({
+    id,type:"items_table",
+    headerLabels:["description","amount"],
+    headerCells:[
+      {label:"Description",widthPx:options.widths?.[0]??120,fontSizePx:options.headerSize??9,fontFamily:options.headerFamily??"Arial",fontWeight:options.headerWeight??"700",textAlign:"center"},
+      {label:"Amount",widthPx:options.widths?.[1]??80,fontSizePx:options.headerSize??9,fontFamily:options.headerFamily??"Arial",fontWeight:options.headerWeight??"700",textAlign:"center"}
+    ],
+    rows:[{
+      itemNumber:options.itemNumber??1,
+      autoFitted:options.autoFitted??false,
+      cells:[
+        {columnKey:"description",columnLabel:"Description",fontSizePx:options.bodySize??9,fontFamily:options.bodyFamily??"Arial",fontWeight:options.bodyWeight??"400",paddingLeftPx:options.padding??4,paddingRightPx:options.padding??4,paddingTopPx:options.padding??4,paddingBottomPx:options.padding??4,hasContent:true,textAlign:"left",verticalAlign:"middle"},
+        {columnKey:"amount",columnLabel:"Amount",fontSizePx:options.bodySize??9,fontFamily:options.bodyFamily??"Arial",fontWeight:options.bodyWeight??"400",paddingLeftPx:options.padding??4,paddingRightPx:options.padding??4,paddingTopPx:options.padding??4,paddingBottomPx:options.padding??4,hasContent:true,textAlign:"right",verticalAlign:"middle"}
+      ]
+    }]
+  });
+  const audit=analyzeRenderedInvoiceMetrics({
+    pages:[
+      {pageNumber:1,width:793.7,height:1122.5,blocks:[makeTable("items-page-1")]},
+      {pageNumber:2,width:793.7,height:1122.5,blocks:[makeTable("items-page-2",{itemNumber:2,widths:[100,100],headerSize:11,bodySize:11,headerFamily:"Georgia",bodyFamily:"Georgia",headerWeight:"600",bodyWeight:"500",padding:7})]}
+    ]
+  });
+  assert.ok(audit.warnings.some(issue=>issue.id==="continuation-column-width-mismatch-2-items-page-2"));
+  const typography=audit.warnings.find(issue=>issue.id==="continuation-table-typography-mismatch-2-items-page-2");
+  assert.ok(typography);
+  assert.ok(typography.differences.includes("heading font family"));
+  assert.ok(typography.differences.includes("item text size"));
+  assert.ok(audit.warnings.some(issue=>issue.id==="continuation-table-spacing-mismatch-2-items-page-2"));
+  assert.equal(audit.hasErrors,false,"cross-page style differences are review warnings");
+});
+
+test("continuation table comparison ignores legitimate font fitting on unusually long rows",()=>{
+  const makeTable=(id,rows)=>({
+    id,type:"items_table",
+    headerLabels:["description","amount"],
+    headerCells:[
+      {label:"Description",widthPx:120,fontSizePx:9,fontFamily:"Arial",fontWeight:"700",textAlign:"center"},
+      {label:"Amount",widthPx:80,fontSizePx:9,fontFamily:"Arial",fontWeight:"700",textAlign:"center"}
+    ],
+    rows
+  });
+  const makeCells=(fontSize)=>[
+    {columnKey:"description",columnLabel:"Description",fontSizePx:fontSize,fontFamily:"Arial",fontWeight:"400",paddingLeftPx:4,paddingRightPx:4,paddingTopPx:4,paddingBottomPx:4,hasContent:true,textAlign:"left",verticalAlign:"middle"},
+    {columnKey:"amount",columnLabel:"Amount",fontSizePx:fontSize,fontFamily:"Arial",fontWeight:"400",paddingLeftPx:4,paddingRightPx:4,paddingTopPx:4,paddingBottomPx:4,hasContent:true,textAlign:"right",verticalAlign:"middle"}
+  ];
+  const audit=analyzeRenderedInvoiceMetrics({
+    pages:[
+      {pageNumber:1,width:793.7,height:1122.5,blocks:[makeTable("items-page-1",[{itemNumber:1,autoFitted:false,cells:makeCells(9)}])]},
+      {pageNumber:2,width:793.7,height:1122.5,blocks:[makeTable("items-page-2",[{itemNumber:2,autoFitted:true,cells:makeCells(6)}])]}
+    ]
+  });
+  assert.equal(audit.warnings.some(issue=>issue.id==="continuation-table-typography-mismatch-2-items-page-2"),false);
+  assert.equal(audit.warnings.some(issue=>issue.id==="continuation-table-spacing-mismatch-2-items-page-2"),false);
+});
 
 test("actual print audit flags inconsistent item-column alignment and misplaced numeric values",()=>{
   const audit=analyzeRenderedInvoiceMetrics({

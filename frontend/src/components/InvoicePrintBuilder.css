@@ -1060,3 +1060,230 @@
   .invoice-builder-empty-property>strong{font-size:15px}
   .invoice-builder-empty-property>span{font-size:13px}
 }
+
+
+/* Cleaner Add panel: grouped fields, a short common-actions area and optional tools */
+.invoice-builder-field-groups{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  padding:6px 10px 0;
+}
+.invoice-builder-field-group{
+  padding:0;
+  border:1px solid #e7edf3;
+  border-radius:9px;
+  background:#fff;
+  overflow:hidden;
+}
+.invoice-builder-field-group-toggle{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  width:100%;
+  min-height:48px;
+  padding:8px 11px;
+  border:0;
+  background:#f8fafc;
+  color:#344960;
+  text-align:left;
+}
+.invoice-builder-field-group-toggle>span{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-width:0;
+}
+.invoice-builder-field-group-toggle strong{
+  color:#40556c;
+  font-size:11px;
+  font-weight:800;
+}
+.invoice-builder-field-group-toggle small{
+  color:#8291a2;
+  font-size:9px;
+  white-space:nowrap;
+}
+.invoice-builder-field-group-toggle>i{
+  flex:0 0 auto;
+  color:#7b8da1;
+  font-size:11px;
+}
+.invoice-builder-field-group.is-expanded .invoice-builder-field-group-toggle{
+  border-bottom:1px solid #edf1f5;
+  background:#f3f7fb;
+}
+.invoice-builder-field-group .invoice-builder-palette{
+  padding:7px;
+  grid-template-columns:1fr;
+}
+.invoice-builder-field-group .invoice-builder-palette button{
+  min-height:40px;
+  padding:6px 8px;
+}
+.invoice-builder-field-label{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.invoice-builder-quick-add{
+  display:grid;
+  gap:8px;
+  margin:10px;
+  padding:11px;
+  border:1px solid #e3eaf1;
+  border-radius:9px;
+  background:#f8fafc;
+}
+.invoice-builder-quick-add>div:first-child{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+}
+.invoice-builder-quick-add strong{
+  color:#40566e;
+  font-size:11px;
+  font-weight:800;
+}
+.invoice-builder-quick-add small{
+  color:#8291a2;
+  font-size:9px;
+}
+.invoice-builder-quick-add>div:last-child{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;
+}
+.invoice-builder-quick-add .btn{
+  min-width:0;
+  min-height:40px;
+  font-size:11px;
+}
+.invoice-builder-more-elements{
+  margin:0 10px 12px;
+  border:1px solid #e3eaf1;
+  border-radius:9px;
+  background:#fff;
+}
+.invoice-builder-more-elements>summary{
+  display:flex;
+  flex-direction:column;
+  gap:2px;
+  padding:10px 11px;
+  color:#40566e;
+  cursor:pointer;
+  list-style:none;
+}
+.invoice-builder-more-elements>summary::-webkit-details-marker{display:none}
+.invoice-builder-more-elements>summary:after{
+  content:"+";
+  position:absolute;
+  right:27px;
+  color:#71869b;
+  font-size:16px;
+}
+.invoice-builder-more-elements[open]>summary:after{content:"−"}
+.invoice-builder-more-elements>summary span{
+  font-size:11px;
+  font-weight:800;
+}
+.invoice-builder-more-elements>summary small{
+  color:#8291a2;
+  font-size:9px;
+}
+.invoice-builder-more-elements .invoice-builder-extra-tools{
+  padding:8px;
+  border-top:1px solid #edf1f5;
+}
+.invoice-builder-more-menu{position:relative;display:inline-flex;z-index:8}
+.invoice-builder-more-menu>summary{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:36px;
+  padding:6px 10px;
+  border:1px solid #d9e2ec;
+  border-radius:7px;
+  background:#fff;
+  color:#40566e;
+  cursor:pointer;
+  list-style:none;
+  font-size:11px;
+  font-weight:700;
+  white-space:nowrap;
+}
+.invoice-builder-more-menu>summary::-webkit-details-marker{display:none}
+.invoice-builder-more-menu>summary:after{content:"▾";margin-left:7px;color:#77889b}
+.invoice-builder-more-menu[open]>summary{border-color:#9dbbd9;background:#f4f8fd}
+.invoice-builder-more-menu-panel{
+  position:absolute;
+  top:calc(100% + 7px);
+  right:0;
+  z-index:30;
+  display:grid;
+  gap:3px;
+  width:220px;
+  max-width:min(260px,calc(100vw - 28px));
+  padding:6px;
+  border:1px solid #dce5ee;
+  border-radius:10px;
+  background:#fff;
+  box-shadow:0 12px 28px rgba(32,54,78,.16);
+}
+.invoice-builder-more-menu-item{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  width:100%;
+  min-height:42px;
+  margin:0;
+  padding:8px 10px;
+  border:0;
+  border-radius:7px;
+  background:#fff;
+  color:#40566e;
+  text-align:left;
+  text-decoration:none;
+  font-size:12px;
+  cursor:pointer;
+}
+.invoice-builder-more-menu-item:hover,.invoice-builder-more-menu-item:focus-visible{
+  outline:0;
+  background:#f2f7fc;
+  color:#245f98;
+}
+.invoice-builder-more-menu-item>i{
+  width:18px;
+  color:#6f88a2;
+  text-align:center;
+}
+.invoice-builder-toolbar-actions{align-items:center;gap:7px}
+@media(max-width:760px){
+  .invoice-builder-field-groups{gap:7px;padding:8px 10px 0}
+  .invoice-builder-field-group-toggle{min-height:48px;padding:9px 11px}
+  .invoice-builder-field-group-toggle strong,.invoice-builder-more-elements>summary span{font-size:13px}
+  .invoice-builder-field-group-toggle small,.invoice-builder-more-elements>summary small{font-size:10px}
+  .invoice-builder-field-group .invoice-builder-palette{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:8px}
+  .invoice-builder-field-group .invoice-builder-palette button{min-height:46px;padding:7px;font-size:12px}
+  .invoice-builder-field-group .invoice-builder-palette button>span{width:30px;height:30px;flex-basis:30px}
+  .invoice-builder-quick-add{margin:10px;padding:12px}
+  .invoice-builder-quick-add strong{font-size:13px}
+  .invoice-builder-quick-add small{font-size:10px}
+  .invoice-builder-quick-add .btn{min-height:44px;font-size:12px}
+  .invoice-builder-more-elements{margin:0 10px 14px}
+  .invoice-builder-more-elements>summary{min-height:52px;padding:10px 11px}
+  .invoice-builder-more-menu{width:auto}
+  .invoice-builder-more-menu>summary{min-height:40px;padding:7px 10px;font-size:12px}
+  .invoice-builder-more-menu-panel{right:0;width:240px}
+  .invoice-builder-more-menu-item{min-height:46px;font-size:13px}
+  .invoice-builder-toolbar-actions{display:flex;align-items:center;justify-content:flex-end;width:auto;margin:0 0 0 auto;gap:7px}
+}
+@media(max-width:380px){
+  .invoice-builder-field-group .invoice-builder-palette{grid-template-columns:1fr}
+  .invoice-builder-quick-add>div:last-child{grid-template-columns:1fr}
+  .invoice-builder-more-menu>summary{font-size:11px}
+}
+
+/* Keep the expanded/collapsed marker anchored to its own summary row */
+.invoice-builder-more-elements>summary{position:relative}

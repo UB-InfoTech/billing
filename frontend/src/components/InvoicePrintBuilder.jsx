@@ -934,6 +934,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     }
     updateActive({blocks:type==="shape"?[newBlock,...activeTemplate.blocks]:[...activeTemplate.blocks,newBlock]});
     selectSingleBlock(id);
+    setMobilePanel("design");
   };
   const findOpenPalettePosition=(width,height)=>{
     const occupied=activeTemplate.blocks.filter(block=>block.visible!==false);

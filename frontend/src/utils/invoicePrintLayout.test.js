@@ -188,6 +188,66 @@ test("actual print audit blocks output when a page has no measurable dimensions"
   assert.ok(audit.warnings.some(issue => issue.id === "page-geometry-unmeasured-1"));
 });
 
+test("actual print audit verifies expected page and item totals across the whole invoice",()=>{
+  const audit=analyzeRenderedInvoiceMetrics({
+    pages:[
+      {
+        pageNumber:1,expectedPageCount:3,expectedInvoiceItemCount:3,itemCount:1,
+        blocks:[{id:"items-1",type:"items_table",rows:[{itemNumber:1}]}]
+      },
+      {
+        pageNumber:2,expectedPageCount:3,expectedInvoiceItemCount:3,itemCount:1,
+        blocks:[{id:"items-2",type:"items_table",rows:[{itemNumber:2}]}]
+      }
+    ]
+  });
+  assert.equal(audit.pageCount,2);
+  assert.equal(audit.expectedPageCount,3);
+  assert.equal(audit.expectedInvoiceItemCount,3);
+  assert.equal(audit.renderedInvoiceItemCount,2);
+  assert.equal(audit.hasErrors,true);
+  assert.ok(audit.warnings.some(issue=>issue.id==="invoice-page-count-mismatch"));
+  assert.ok(audit.warnings.some(issue=>issue.id==="invoice-item-count-mismatch"));
+});
+
+test("legacy preview measurements remain compatible when expected totals are absent",()=>{
+  const audit=analyzeRenderedInvoiceMetrics({
+    pages:[{
+      pageNumber:1,width:793.7,height:1122.5,
+      blocks:[{id:"items",type:"items_table",rows:[{itemNumber:1}]}]
+    }]
+  });
+  assert.equal(audit.expectedPageCount,null);
+  assert.equal(audit.expectedInvoiceItemCount,null);
+  assert.equal(audit.renderedInvoiceItemCount,1);
+  assert.equal(audit.warnings.some(issue=>issue.id==="invoice-page-count-mismatch"),false);
+  assert.equal(audit.warnings.some(issue=>issue.id==="invoice-item-count-mismatch"),false);
+});
+
+test("rendered page measurement reads the invoice-wide page and item totals",()=>{
+  const rect={left:0,top:0,right:794,bottom:1123,width:794,height:1123};
+  const sheet={
+    clientWidth:794,clientHeight:1123,
+    getBoundingClientRect:()=>rect,
+    getAttribute:name=>({
+      "data-page-number":"2",
+      "data-page-total-pages":"4",
+      "data-invoice-total-items":"17"
+    }[name]??null),
+    querySelector:()=>null,
+    querySelectorAll:()=>[]
+  };
+  const documentRef={
+    fonts:[],
+    querySelectorAll:selector=>selector===".design-sheet"?[sheet]:[],
+    defaultView:{getComputedStyle:()=>({})}
+  };
+  const measured=measureRenderedInvoiceDocument(documentRef);
+  assert.equal(measured.pages[0].pageNumber,2);
+  assert.equal(measured.pages[0].expectedPageCount,4);
+  assert.equal(measured.pages[0].expectedInvoiceItemCount,17);
+});
+
 test("actual print audit catches missing item rows and clipped cells", () => {
   const audit = analyzeRenderedInvoiceMetrics({
     pages: [{

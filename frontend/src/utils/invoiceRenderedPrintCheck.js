@@ -212,6 +212,8 @@ export function measureRenderedInvoiceDocument(documentRef){
       });
       return {
         pageNumber:readOptionalNumberAttribute(sheet,"data-page-number")||pageIndex+1,
+        expectedPageCount:readOptionalNumberAttribute(sheet,"data-page-total-pages"),
+        expectedInvoiceItemCount:readOptionalNumberAttribute(sheet,"data-invoice-total-items"),
         itemCount:readOptionalNumberAttribute(sheet,"data-page-item-count"),
         itemCapacityMm:readOptionalNumberAttribute(sheet,"data-page-item-capacity-mm"),
         estimatedItemRowHeightMm:readOptionalNumberAttribute(sheet,"data-page-row-height-estimate-mm"),
@@ -676,6 +678,56 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
   const printMargins=pageSpec.printMargins||{};
   const marginAuditEnabled=["top","right","bottom","left"].some(key=>printMargins[key]!==undefined);
   const firstPage=pages[0];
+  const declaredPageCounts=pages
+    .map(page=>page?.expectedPageCount)
+    .filter(value=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value)))
+    .map(Number);
+  const declaredItemCounts=pages
+    .map(page=>page?.expectedInvoiceItemCount)
+    .filter(value=>value!==null&&value!==undefined&&value!==""&&Number.isFinite(Number(value)))
+    .map(Number);
+  const expectedPageCount=declaredPageCounts.length?declaredPageCounts[0]:null;
+  const expectedInvoiceItemCount=declaredItemCounts.length?declaredItemCounts[0]:null;
+  const renderedInvoiceItemCount=pages.reduce((total,page)=>total+
+    (Array.isArray(page?.blocks)?page.blocks.reduce((pageTotal,block)=>
+      pageTotal+(block?.type==="items_table"&&Array.isArray(block.rows)?block.rows.length:0),0):0),0);
+
+  if(declaredPageCounts.length&&new Set(declaredPageCounts).size>1){
+    addWarning(warnings,{
+      id:"inconsistent-declared-page-counts",
+      severity:"error",
+      title:"Invoice pages disagree about the total page count",
+      detail:"The rendered pages contain different total-page values. Reopen the actual print preview and check the multipage layout before printing."
+    });
+  }else if(expectedPageCount!==null&&expectedPageCount>0&&expectedPageCount!==pages.length){
+    addWarning(warnings,{
+      id:"invoice-page-count-mismatch",
+      severity:"error",
+      title:"The rendered page count does not match the invoice plan",
+      detail:"The invoice layout expects "+expectedPageCount+" page(s), but the actual preview contains "+pages.length+". Check the page breaks and reopen the preview before printing.",
+      expectedPageCount,
+      renderedPageCount:pages.length
+    });
+  }
+
+  if(declaredItemCounts.length&&new Set(declaredItemCounts).size>1){
+    addWarning(warnings,{
+      id:"inconsistent-declared-item-counts",
+      severity:"error",
+      title:"Invoice pages disagree about the number of items",
+      detail:"The rendered pages contain different invoice item totals. Reopen the actual print preview and check the item table before printing."
+    });
+  }else if(expectedInvoiceItemCount!==null&&expectedInvoiceItemCount!==renderedInvoiceItemCount){
+    addWarning(warnings,{
+      id:"invoice-item-count-mismatch",
+      severity:"error",
+      title:"The printed item count does not match the invoice",
+      detail:"The invoice contains "+expectedInvoiceItemCount+" item(s), but the actual preview renders "+renderedInvoiceItemCount+" item row(s) across all pages. Check item-table visibility and page breaks before printing.",
+      expectedInvoiceItemCount,
+      renderedInvoiceItemCount
+    });
+  }
+
   const measuredFontFamilies=new Map();
   pages.forEach((page,pageIndex)=>{
     (Array.isArray(page.blocks)?page.blocks:[]).forEach(block=>{
@@ -1193,7 +1245,7 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
       closingOnly:Boolean(page.closingOnly)
     };
   });
-  return {pageCount:pages.length,warnings,hasErrors:warnings.some(warning=>warning.severity==="error"),pageLayouts};
+  return {pageCount:pages.length,expectedPageCount,expectedInvoiceItemCount,renderedInvoiceItemCount,warnings,hasErrors:warnings.some(warning=>warning.severity==="error"),pageLayouts};
 }
 
 export function checkRenderedInvoiceDocument(documentRef,expectedPage={}){

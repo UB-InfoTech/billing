@@ -1065,7 +1065,7 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
           addWarning(warnings,{
             id:(failed?"broken-image-":"incomplete-image-")+pageNumber+"-"+block.id+"-"+imageIndex,
             severity:"warning",
-            title:failed?"An invoice image could not be loaded":"An invoice image is still loading",
+            title:failed?"An image could not be loaded":"An image is still loading",
             detail:failed
               ?(image.alt||blockName)+" is missing from page "+pageNumber+". Re-add the image or restore its source file."
               :(image.alt||blockName)+" has not finished loading on page "+pageNumber+". Reopen the preview and check the image before printing.",

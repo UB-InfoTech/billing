@@ -9,6 +9,7 @@ import {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics} from "../u
 import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
 import {buildInvoicePageNavigation} from "../utils/invoicePreviewNavigation.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
+import {getInvoiceBlockResizePatch} from "../utils/invoiceBlockGeometry.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
 const auth=()=>({headers:{"x-auth-token":localStorage.getItem("token")||""}});
@@ -53,6 +54,7 @@ const makeBlock=(id,type,fieldKey,label,x,y,w,h,extra={})=>({id,type,fieldKey:fi
 const makeTemplate=(id,name,key)=>({...createInvoiceDesignTemplate(id,key),name:name||createInvoiceDesignTemplate(id,key).name});
 const makeInitialDesign=()=>({enabled:false,activeTemplateId:"clean-default",templates:[makeTemplate("clean-default","Modern business","modern-business")]});
 const createId=prefix=>prefix+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7);
+const RESIZE_HANDLES=["nw","n","ne","e","se","s","sw","w"];
 const clamp=(value,min,max)=>Math.min(max,Math.max(min,Number(value)||min));
 const snapAxis=(origin,size,lines)=>{
   let bestPosition=origin;
@@ -1046,11 +1048,11 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     draggingRef.current=next;
     setDragging(next);
   };
-  const startBlockResize=(event,block)=>{
+  const startBlockResize=(event,block,handle="se")=>{
     event.preventDefault();
     event.stopPropagation();
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    const next={id:block.id,mode:"resize",startX:event.clientX,startY:event.clientY,x:block.x,y:block.y,w:block.w,h:block.h,initialDesign:currentDesignRef.current,didMove:false};
+    const next={id:block.id,mode:"resize",handle,startX:event.clientX,startY:event.clientY,x:block.x,y:block.y,w:block.w,h:block.h,initialDesign:currentDesignRef.current,didMove:false};
     draggingRef.current=next;
     setSelectedBlockId(block.id);
     setDragging(next);
@@ -1070,10 +1072,8 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const dy=(event.clientY-current.startY)/rect.height*100;
     let patch;
     if(current.mode==="resize"){
-      patch={
-        w:clamp(current.w+dx,3,100-current.x),
-        h:clamp(current.h+dy,2,100-current.y)
-      };
+      patch=getInvoiceBlockResizePatch(current,current.handle,dx,dy);
+      if(!patch)return;
       setAlignmentGuides({vertical:[],horizontal:[]});
     }else{
       const block=activeTemplate.blocks.find(item=>item.id===current.id);
@@ -1394,96 +1394,19 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                   </div>
                   <div className="invoice-builder-block-layer">
                     {activeTemplate.blocks.filter(block=>block.visible!==false).map(block=>(
-                      <button type="button" key={block.id} className={"invoice-builder-block "+(selectedBlockId===block.id?"is-selected":"")+(dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,fontStyle:block.italic?"italic":"normal",fontFamily:block.fontFamily||"Arial",textAlign:block.align,color:block.color,backgroundColor:block.backgroundColor||"transparent",border:block.borderWidth?block.borderWidth+"px solid "+(block.borderColor||"#d8e0e9"):undefined,borderRadius:block.borderRadius+"px",padding:block.padding+"px",opacity:block.opacity??1,lineHeight:block.lineHeight??1.25,letterSpacing:(block.letterSpacing??0)+"px",textDecoration:block.textDecoration||"none",textTransform:block.textTransform||"none"}} onClick={()=>{if(!placingField)setSelectedBlockId(block.id);}} onPointerDown={event=>{if(!placingField)startBlockDrag(event,block);}} aria-label={"Move "+(block.label||"invoice element")}>
-                        {renderBlockContent(block)}
-                        {selectedBlockId===block.id&&<span className="invoice-builder-resize-handle" data-resize-handle="true" onPointerDown={event=>startBlockResize(event,block)} aria-hidden="true"/>}
-                      </button>
-                    ))}
-                  </div>
-                  </div>
-                  {activeTemplate.background?.url&&<div className="invoice-builder-reference-hint">Reference background · {activeTemplate.background.type.toUpperCase()}</div>}
-                </div>
-              </div>
-              </div>
-            </div>
-            <div className="invoice-builder-canvas-footer">
-              <span><i className="bi bi-arrows-move me-1"/>Drag to position · Arrow keys nudge (Shift for larger steps) · Select to edit.</span>
-              <div className="invoice-builder-mobile-zoom" aria-label="Page zoom controls">
-                <button type="button" aria-label="Zoom out" onClick={()=>setCanvasZoom(value=>Math.max(1,Math.round((value-0.25)*100)/100))} disabled={canvasZoom<=1}><i className="bi bi-dash-lg"/></button>
-                <span>{Math.round(canvasZoom*100)}%</span>
-                <button type="button" aria-label="Zoom in" onClick={()=>setCanvasZoom(value=>Math.min(3,Math.round((value+0.25)*100)/100))} disabled={canvasZoom>=3}><i className="bi bi-plus-lg"/></button>
-                <button type="button" onClick={()=>setCanvasZoom(1)}>Fit</button>
-              </div>
-              <span className="invoice-builder-pagination-hint">Long invoices continue automatically. Headings repeat and totals move to the final page.</span>
-              {activeTemplate.background?.url&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>updateActive({background:{...activeTemplate.background,visible:activeTemplate.background.visible===false}})}>{activeTemplate.background.visible===false?"Show reference":"Hide reference"}</button>}
-            </div>
-          </main>
-
-          <aside className="invoice-builder-sidebar invoice-builder-properties">
-            <div className="invoice-builder-panel-heading"><strong>Design settings</strong><small>Make this invoice your own</small></div>
-            {activeTemplate.background?.url&&(
-              <section className="invoice-builder-property-card">
-                <h3>Your imported design</h3>
-                <p>The original file is kept as a locked reference. Editable invoice details sit above it and will not move the original.</p>
-                <div className="invoice-builder-import-file"><i className={"bi "+(activeTemplate.background.type==="pdf"?"bi-file-earmark-pdf":"bi-image")}/><div><strong>{importedFile?.name||"Imported reference file"}</strong><small>{activeTemplate.background.type.toUpperCase()} reference · {importedFile?Math.max(1,Math.round(importedFile.size/1024))+" KB · ":""}Original kept safe</small></div><span className="badge text-bg-light border">Locked</span></div>
-                <div className="d-flex flex-wrap gap-2">
-                  <button type="button" className="btn btn-sm btn-outline-danger" onClick={()=>{setPlacingField(false);setLayoutScan(null);setLayoutScanError("");setImportedFile(null);setOcrScan(null);setOcrError("");setHighlightedOcrLineId("");updateActive({templateKey:"clean",background:{url:"",type:"none",locked:true,visible:true},blocks:activeTemplate.blocks.map(block=>block.type==="field"?{...block,showLabel:true}:block)});}}>Remove</button>
-                </div>
-                <div className="invoice-builder-smart-scan mt-3">
-                  <strong><i className="bi bi-magic me-1"/>Smart layout scan</strong>
-                  <p>Checks image rules or PDF drawing lines to find a likely item-table area, then arranges common invoice fields around it. It does not read or recognize printed words.</p>
-                  {layoutScanLoading&&<div className="small text-primary mb-2"><span className="spinner-border spinner-border-sm me-1"/>Scanning imported design…</div>}
-                  {layoutScan&&<div className="invoice-builder-scan-result mb-2">
-                    <i className="bi bi-check-circle me-1"/>
-                    {layoutScan.table
-                      ?"Likely item table found · "+layoutScan.table.rows+" horizontal rules"
-                      :"Page scanned · item table needs manual positioning"}
-                  </div>}
-                  {layoutScanError&&<div className="small text-warning mb-2">{layoutScanError}</div>}
-                  <button type="button" className="btn btn-sm btn-primary w-100" onClick={applySmartLayout} disabled={!layoutScan||layoutScanLoading}>
-                    <i className="bi bi-stars me-1"/>Apply suggested layout
-                  </button>
-                </div>
-                <div className="invoice-builder-ocr-card mt-3">
-                  <strong><i className="bi bi-text-paragraph me-1"/>Recognise printed text</strong>
-                  <p>Reads the first page and suggests which invoice fields each line may represent. You review every match and choose where its live value belongs.</p>
-                  <button type="button" className="btn btn-sm btn-outline-primary w-100" onClick={runOcrScan} disabled={!importedFile||ocrLoading}>
-                    {ocrLoading?<><span className="spinner-border spinner-border-sm me-1"/>Reading text…</>:<><i className="bi bi-search me-1"/>Read text and suggest fields</>}
-                  </button>
-                  {!importedFile&&<div className="small text-secondary mt-2">Re-import this reference file to run OCR.</div>}
-                  {ocrLoading&&<div className="invoice-builder-ocr-progress mt-2">
-                    <div className="d-flex justify-content-between gap-2"><span>{ocrProgress.stage||"Preparing"}</span><span>{Math.round((ocrProgress.progress||0)*100)}%</span></div>
-                    <div className="progress mt-1" role="progressbar" aria-label="Text recognition progress" aria-valuenow={Math.round((ocrProgress.progress||0)*100)} aria-valuemin="0" aria-valuemax="100"><div className="progress-bar" style={{width:Math.round((ocrProgress.progress||0)*100)+"%"}}/></div>
-                  </div>}
-                  {ocrError&&<div className="small text-warning mt-2">{ocrError}</div>}
-                  {ocrScan&&<div className="invoice-builder-ocr-results mt-3">
-                    <div className="invoice-builder-ocr-results-heading">
-                      <strong>{suggestedOcrCount} suggested fields · {ocrScan.lines.length} text lines</strong>
-                      <small>Page 1 · English</small>
-                    </div>
-                    <div className="invoice-builder-ocr-view-switch" role="group" aria-label="Which detected text to show">
-                      <button type="button" className={ocrView==="suggested"?"is-active":""} onClick={()=>setOcrView("suggested")}>Suggested fields</button>
-                      <button type="button" className={ocrView==="all"?"is-active":""} onClick={()=>setOcrView("all")}>All detected text</button>
-                    </div>
-                    <p>Review each match. Preview its area on the page, then place the live field or choose a position yourself.</p>
-                    {ocrScan.lines.length===0
-                      ?<div className="small text-secondary">No readable text was found. Try a clearer scan or use guided placement.</div>
-                      :visibleOcrLines.length===0
-                        ?<div className="invoice-builder-ocr-empty">No field labels were confidently matched. Open <strong>All detected text</strong> to choose a field manually.</div>
-                        :visibleOcrLines.map(line=>(
-                        <div className="invoice-builder-ocr-row" key={line.id}>
-                          <div className="invoice-builder-ocr-line">
-                            <span>{line.text}</span>
-                            <small>{line.confidence>0?Math.round(line.confidence)+"% confidence":"Text found"}</small>
+                      <React.Fragment key={block.id}>
+                        <button type="button" className={"invoice-builder-block "+(selectedBlockId===block.id?"is-selected":"")+(dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,fontStyle:block.italic?"italic":"normal",fontFamily:block.fontFamily||"Arial",textAlign:block.align,color:block.color,backgroundColor:block.backgroundColor||"transparent",border:block.borderWidth?block.borderWidth+"px solid "+(block.borderColor||"#d8e0e9"):undefined,borderRadius:block.borderRadius+"px",padding:block.padding+"px",opacity:block.opacity??1,lineHeight:block.lineHeight??1.25,letterSpacing:(block.letterSpacing??0)+"px",textDecoration:block.textDecoration||"none",textTransform:block.textTransform||"none"}} onClick={()=>{if(!placingField)setSelectedBlockId(block.id);}} onPointerDown={event=>{if(!placingField)startBlockDrag(event,block);}} aria-label={"Move "+(block.label||"invoice element")}>
+                          {renderBlockContent(block)}
+                        </button>
+                        {selectedBlockId===block.id&&(
+                          <div className="invoice-builder-resize-overlay" style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%"}} aria-hidden="true">
+                            {RESIZE_HANDLES.map(handle=>(
+                              <span key={handle} className={"invoice-builder-resize-handle handle-"+handle} data-resize-handle={handle} onPointerDown={event=>startBlockResize(event,block,handle)}/>
+                            ))}
                           </div>
-                          <div className="invoice-builder-ocr-map">
-                            <select className="form-select form-select-sm" aria-label={"Map detected text: "+line.text} value={line.selectedField||""} onChange={event=>updateOcrMapping(line.id,event.target.value)}>
-                              <option value="">Choose field…</option>
-                              {FIELD_GROUPS.map(group=>(
-                                <optgroup label={group.title} key={group.title}>
-                                  {group.items.filter(([key])=>key!=="logo").map(([key,label])=><option value={key} key={key}>{label}</option>)}
-                                </optgroup>
-                              ))}
+                        )}
+                      </React.Fragment>
+                    ))}
                             </select>
                             <div className="invoice-builder-ocr-map-actions">
                               <button type="button" className={"btn btn-sm "+(highlightedOcrLineId===line.id?"btn-outline-primary":"btn-light border")} onClick={()=>setHighlightedOcrLineId(highlightedOcrLineId===line.id?"":line.id)}><i className="bi bi-eye me-1"/>{highlightedOcrLineId===line.id?"Hide area":"Show area"}</button>

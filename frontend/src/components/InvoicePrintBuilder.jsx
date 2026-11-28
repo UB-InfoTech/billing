@@ -475,7 +475,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const selectedBlock=activeTemplate.blocks.find(block=>block.id===selectedBlockId)||null;
   const selectedBlocks=activeTemplate.blocks.filter(block=>selectedBlockIds.includes(block.id)&&block.visible!==false);
   const selectSingleBlock=blockId=>{
-    selectSingleBlock(blockId);
+    setSelectedBlockId(blockId);
     setSelectedBlockIds(blockId?[blockId]:[]);
   };
   const visibleOcrLines=useMemo(()=>{

@@ -66,8 +66,8 @@ function createInvoiceDesignTemplate(id,key="modern-business"){
   const tableHeight=compact?27:(landscape?32.5:34);
   const footerTop=tableTop+tableHeight+1;
   const footerHeight=100-footerTop-1;
-  const itemFont=compact?10.8:(landscape?11.8:12);
-  const smallFont=compact?9.8:10.4;
+  const itemFont=compact?11.5:(landscape?12.4:12.8);
+  const smallFont=compact?10.8:11.4;
 
   if(band){
     const height=18.5;
@@ -76,16 +76,16 @@ function createInvoiceDesignTemplate(id,key="modern-business"){
       fontSize:compact?20:21.5,bold:true,color:"#ffffff",showLabel:false,lineHeight:1.08
     }));
     blocks.push(field("company-address","company_address",5.7,8.1,70,3.0,{
-      fontSize:10.5,color:"#f5f8fb",showLabel:false
+      fontSize:11,color:"#f5f8fb",showLabel:false
     }));
     blocks.push(field("company-phone","company_phone",5.7,11.4,31,2.2,{
-      fontSize:10.0,color:"#ffffff",showLabel:false
+      fontSize:10.8,color:"#ffffff",showLabel:false
     }));
     blocks.push(field("company-email","company_email",37.5,11.4,35,2.2,{
-      fontSize:9.5,color:"#ffffff",showLabel:false
+      fontSize:10.5,color:"#ffffff",showLabel:false
     }));
     blocks.push(field("company-gstin","company_gstin",5.7,14.2,67,2.4,{
-      fontSize:9.7,bold:true,color:"#ffffff",showLabel:true
+      fontSize:10.5,bold:true,color:"#ffffff",showLabel:true
     }));
     blocks.push(logo("business-logo",84,2.5,10.5,13.5,{
       backgroundColor:"#ffffff",borderColor:"#ffffff",borderWidth:.4,borderRadius:2
@@ -97,16 +97,16 @@ function createInvoiceDesignTemplate(id,key="modern-business"){
       fontSize:21.5,bold:true,align:"center",color:preset.deep,showLabel:false
     }));
     blocks.push(field("company-address","company_address",18.5,8.2,63,3.0,{
-      fontSize:10.5,align:"center",color:"#536579",showLabel:false
+      fontSize:11,align:"center",color:"#536579",showLabel:false
     }));
     blocks.push(field("company-phone","company_phone",20,11.5,28,2.2,{
-      fontSize:9.8,align:"center",color:"#536579",showLabel:false
+      fontSize:10.5,align:"center",color:"#536579",showLabel:false
     }));
     blocks.push(field("company-email","company_email",49,11.5,31,2.2,{
-      fontSize:9.4,align:"center",color:"#536579",showLabel:false
+      fontSize:10.3,align:"center",color:"#536579",showLabel:false
     }));
     blocks.push(field("company-gstin","company_gstin",20,14.3,60,2.2,{
-      fontSize:9.6,bold:true,align:"center",color:preset.accent,showLabel:true
+      fontSize:10.4,bold:true,align:"center",color:preset.accent,showLabel:true
     }));
     blocks.push(line("header-rule",5,18.2,90,preset.border));
   }else{
@@ -116,16 +116,16 @@ function createInvoiceDesignTemplate(id,key="modern-business"){
       fontSize:20.5,bold:true,color:preset.deep,showLabel:false
     }));
     blocks.push(field("company-address","company_address",19.2,8.3,59,3.0,{
-      fontSize:10.5,color:"#596b7f",showLabel:false
+      fontSize:11,color:"#596b7f",showLabel:false
     }));
     blocks.push(field("company-phone","company_phone",19.2,11.6,27,2.2,{
-      fontSize:10.0,color:"#596b7f",showLabel:false
+      fontSize:10.8,color:"#596b7f",showLabel:false
     }));
     blocks.push(field("company-email","company_email",47,11.6,31,2.2,{
-      fontSize:9.4,color:"#596b7f",showLabel:false
+      fontSize:10.3,color:"#596b7f",showLabel:false
     }));
     blocks.push(field("company-gstin","company_gstin",19.2,14.3,59,2.2,{
-      fontSize:9.6,bold:true,color:preset.accent,showLabel:true
+      fontSize:10.5,bold:true,color:preset.accent,showLabel:true
     }));
     blocks.push(line("header-rule",5,18.2,90,preset.border));
   }
@@ -144,26 +144,26 @@ function createInvoiceDesignTemplate(id,key="modern-business"){
     borderColor:preset.border,borderWidth:.5,borderRadius:preset.header==="minimal"?1:2
   }));
   blocks.push(text("bill-to-label","BILL TO",7,26.1,50,2,{
-    fontSize:8.8,bold:true,color:preset.accent,letterSpacing:.35
+    fontSize:9.6,bold:true,color:preset.accent,letterSpacing:.35
   }));
   blocks.push(field("customer-name","customer_name",7,28.6,50.5,3,{
-    fontSize:13.2,bold:true,color:preset.deep,showLabel:false
+    fontSize:13.5,bold:true,color:preset.deep,showLabel:false
   }));
   blocks.push(field("customer-address","customer_address",7,31.8,50.5,3.2,{
-    fontSize:10.3,color:"#536477",showLabel:false,lineHeight:1.2
+    fontSize:10.8,color:"#536477",showLabel:false,lineHeight:1.2
   }));
   blocks.push(field("customer-phone","customer_phone",7,35.3,25,2.1,{
-    fontSize:9.7,color:"#536477"
+    fontSize:10.5,color:"#536477"
   }));
   blocks.push(field("customer-gstin","customer_gstin",32.8,35.3,25.5,2.1,{
-    fontSize:9.1,color:"#536477"
+    fontSize:10.2,color:"#536477"
   }));
   blocks.push(field("customer-state","customer_state",7,38,50,2,{
-    fontSize:9.2,color:"#536477"
+    fontSize:10.2,color:"#536477"
   }));
 
   blocks.push(text("invoice-details-label","INVOICE DETAILS",64.3,26.1,29,2,{
-    fontSize:8.8,bold:true,color:preset.accent,letterSpacing:.3
+    fontSize:9.5,bold:true,color:preset.accent,letterSpacing:.3
   }));
   const metaRows=[
     ["invoice-no","invoice_no"],
@@ -175,7 +175,7 @@ function createInvoiceDesignTemplate(id,key="modern-business"){
   ];
   metaRows.forEach(([fieldId,fieldKey],index)=>{
     blocks.push(field(fieldId,fieldKey,64.3,28.5+index*2.15,29,1.95,{
-      fontSize:9.7,color:preset.deep,bold:index===0
+      fontSize:10.5,color:preset.deep,bold:index===0
     }));
   });
 
@@ -186,7 +186,7 @@ function createInvoiceDesignTemplate(id,key="modern-business"){
     preset.category==="Manufacturing"?"JOB WORK / PRODUCTION DETAILS":
     preset.category==="Food & hospitality"?"ORDER DETAILS":"ITEM DETAILS";
   blocks.push(text("items-caption",caption,5.3,tableTop-2.8,89.5,2.2,{
-    fontSize:8.8,bold:true,color:preset.accent,letterSpacing:.35
+    fontSize:9.6,bold:true,color:preset.accent,letterSpacing:.35
   }));
   blocks.push(items("item-table",5,tableTop,90,tableHeight,preset,itemFont,compact?2.8:3.7));
 
@@ -208,18 +208,18 @@ function createInvoiceDesignTemplate(id,key="modern-business"){
     fontSize:smallFont,color:"#536477",lineHeight:1.16
   }));
   blocks.push(text("terms-heading","TERMS & CONDITIONS",5.5,termsTitleTop,54,1.7,{
-    fontSize:8.5,bold:true,color:preset.accent,letterSpacing:.3
+    fontSize:9.3,bold:true,color:preset.accent,letterSpacing:.3
   }));
   blocks.push(field("terms","terms",5.5,termsTop,54,termsHeight,{
-    fontSize:compact?8.8:9.2,color:"#5b6b7e",lineHeight:1.16,showLabel:false
+    fontSize:compact?9.5:10,color:"#5b6b7e",lineHeight:1.16,showLabel:false
   }));
   blocks.push(shape("totals-panel",62,totalsTop,33,totalsPanelHeight,preset.soft,{
     borderColor:preset.border,borderWidth:.5,borderRadius:preset.header==="minimal"?1:2
   }));
-  blocks.push(totals("invoice-totals",64,totalsBlockTop,29,totalsPanelHeight-1.2,preset,compact?10.2:11));
+  blocks.push(totals("invoice-totals",64,totalsBlockTop,29,totalsPanelHeight-1.2,preset,compact?10.8:11.5));
   blocks.push(line("signature-rule",70,signatureTop-.6,22,preset.border));
   blocks.push(field("signature","signature",64,signatureTop,31,2.1,{
-    fontSize:9.2,bold:true,align:"right",color:preset.deep,showLabel:false
+    fontSize:10,bold:true,align:"right",color:preset.deep,showLabel:false
   }));
 
   return {

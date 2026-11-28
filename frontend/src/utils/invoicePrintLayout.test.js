@@ -1326,9 +1326,9 @@ test("ready-made invoice templates use more legible print sizes for tables, tota
     const totals=design.blocks.find(block=>block.type==="totals");
     const amountWords=design.blocks.find(block=>block.id==="amount-in-words");
     const terms=design.blocks.find(block=>block.id==="terms");
-    assert.ok(itemTable.fontSize>=10.5,preset.name+" keeps item text readable at print size");
-    assert.ok(totals.fontSize>=10,preset.name+" keeps totals readable at print size");
-    assert.ok(amountWords.fontSize>=9.5,preset.name+" keeps amount words legible");
-    assert.ok(terms.fontSize>=8.5,preset.name+" keeps terms legible");
+    assert.ok(itemTable.fontSize>=11.5,preset.name+" keeps item text readable at print size");
+    assert.ok(totals.fontSize>=10.8,preset.name+" keeps totals readable at print size");
+    assert.ok(amountWords.fontSize>=10.8,preset.name+" keeps amount words legible");
+    assert.ok(terms.fontSize>=9.5,preset.name+" keeps terms legible");
   });
 });

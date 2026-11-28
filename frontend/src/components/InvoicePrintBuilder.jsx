@@ -548,7 +548,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         className={(selectedBlockIds.includes(block.id)?"is-selected ":"")+(canReorder&&layerDropTargetId===targetKey?"is-drop-target":"")}
         key={block.id}
         onDragOver={canReorder?event=>handleLayerDragOver(event,targetKey):undefined}
-        onDrop={canReorder?event=>handleLayerDrop(event,[block.id],targetKey):undefined}
+        onDrop={canReorder?event=>handleLayerDrop(event,[block.id]):undefined}
       >
         {canReorder&&<span className="invoice-builder-layer-grip" draggable onDragStart={event=>startLayerDrag(event,[block.id])} onDragEnd={clearLayerDrag} title="Drag to change layer order" aria-hidden="true"><i className="bi bi-grip-vertical"/></span>}
         <button type="button" className="invoice-builder-layer-select" onClick={()=>selectBlockOrGroup(block.id)}>
@@ -1071,7 +1071,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     event.dataTransfer.dropEffect="move";
     setLayerDropTargetId(current=>current===targetKey?current:targetKey);
   };
-  const handleLayerDrop=(event,targetIds,targetKey)=>{
+  const handleLayerDrop=(event,targetIds)=>{
     if(!hasLayerDragData(event.dataTransfer))return;
     event.preventDefault();
     event.stopPropagation();
@@ -2124,7 +2124,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                     className={"invoice-builder-layer-group"+(row.blocks.some(block=>selectedBlockIds.includes(block.id))?" is-selected":"")+(layerDropTargetId==="group:"+row.id?" is-drop-target":"")}
                     key={"group-"+row.id}
                     onDragOver={event=>handleLayerDragOver(event,"group:"+row.id)}
-                    onDrop={event=>handleLayerDrop(event,row.blocks.map(block=>block.id),"group:"+row.id)}
+                    onDrop={event=>handleLayerDrop(event,row.blocks.map(block=>block.id))}
                   >
                     <div className="invoice-builder-layer-group-heading">
                       <span className="invoice-builder-layer-grip" draggable onDragStart={event=>startLayerDrag(event,row.blocks.map(block=>block.id))} onDragEnd={clearLayerDrag} title="Drag to move this group" aria-hidden="true"><i className="bi bi-grip-vertical"/></span>

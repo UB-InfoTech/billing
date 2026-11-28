@@ -1287,3 +1287,43 @@
 
 /* Keep the expanded/collapsed marker anchored to its own summary row */
 .invoice-builder-more-elements>summary{position:relative}
+
+
+/* Touch gestures: scroll/select normally; deliberately enable dragging when needed */
+.invoice-builder-block-layer{touch-action:pan-x pan-y}
+.invoice-builder-block{touch-action:pan-x pan-y}
+.invoice-builder-workspace.is-touch-move-mode .invoice-builder-block-layer,
+.invoice-builder-workspace.is-touch-move-mode .invoice-builder-block{touch-action:none}
+.invoice-builder-touch-move-toggle,
+.invoice-builder-touch-move-help{display:none}
+@media(max-width:760px){
+  .invoice-builder-touch-move-toggle{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-height:42px;
+    padding:7px 12px;
+    border:1px solid #cbd8e6;
+    border-radius:8px;
+    background:#fff;
+    color:#38536f;
+    font-size:12px;
+    font-weight:750;
+    touch-action:manipulation;
+  }
+  .invoice-builder-touch-move-toggle.is-active{
+    border-color:#367bb8;
+    background:#eaf3fc;
+    color:#205d96;
+    box-shadow:0 0 0 2px rgba(54,123,184,.1);
+  }
+  .invoice-builder-touch-move-help{
+    display:block;
+    width:100%;
+    color:#74869a;
+    font-size:10px;
+    line-height:1.4;
+  }
+  .invoice-builder-workspace.is-touch-move-mode .invoice-builder-touch-move-help{color:#2f6598}
+  .invoice-builder-canvas-footer{row-gap:7px}
+}

@@ -33,6 +33,32 @@ function readOptionalNumberAttribute(element,name){
   return Number.isFinite(value)?value:null;
 }
 
+function measureImageAsset(image){
+  const complete=Boolean(image?.complete);
+  const naturalWidth=Math.max(0,Number(image?.naturalWidth)||0);
+  const naturalHeight=Math.max(0,Number(image?.naturalHeight)||0);
+  return {
+    broken:complete&&naturalWidth===0,
+    incomplete:!complete,
+    complete,
+    naturalWidth,
+    naturalHeight,
+    alt:image?.getAttribute?.("alt")||"",
+    loading:String(image?.loading||"").toLowerCase()
+  };
+}
+
+function getFontFamilyNames(value){
+  const names=[];
+  const matcher=/(?:^|,)\s*(?:"([^"]+)"|'([^']+)'|([^,]+))/gu;
+  let match;
+  while((match=matcher.exec(String(value||"")))!==null){
+    const name=String(match[1]||match[2]||match[3]||"").trim().toLowerCase();
+    if(name)names.push(name);
+  }
+  return names;
+}
+
 function getCellOverflowAxes(cells){
   const axes=new Set();
   cells.forEach(cell=>{
@@ -45,13 +71,29 @@ function getCellOverflowAxes(cells){
 export function measureRenderedInvoiceDocument(documentRef){
   if(!documentRef?.querySelectorAll)return {pages:[]};
   const sheets=Array.from(documentRef.querySelectorAll(".design-sheet"));
+  let fontFaces=[];
+  try{
+    fontFaces=Array.from(documentRef.fonts||[]).map(face=>({
+      family:String(face?.family||"").replace(/^["']|["']$/g,"").trim(),
+      status:String(face?.status||"").toLowerCase(),
+      weight:String(face?.weight||""),
+      style:String(face?.style||"")
+    }));
+  }catch{
+    fontFaces=[];
+  }
   return {
+    fontSetStatus:String(documentRef.fonts?.status||"").toLowerCase()||null,
+    fontFaces,
     pages:sheets.map((sheet,pageIndex)=>{
       const sheetRect=sheet.getBoundingClientRect();
       const contentArea=sheet.querySelector?.(".design-content-area");
       const contentAreaRect=contentArea?.getBoundingClientRect?.();
+      const backgroundImages=Array.from(sheet.querySelectorAll?.(".design-background")||[])
+        .map(measureImageAsset);
       const blocks=Array.from(sheet.querySelectorAll(".design-block")).map((block,blockIndex)=>{
         const bounds=getRect(block,sheetRect);
+        const blockStyle=getElementStyle(documentRef,block);
         const type=block.getAttribute("data-block-type")||"";
         const table=block.querySelector(".design-items");
         const blankTable=block.querySelector(".design-blank-table");
@@ -142,16 +184,16 @@ export function measureRenderedInvoiceDocument(documentRef){
             cellCount:cells.length
           };
         }):[];
-        const images=Array.from(block.querySelectorAll("img")).map(image=>({
-          broken:Boolean(image.complete&&image.naturalWidth===0),
-          alt:image.getAttribute("alt")||""
-        }));
+        const images=Array.from(block.querySelectorAll("img")).map(measureImageAsset);
         return {
           id:block.getAttribute("data-block-id")||("page-"+(pageIndex+1)+"-block-"+(blockIndex+1)),
           type,
           fieldKey:block.getAttribute("data-field-key")||"",
           label:block.getAttribute("data-block-label")||"",
           hasContent:String(block.textContent||"").trim().length>0,
+          fontFamily:String(blockStyle?.fontFamily||""),
+          fontSizePx:Number.parseFloat(blockStyle?.fontSize)||0,
+          fontWeight:String(blockStyle?.fontWeight||""),
           bounds,
           tablePresent:type==="items_table"?Boolean(table):undefined,
           headerDisplay:header?String(headerStyle?.display||"").toLowerCase():"",
@@ -178,6 +220,7 @@ export function measureRenderedInvoiceDocument(documentRef){
         width:Number(sheet.clientWidth)||sheetRect.width,
         height:Number(sheet.clientHeight)||sheetRect.height,
         contentAreaHeightPx:Number(contentAreaRect?.height)||null,
+        backgroundImages,
         blocks
       };
     })
@@ -633,6 +676,52 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
   const printMargins=pageSpec.printMargins||{};
   const marginAuditEnabled=["top","right","bottom","left"].some(key=>printMargins[key]!==undefined);
   const firstPage=pages[0];
+  const measuredFontFamilies=new Map();
+  pages.forEach((page,pageIndex)=>{
+    (Array.isArray(page.blocks)?page.blocks:[]).forEach(block=>{
+      const fontFamilies=[
+        ...getFontFamilyNames(block?.fontFamily),
+        ...(Array.isArray(block?.headerCells)?block.headerCells.flatMap(cell=>getFontFamilyNames(cell?.fontFamily)):[]),
+        ...(Array.isArray(block?.rows)?block.rows.flatMap(row=>
+          Array.isArray(row?.cells)?row.cells.flatMap(cell=>getFontFamilyNames(cell?.fontFamily)):[]
+        ):[])
+      ];
+      fontFamilies.forEach(family=>{
+        if(!measuredFontFamilies.has(family)){
+          measuredFontFamilies.set(family,{
+            blockId:block.id,
+            blockLabel:block.label||"Invoice text",
+            pageNumber:Number(page.pageNumber)||pageIndex+1
+          });
+        }
+      });
+    });
+  });
+  if(measurements.fontSetStatus==="loading"){
+    addWarning(warnings,{
+      id:"invoice-fonts-still-loading",
+      severity:"warning",
+      title:"Invoice fonts are still loading",
+      detail:"The browser has not finished loading all invoice fonts. Reopen the actual preview after the fonts finish loading so text wrapping and spacing can be checked accurately."
+    });
+  }
+  (Array.isArray(measurements.fontFaces)?measurements.fontFaces:[])
+    .filter(face=>String(face?.status||"").toLowerCase()==="error")
+    .forEach(face=>{
+      const family=String(face?.family||"").replace(/^["']|["']$/g,"").trim().toLowerCase();
+      const usage=measuredFontFamilies.get(family);
+      if(!family||!usage)return;
+      addWarning(warnings,{
+        id:"invoice-font-load-failed-"+family.replace(/[^a-z0-9]+/g,"-"),
+        severity:"warning",
+        title:"A font used by the invoice could not be loaded",
+        detail:"The "+face.family+" font used by "+usage.blockLabel+" could not be loaded. The browser may substitute another font, changing line wrapping and spacing. Check the font file or choose an available font, then reopen the actual preview.",
+        pageNumber:usage.pageNumber,
+        blockId:usage.blockId,
+        fontFamily:face.family
+      });
+    });
+
   pages.forEach((page,pageIndex)=>{
     const pageNumber=Number(page.pageNumber)||pageIndex+1;
     const pageWidth=Math.max(0,Number(page.width)||0);
@@ -649,12 +738,12 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
     if(expected&&pageWidth&&pageHeight){
       const widthDeviation=Math.abs(pageWidth-expected.widthPx)/expected.widthPx;
       const heightDeviation=Math.abs(pageHeight-expected.heightPx)/expected.heightPx;
-      if(widthDeviation>0.08||heightDeviation>0.08){
+      if(widthDeviation>0.025||heightDeviation>0.025){
         addWarning(warnings,{
           id:"page-size-mismatch-"+pageNumber,
           severity:"warning",
           title:"Paper size or orientation does not match",
-          detail:"Page "+pageNumber+" measures approximately "+(pageWidth*25.4/96).toFixed(1)+" × "+(pageHeight*25.4/96).toFixed(1)+" mm, but the design is set to "+pageSpec.pageSize+" "+(pageSpec.orientation||"portrait")+". Check paper and orientation in the print dialog.",
+          detail:"Page "+pageNumber+" measures approximately "+(pageWidth*25.4/96).toFixed(1)+" × "+(pageHeight*25.4/96).toFixed(1)+" mm, but the design is set to "+pageSpec.pageSize+" "+(pageSpec.orientation||"portrait")+". Check paper size, orientation and browser print scaling (Actual size / 100%).",
           pageNumber
         });
       }
@@ -672,6 +761,21 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
         });
       }
     }
+    (Array.isArray(page.backgroundImages)?page.backgroundImages:[]).forEach((image,imageIndex)=>{
+      if(image.broken||image.incomplete){
+        const failed=image.broken;
+        addWarning(warnings,{
+          id:(failed?"broken":"incomplete")+"-invoice-background-"+pageNumber+"-"+imageIndex,
+          severity:"warning",
+          title:failed?"The invoice background image could not be loaded":"The invoice background image is still loading",
+          detail:failed
+            ?"The imported invoice background is missing on page "+pageNumber+". Restore the image file or re-import the reference design before printing."
+            :"The imported invoice background has not finished loading on page "+pageNumber+". Reopen the preview and check it again before printing.",
+          pageNumber,
+          blockId:"page-background"
+        });
+      }
+    });
     const pageBlocks=Array.isArray(page.blocks)?page.blocks:[];
     const itemTables=pageBlocks.filter(block=>block.type==="items_table");
     const measuredItemCount=itemTables.reduce((sum,table)=>sum+(Array.isArray(table.rows)?table.rows.length:0),0);
@@ -956,14 +1060,19 @@ export function analyzeRenderedInvoiceMetrics(measurements={},expectedPage={}){
         }
       });
       (Array.isArray(block.images)?block.images:[]).forEach((image,imageIndex)=>{
-        if(image.broken){
+        if(image.broken||image.incomplete){
+          const failed=image.broken;
           addWarning(warnings,{
-            id:"broken-image-"+pageNumber+"-"+block.id+"-"+imageIndex,
+            id:(failed?"broken-image-":"incomplete-image-")+pageNumber+"-"+block.id+"-"+imageIndex,
             severity:"warning",
-            title:"An image could not be loaded",
-            detail:(image.alt||blockName)+" is missing from page "+pageNumber+". Re-add the image or restore its source file.",
+            title:failed?"An invoice image could not be loaded":"An invoice image is still loading",
+            detail:failed
+              ?(image.alt||blockName)+" is missing from page "+pageNumber+". Re-add the image or restore its source file."
+              :(image.alt||blockName)+" has not finished loading on page "+pageNumber+". Reopen the preview and check the image before printing.",
             pageNumber,
-            blockId:block.id
+            blockId:block.id,
+            imageWidth:image.naturalWidth||0,
+            imageHeight:image.naturalHeight||0
           });
         }
       });

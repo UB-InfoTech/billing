@@ -4,6 +4,7 @@ import {
   getInvoiceBlockGroupMemberIds,
   assignInvoiceBlockGroup,
   expandInvoiceBlockGroupSelection,
+  moveInvoiceLayerStack,
   ungroupInvoiceBlocks
 } from "./invoiceBlockGroups.js";
 
@@ -71,4 +72,66 @@ test("selection expands to include every member of any saved group it touches", 
 test("selection expansion preserves ordinary selections and ignores invalid ids", () => {
   assert.deepEqual(expandInvoiceBlockGroupSelection(baseBlocks, ["logo", "missing"]), ["logo"]);
   assert.deepEqual(expandInvoiceBlockGroupSelection(baseBlocks, []), []);
+});
+
+
+test("moves an individual layer to the front or back side of another element", () => {
+  const stack = [
+    { id: "back" },
+    { id: "moving" },
+    { id: "target" },
+    { id: "front" }
+  ];
+  const forward = moveInvoiceLayerStack(stack, ["moving"], ["target"], "above");
+  assert.equal(forward.changed, true);
+  assert.deepEqual(forward.blocks.map(block => block.id), ["back", "target", "moving", "front"]);
+
+  const backward = moveInvoiceLayerStack(stack, ["moving"], ["target"], "below");
+  assert.equal(backward.changed, true);
+  assert.deepEqual(backward.blocks.map(block => block.id), ["back", "moving", "target", "front"]);
+});
+
+test("moves every member of a saved group together without changing its internal stack order", () => {
+  const stack = [
+    { id: "back" },
+    { id: "group-low", groupId: "group-1" },
+    { id: "middle" },
+    { id: "group-high", groupId: "group-1", visible: false },
+    { id: "front" }
+  ];
+  const moved = moveInvoiceLayerStack(
+    stack,
+    ["group-low", "group-high"],
+    ["front"],
+    "above"
+  );
+  assert.equal(moved.changed, true);
+  assert.deepEqual(
+    moved.blocks.map(block => block.id),
+    ["back", "middle", "front", "group-low", "group-high"]
+  );
+  assert.equal(moved.blocks[3].groupId, moved.blocks[4].groupId);
+});
+
+test("moves an element above or below a target group as a whole", () => {
+  const stack = [
+    { id: "back" },
+    { id: "group-low", groupId: "group-1" },
+    { id: "middle" },
+    { id: "group-high", groupId: "group-1" },
+    { id: "moving" }
+  ];
+  const below = moveInvoiceLayerStack(stack, ["moving"], ["group-low", "group-high"], "below");
+  assert.deepEqual(below.blocks.map(block => block.id), ["back", "moving", "group-low", "middle", "group-high"]);
+
+  const above = moveInvoiceLayerStack(stack, ["moving"], ["group-low", "group-high"], "above");
+  assert.deepEqual(above.blocks.map(block => block.id), ["back", "group-low", "middle", "group-high", "moving"]);
+});
+
+test("layer movement safely ignores self-drops and invalid targets", () => {
+  const stack = [{ id: "one" }, { id: "two" }];
+  assert.deepEqual(moveInvoiceLayerStack(stack, ["one"], ["one"], "above"), { blocks: stack, changed: false });
+  assert.deepEqual(moveInvoiceLayerStack(stack, ["one"], ["missing"], "below"), { blocks: stack, changed: false });
+  assert.deepEqual(moveInvoiceLayerStack(stack, ["missing"], ["two"], "above"), { blocks: stack, changed: false });
+  assert.deepEqual(moveInvoiceLayerStack(stack, ["one"], ["two"], "sideways"), { blocks: stack, changed: false });
 });

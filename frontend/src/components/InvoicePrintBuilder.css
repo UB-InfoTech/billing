@@ -1327,3 +1327,139 @@
   .invoice-builder-workspace.is-touch-move-mode .invoice-builder-touch-move-help{color:#2f6598}
   .invoice-builder-canvas-footer{row-gap:7px}
 }
+
+
+/* Contextual actions stay attached to the selected block at every canvas zoom. */
+.invoice-builder-context-toolbar{
+  position:absolute;
+  z-index:15;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:3px;
+  box-sizing:border-box;
+  padding:4px;
+  border:1px solid #cbd9e8;
+  border-radius:10px;
+  background:#fff;
+  box-shadow:0 5px 18px rgba(27,47,70,.2);
+  white-space:nowrap;
+  pointer-events:auto;
+  transform-origin:top left;
+}
+.invoice-builder-context-toolbar>button,
+.invoice-builder-context-align>summary{
+  display:inline-flex;
+  flex:0 0 auto;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  min-width:0;
+  min-height:38px;
+  padding:6px 8px;
+  border:1px solid transparent;
+  border-radius:7px;
+  background:#fff;
+  color:#40566e;
+  font-size:11px;
+  font-weight:750;
+  line-height:1;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.invoice-builder-context-toolbar>button:hover,
+.invoice-builder-context-align>summary:hover,
+.invoice-builder-context-align[open]>summary{
+  border-color:#d9e5f1;
+  background:#f2f7fc;
+  color:#245f98;
+}
+.invoice-builder-context-toolbar>button:focus-visible,
+.invoice-builder-context-align>summary:focus-visible,
+.invoice-builder-context-align-menu button:focus-visible{
+  outline:2px solid #2876c7;
+  outline-offset:2px;
+}
+.invoice-builder-context-toolbar>button>i,
+.invoice-builder-context-align>summary>i{
+  font-size:12px;
+}
+.invoice-builder-context-toolbar>button.is-danger{
+  color:#ad3e45;
+}
+.invoice-builder-context-toolbar>button.is-danger:hover{
+  border-color:#f0c9cc;
+  background:#fff4f4;
+  color:#9c2630;
+}
+.invoice-builder-context-align{
+  position:relative;
+  display:inline-flex;
+  flex:0 0 auto;
+}
+.invoice-builder-context-align>summary{
+  list-style:none;
+}
+.invoice-builder-context-align>summary::-webkit-details-marker{
+  display:none;
+}
+.invoice-builder-context-align>summary>i:last-child{
+  margin-left:1px;
+  font-size:9px;
+}
+.invoice-builder-context-align-menu{
+  position:absolute;
+  top:calc(100% + 6px);
+  left:0;
+  z-index:22;
+  display:grid;
+  gap:3px;
+  min-width:116px;
+  padding:5px;
+  border:1px solid #d9e3ed;
+  border-radius:9px;
+  background:#fff;
+  box-shadow:0 8px 22px rgba(27,47,70,.18);
+}
+.invoice-builder-context-align-menu button{
+  min-height:38px;
+  padding:7px 10px;
+  border:0;
+  border-radius:6px;
+  background:#fff;
+  color:#40566e;
+  text-align:left;
+  font-size:12px;
+  font-weight:700;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.invoice-builder-context-align-menu button:hover{
+  background:#f1f6fc;
+  color:#245f98;
+}
+@media(max-width:760px){
+  .invoice-builder-context-toolbar{
+    gap:2px;
+    padding:4px;
+    border-radius:9px;
+    box-shadow:0 4px 15px rgba(27,47,70,.22);
+  }
+  .invoice-builder-context-toolbar>button,
+  .invoice-builder-context-align>summary{
+    min-height:44px;
+    padding:7px 8px;
+    font-size:12px;
+  }
+  .invoice-builder-context-toolbar>button>i,
+  .invoice-builder-context-align>summary>i{
+    font-size:13px;
+  }
+  .invoice-builder-context-align-menu{
+    min-width:132px;
+  }
+  .invoice-builder-context-align-menu button{
+    min-height:44px;
+    font-size:13px;
+  }
+}

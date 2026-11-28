@@ -9,7 +9,7 @@ import {measureRenderedInvoiceDocument,analyzeRenderedInvoiceMetrics} from "../u
 import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
 import {buildInvoicePageNavigation} from "../utils/invoicePreviewNavigation.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
-import {getInvoiceBlockResizePatch,getInvoiceBlockAlignmentPatch,getInvoiceGroupAlignmentPatches,getInvoiceGroupDistributionPatches,getInvoiceGroupMovePatches,getInvoiceMarqueeSelection} from "../utils/invoiceBlockGeometry.js";
+import {getInvoiceBlockResizePatch,getInvoiceBlockAlignmentPatch,getInvoiceContextToolbarPosition,getInvoiceGroupAlignmentPatches,getInvoiceGroupDistributionPatches,getInvoiceGroupMovePatches,getInvoiceMarqueeSelection} from "../utils/invoiceBlockGeometry.js";
 import {getInvoiceCanvasScaleSettings} from "../utils/invoiceCanvasScale.js";
 import {canStartInvoiceBlockDrag,getInvoicePointerDragThreshold} from "../utils/invoiceCanvasInteraction.js";
 import {getInvoiceBlockGroupMemberIds,assignInvoiceBlockGroup,expandInvoiceBlockGroupSelection,moveInvoiceLayerStack,ungroupInvoiceBlocks} from "../utils/invoiceBlockGroups.js";
@@ -1521,6 +1521,15 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     :(activeTemplate.pageSize==="Letter"?0.773:0.707);
   const basePageWidth=activeTemplate.orientation==="landscape"?1123:794;
   const effectiveCanvasScale=canvasScale*canvasZoom;
+  const selectedContextToolbarPosition=selectedBlock&&selectedBlock.visible!==false&&selectedBlockIds.length===1&&!dragging&&!placingField
+    ?getInvoiceContextToolbarPosition(selectedBlock,{
+      pageWidth:basePageWidth,
+      pageHeight:basePageWidth/canvasRatio,
+      scale:effectiveCanvasScale,
+      toolbarWidth:252,
+      toolbarHeight:44
+    })
+    :null;
   const effectiveCanvasScalePercent=Math.round(effectiveCanvasScale*100);
   const backgroundUrl=activeTemplate.background?.url?API+activeTemplate.background.url:"";
   const previewItems=previewInvoice?.items||[
@@ -1847,6 +1856,40 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                             {RESIZE_HANDLES.map(handle=>(
                               <span key={handle} className={"invoice-builder-resize-handle handle-"+handle} data-resize-handle={handle} onPointerDown={event=>startBlockResize(event,block,handle)}/>
                             ))}
+                          </div>
+                        )}
+                        {selectedBlockIds.length===1&&selectedBlockId===block.id&&selectedContextToolbarPosition&&!dragging&&!placingField&&(
+                          <div
+                            className={"invoice-builder-context-toolbar is-"+selectedContextToolbarPosition.placement}
+                            role="group"
+                            aria-label="Selected element actions"
+                            style={{
+                              left:selectedContextToolbarPosition.left+"px",
+                              top:selectedContextToolbarPosition.top+"px",
+                              width:selectedContextToolbarPosition.width+"px",
+                              transform:"scale("+selectedContextToolbarPosition.scale+")"
+                            }}
+                            onPointerDown={event=>event.stopPropagation()}
+                          >
+                            <button type="button" onClick={()=>setMobilePanel("settings")} title="Edit this element" aria-label="Edit this element">
+                              <i className="bi bi-pencil-square" aria-hidden="true"/> <span>Edit</span>
+                            </button>
+                            <button type="button" onClick={duplicateSelectedBlock} title="Make a copy of this element" aria-label="Duplicate this element">
+                              <i className="bi bi-copy" aria-hidden="true"/> <span>Copy</span>
+                            </button>
+                            <details className="invoice-builder-context-align">
+                              <summary title="Align this element on the page" aria-label="Align this element on the page">
+                                <i className="bi bi-align-start" aria-hidden="true"/> <span>Align</span> <i className="bi bi-chevron-down" aria-hidden="true"/>
+                              </summary>
+                              <div className="invoice-builder-context-align-menu" role="group" aria-label="Choose alignment">
+                                <button type="button" onClick={event=>{alignSelectedBlock("left");event.currentTarget.closest("details")?.removeAttribute("open");}}>Left</button>
+                                <button type="button" onClick={event=>{alignSelectedBlock("center");event.currentTarget.closest("details")?.removeAttribute("open");}}>Center</button>
+                                <button type="button" onClick={event=>{alignSelectedBlock("right");event.currentTarget.closest("details")?.removeAttribute("open");}}>Right</button>
+                              </div>
+                            </details>
+                            <button type="button" className="is-danger" onClick={removeBlock} title="Delete this element" aria-label="Delete this element">
+                              <i className="bi bi-trash" aria-hidden="true"/> <span>Delete</span>
+                            </button>
                           </div>
                         )}
                       </React.Fragment>

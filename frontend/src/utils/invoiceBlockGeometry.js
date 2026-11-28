@@ -194,4 +194,55 @@ function getInvoiceMarqueeSelection(blocks, selection) {
   }).map(block => block.id);
 }
 
-export { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch, getInvoiceGroupAlignmentPatches, getInvoiceGroupDistributionPatches, getInvoiceGroupMovePatches, getInvoiceMarqueeSelection };
+
+/**
+ * Keep the selected-element toolbar readable at every canvas zoom level
+ * while keeping it inside the visible page.
+ */
+function getInvoiceContextToolbarPosition(block, options = {}) {
+  if (!block) return null;
+
+  const pageWidth = toFiniteNumber(options.pageWidth, 794);
+  const pageHeight = toFiniteNumber(options.pageHeight, 1123);
+  const canvasScale = Math.max(0.1, toFiniteNumber(options.scale, 1));
+  const toolbarWidth = clamp(toFiniteNumber(options.toolbarWidth, 252), 160, 420);
+  const toolbarHeight = clamp(toFiniteNumber(options.toolbarHeight, 44), 36, 100);
+  const gap = clamp(toFiniteNumber(options.gap, 8), 0, 24);
+  const margin = clamp(toFiniteNumber(options.margin, 4), 0, 20);
+
+  if (pageWidth <= 0 || pageHeight <= 0) return null;
+
+  const visibleWidth = Math.min(toolbarWidth, Math.max(80, pageWidth * canvasScale - margin * 2));
+  const localWidth = visibleWidth / canvasScale;
+  const localHeight = toolbarHeight / canvasScale;
+  const localGap = gap / canvasScale;
+  const localMargin = margin / canvasScale;
+  const x = clamp(toFiniteNumber(block.x, 0), 0, 100);
+  const y = clamp(toFiniteNumber(block.y, 0), 0, 100);
+  const height = clamp(toFiniteNumber(block.h, 0), 0, 100);
+  const blockTop = y * pageHeight / 100;
+  const blockBottom = (y + height) * pageHeight / 100;
+  const spaceAbove = blockTop - localMargin;
+  const spaceBelow = pageHeight - blockBottom - localMargin;
+  const placement = spaceAbove >= localHeight + localGap || spaceAbove >= spaceBelow
+    ? "above"
+    : "below";
+
+  const maxLeft = Math.max(localMargin, pageWidth - localWidth - localMargin);
+  const left = clamp(x * pageWidth / 100, localMargin, maxLeft);
+  const maxTop = Math.max(localMargin, pageHeight - localHeight - localMargin);
+  const requestedTop = placement === "above"
+    ? blockTop - localHeight - localGap
+    : blockBottom + localGap;
+  const top = clamp(requestedTop, localMargin, maxTop);
+
+  return {
+    left,
+    top,
+    width: localWidth,
+    scale: 1 / canvasScale,
+    placement
+  };
+}
+
+export { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch, getInvoiceContextToolbarPosition, getInvoiceGroupAlignmentPatches, getInvoiceGroupDistributionPatches, getInvoiceGroupMovePatches, getInvoiceMarqueeSelection };

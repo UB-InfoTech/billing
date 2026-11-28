@@ -10,6 +10,7 @@ import {analyzeInvoicePagination} from "../utils/invoicePaginationHints.js";
 import {buildInvoicePageNavigation} from "../utils/invoicePreviewNavigation.js";
 import {INVOICE_DESIGN_PRESETS,createInvoiceDesignTemplate,createBlankInvoiceDesignTemplate} from "../utils/invoiceTemplateLibrary.js";
 import {getInvoiceBlockResizePatch,getInvoiceBlockAlignmentPatch,getInvoiceGroupAlignmentPatches,getInvoiceGroupDistributionPatches,getInvoiceGroupMovePatches,getInvoiceMarqueeSelection} from "../utils/invoiceBlockGeometry.js";
+import {getInvoiceCanvasScaleSettings} from "../utils/invoiceCanvasScale.js";
 import {getInvoiceBlockGroupMemberIds,assignInvoiceBlockGroup,expandInvoiceBlockGroupSelection,moveInvoiceLayerStack,ungroupInvoiceBlocks} from "../utils/invoiceBlockGroups.js";
 
 const API=(import.meta.env.VITE_API_URL||"http://localhost:5000").replace(/\/$/,"");
@@ -51,7 +52,7 @@ const SAMPLE_VALUES={
   invoice_title:"TAX INVOICE",invoice_no:"INV-00001",invoice_date:"18 Nov 2026",due_date:"25 Nov 2026",challan_no:"CH-001",payment_terms:"Net 7 days",eway_bill:"E-Way Bill number",
   subtotal:"₹ 10,000.00",discount:"− ₹ 500.00",taxable_value:"₹ 9,500.00",cgst:"₹ 855.00",sgst:"₹ 855.00",igst:"₹ 0.00",round_off:"₹ 0.00",grand_total:"₹ 11,210.00",amount_paid:"₹ 5,000.00",balance_due:"₹ 6,210.00",amount_words:"Eleven thousand two hundred ten only",bank_details:"Bank name · Account number · IFSC",terms:"Thank you for your business. Please contact us if you have any questions.",signature:"For Your Business · Authorised Signatory"
 };
-const makeBlock=(id,type,fieldKey,label,x,y,w,h,extra={})=>({id,type,fieldKey:fieldKey||"",label:label||"",text:"",x,y,w,h,fontSize:10,bold:false,align:"left",color:"#172335",backgroundColor:"transparent",borderColor:"#d8e0e9",borderWidth:0,borderRadius:0,padding:1,fontFamily:"Arial",italic:false,opacity:1,visible:true,showLabel:true,...extra});
+const makeBlock=(id,type,fieldKey,label,x,y,w,h,extra={})=>({id,type,fieldKey:fieldKey||"",label:label||"",text:"",x,y,w,h,fontSize:12,bold:false,align:"left",color:"#172335",backgroundColor:"transparent",borderColor:"#d8e0e9",borderWidth:0,borderRadius:0,padding:1,fontFamily:"Arial",italic:false,opacity:1,visible:true,showLabel:true,...extra});
 const makeTemplate=(id,name,key)=>({...createInvoiceDesignTemplate(id,key),name:name||createInvoiceDesignTemplate(id,key).name});
 const makeInitialDesign=()=>({enabled:false,activeTemplateId:"clean-default",templates:[makeTemplate("clean-default","Modern business","modern-business")]});
 const createId=prefix=>prefix+"-"+Date.now().toString(36)+"-"+Math.random().toString(36).slice(2,7);
@@ -218,7 +219,9 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [snapToGrid,setSnapToGrid]=useState(false);
   const [mobilePanel,setMobilePanel]=useState("design");
   const [canvasScale,setCanvasScale]=useState(1);
+  const [canvasFitScale,setCanvasFitScale]=useState(1);
   const [canvasZoom,setCanvasZoom]=useState(1);
+  const [showPrintCheck,setShowPrintCheck]=useState(false);
   const [uploading,setUploading]=useState(false);
   const [error,setError]=useState("");
   const [message,setMessage]=useState("");
@@ -258,6 +261,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   const [columnOptimizationPreview,setColumnOptimizationPreview]=useState(null);
   const [printPreviewError,setPrintPreviewError]=useState("");
   const canvasRef=useRef(null);
+  const canvasScrollRef=useRef(null);
   const printPreviewFrameRef=useRef(null);
   const printCheckRef=useRef(null);
   const importRef=useRef(null);
@@ -467,13 +471,31 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const updateCanvasScale=()=>{
       const isMobile=window.matchMedia?window.matchMedia("(max-width: 760px)").matches:window.innerWidth<=760;
       const pageWidth=activeTemplate.orientation==="landscape"?1123:794;
-      const availableWidth=Math.max(280,(Number(window.innerWidth)||320)-32);
-      setCanvasScale(isMobile?Math.min(1,availableWidth/pageWidth):1);
+      const availableWidth=Math.max(280,(canvasScrollRef.current?.clientWidth||window.innerWidth||320)-24);
+      const scale=getInvoiceCanvasScaleSettings(availableWidth,pageWidth,{
+        isMobile,
+        orientation:activeTemplate.orientation
+      });
+      setCanvasScale(scale.readableScale);
+      setCanvasFitScale(scale.fitScale);
     };
     updateCanvasScale();
     window.addEventListener("resize",updateCanvasScale);
-    return ()=>window.removeEventListener("resize",updateCanvasScale);
+    let observer=null;
+    if(typeof ResizeObserver!=="undefined"&&canvasScrollRef.current){
+      observer=new ResizeObserver(updateCanvasScale);
+      observer.observe(canvasScrollRef.current);
+    }
+    return ()=>{
+      window.removeEventListener("resize",updateCanvasScale);
+      observer?.disconnect();
+    };
   },[activeTemplate.orientation]);
+  useEffect(()=>{
+    if(!showPrintCheck)return;
+    const frame=window.requestAnimationFrame(()=>printCheckRef.current?.scrollIntoView({behavior:"smooth",block:"nearest"}));
+    return ()=>window.cancelAnimationFrame(frame);
+  },[showPrintCheck]);
   if(!starterTemplateSnapshotRef.current){
     starterTemplateSnapshotRef.current={id:activeTemplate.id,blocks:JSON.stringify(activeTemplate.blocks)};
   }
@@ -887,9 +909,9 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     const y=clamp(position?.y??40,0,100-height);
     const newBlock=makeBlock(id,type,fieldKey,label,x,y,width,height,{showLabel:type==="field"?!activeTemplate.background?.url:false,...extra});
     if(type==="text")newBlock.text="Your text";
-    if(type==="items_table")newBlock.fontSize=8;
+    if(type==="items_table")newBlock.fontSize=10.8;
     if(type==="blank_table"){
-      newBlock.fontSize=8;
+      newBlock.fontSize=10.5;
       newBlock.tableColumns=[{id:"column-1",label:"",width:100}];
       newBlock.tableRows=[[""]];
       newBlock.tableShowHeader=false;
@@ -1485,6 +1507,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     :(activeTemplate.pageSize==="Letter"?0.773:0.707);
   const basePageWidth=activeTemplate.orientation==="landscape"?1123:794;
   const effectiveCanvasScale=canvasScale*canvasZoom;
+  const effectiveCanvasScalePercent=Math.round(effectiveCanvasScale*100);
   const backgroundUrl=activeTemplate.background?.url?API+activeTemplate.background.url:"";
   const previewItems=previewInvoice?.items||[
     {sr:"1",description:"Sample product",quantity:"2",unitPrice:"500.00",amount:"1000.00",qtyUnit:"PCS"},
@@ -1655,9 +1678,9 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         {message&&<div className="alert alert-info m-3 mb-0">{message}<button type="button" className="btn-close float-end" aria-label="Dismiss" onClick={()=>setMessage("")}/></div>}
         <div className={"invoice-builder-workspace mobile-panel-"+mobilePanel}>
           <nav className="invoice-builder-mobile-tabs" aria-label="Invoice editor panels">
-            <button type="button" className={mobilePanel==="fields"?"is-active":""} aria-pressed={mobilePanel==="fields"} onClick={()=>setMobilePanel("fields")}><i className="bi bi-plus-square me-1"/>Fields</button>
+            <button type="button" className={mobilePanel==="fields"?"is-active":""} aria-pressed={mobilePanel==="fields"} onClick={()=>setMobilePanel("fields")}><i className="bi bi-plus-square me-1"/>Add</button>
             <button type="button" className={mobilePanel==="design"?"is-active":""} aria-pressed={mobilePanel==="design"} onClick={()=>setMobilePanel("design")}><i className="bi bi-file-earmark me-1"/>Page</button>
-            <button type="button" className={mobilePanel==="settings"?"is-active":""} aria-pressed={mobilePanel==="settings"} onClick={()=>setMobilePanel("settings")}><i className="bi bi-sliders me-1"/>Settings</button>
+            <button type="button" className={mobilePanel==="settings"?"is-active":""} aria-pressed={mobilePanel==="settings"} onClick={()=>setMobilePanel("settings")}><i className="bi bi-sliders me-1"/>Edit</button>
           </nav>
           <aside className="invoice-builder-sidebar invoice-builder-fields">
             <div className="invoice-builder-panel-heading"><strong>Add to invoice</strong><small>Drag a field onto the page or tap to add it</small></div>
@@ -1726,7 +1749,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 {!previewRecordId&&<small className="invoice-builder-preview-help">No invoice needed. Check the design with sample details first; nothing will be saved.</small>}
               </div>
               <div className="invoice-builder-page-settings">
-                <button type="button" className={"btn btn-sm "+(designWarnings.length?"btn-outline-warning":"btn-light border")} onClick={()=>printCheckRef.current?.scrollIntoView({behavior:"smooth",block:"nearest"})} title="Review potential print-layout issues"><i className="bi bi-clipboard-check me-1"/>Print check {designWarnings.length?("(" +designWarnings.length+")"):"✓"}</button>
+                <button type="button" className={"btn btn-sm "+(designWarnings.length?"btn-outline-warning":"btn-light border")} onClick={()=>setShowPrintCheck(value=>!value)} aria-expanded={showPrintCheck} title="Review potential print-layout issues"><i className="bi bi-clipboard-check me-1"/>{showPrintCheck?"Hide print check":"Print check"} {designWarnings.length?("(" +designWarnings.length+")"):"✓"}</button>
                 <label>Paper</label><select value={activeTemplate.pageSize} onChange={event=>setPageSize(event.target.value)}><option value="A4">A4</option><option value="A5">A5</option><option value="Letter">Letter</option></select>
                 <select aria-label="Page orientation" value={activeTemplate.orientation} onChange={event=>updateActive({orientation:event.target.value})}><option value="portrait">Portrait</option><option value="landscape">Landscape</option></select>
                 <details className="invoice-builder-margin-settings"><summary>Margins</summary><div className="invoice-builder-margin-popover"><strong>Printable area (mm)</strong><div className="invoice-builder-margin-grid">{[["Top","top"],["Right","right"],["Bottom","bottom"],["Left","left"]].map(([label,key])=><label key={key}>{label}<input type="number" min="0" max="25" step="1" className="form-control form-control-sm" value={printMargins[key]??0} onChange={event=>updateActive({printMargins:{...printMargins,[key]:Math.max(0,Math.min(25,Number(event.target.value)||0))}})}/></label>)}</div><button type="button" className="btn btn-sm btn-outline-primary w-100 mt-2" onClick={()=>updateActive({printMargins:{top:4,right:4,bottom:4,left:4}})}>Set 4 mm printer-safe margins</button><small>4 mm is a common safe distance for ordinary printers, not a guarantee for every device. Elements are positioned inside this printable area. Imported reference backgrounds stay full-page.</small></div></details>
@@ -1735,14 +1758,14 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               </div>
             </div>
 
-            <div ref={printCheckRef} className="invoice-builder-print-check" role="status"><strong>{designWarnings.length?("Layout check · "+designWarnings.length+" issue"+(designWarnings.length===1?"":"s")+" to review"):"Layout check · No estimated issues found"}</strong>{layoutOptimizationSuggestions.length>0&&<section className="invoice-builder-optimization"><div className="invoice-builder-optimization-heading"><div><strong>Layout assistant</strong><small>{layoutOptimizationSuggestions.length} safe suggestion(s) available · review before applying</small></div><button type="button" className="btn btn-sm btn-primary" onClick={openLayoutPlanPreview}>Review changes</button></div><ul>{layoutOptimizationSuggestions.map(suggestion=><li key={suggestion.id}><div><b>{suggestion.title}</b><small>{suggestion.detail}</small></div><button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>applyLayoutSuggestion(suggestion)}>Apply</button></li>)}</ul>{layoutPlanPreview&&<div className="invoice-builder-layout-plan-review" aria-live="polite"><div className="invoice-builder-layout-plan-review-heading"><div><strong>Review the combined changes</strong><small>{layoutPlanPreview.appliedCount} ready to apply{layoutPlanPreview.skippedCount?" · "+layoutPlanPreview.skippedCount+" skipped":""}</small></div><button type="button" className="btn btn-sm btn-light border" onClick={()=>setLayoutPlanPreview(null)}>Close</button></div>{layoutPlanPreview.changes.length>0?<ul>{layoutPlanPreview.changes.map(change=><li key={change.id}><div><b>{change.title}</b><small>{change.summary}</small></div></li>)}</ul>:<small>No changes are available in this review.</small>}{layoutPlanPreview.skippedCount>0&&<small className="invoice-builder-layout-plan-note">Skipped suggestions could not be applied safely. Your design will not be changed by those suggestions.</small>}<div className="invoice-builder-layout-plan-actions"><button type="button" className="btn btn-sm btn-light border" onClick={()=>setLayoutPlanPreview(null)}>Keep current design</button><button type="button" className="btn btn-sm btn-primary" onClick={applyLayoutPlanPreview} disabled={!layoutPlanPreview.appliedCount}>Apply reviewed changes</button></div></div>}</section>}{designWarnings.length>0?<ul>{designWarnings.slice(0,8).map((issue,index)=>{
+            {showPrintCheck&&<div ref={printCheckRef} className="invoice-builder-print-check" role="status"><div className="invoice-builder-print-check-heading"><strong>{designWarnings.length?("Layout check · "+designWarnings.length+" issue"+(designWarnings.length===1?"":"s")+" to review"):"Layout check · No estimated issues found"}</strong><button type="button" className="btn btn-sm btn-light border" onClick={()=>setShowPrintCheck(false)}>Close</button></div>{layoutOptimizationSuggestions.length>0&&<section className="invoice-builder-optimization"><div className="invoice-builder-optimization-heading"><div><strong>Layout assistant</strong><small>{layoutOptimizationSuggestions.length} safe suggestion(s) available · review before applying</small></div><button type="button" className="btn btn-sm btn-primary" onClick={openLayoutPlanPreview}>Review changes</button></div><ul>{layoutOptimizationSuggestions.map(suggestion=><li key={suggestion.id}><div><b>{suggestion.title}</b><small>{suggestion.detail}</small></div><button type="button" className="btn btn-sm btn-outline-primary" onClick={()=>applyLayoutSuggestion(suggestion)}>Apply</button></li>)}</ul>{layoutPlanPreview&&<div className="invoice-builder-layout-plan-review" aria-live="polite"><div className="invoice-builder-layout-plan-review-heading"><div><strong>Review the combined changes</strong><small>{layoutPlanPreview.appliedCount} ready to apply{layoutPlanPreview.skippedCount?" · "+layoutPlanPreview.skippedCount+" skipped":""}</small></div><button type="button" className="btn btn-sm btn-light border" onClick={()=>setLayoutPlanPreview(null)}>Close</button></div>{layoutPlanPreview.changes.length>0?<ul>{layoutPlanPreview.changes.map(change=><li key={change.id}><div><b>{change.title}</b><small>{change.summary}</small></div></li>)}</ul>:<small>No changes are available in this review.</small>}{layoutPlanPreview.skippedCount>0&&<small className="invoice-builder-layout-plan-note">Skipped suggestions could not be applied safely. Your design will not be changed by those suggestions.</small>}<div className="invoice-builder-layout-plan-actions"><button type="button" className="btn btn-sm btn-light border" onClick={()=>setLayoutPlanPreview(null)}>Keep current design</button><button type="button" className="btn btn-sm btn-primary" onClick={applyLayoutPlanPreview} disabled={!layoutPlanPreview.appliedCount}>Apply reviewed changes</button></div></div>}</section>}{designWarnings.length>0?<ul>{designWarnings.slice(0,8).map((issue,index)=>{
                 const issueBlock=activeTemplate.blocks.find(block=>block.id===issue.blockId);
                 const canFitText=issue.fixAction==="fit-text"&&issueBlock&&issueBlock.visible!==false&&["field","text"].includes(issueBlock.type)&&Number(issue.suggestedFontSize)>=6&&Number(issue.suggestedFontSize)<Number(issueBlock.fontSize||10);
                 const canSetSafeMargins=issue.fixAction==="set-printer-safe-margins"&&issue.recommendedMargins;
                 const canNormalizeMargins=issue.fixAction==="normalize-print-margins"&&issue.normalizedMargins;
                 return <li key={issue.id||index}><div><span className={issue.severity==="error"?"text-danger":"text-warning"}>{issue.title}</span> — {issue.detail}</div>{canFitText&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{updateBlock(issue.blockId,{fontSize:issue.suggestedFontSize});selectSingleBlock(issue.blockId);setMessage("Text size adjusted to "+issue.suggestedFontSize+" px. Recheck the actual print preview.");}}>Fit text to box · {issue.suggestedFontSize} px</button>}{canSetSafeMargins&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{updateActive({printMargins:issue.recommendedMargins});setMessage("Applied 4 mm printer-safe design margins. Recheck the actual print preview.");}}>Set 4 mm safe margins</button>}{canNormalizeMargins&&<button type="button" className="invoice-builder-audit-edit" onClick={()=>{updateActive({printMargins:issue.normalizedMargins});setMessage("Margin values normalized to the supported 0–25 mm range.");}}>Normalize margins</button>}</li>;
-              })}</ul>:<small>No obvious layout problems were estimated. Confirm the final design in Actual print before printing.</small>}{designWarnings.length>0&&<small>Text-fit checks are estimates. Confirm the final result using Actual print.</small>}</div>
-            <div className="invoice-builder-canvas-scroll">
+              })}</ul>:<small>No obvious layout problems were estimated. Confirm the final design in Actual print before printing.</small>}{designWarnings.length>0&&<small>Text-fit checks are estimates. Confirm the final result using Actual print.</small>}</div>}
+            <div ref={canvasScrollRef} className="invoice-builder-canvas-scroll">
               <div className="invoice-builder-page-frame" style={{width:Math.round(basePageWidth*effectiveCanvasScale)+"px",aspectRatio:String(canvasRatio)}}>
                 <div className={"invoice-builder-page "+(activeTemplate.orientation==="landscape"?"is-landscape":"")} style={{width:basePageWidth+"px",minWidth:basePageWidth+"px",maxWidth:"none",height:"100%",aspectRatio:String(canvasRatio),transform:"scale("+effectiveCanvasScale+")",transformOrigin:"top left"}}>
                 <div className="invoice-builder-canvas" onDragOver={event=>event.preventDefault()} onDrop={handlePaletteDrop} onPointerMove={moveBlock} onPointerUp={finishBlockDrag} onPointerCancel={cancelBlockDrag}>
@@ -1791,20 +1814,22 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               </div>
             </div>
             <div className="invoice-builder-canvas-footer">
-              <span><i className="bi bi-arrows-move me-1"/>Drag empty space to select several · Shift-click adds · Arrow keys nudge.</span>
-              <div className="invoice-builder-mobile-zoom" aria-label="Page zoom controls">
-                <button type="button" aria-label="Zoom out" onClick={()=>setCanvasZoom(value=>Math.max(1,Math.round((value-0.25)*100)/100))} disabled={canvasZoom<=1}><i className="bi bi-dash-lg"/></button>
-                <span>{Math.round(canvasZoom*100)}%</span>
-                <button type="button" aria-label="Zoom in" onClick={()=>setCanvasZoom(value=>Math.min(3,Math.round((value+0.25)*100)/100))} disabled={canvasZoom>=3}><i className="bi bi-plus-lg"/></button>
-                <button type="button" onClick={()=>setCanvasZoom(1)}>Fit</button>
+              <span className="invoice-builder-canvas-help"><i className="bi bi-arrows-move me-1"/>Drag blank space to select several. Drag an element to move it.</span>
+              <div className="invoice-builder-canvas-zoom" aria-label="Page zoom controls">
+                <button type="button" aria-label="Zoom out" title="Zoom out" onClick={()=>setCanvasZoom(value=>Math.max(0.25,Math.round((value-0.1)*100)/100))} disabled={canvasZoom<=0.25}><i className="bi bi-dash-lg"/></button>
+                <span aria-live="polite">{effectiveCanvasScalePercent}%</span>
+                <button type="button" aria-label="Zoom in" title="Zoom in" onClick={()=>setCanvasZoom(value=>Math.min(2.5,Math.round((value+0.1)*100)/100))} disabled={canvasZoom>=2.5}><i className="bi bi-plus-lg"/></button>
+                <button type="button" onClick={()=>setCanvasZoom(Math.max(0.25,Math.min(2.5,canvasFitScale/canvasScale)))} title="Fit the full page into the available width">Fit width</button>
+                <button type="button" onClick={()=>setCanvasZoom(1)} title="Return to the readable editing size">Readable</button>
               </div>
+              {selectedBlock&&<button type="button" className="invoice-builder-mobile-edit-link" onClick={()=>setMobilePanel("settings")}>Edit selected</button>}
               <span className="invoice-builder-pagination-hint">Long invoices continue automatically. Headings repeat and totals move to the final page.</span>
               {activeTemplate.background?.url&&<button type="button" className="btn btn-sm btn-light border" onClick={()=>updateActive({background:{...activeTemplate.background,visible:activeTemplate.background.visible===false}})}>{activeTemplate.background.visible===false?"Show reference":"Hide reference"}</button>}
             </div>
           </main>
 
           <aside className="invoice-builder-sidebar invoice-builder-properties">
-            <div className="invoice-builder-panel-heading"><strong>Design settings</strong><small>Make this invoice your own</small></div>
+            <div className="invoice-builder-panel-heading"><strong>{selectedBlock?"Edit selected element":"Design settings"}</strong><small>{selectedBlock?"Change its text, size, position and appearance":"Manage your page, layers and saved designs"}</small></div>
             {activeTemplate.background?.url&&(
               <section className="invoice-builder-property-card">
                 <h3>Your imported design</h3>

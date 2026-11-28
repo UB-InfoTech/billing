@@ -986,3 +986,10 @@
   .invoice-builder-footer{font-size:11px}
   .invoice-builder-canvas-scroll::-webkit-scrollbar{width:8px;height:8px}
 }
+
+.invoice-builder-static-table table{font-size:10px}
+@media(max-width:760px){
+  .invoice-builder-blank-table-grid{min-width:100%}
+  .invoice-builder-blank-table-grid th,.invoice-builder-blank-table-grid td{padding:4px 3px;font-size:11px}
+  .invoice-builder-blank-table-grid input,.invoice-builder-blank-table-grid select{min-width:0;width:100%;font-size:12px}
+}

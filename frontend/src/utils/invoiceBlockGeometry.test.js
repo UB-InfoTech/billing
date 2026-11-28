@@ -168,7 +168,7 @@ test("marquee selection works in either drag direction and ignores edge-only con
   );
   assert.deepEqual(
     getInvoiceMarqueeSelection(marqueeBlocks, { x: 22, y: 10, w: 10, h: 20 }),
-    ["left", "overlap"]
+    ["overlap"]
   );
 });
 

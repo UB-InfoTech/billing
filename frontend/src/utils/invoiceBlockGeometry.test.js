@@ -190,6 +190,7 @@ test("context toolbar stays within the page and remains readable at mobile canva
 
   assert.equal(position.placement, "below");
   assert.equal(position.scale, 2);
+  assert.equal(position.width, 252);
   assert.ok(position.left >= 0);
   assert.ok(position.left + position.width <= 794);
   assert.ok(position.top > 0);
@@ -225,6 +226,7 @@ test("context toolbar anchors to the full visible multi-selection bounds", () =>
   });
 
   assert.equal(position.left, 12 * 794 / 100);
+  assert.equal(position.width, 280);
   assert.equal(position.placement, "below");
   assert.ok(position.top >= (35 + 12) * 1123 / 100);
 });

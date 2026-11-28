@@ -389,6 +389,7 @@ test("rendered invoice measurements identify each cell's estimated and actual wr
 test("continuation pages keep item-column proportions, fonts and cell spacing consistent",()=>{
   const makeTable=(id,options={})=>({
     id,type:"items_table",
+    headerLabels:["description","amount"],
     headerCells:[
       {label:"Description",widthPx:options.widths?.[0]??120,fontSizePx:options.headerSize??9,fontFamily:options.headerFamily??"Arial",fontWeight:options.headerWeight??"700",textAlign:"center"},
       {label:"Amount",widthPx:options.widths?.[1]??80,fontSizePx:options.headerSize??9,fontFamily:options.headerFamily??"Arial",fontWeight:options.headerWeight??"700",textAlign:"center"}
@@ -420,6 +421,7 @@ test("continuation pages keep item-column proportions, fonts and cell spacing co
 test("continuation table comparison ignores legitimate font fitting on unusually long rows",()=>{
   const makeTable=(id,rows)=>({
     id,type:"items_table",
+    headerLabels:["description","amount"],
     headerCells:[
       {label:"Description",widthPx:120,fontSizePx:9,fontFamily:"Arial",fontWeight:"700",textAlign:"center"},
       {label:"Amount",widthPx:80,fontSizePx:9,fontFamily:"Arial",fontWeight:"700",textAlign:"center"}

@@ -209,3 +209,29 @@ test("context toolbar returns null for missing blocks or invalid page dimensions
   assert.equal(getInvoiceContextToolbarPosition(null), null);
   assert.equal(getInvoiceContextToolbarPosition({ x: 0, y: 0 }, { pageWidth: 0 }), null);
 });
+
+
+test("context toolbar anchors to the full visible multi-selection bounds", () => {
+  const selection = [
+    { id: "first", x: 12, y: 18, w: 15, h: 8 },
+    { id: "second", x: 72, y: 35, w: 18, h: 12 },
+    { id: "hidden", x: 0, y: 92, w: 12, h: 5, visible: false }
+  ];
+  const position = getInvoiceContextToolbarPosition(selection, {
+    pageWidth: 794,
+    pageHeight: 1123,
+    scale: 0.6,
+    toolbarWidth: 280
+  });
+
+  assert.equal(position.left, 12 * 794 / 100);
+  assert.equal(position.placement, "below");
+  assert.ok(position.top >= (35 + 12) * 1123 / 100);
+});
+
+test("context toolbar returns null when a multi-selection has no visible elements", () => {
+  assert.equal(getInvoiceContextToolbarPosition([
+    { id: "hidden-a", visible: false },
+    { id: "hidden-b", visible: false }
+  ]), null);
+});

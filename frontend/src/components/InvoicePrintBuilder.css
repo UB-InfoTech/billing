@@ -897,7 +897,7 @@
 .invoice-builder-layer-collapse{display:grid;place-items:center;width:24px;height:26px;flex:0 0 24px;border:0;border-radius:5px;background:transparent;color:#7e8ea1}
 .invoice-builder-layer-collapse:hover{background:#eaf1f9;color:#2d639b}
 .invoice-builder-layer-group-items{display:flex;flex-direction:column;gap:3px;margin:4px 0 0 10px;padding-left:7px;border-left:1px solid #dfe7f0}
-.invoice-builder-layer-group-items>div{min-width:0;margin:0;padding:2px;border:1px solid transparent;border-radius:6px}
+.invoice-builder-layer-group-items>div{display:flex;align-items:center;gap:5px;min-width:0;margin:0;padding:2px;border:1px solid transparent;border-radius:6px}
 .invoice-builder-layer-group-items>div.is-selected{border-color:#c7dcf4;background:#f4f8fe}
 @media(max-width:760px){
   .invoice-builder-saved-group-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}

@@ -1284,3 +1284,6 @@
   .invoice-builder-quick-add>div:last-child{grid-template-columns:1fr}
   .invoice-builder-more-menu>summary{font-size:11px}
 }
+
+/* Keep the expanded/collapsed marker anchored to its own summary row */
+.invoice-builder-more-elements>summary{position:relative}

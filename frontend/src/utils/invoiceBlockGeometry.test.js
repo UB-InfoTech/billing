@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { getInvoiceBlockResizePatch } from "./invoiceBlockGeometry.js";
+import { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch } from "./invoiceBlockGeometry.js";
 
 const block = { x: 20, y: 25, w: 30, h: 20 };
 
@@ -55,4 +55,31 @@ test("resize handles enforce minimum sizes without moving the fixed edge", () =>
 test("invalid resize handles return no change", () => {
   assert.equal(getInvoiceBlockResizePatch(block, "middle", 5, 5), null);
   assert.equal(getInvoiceBlockResizePatch(null, "se", 5, 5), null);
+});
+
+const positionedBlock = { x: 20, y: 25, w: 30, h: 20 };
+
+test("page alignment positions an element without changing its size or other axis", () => {
+  assert.deepEqual(getInvoiceBlockAlignmentPatch(positionedBlock, "left"), { x: 0 });
+  assert.deepEqual(getInvoiceBlockAlignmentPatch(positionedBlock, "center"), { x: 35 });
+  assert.deepEqual(getInvoiceBlockAlignmentPatch(positionedBlock, "right"), { x: 70 });
+  assert.deepEqual(getInvoiceBlockAlignmentPatch(positionedBlock, "top"), { y: 0 });
+  assert.deepEqual(getInvoiceBlockAlignmentPatch(positionedBlock, "middle"), { y: 40 });
+  assert.deepEqual(getInvoiceBlockAlignmentPatch(positionedBlock, "bottom"), { y: 80 });
+});
+
+test("page alignment safely handles elements as large as the available page", () => {
+  assert.deepEqual(
+    getInvoiceBlockAlignmentPatch({ x: 12, y: 8, w: 100, h: 100 }, "right"),
+    { x: 0 }
+  );
+  assert.deepEqual(
+    getInvoiceBlockAlignmentPatch({ x: 12, y: 8, w: 20, h: 100 }, "bottom"),
+    { y: 0 }
+  );
+});
+
+test("unsupported page alignments and missing elements return no change", () => {
+  assert.equal(getInvoiceBlockAlignmentPatch(positionedBlock, "diagonal"), null);
+  assert.equal(getInvoiceBlockAlignmentPatch(null, "center"), null);
 });

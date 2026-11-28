@@ -117,14 +117,16 @@ test("moves an element above or below a target group as a whole", () => {
   const stack = [
     { id: "back" },
     { id: "group-low", groupId: "group-1" },
+    { id: "moving" },
     { id: "middle" },
-    { id: "group-high", groupId: "group-1" },
-    { id: "moving" }
+    { id: "group-high", groupId: "group-1" }
   ];
   const below = moveInvoiceLayerStack(stack, ["moving"], ["group-low", "group-high"], "below");
+  assert.equal(below.changed, true);
   assert.deepEqual(below.blocks.map(block => block.id), ["back", "moving", "group-low", "middle", "group-high"]);
 
   const above = moveInvoiceLayerStack(stack, ["moving"], ["group-low", "group-high"], "above");
+  assert.equal(above.changed, true);
   assert.deepEqual(above.blocks.map(block => block.id), ["back", "group-low", "middle", "group-high", "moving"]);
 });
 

@@ -11,6 +11,25 @@ const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
  * Return a safe percentage-based geometry patch for resizing one invoice block.
  * The opposite edge stays fixed when resizing from the north or west.
  */
+/**
+ * Place a block against one page edge or in the centre of one axis.
+ * The element's size and its other axis are kept unchanged.
+ */
+function getInvoiceBlockAlignmentPatch(block, alignment) {
+  if (!block) return null;
+
+  const width = clamp(toFiniteNumber(block.w, 0), 0, 100);
+  const height = clamp(toFiniteNumber(block.h, 0), 0, 100);
+
+  if (alignment === "left") return { x: 0 };
+  if (alignment === "center") return { x: (100 - width) / 2 };
+  if (alignment === "right") return { x: 100 - width };
+  if (alignment === "top") return { y: 0 };
+  if (alignment === "middle") return { y: (100 - height) / 2 };
+  if (alignment === "bottom") return { y: 100 - height };
+  return null;
+}
+
 function getInvoiceBlockResizePatch(block, handle, deltaX = 0, deltaY = 0) {
   if (!block || !RESIZE_DIRECTIONS.has(handle)) return null;
 
@@ -47,4 +66,4 @@ function getInvoiceBlockResizePatch(block, handle, deltaX = 0, deltaY = 0) {
   return { x: nextX, y: nextY, w: nextWidth, h: nextHeight };
 }
 
-export { getInvoiceBlockResizePatch };
+export { getInvoiceBlockResizePatch, getInvoiceBlockAlignmentPatch };

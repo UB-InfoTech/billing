@@ -86,7 +86,13 @@ test("moves an individual layer to the front or back side of another element", (
   assert.equal(forward.changed, true);
   assert.deepEqual(forward.blocks.map(block => block.id), ["back", "target", "moving", "front"]);
 
-  const backward = moveInvoiceLayerStack(stack, ["moving"], ["target"], "below");
+  const backwardStack = [
+    { id: "back" },
+    { id: "target" },
+    { id: "moving" },
+    { id: "front" }
+  ];
+  const backward = moveInvoiceLayerStack(backwardStack, ["moving"], ["target"], "below");
   assert.equal(backward.changed, true);
   assert.deepEqual(backward.blocks.map(block => block.id), ["back", "moving", "target", "front"]);
 });

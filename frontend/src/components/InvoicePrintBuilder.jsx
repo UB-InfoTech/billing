@@ -574,10 +574,21 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
         return;
       }
       if(!selectedBlockId||!["arrowleft","arrowright","arrowup","arrowdown"].includes(key))return;
-      const block=activeTemplate.blocks.find(item=>item.id===selectedBlockId);
-      if(!block)return;
       event.preventDefault();
       const step=snapToGrid?2:(event.shiftKey?1:0.25);
+      if(selectedBlockIds.length>1){
+        const group=activeTemplate.blocks.filter(item=>selectedBlockIds.includes(item.id)&&item.visible!==false);
+        const dx=key==="arrowleft"?-step:key==="arrowright"?step:0;
+        const dy=key==="arrowup"?-step:key==="arrowdown"?step:0;
+        const patches=getInvoiceGroupMovePatches(group,dx,dy);
+        if(patches.length){
+          const byId=new Map(patches.map(item=>[item.id,item]));
+          updateActive({blocks:activeTemplate.blocks.map(item=>byId.has(item.id)?{...item,x:byId.get(item.id).x,y:byId.get(item.id).y}:item)});
+        }
+        return;
+      }
+      const block=activeTemplate.blocks.find(item=>item.id===selectedBlockId);
+      if(!block)return;
       const patch={};
       if(key==="arrowleft")patch.x=clamp(block.x-step,0,100-block.w);
       if(key==="arrowright")patch.x=clamp(block.x+step,0,100-block.w);
@@ -587,7 +598,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
     };
     window.addEventListener("keydown",handleShortcut);
     return ()=>window.removeEventListener("keydown",handleShortcut);
-  },[history,selectedBlockId,activeTemplate,snapToGrid]);
+  },[history,selectedBlockId,selectedBlockIds,activeTemplate,snapToGrid]);
   const updateActive=(patch,options={})=>{
     updateDesign({...localDesign,templates:localDesign.templates.map(template=>template.id===activeTemplate.id?{...template,...patch}:template)},options);
   };
@@ -600,10 +611,17 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
   };
   const alignSelectedBlocks=alignment=>{
     const patches=getInvoiceGroupAlignmentPatches(selectedBlocks,alignment);
-    if(!patches.length)return;
-    const byId=new Map(patches.map(patch=>[patch.id,patch]));
+    const changed=patches.filter(patch=>{
+      const current=activeTemplate.blocks.find(block=>block.id===patch.id);
+      return current&&Object.entries(patch).some(([key,value])=>key!=="id"&&Math.abs(Number(current[key])-value)>0.001);
+    });
+    if(!changed.length){
+      setMessage("Those elements are already aligned that way.");
+      return;
+    }
+    const byId=new Map(changed.map(patch=>[patch.id,patch]));
     updateActive({blocks:activeTemplate.blocks.map(block=>byId.has(block.id)?{...block,...byId.get(block.id)}:block)});
-    setMessage("Aligned "+patches.length+" selected elements. Use Undo to restore their previous positions.");
+    setMessage("Aligned "+changed.length+" selected elements. Use Undo to restore their previous positions.");
   };
   const distributeSelectedBlocks=axis=>{
     const patches=getInvoiceGroupDistributionPatches(selectedBlocks,axis);
@@ -611,9 +629,17 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
       setMessage("Select at least three elements with enough space between them to distribute evenly.");
       return;
     }
-    const byId=new Map(patches.map(patch=>[patch.id,patch]));
+    const changed=patches.filter(patch=>{
+      const current=activeTemplate.blocks.find(block=>block.id===patch.id);
+      return current&&Object.entries(patch).some(([key,value])=>key!=="id"&&Math.abs(Number(current[key])-value)>0.001);
+    });
+    if(!changed.length){
+      setMessage("Those elements are already evenly spaced.");
+      return;
+    }
+    const byId=new Map(changed.map(patch=>[patch.id,patch]));
     updateActive({blocks:activeTemplate.blocks.map(block=>byId.has(block.id)?{...block,...byId.get(block.id)}:block)});
-    setMessage("Evenly spaced "+patches.length+" selected elements. Use Undo to restore their previous positions.");
+    setMessage("Evenly spaced "+changed.length+" selected elements. Use Undo to restore their previous positions.");
   };
 
   const applyLayoutSuggestion=suggestion=>{

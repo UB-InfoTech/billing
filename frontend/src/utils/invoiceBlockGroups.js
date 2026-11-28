@@ -19,6 +19,19 @@ function assignInvoiceBlockGroup(blocks, blockIds, groupId, groupName = "Saved g
   );
 }
 
+function expandInvoiceBlockGroupSelection(blocks, selectedBlockIds) {
+  if (!Array.isArray(blocks) || !Array.isArray(selectedBlockIds) || !selectedBlockIds.length) return [];
+  const selectedIds = new Set(selectedBlockIds);
+  const groupIds = new Set(
+    blocks
+      .filter(block => block && selectedIds.has(block.id) && block.groupId)
+      .map(block => block.groupId)
+  );
+  return blocks
+    .filter(block => block && (selectedIds.has(block.id) || (block.groupId && groupIds.has(block.groupId))))
+    .map(block => block.id);
+}
+
 function ungroupInvoiceBlocks(blocks, selectedBlockIds) {
   if (!Array.isArray(blocks) || !Array.isArray(selectedBlockIds)) {
     return { blocks: Array.isArray(blocks) ? blocks : [], affectedIds: [] };
@@ -41,4 +54,4 @@ function ungroupInvoiceBlocks(blocks, selectedBlockIds) {
   return { blocks: nextBlocks, affectedIds };
 }
 
-export { getInvoiceBlockGroupMemberIds, assignInvoiceBlockGroup, ungroupInvoiceBlocks };
+export { getInvoiceBlockGroupMemberIds, assignInvoiceBlockGroup, expandInvoiceBlockGroupSelection, ungroupInvoiceBlocks };

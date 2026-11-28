@@ -1789,9 +1789,10 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                       <React.Fragment key={block.id}>
                         <button type="button" className={"invoice-builder-block "+(selectedBlockIds.includes(block.id)?"is-selected":"")+(dragging?.mode==="group-move"&&selectedBlockIds.includes(block.id)||dragging?.id===block.id?" is-dragging":"")} style={{left:block.x+"%",top:block.y+"%",width:block.w+"%",height:block.h+"%",fontSize:block.fontSize+"px",fontWeight:block.bold?700:400,fontStyle:block.italic?"italic":"normal",fontFamily:block.fontFamily||"Arial",textAlign:block.align,color:block.color,backgroundColor:block.backgroundColor||"transparent",border:block.borderWidth?block.borderWidth+"px solid "+(block.borderColor||"#d8e0e9"):undefined,borderRadius:block.borderRadius+"px",padding:block.padding+"px",opacity:block.opacity??1,lineHeight:block.lineHeight??1.25,letterSpacing:(block.letterSpacing??0)+"px",textDecoration:block.textDecoration||"none",textTransform:block.textTransform||"none"}} onClick={event=>{
                           if(placingField)return;
+                          if(window.matchMedia?.("(max-width: 760px)").matches)setMobilePanel("settings");
                           if(event.shiftKey||event.ctrlKey||event.metaKey){
                             toggleBlockOrGroupSelection(block.id);
-                          }else if(event.detail===0){
+                          }else{
                             selectBlockOrGroup(block.id);
                           }
                         }} onPointerDown={event=>{if(!placingField)startBlockDrag(event,block);}} aria-label={"Move "+(block.label||"invoice element")}>
@@ -1973,17 +1974,38 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
               </section>
             )}
             {!selectedBlock?(
-              <div className="invoice-builder-empty-property"><i className="bi bi-cursor"/>Select an item on the page to edit it.</div>
+              <div className="invoice-builder-empty-property">
+                <i className="bi bi-cursor"/>
+                <strong>Choose something on the invoice page</strong>
+                <span>Click a field, table or text to edit it here. Drag it on the page to move it, or use its corner handles to resize it.</span>
+              </div>
             ):(
               <section className="invoice-builder-property-card">
-                <div className="d-flex justify-content-between align-items-center gap-2 mb-2"><h3 className="mb-0">Quick edits</h3><button type="button" className="btn btn-sm btn-outline-danger" onClick={removeBlock} title="Remove item"><i className="bi bi-trash"/></button></div><p className="invoice-builder-quick-help">Choose what this item shows here. Open the extra controls only when you need to change its position or appearance.</p>
-                <label className="form-label">Name</label><input className="form-control form-control-sm mb-3" value={selectedBlock.label} onChange={event=>updateBlock(selectedBlock.id,{label:event.target.value})}/>
+                <div className="d-flex justify-content-between align-items-center gap-2 mb-2"><h3 className="mb-0">Quick edits</h3><button type="button" className="btn btn-sm btn-outline-danger" onClick={removeBlock} title="Remove item"><i className="bi bi-trash"/></button></div><p className="invoice-builder-quick-help">Make the common changes here. Open the extra controls only for detailed layout or styling changes.</p>
+                <label className="form-label">{selectedBlock.type==="field"?"Label on invoice":"Element name"}</label><input className="form-control form-control-sm mb-3" value={selectedBlock.label} onChange={event=>updateBlock(selectedBlock.id,{label:event.target.value})}/>
                 {selectedBlock.type==="field"&&(
-                  <><label className="form-label">What should it show?</label><select className="form-select form-select-sm mb-3" value={selectedBlock.fieldKey} onChange={event=>updateBlock(selectedBlock.id,{fieldKey:event.target.value,label:FIELD_LABELS[event.target.value]||selectedBlock.label})}>{Object.entries(FIELD_LABELS).filter(([key])=>key!=="logo").map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></>
+                  <><label className="form-label">Invoice detail</label><select className="form-select form-select-sm mb-3" value={selectedBlock.fieldKey} onChange={event=>updateBlock(selectedBlock.id,{fieldKey:event.target.value,label:FIELD_LABELS[event.target.value]||selectedBlock.label})}>{Object.entries(FIELD_LABELS).filter(([key])=>key!=="logo").map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></>
                 )}
+                {selectedBlock.type==="field"&&<div className="form-check form-switch mb-3"><input id="invoice-block-show-label" className="form-check-input" type="checkbox" checked={selectedBlock.showLabel!==false} onChange={event=>updateBlock(selectedBlock.id,{showLabel:event.target.checked})}/><label className="form-check-label" htmlFor="invoice-block-show-label">Show label before the value</label></div>}
                 {selectedBlock.type==="text"&&<><label className="form-label">Text</label><textarea className="form-control form-control-sm mb-3" rows={3} value={selectedBlock.text} onChange={event=>updateBlock(selectedBlock.id,{text:event.target.value})}/></>}
+                {["field","text"].includes(selectedBlock.type)&&<div className="invoice-builder-quick-style">
+                  <div className="invoice-builder-quick-style-row">
+                    <span>Text size</span>
+                    <div role="group" aria-label="Text size">
+                      {[["Small",10],["Regular",12],["Large",14]].map(([label,size])=><button type="button" key={label} className={"btn btn-sm "+(Math.round(Number(selectedBlock.fontSize)||12)===size?"btn-primary":"btn-light border")} aria-pressed={Math.round(Number(selectedBlock.fontSize)||12)===size} onClick={()=>updateBlock(selectedBlock.id,{fontSize:size})}>{label}</button>)}
+                    </div>
+                  </div>
+                  <div className="invoice-builder-quick-style-row">
+                    <span>Alignment</span>
+                    <div role="group" aria-label="Text alignment">
+                      {["left","center","right"].map(value=><button type="button" key={value} className={"btn btn-sm "+(selectedBlock.align===value?"btn-primary":"btn-light border")} aria-pressed={selectedBlock.align===value} onClick={()=>updateBlock(selectedBlock.id,{align:value})}>{value==="center"?"Center":value[0].toUpperCase()+value.slice(1)}</button>)}
+                    </div>
+                  </div>
+                  <div className="form-check form-switch mb-0"><input id="invoice-block-bold-quick" className="form-check-input" type="checkbox" checked={selectedBlock.bold===true} onChange={event=>updateBlock(selectedBlock.id,{bold:event.target.checked})}/><label className="form-check-label" htmlFor="invoice-block-bold-quick">Bold text</label></div>
+                </div>}
+                <details className="invoice-builder-advanced-controls"><summary><span>More design controls</span><small>Position, size, table columns, colours and detailed text options</small></summary>
                 {selectedBlock.type==="text"&&<div className="invoice-builder-custom-text-tools">
-                  <h4>Text formatting</h4>
+                  <h4>Detailed text formatting</h4>
                   <div className="invoice-builder-number-grid">
                     <div><label className="form-label">Line spacing</label><input type="number" min="1" max="2.5" step="0.1" className="form-control form-control-sm" value={selectedBlock.lineHeight??1.25} onChange={event=>updateBlock(selectedBlock.id,{lineHeight:clamp(event.target.value,1,2.5)})}/></div>
                     <div><label className="form-label">Letter spacing (px)</label><input type="number" min="-1" max="8" step="0.25" className="form-control form-control-sm" value={selectedBlock.letterSpacing??0} onChange={event=>updateBlock(selectedBlock.id,{letterSpacing:clamp(event.target.value,-1,8)})}/></div>
@@ -1992,8 +2014,6 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                     <div><label className="form-label">Vertical position</label><select className="form-select form-select-sm" value={selectedBlock.verticalAlign||"top"} onChange={event=>updateBlock(selectedBlock.id,{verticalAlign:event.target.value})}><option value="top">Top</option><option value="middle">Middle</option><option value="bottom">Bottom</option></select></div>
                   </div>
                 </div>}
-
-                <details className="invoice-builder-advanced-controls"><summary><span>More design controls</span><small>Position, size, table columns, colours and text styles</small></summary>
                 {selectedBlock.type==="blank_table"&&(
                   <div className="invoice-builder-table-editor invoice-builder-blank-table-editor">
                     <h4>Build your blank table</h4>
@@ -2083,7 +2103,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                     </div>
                   </div>
                 )}
-                {selectedBlock.type==="field"&&<div className="form-check form-switch mb-3"><input id="invoice-block-show-label" className="form-check-input" type="checkbox" checked={selectedBlock.showLabel!==false} onChange={event=>updateBlock(selectedBlock.id,{showLabel:event.target.checked})}/><label className="form-check-label" htmlFor="invoice-block-show-label">Show field label before the value</label><small className="d-block text-secondary">Turn this off when the imported design already prints the label.</small></div>}
+                
                 <div className="invoice-builder-selected-actions"><button type="button" className="btn btn-sm btn-light border" onClick={duplicateSelectedBlock}><i className="bi bi-copy me-1"/>Duplicate element</button><button type="button" className="btn btn-sm btn-light border" onClick={()=>moveSelectedLayer(1)} title="Bring forward"><i className="bi bi-front"/></button><button type="button" className="btn btn-sm btn-light border" onClick={()=>moveSelectedLayer(-1)} title="Send backward"><i className="bi bi-back"/></button></div>
                 <h4>Quick positioning</h4>
                 <p className="invoice-builder-position-help">Place this element neatly on the page without changing its size.</p>

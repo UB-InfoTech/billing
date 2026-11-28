@@ -199,8 +199,10 @@ function getInvoiceMarqueeSelection(blocks, selection) {
  * Keep the selected-element toolbar readable at every canvas zoom level
  * while keeping it inside the visible page.
  */
-function getInvoiceContextToolbarPosition(block, options = {}) {
-  if (!block) return null;
+function getInvoiceContextToolbarPosition(blockOrBlocks, options = {}) {
+  const blocks = (Array.isArray(blockOrBlocks) ? blockOrBlocks : [blockOrBlocks])
+    .filter(block => block && block.visible !== false);
+  if (!blocks.length) return null;
 
   const pageWidth = toFiniteNumber(options.pageWidth, 794);
   const pageHeight = toFiniteNumber(options.pageHeight, 1123);
@@ -212,16 +214,24 @@ function getInvoiceContextToolbarPosition(block, options = {}) {
 
   if (pageWidth <= 0 || pageHeight <= 0) return null;
 
+  const bounds = blocks.map(block => {
+    const x = clamp(toFiniteNumber(block.x, 0), 0, 100);
+    const y = clamp(toFiniteNumber(block.y, 0), 0, 100);
+    const width = clamp(toFiniteNumber(block.w, 0), 0, 100);
+    const height = clamp(toFiniteNumber(block.h, 0), 0, 100);
+    return { left: x, top: y, right: Math.min(100, x + width), bottom: Math.min(100, y + height) };
+  });
+  const selectionLeft = Math.min(...bounds.map(item => item.left));
+  const selectionTop = Math.min(...bounds.map(item => item.top));
+  const selectionBottom = Math.max(...bounds.map(item => item.bottom));
+
   const visibleWidth = Math.min(toolbarWidth, Math.max(80, pageWidth * canvasScale - margin * 2));
   const localWidth = visibleWidth / canvasScale;
   const localHeight = toolbarHeight / canvasScale;
   const localGap = gap / canvasScale;
   const localMargin = margin / canvasScale;
-  const x = clamp(toFiniteNumber(block.x, 0), 0, 100);
-  const y = clamp(toFiniteNumber(block.y, 0), 0, 100);
-  const height = clamp(toFiniteNumber(block.h, 0), 0, 100);
-  const blockTop = y * pageHeight / 100;
-  const blockBottom = (y + height) * pageHeight / 100;
+  const blockTop = selectionTop * pageHeight / 100;
+  const blockBottom = selectionBottom * pageHeight / 100;
   const spaceAbove = blockTop - localMargin;
   const spaceBelow = pageHeight - blockBottom - localMargin;
   const placement = spaceAbove >= localHeight + localGap || spaceAbove >= spaceBelow
@@ -229,7 +239,7 @@ function getInvoiceContextToolbarPosition(block, options = {}) {
     : "below";
 
   const maxLeft = Math.max(localMargin, pageWidth - localWidth - localMargin);
-  const left = clamp(x * pageWidth / 100, localMargin, maxLeft);
+  const left = clamp(selectionLeft * pageWidth / 100, localMargin, maxLeft);
   const maxTop = Math.max(localMargin, pageHeight - localHeight - localMargin);
   const requestedTop = placement === "above"
     ? blockTop - localHeight - localGap

@@ -388,6 +388,17 @@
 
 .invoice-builder-custom-text-preview{display:flex;width:100%;height:100%;white-space:pre-wrap;overflow-wrap:anywhere}
 
+.invoice-builder-position-help{margin:-4px 0 9px;color:#75869a;font-size:10px;line-height:1.45}
+.invoice-builder-position-group{display:grid;gap:5px;margin:0 0 10px}
+.invoice-builder-position-group>strong{color:#50657d;font-size:10px;font-weight:750}
+.invoice-builder-position-group>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.invoice-builder-position-group .btn{min-width:0;padding:6px 4px;font-size:10px}
+@media(max-width:760px){
+ .invoice-builder-position-group>div{gap:5px}
+ .invoice-builder-position-group .btn{min-height:36px;font-size:11px}
+}
+
+
 
 /* Industry template gallery and no-code blank-grid controls */
 .invoice-builder-template-filters{display:flex;align-items:center;gap:9px;flex-wrap:wrap;width:100%;padding:8px 20px 4px}

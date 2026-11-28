@@ -1869,6 +1869,7 @@ export default function InvoicePrintBuilder({design,onChange,onSave,onClose,savi
                 <strong>Print dialog settings</strong>
                 <span>{activeTemplate.pageSize} · {activeTemplate.orientation==="landscape"?"Landscape":"Portrait"} · Scale 100% · Browser margins: None · Headers/footers: Off · Background graphics: On</span>
                 <small>Design safe area: Top {printMargins.top??0} mm · Right {printMargins.right??0} mm · Bottom {printMargins.bottom??0} mm · Left {printMargins.left??0} mm. These margins are built into the invoice layout; keep browser margins set to None.</small>
+                <small>In the print dialog, choose Actual size or 100% (not Fit to page), confirm the same paper and orientation, and keep headers/footers off. The browser does not expose those dialog settings to the invoice preview, so they must be checked manually.</small>
                 <small>These are the design's intended settings. The selected printer may still clip edges; review the measured pages and do a physical test print when changing printers.</small>
               </div>
             </div>

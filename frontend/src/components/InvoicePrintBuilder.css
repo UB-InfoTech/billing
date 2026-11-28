@@ -1463,3 +1463,55 @@
     font-size:13px;
   }
 }
+
+
+/* Multi-selection toolbar keeps the most-used group actions in one short row. */
+.invoice-builder-context-multi-toolbar{
+  gap:5px;
+}
+.invoice-builder-context-multi-toolbar>button,
+.invoice-builder-context-multi-toolbar>.invoice-builder-context-align>summary{
+  min-width:68px;
+}
+.invoice-builder-context-arrange-menu{
+  max-height:min(360px,70vh);
+  overflow-y:auto;
+  overscroll-behavior:contain;
+}
+.invoice-builder-context-arrange-menu>strong{
+  padding:6px 8px 2px;
+  color:#63788e;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.invoice-builder-context-arrange-menu button:disabled{
+  opacity:.42;
+  cursor:not-allowed;
+}
+.invoice-builder-context-menu-divider{
+  display:block;
+  margin:4px 6px;
+  border-top:1px solid #e7edf3;
+}
+@media(max-width:760px){
+  .invoice-builder-context-multi-toolbar{
+    gap:3px;
+    padding:4px;
+  }
+  .invoice-builder-context-multi-toolbar>button,
+  .invoice-builder-context-multi-toolbar>.invoice-builder-context-align>summary{
+    min-width:0;
+    min-height:44px;
+    padding:7px 8px;
+    font-size:12px;
+  }
+  .invoice-builder-context-arrange-menu{
+    max-height:55vh;
+    min-width:150px;
+  }
+  .invoice-builder-context-arrange-menu button{
+    min-height:44px;
+  }
+}
